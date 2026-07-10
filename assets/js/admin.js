@@ -454,6 +454,86 @@ document.addEventListener('DOMContentLoaded', () => {
     assistantBtn.addEventListener('click', sendAssistantMessage);
     assistantInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAssistantMessage(); });
   }
+
+  /* ── Bulk trending app/game generator ── */
+  const btnBgSuggest = document.getElementById('btn-bg-suggest');
+  if (btnBgSuggest) {
+    const namesPanel = document.getElementById('bg-names-panel');
+    const namesList = document.getElementById('bg-names-list');
+    const suggestStatus = document.getElementById('bg-suggest-status');
+    const btnBgCreate = document.getElementById('btn-bg-create');
+    const bgProgress = document.getElementById('bg-progress');
+    const bgBar = document.getElementById('bg-bar');
+    const bgStatus = document.getElementById('bg-status');
+    const bgResults = document.getElementById('bg-results');
+
+    btnBgSuggest.addEventListener('click', async () => {
+      const count = parseInt(document.getElementById('bg-count').value, 10) || 10;
+      const type = document.getElementById('bg-type').value;
+      const hint = document.getElementById('bg-hint').value.trim();
+      btnBgSuggest.disabled = true;
+      suggestStatus.textContent = '⏳ جاري اقتراح الأسماء...';
+      try {
+        const res = await fetch('admin.php?ajax=suggest_trending', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count, type, hint })
+        });
+        const data = await res.json();
+        if (!data.success) { suggestStatus.textContent = '❌ ' + data.error; btnBgSuggest.disabled = false; return; }
+        namesList.innerHTML = '';
+        data.names.forEach(name => {
+          const row = document.createElement('label');
+          row.style.cssText = 'display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer';
+          row.innerHTML = `<input type="checkbox" checked value="${escHtml(name)}"><span>${escHtml(name)}</span>`;
+          namesList.appendChild(row);
+        });
+        namesPanel.style.display = 'block';
+        bgResults.innerHTML = '';
+        suggestStatus.textContent = `✅ تم اقتراح ${data.names.length} اسم`;
+      } catch { suggestStatus.textContent = '❌ خطأ في الاتصال'; }
+      btnBgSuggest.disabled = false;
+    });
+
+    btnBgCreate.addEventListener('click', async () => {
+      const type = document.getElementById('bg-type').value === 'games' ? 'games' : 'apps';
+      const checked = [...namesList.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);
+      if (!checked.length) { bgStatus.textContent = 'لم يتم تحديد أي اسم'; return; }
+      btnBgCreate.disabled = true;
+      bgProgress.style.display = 'block';
+      bgResults.innerHTML = '';
+      let done = 0, failed = 0;
+      for (const name of checked) {
+        bgStatus.textContent = `جاري الإنشاء... (${done + failed + 1}/${checked.length}) — ${name}`;
+        try {
+          const res = await fetch('admin.php?ajax=bulk_create_one', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, type })
+          });
+          const data = await res.json();
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;' +
+            (data.success ? 'background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2)' : 'background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.2)');
+          if (data.success) {
+            done++;
+            row.innerHTML = `<span>✅ ${escHtml(data.name)} — ${data.has_playstore ? 'تم ربطها بـ Play Store' : 'بدون رابط Play Store'}${data.has_icon ? '' : '، بدون أيقونة'}</span>
+              <a href="${data.edit_url}" class="btn-edit" target="_blank">فتح للتعديل</a>`;
+          } else {
+            failed++;
+            row.innerHTML = `<span>❌ ${escHtml(name)} — ${escHtml(data.error || 'فشل غير معروف')}</span>`;
+          }
+          bgResults.appendChild(row);
+        } catch {
+          failed++;
+          const row = document.createElement('div');
+          row.textContent = `❌ ${name} — خطأ في الاتصال`;
+          bgResults.appendChild(row);
+        }
+        bgBar.style.width = Math.round(((done + failed) / checked.length) * 100) + '%';
+      }
+      bgStatus.textContent = `✅ اكتمل: ${done} تم إنشاؤهم${failed ? `، فشل ${failed}` : ''}`;
+      btnBgCreate.disabled = false;
+    });
+  }
 });
 
 function escHtml(s) {

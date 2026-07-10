@@ -251,48 +251,15 @@ if (isset($_GET['ajax']) === true && $_GET['ajax'] === 'fetch_playstore' && is_a
         echo json_encode(['success'=>false,'error'=>'ضع رابط صفحة تطبيق صالح من play.google.com/store/apps/details']); exit;
     }
 
-    $ch = curl_init($src);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept-Language: ar,en;q=0.8'],
-    ]);
-    $html = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if (!$html || $code !== 200) {
-        echo json_encode(['success'=>false,'error'=>'تعذر جلب الصفحة من Google Play (رمز: '.$code.')']); exit;
-    }
-
-    $meta = function(string $prop) use ($html): ?string {
-        if (preg_match('#<meta[^>]+property=["\']' . preg_quote($prop, '#') . '["\'][^>]+content=["\']([^"\']*)["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-        if (preg_match('#<meta[^>]+content=["\']([^"\']*)["\'][^>]+property=["\']' . preg_quote($prop, '#') . '["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-        return null;
-    };
-
-    $title = $meta('og:title');
-    $desc  = $meta('og:description');
-    $image = $meta('og:image');
-    $pkg = null;
-    if (preg_match('#[?&]id=([a-zA-Z0-9_.]+)#', $src, $m)) $pkg = $m[1];
-
-    if (!$title && !$desc) {
+    $meta = fetch_playstore_meta($src);
+    if (!$meta) {
         echo json_encode(['success'=>false,'error'=>'لم يتم العثور على بيانات في الصفحة — قد تكون Google تمنع الوصول الآلي من هذا الاستضافة']); exit;
     }
 
-    // Clean up common Play Store title suffix "- Apps on Google Play"
-    if ($title) $title = trim(preg_replace('/\s*[-–]\s*(Apps on Google Play|تطبيقات على Google Play).*$/i', '', $title));
-
-    echo json_encode([
+    echo json_encode(array_merge($meta, [
         'success' => true,
-        'name' => $title,
-        'short_description' => $desc ? mb_substr($desc, 0, 300) : null,
-        'long_description' => $desc,
-        'icon_url' => $image,
-        'package_name' => $pkg,
-        'playstore_url' => $src,
         'note' => 'تم استيراد العنوان والوصف والأيقونة فقط. رابط التحميل المباشر غير متاح من Google Play — أضفه يدوياً أو استخدم توليد AI لباقي الحقول.',
-    ], JSON_UNESCAPED_UNICODE);
+    ]), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -500,6 +467,136 @@ P;
     exit;
 }
 
+/* ══════════════════════════════════════════════════════
+   AJAX: Suggest N trending app/game names via AI
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'suggest_trending' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $count = max(1, min(30, (int)($input['count'] ?? 10)));
+    $type  = in_array($input['type'] ?? 'apps', ['apps','games','mixed'], true) ? $input['type'] : 'apps';
+    $hint  = trim($input['hint'] ?? '');
+
+    $typeLabel = ['apps' => 'تطبيقات', 'games' => 'ألعاب', 'mixed' => 'تطبيقات وألعاب'][$type];
+    $prompt = "اقترح {$count} اسم {$typeLabel} أندرويد حقيقية من الأكثر بحثاً وتحميلاً حالياً (رسمية أو نسخ معدّلة/مود شائعة). " .
+        ($hint ? "مجال/تفضيل إضافي: {$hint}. " : '') .
+        "أعد أسماء دقيقة وقابلة للبحث في متجر التطبيقات، بدون تكرار.\n" .
+        "أعد JSON فقط بدون أي نص إضافي: {\"names\":[\"اسم 1\",\"اسم 2\"]}";
+
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    $names = is_array($data['names'] ?? null) ? array_values(array_filter(array_map('trim', $data['names']))) : [];
+    if (!$names) { echo json_encode(['success'=>false,'error'=>'لم يُرجع الموديل قائمة أسماء صالحة، حاول مجدداً']); exit; }
+
+    echo json_encode(['success'=>true,'names'=>$names], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Full bulk-create pipeline for ONE app/game name —
+   AI content, best-effort Play Store search/import, AI icon
+   fallback, insert. Called once per name from the client so
+   a 30-item batch can't time out a single request. Apps with
+   no download link land as drafts via the existing forced-
+   draft rule (there is no draft/publish distinction to set
+   here — the app simply has no download_url yet).
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name = trim($input['name'] ?? '');
+    $type = in_array($input['type'] ?? 'apps', ['apps','games'], true) ? $input['type'] : 'apps';
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'اسم مطلوب']); exit; }
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) { echo json_encode(['success'=>false,'error'=>'لم يتم إضافة مفتاح OpenRouter بعد.']); exit; }
+    $models = build_model_rotation($pdo);
+
+    $prompt = <<<P
+أنت خبير تسويق تطبيقات أندرويد. التطبيق: "{$name}"
+أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
+{
+  "name":"الاسم الرسمي",
+  "seo_title":"عنوان SEO أقل من 60 حرف",
+  "meta_description":"وصف meta أقل من 155 حرف",
+  "keywords":"كلمات مفتاحية مفصولة بفاصلة",
+  "short_description":"جملة أو جملتين",
+  "long_description":"وصف طويل احترافي عدة فقرات",
+  "developer":"اسم المطور المحتمل",
+  "version":"رقم إصدار مثل 3.1.0",
+  "android_version":"مثل: 7.0 فأعلى",
+  "size_mb":"حجم تقريبي مثل 45",
+  "license":"Free",
+  "package_name":"com.developer.appname",
+  "rating":4.5,
+  "whats_new":"آخر التحديثات",
+  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5"],
+  "pros":["إيجابية 1","إيجابية 2","إيجابية 3"],
+  "cons":["سلبية 1","سلبية 2"],
+  "install_steps":["خطوة 1","خطوة 2","خطوة 3","خطوة 4"],
+  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"}]
+}
+P;
+    $result = openrouter_call_rotating($keys, $models, $prompt);
+    if (!$result['ok']) { echo json_encode(['success'=>false,'error'=>'فشل توليد المحتوى بالذكاء الاصطناعي']); exit; }
+    $data = ai_extract_json($result['content']);
+    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+
+    $finalName = trim($data['name'] ?? $name) ?: $name;
+    $slug = unique_slug($pdo, $finalName);
+
+    // Best-effort Play Store search + import — a miss here is normal, not an error.
+    $playstoreUrl = playstore_search($finalName);
+    $iconPath = null;
+    $playstoreMeta = $playstoreUrl ? fetch_playstore_meta($playstoreUrl) : null;
+    if ($playstoreMeta && !empty($playstoreMeta['icon_url'])) {
+        $iconPath = import_remote_icon($playstoreMeta['icon_url'], $slug);
+    }
+    // AI icon fallback if Play Store import didn't yield one.
+    if (!$iconPath) {
+        $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist square Android app icon (no text, no watermark, centered symbol, flat/gradient style, 1024x1024) for an app called \"{$finalName}\".");
+        if ($ir['ok']) {
+            $tmp = tempnam(sys_get_temp_dir(), 'aiicn');
+            file_put_contents($tmp, $ir['bin']);
+            $iconPath = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug);
+            @unlink($tmp);
+        }
+    }
+
+    $catStmt = $pdo->prepare("SELECT id FROM categories WHERE slug=?");
+    $catStmt->execute([$type === 'games' ? 'games' : 'apps']);
+    $catId = $catStmt->fetchColumn() ?: null;
+
+    $features     = array_values(array_filter($data['features'] ?? []));
+    $pros         = array_values(array_filter($data['pros'] ?? []));
+    $cons         = array_values(array_filter($data['cons'] ?? []));
+    $installSteps = array_values(array_filter($data['install_steps'] ?? []));
+    $faq          = array_is_list($data['faq'] ?? []) ? $data['faq'] : [];
+
+    $pdo->prepare("INSERT INTO apps (name,slug,category_id,developer,version,android_version,size_mb,license,package_name,icon_path,short_description,long_description,features,pros,cons,install_steps,faq,whats_new,playstore_url,rating,seo_title,meta_description,keywords,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
+        ->execute([
+            $finalName, $slug, $catId,
+            trim($data['developer'] ?? ''), trim($data['version'] ?? ''), trim($data['android_version'] ?? ''),
+            trim($data['size_mb'] ?? ''), trim($data['license'] ?? 'Free'), trim($data['package_name'] ?? ''),
+            $iconPath,
+            trim($data['short_description'] ?? ''), trim($data['long_description'] ?? ''),
+            json_encode($features, JSON_UNESCAPED_UNICODE), json_encode($pros, JSON_UNESCAPED_UNICODE),
+            json_encode($cons, JSON_UNESCAPED_UNICODE), json_encode($installSteps, JSON_UNESCAPED_UNICODE),
+            json_encode($faq, JSON_UNESCAPED_UNICODE), trim($data['whats_new'] ?? ''),
+            $playstoreUrl, (float)($data['rating'] ?? 4.5),
+            trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''),
+        ]);
+    $newId = (int)$pdo->lastInsertId();
+
+    echo json_encode([
+        'success' => true, 'id' => $newId, 'name' => $finalName, 'slug' => $slug,
+        'has_playstore' => (bool)$playstoreUrl, 'has_icon' => (bool)$iconPath,
+        'edit_url' => 'admin.php?page=edit-app&id=' . $newId,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $page   = $_GET['page'] ?? 'dashboard';
 $msg    = '';
 $error  = '';
@@ -581,22 +678,8 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         if ($p) $iconPath = $p;
     } elseif (!empty($_POST['icon_url_import'])) {
         // Icon was imported from Google Play — download it server-side and process it the same way.
-        $remote = filter_var(trim($_POST['icon_url_import']), FILTER_VALIDATE_URL);
-        if ($remote) {
-            $tmp = tempnam(sys_get_temp_dir(), 'icn');
-            $ch = curl_init($remote);
-            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => true]);
-            $bin = curl_exec($ch);
-            $ok = curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $bin;
-            curl_close($ch);
-            if ($ok) {
-                file_put_contents($tmp, $bin);
-                $fakeFile = ['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($bin)];
-                $p = process_icon($fakeFile, $slug);
-                if ($p) $iconPath = $p;
-            }
-            @unlink($tmp);
-        }
+        $p = import_remote_icon($_POST['icon_url_import'], $slug);
+        if ($p) $iconPath = $p;
     } elseif (!empty($_POST['ai_icon_path']) && preg_match('#^uploads/icons/[A-Za-z0-9_\-\.]+\.webp$#', trim($_POST['ai_icon_path']))) {
         // Icon was generated by AI and already saved server-side — just reference it.
         $iconPath = trim($_POST['ai_icon_path']);
@@ -778,6 +861,7 @@ $navLinks = [
     'apps'      => ['label'=>'التطبيقات',     'icon'=>'M4 6h16M4 12h16M4 18h16'],
     'add-app'   => ['label'=>'إضافة تطبيق',   'icon'=>'M12 5v14m-7-7h14'],
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
+    'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
@@ -1318,6 +1402,62 @@ window.EXISTING_DATA = <?= json_encode([
     'install_steps' => $steps, 'faq' => $faqArr,
 ], JSON_UNESCAPED_UNICODE) ?>;
 </script>
+
+<?php
+/* ─────────────── BULK TRENDING APP/GAME GENERATOR ─────────────── */
+elseif ($page === 'bulk-generate'): ?>
+
+<div class="admin-header"><h1>توليد تطبيقات رائجة بالجملة</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.8">
+    يقترح الذكاء الاصطناعي عدداً اخترته من أكثر التطبيقات/الألعاب بحثاً (معدّلة أو رسمية)، ثم يولّد لكل اسم محتوى كاملاً ويحاول تلقائياً
+    العثور على صفحته في Google Play لاستيراد الأيقونة ورابط الصفحة. أي تطبيق يتعذّر جلب رابط تحميل مباشر له يُحفظ <strong style="color:#fbbf24">كمسودة</strong> جاهزة
+    — أضف رابط التحميل من صفحة التعديل ثم انشرها.
+  </p>
+</div>
+
+<div class="panel">
+  <div class="form-grid">
+    <div class="form-group">
+      <label class="form-label">العدد</label>
+      <input class="form-input" type="number" id="bg-count" min="1" max="30" value="10">
+    </div>
+    <div class="form-group">
+      <label class="form-label">النوع</label>
+      <select class="form-select" id="bg-type">
+        <option value="apps">تطبيقات</option>
+        <option value="games">ألعاب</option>
+        <option value="mixed">تطبيقات وألعاب</option>
+      </select>
+    </div>
+    <div class="form-group full">
+      <label class="form-label">تفضيل/مجال إضافي (اختياري)</label>
+      <input class="form-input" id="bg-hint" type="text" placeholder="مثال: أدوات VPN، ألعاب أكشن أوفلاين...">
+    </div>
+  </div>
+  <button type="button" id="btn-bg-suggest" class="btn-ai" style="margin-top:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    اقترح الأسماء
+  </button>
+  <div class="ai-status" id="bg-suggest-status"></div>
+</div>
+
+<div class="panel" id="bg-names-panel" style="display:none">
+  <h2>الأسماء المقترحة — ألغِ تحديد ما لا تريده</h2>
+  <div id="bg-names-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+  <button type="button" id="btn-bg-create" class="btn-save">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+    إنشاء الكل
+  </button>
+  <div style="margin-top:14px;display:none" id="bg-progress">
+    <div style="height:8px;background:var(--navy-600);border-radius:6px;overflow:hidden">
+      <div id="bg-bar" style="height:100%;width:0%;background:linear-gradient(135deg,var(--cyan),var(--purple));transition:width .3s"></div>
+    </div>
+    <div id="bg-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+  </div>
+  <div id="bg-results" style="display:flex;flex-direction:column;gap:8px;margin-top:14px"></div>
+</div>
 
 <?php
 /* ─────────────── CATEGORIES ─────────────── */

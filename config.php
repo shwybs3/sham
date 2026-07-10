@@ -403,6 +403,90 @@ function ai_generate_image(PDO $pdo, string $prompt): array {
     return $last;
 }
 
+/* ═══════════════════════════════════════════════
+   Google Play scraping helpers — public Open Graph
+   tags only (title/description/icon), best effort.
+   Play Store search results are heavily client-side
+   rendered, so playstore_search() can legitimately
+   find nothing for many queries; callers must treat
+   a null return as normal, not an error.
+   ═══════════════════════════════════════════════ */
+function fetch_playstore_meta(string $url, int $timeout = 20): ?array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout, CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept-Language: ar,en;q=0.8'],
+    ]);
+    $html = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!$html || $code !== 200) return null;
+
+    $meta = function (string $prop) use ($html): ?string {
+        if (preg_match('#<meta[^>]+property=["\']' . preg_quote($prop, '#') . '["\'][^>]+content=["\']([^"\']*)["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+        if (preg_match('#<meta[^>]+content=["\']([^"\']*)["\'][^>]+property=["\']' . preg_quote($prop, '#') . '["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+        return null;
+    };
+
+    $title = $meta('og:title');
+    $desc  = $meta('og:description');
+    $image = $meta('og:image');
+    if (!$title && !$desc) return null;
+
+    $pkg = null;
+    if (preg_match('#[?&]id=([a-zA-Z0-9_.]+)#', $url, $m)) $pkg = $m[1];
+    // Clean up common Play Store title suffix "- Apps on Google Play"
+    if ($title) $title = trim(preg_replace('/\s*[-–]\s*(Apps on Google Play|تطبيقات على Google Play).*$/i', '', $title));
+
+    return [
+        'name' => $title,
+        'short_description' => $desc ? mb_substr($desc, 0, 300) : null,
+        'long_description' => $desc,
+        'icon_url' => $image,
+        'package_name' => $pkg,
+        'playstore_url' => $url,
+    ];
+}
+
+// Best-effort: finds the first Play Store app-details link for a free-text search query.
+// Returns null (not an error) when nothing could be scraped — search results are mostly
+// client-side rendered, so this legitimately fails often; callers must fall back gracefully.
+function playstore_search(string $query, int $timeout = 20): ?string {
+    $ch = curl_init('https://play.google.com/store/search?q=' . urlencode($query) . '&c=apps&hl=ar');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout, CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept-Language: ar,en;q=0.8'],
+    ]);
+    $html = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!$html || $code !== 200) return null;
+    if (preg_match('#/store/apps/details\?id=([a-zA-Z0-9_.]+)#', $html, $m)) {
+        return 'https://play.google.com/store/apps/details?id=' . $m[1];
+    }
+    return null;
+}
+
+// Downloads a remote image URL and saves it as a processed app icon (shared by
+// Play Store import and the bulk generator).
+function import_remote_icon(string $remoteUrl, string $slug): ?string {
+    $remote = filter_var(trim($remoteUrl), FILTER_VALIDATE_URL);
+    if (!$remote) return null;
+    $tmp = tempnam(sys_get_temp_dir(), 'icn');
+    $ch = curl_init($remote);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => true]);
+    $bin = curl_exec($ch);
+    $ok = curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && $bin;
+    curl_close($ch);
+    $path = null;
+    if ($ok) {
+        file_put_contents($tmp, $bin);
+        $path = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($bin)], $slug);
+    }
+    @unlink($tmp);
+    return $path;
+}
+
 // Convenience: builds the key/model list from saved settings and runs a plain-text prompt.
 // Returns ['ok'=>bool,'content'=>?string,'error'=>?string]
 function ai_text(PDO $pdo, string $prompt): array {
