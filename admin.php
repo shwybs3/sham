@@ -295,6 +295,211 @@ if (isset($_GET['ajax']) === true && $_GET['ajax'] === 'fetch_playstore' && is_a
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+/* ══════════════════════════════════════════════════════
+   AJAX: AI-generate an app icon (best effort — see
+   ai_generate_image() in config.php for why this can fail
+   even with a valid key: free image models are scarce).
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_icon_ai' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    $desc  = trim($input['description'] ?? '');
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'اسم التطبيق مطلوب']); exit; }
+
+    $prompt = "Generate a professional, modern, minimalist square Android app icon (no text, no watermark, centered symbol, flat/gradient style, 1024x1024) for an app called \"$name\"" . ($desc ? (" — " . mb_substr($desc, 0, 200)) : '') . ".";
+    $r = ai_generate_image($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+
+    $tmp = tempnam(sys_get_temp_dir(), 'aiicn');
+    file_put_contents($tmp, $r['bin']);
+    $fakeFile = ['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($r['bin'])];
+    $path = process_icon($fakeFile, slugify($name));
+    @unlink($tmp);
+
+    if (!$path) { echo json_encode(['success'=>false,'error'=>'تم توليد الصورة لكن تعذّرت معالجتها كأيقونة صالحة']); exit; }
+    echo json_encode(['success'=>true,'path'=>$path,'url'=>url($path)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: AI-generate an app screenshot (best effort, same
+   caveats as the icon endpoint above).
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_screenshot_ai' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    $desc  = trim($input['description'] ?? '');
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'اسم التطبيق مطلوب']); exit; }
+
+    $prompt = "Generate a realistic Android app screenshot mockup (portrait 9:16, clean modern mobile UI, no watermark, no device frame) plausibly showing the in-app interface of an app called \"$name\"" . ($desc ? (" — " . mb_substr($desc, 0, 200)) : '') . ".";
+    $r = ai_generate_image($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+
+    $dir = UPLOAD_PATH . '/screenshots';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $tmp = tempnam(sys_get_temp_dir(), 'aiss');
+    file_put_contents($tmp, $r['bin']);
+    $info = @getimagesize($tmp);
+    if (!$info) { @unlink($tmp); echo json_encode(['success'=>false,'error'=>'تعذرت قراءة الصورة المولّدة']); exit; }
+
+    $fname = slugify($name) . '-ai-' . substr(md5(uniqid()), 0, 6) . '.webp';
+    $dest  = "$dir/$fname";
+    $ok = compress_image_to($tmp, $info['mime'], $dest, 1080, 2000, 82);
+    @unlink($tmp);
+
+    if (!$ok) { echo json_encode(['success'=>false,'error'=>'فشل ضغط الصورة المولّدة']); exit; }
+    $relPath = "uploads/screenshots/$fname";
+    echo json_encode(['success'=>true,'path'=>$relPath,'url'=>url($relPath)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: AI admin assistant — a safe, whitelisted-actions
+   console. The admin types a request in plain language;
+   the model maps it to ONE of a fixed set of actions below
+   and PHP executes it through the exact same functions the
+   rest of admin.php already uses. There is no action that
+   writes to the filesystem outside uploads/, executes shell
+   commands, or touches PHP/template files — by design, this
+   never becomes a live remote-code-execution surface even if
+   the admin session were ever compromised.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true);
+    $message = trim($input['message'] ?? '');
+    if (!$message) { echo json_encode(['success'=>false,'error'=>'اكتب طلباً أولاً']); exit; }
+
+    $recentApps = $pdo->query("SELECT id,name,status FROM apps ORDER BY id DESC LIMIT 40")->fetchAll();
+    $appsList = implode("\n", array_map(fn($a) => "#{$a['id']} {$a['name']} ({$a['status']})", $recentApps));
+    $allowedSettingKeys = ['moneytag_zone','openrouter_model','openrouter_fallback','openrouter_auto_rotate','openrouter_image_model'];
+
+    $prompt = <<<P
+أنت مساعد إدارة داخل لوحة تحكم متجر تطبيقات "yassota". لديك قدرة على تنفيذ إجراءات محدّدة فقط عبر إرجاع JSON — لا تنفّذ أي كود، ولا تكتب ملفات، فقط تختار إجراءً من القائمة المسموحة التالية:
+
+- "chat": للرد على سؤال أو توضيح بدون أي تنفيذ. params: {}
+- "create_app_draft": ينشئ تطبيقاً جديداً كمسودة بمحتوى مولّد بالذكاء الاصطناعي (بدون رابط تحميل — يضيفه الأدمن لاحقاً). params: {"name": "اسم التطبيق"}
+- "regenerate_seo_one": يعيد توليد عنوان/وصف/كلمات SEO لتطبيق محدد. params: {"app_id": رقم}
+- "regenerate_seo_all": يعيد توليد SEO لكل التطبيقات المنشورة. params: {}
+- "generate_icon": يولّد أيقونة بالذكاء الاصطناعي لتطبيق محدد ويحفظها له مباشرة. params: {"app_id": رقم}
+- "update_setting": يغيّر إعداداً غير حساس. المفاتيح المسموحة فقط: moneytag_zone, openrouter_model, openrouter_fallback, openrouter_auto_rotate, openrouter_image_model. params: {"key": "...", "value": "..."}
+- "list_apps": يسرد أحدث التطبيقات. params: {}
+
+قائمة أحدث التطبيقات (id، الاسم، الحالة):
+{$appsList}
+
+طلب الأدمن: "{$message}"
+
+أعد JSON فقط بدون أي نص إضافي أو Markdown بهذا الشكل بالضبط:
+{"action":"...","params":{...},"reply":"رد قصير بالعربية يشرح ماذا ستفعل أو رد مباشر إن كان action=chat"}
+إذا لم يطابق الطلب أي إجراء مسموح أو كان غامضاً، استخدم action="chat" واشرح ذلك في reply.
+P;
+
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $decision = ai_extract_json($r['content']);
+    if (!$decision || empty($decision['action'])) {
+        echo json_encode(['success'=>true,'reply'=>trim($r['content']),'action'=>'chat']); exit;
+    }
+
+    $action = $decision['action'];
+    $params = $decision['params'] ?? [];
+    $reply  = trim($decision['reply'] ?? '');
+    $result = null;
+
+    switch ($action) {
+        case 'create_app_draft':
+            $name = trim($params['name'] ?? '');
+            if (!$name) { $result = 'لم يتم تحديد اسم التطبيق'; break; }
+            $genPrompt = "أنت خبير تسويق تطبيقات أندرويد. التطبيق: \"{$name}\"\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
+            $gr = ai_text($pdo, $genPrompt);
+            $data = $gr['ok'] ? ai_extract_json($gr['content']) : null;
+            $slug = unique_slug($pdo, $name);
+            $pdo->prepare("INSERT INTO apps (name,slug,seo_title,meta_description,keywords,short_description,long_description,developer,version,android_version,size_mb,rating,whats_new,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
+                ->execute([
+                    $name, $slug,
+                    trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''),
+                    trim($data['short_description'] ?? ''), trim($data['long_description'] ?? ''),
+                    trim($data['developer'] ?? ''), trim($data['version'] ?? '1.0.0'), trim($data['android_version'] ?? ''),
+                    trim($data['size_mb'] ?? ''), (float)($data['rating'] ?? 4.5), trim($data['whats_new'] ?? ''),
+                ]);
+            $newId = (int)$pdo->lastInsertId();
+            $result = "تم إنشاء مسودة #{$newId} — {$name}. أضف رابط التحميل والأيقونة ثم انشرها من صفحة التعديل.";
+            break;
+
+        case 'regenerate_seo_one':
+            $id = (int)($params['app_id'] ?? 0);
+            $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
+            $stmt->execute([$id]); $a = $stmt->fetch();
+            if (!$a) { $result = "لم يتم العثور على تطبيق برقم #{$id}"; break; }
+            $seoPrompt = "أنت خبير SEO محترف. التطبيق: \"{$a['name']}\" الوصف الحالي: \"{$a['short_description']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}";
+            $sr = ai_text($pdo, $seoPrompt);
+            $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
+            if (!$sd) { $result = 'فشل التوليد'; break; }
+            $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
+                ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
+            $result = "تم تحديث SEO للتطبيق #{$id} — {$a['name']}";
+            break;
+
+        case 'regenerate_seo_all':
+            $ids = $pdo->query("SELECT id FROM apps WHERE status='published'")->fetchAll(PDO::FETCH_COLUMN);
+            $done = 0;
+            foreach ($ids as $id) {
+                $stmt = $pdo->prepare("SELECT name,short_description FROM apps WHERE id=?");
+                $stmt->execute([$id]); $a = $stmt->fetch();
+                if (!$a) continue;
+                $sr = ai_text($pdo, "أنت خبير SEO. التطبيق: \"{$a['name']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
+                $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
+                if ($sd) {
+                    $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
+                        ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
+                    $done++;
+                }
+            }
+            $result = "تم تحديث SEO لـ {$done} من أصل " . count($ids) . " تطبيق منشور.";
+            break;
+
+        case 'generate_icon':
+            $id = (int)($params['app_id'] ?? 0);
+            $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
+            $stmt->execute([$id]); $a = $stmt->fetch();
+            if (!$a) { $result = "لم يتم العثور على تطبيق برقم #{$id}"; break; }
+            $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist square Android app icon (no text, no watermark, centered symbol, flat/gradient style, 1024x1024) for an app called \"{$a['name']}\".");
+            if (!$ir['ok']) { $result = "فشل توليد الأيقونة: {$ir['error']}"; break; }
+            $tmp = tempnam(sys_get_temp_dir(), 'aiicn');
+            file_put_contents($tmp, $ir['bin']);
+            $path = process_icon(['tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>strlen($ir['bin'])], slugify($a['name']));
+            @unlink($tmp);
+            if (!$path) { $result = 'تم توليد الصورة لكن تعذّرت معالجتها'; break; }
+            $pdo->prepare("UPDATE apps SET icon_path=? WHERE id=?")->execute([$path, $id]);
+            $result = "تم توليد وحفظ أيقونة جديدة للتطبيق #{$id} — {$a['name']}";
+            break;
+
+        case 'update_setting':
+            $key = trim($params['key'] ?? '');
+            $val = trim($params['value'] ?? '');
+            if (!in_array($key, $allowedSettingKeys, true)) { $result = "الإعداد \"{$key}\" غير مسموح بتغييره من هنا"; break; }
+            set_cfg($pdo, $key, $val);
+            $result = "تم تحديث الإعداد {$key}";
+            break;
+
+        case 'list_apps':
+            $result = $appsList ?: 'لا توجد تطبيقات بعد';
+            break;
+
+        case 'chat':
+        default:
+            $result = null;
+            break;
+    }
+
+    echo json_encode(['success'=>true,'action'=>$action,'reply'=>$reply,'result'=>$result], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $page   = $_GET['page'] ?? 'dashboard';
 $msg    = '';
 $error  = '';
@@ -327,7 +532,7 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
-    foreach (['openrouter_key','openrouter_model','openrouter_fallback','moneytag_zone'] as $k) {
+    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','moneytag_zone'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
@@ -392,6 +597,9 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             }
             @unlink($tmp);
         }
+    } elseif (!empty($_POST['ai_icon_path']) && preg_match('#^uploads/icons/[A-Za-z0-9_\-\.]+\.webp$#', trim($_POST['ai_icon_path']))) {
+        // Icon was generated by AI and already saved server-side — just reference it.
+        $iconPath = trim($_POST['ai_icon_path']);
     }
 
     // Screenshots
@@ -399,6 +607,13 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
     if (!empty($_FILES['screenshots']['name'][0])) {
         $newShots = process_screenshots($_FILES['screenshots'], $slug);
         $shots = array_merge($shots, $newShots);
+    }
+    if (!empty($_POST['ai_screenshot_paths']) && is_array($_POST['ai_screenshot_paths'])) {
+        // Screenshots generated by AI and already saved server-side — just reference them.
+        foreach ($_POST['ai_screenshot_paths'] as $p) {
+            $p = trim($p);
+            if (preg_match('#^uploads/screenshots/[A-Za-z0-9_\-\.]+\.webp$#', $p)) $shots[] = $p;
+        }
     }
 
     // Build JSON fields
@@ -563,6 +778,7 @@ $navLinks = [
     'apps'      => ['label'=>'التطبيقات',     'icon'=>'M4 6h16M4 12h16M4 18h16'],
     'add-app'   => ['label'=>'إضافة تطبيق',   'icon'=>'M12 5v14m-7-7h14'],
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
+    'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -942,20 +1158,35 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
         <?php else: ?>
           <img id="icon-preview" src="" style="display:none;width:64px;height:64px;border-radius:14px;object-fit:cover;margin-bottom:8px">
         <?php endif; ?>
-        <label class="upload-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          اختر أيقونة (مربّعة يفضّل)
-          <input type="file" name="icon" accept="image/*" data-preview="icon-preview" hidden>
-        </label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="upload-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            اختر أيقونة (مربّعة يفضّل)
+            <input type="file" name="icon" accept="image/*" data-preview="icon-preview" hidden>
+          </label>
+          <button type="button" id="btn-gen-icon-ai" class="btn-ai" style="padding:9px 16px;font-size:12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            توليد بالذكاء الاصطناعي
+          </button>
+        </div>
+        <div class="form-hint" id="icon-ai-status">إن لم يتوفر موديل توليد صور، استخدم استيراد Google Play أعلى الصفحة للحصول على الأيقونة الحقيقية.</div>
+        <input type="hidden" name="ai_icon_path" id="f-ai-icon-path" value="">
       </div>
       <div class="form-group">
         <label class="form-label">صور التطبيق (Screenshots)</label>
-        <label class="upload-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          اختر صور متعددة
-          <input type="file" name="screenshots[]" accept="image/*" multiple hidden>
-        </label>
-        <div class="form-hint">يمكنك رفع عدة صور مرة واحدة — سيتم ضغطها تلقائياً لـ WebP</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="upload-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            اختر صور متعددة
+            <input type="file" name="screenshots[]" accept="image/*" multiple hidden>
+          </label>
+          <button type="button" id="btn-gen-shot-ai" class="btn-ai" style="padding:9px 16px;font-size:12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            توليد صورة بالذكاء الاصطناعي
+          </button>
+        </div>
+        <div class="form-hint" id="shot-ai-status">يمكنك رفع عدة صور مرة واحدة — سيتم ضغطها تلقائياً لـ WebP. يمكنك أيضاً توليد صور بالذكاء الاصطناعي (زر عدة مرات لعدة صور).</div>
+        <div id="ai-shots-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
       </div>
     </div>
     <?php
@@ -1231,6 +1462,19 @@ elseif ($page === 'settings'): ?>
   </div>
 
   <div class="panel">
+    <h2>توليد الصور بالذكاء الاصطناعي <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <div class="form-group">
+      <label class="form-label">معرّف موديل توليد الصور على OpenRouter</label>
+      <input class="form-input" type="text" name="openrouter_image_model" value="<?= h(get_cfg($pdo,'openrouter_image_model')) ?>" placeholder="مثال: google/gemini-2.5-flash-image-preview">
+      <div class="form-hint">
+        نماذج توليد الصور المجانية والموثوقة نادرة جداً على OpenRouter مقارنة بنماذج النصوص — إن تركت هذا الحقل فارغاً أو فشل التوليد،
+        استخدم بدلاً منه زر "استيراد من Google Play" الذي يجلب الأيقونة الحقيقية للتطبيق (وهو الخيار الموصى به).
+        اطّلع على قائمة الموديلات المتاحة من <a href="https://openrouter.ai/models?modality=text-%3Eimage" target="_blank" style="color:var(--cyan)">openrouter.ai/models</a>.
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>إعدادات الإعلانات</h2>
     <div class="form-group">
       <label class="form-label">MoneyTag Zone ID</label>
@@ -1254,6 +1498,34 @@ elseif ($page === 'settings'): ?>
 
   <button type="submit" class="btn-save">حفظ الإعدادات</button>
 </form>
+
+<?php
+/* ─────────────── AI ASSISTANT ─────────────── */
+elseif ($page === 'assistant'): ?>
+
+<div class="admin-header"><h1>مساعد الذكاء الاصطناعي</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.8">
+    اكتب طلبك بلغة طبيعية وسينفّذه المساعد مباشرة عبر إجراءات محدّدة وآمنة فقط: إنشاء مسودة تطبيق بمحتوى مولّد،
+    إعادة توليد SEO لتطبيق أو للكل، توليد أيقونة بالذكاء الاصطناعي، أو تعديل إعداد غير حساس.
+    المساعد <strong style="color:var(--white)">لا يكتب أو يعدّل ملفات الموقع البرمجية</strong> — كل تغييرات الكود تمر عبر مطوّر الموقع، حفاظاً على أمان السيرفر.
+  </p>
+  <div style="margin-top:12px;font-size:12px;color:var(--muted)">
+    أمثلة: <em>"أنشئ مسودة لتطبيق CapCut Pro"</em> · <em>"حدّث SEO لكل التطبيقات"</em> · <em>"ولّد أيقونة للتطبيق رقم 3"</em>
+  </div>
+</div>
+
+<div class="panel">
+  <div id="assistant-log" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;max-height:50vh;overflow-y:auto"></div>
+  <div class="ai-row">
+    <input class="form-input" id="assistant-input" type="text" placeholder="اكتب طلبك هنا...">
+    <button type="button" id="btn-assistant-send" class="btn-ai">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+      إرسال
+    </button>
+  </div>
+</div>
 
 <?php endif; ?>
 

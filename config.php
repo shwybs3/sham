@@ -329,6 +329,80 @@ function openrouter_call_rotating(array $keys, array $models, string $prompt): a
     return ['ok' => false, 'content' => null, 'model' => null, 'trace' => $trace];
 }
 
+/* ═══════════════════════════════════════════════
+   AI image generation — best-effort, since reliable
+   free image-generation models on OpenRouter are
+   scarce. Uses the admin-configured model only (no
+   auto-rotation across dozens of text models like the
+   content generator does); fails with a clear message
+   rather than a crash when the model doesn't return an
+   image, so the UI can point the admin at the Google
+   Play icon-import fallback instead.
+   ═══════════════════════════════════════════════ */
+function ai_generate_image_raw(string $key, string $model, string $prompt, int $timeout = 90): array {
+    if (!$key)   return ['ok' => false, 'error' => 'لا يوجد مفتاح API'];
+    if (!$model) return ['ok' => false, 'error' => 'لم يتم تحديد موديل توليد صور'];
+
+    $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $key, 'Content-Type: application/json',
+            'HTTP-Referer: ' . SITE_URL, 'X-Title: yassota',
+        ],
+        CURLOPT_POSTFIELDS => json_encode([
+            'model' => $model,
+            'messages' => [['role' => 'user', 'content' => $prompt]],
+            'modalities' => ['image', 'text'],
+        ]),
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err) return ['ok' => false, 'error' => "خطأ اتصال: $err"];
+    if ($code !== 200 || !$res) {
+        $d = json_decode((string)$res, true);
+        return ['ok' => false, 'error' => $d['error']['message'] ?? "رمز استجابة غير متوقع: $code"];
+    }
+
+    $d = json_decode($res, true);
+    $msg = $d['choices'][0]['message'] ?? null;
+    if (!$msg) return ['ok' => false, 'error' => 'رد فارغ من الموديل'];
+
+    // OpenRouter's image-output convention: message.images[].image_url.url (a data: URI).
+    $dataUri = $msg['images'][0]['image_url']['url'] ?? null;
+    // Fallback: some models inline a data: URI directly in the text content.
+    if (!$dataUri && is_string($msg['content'] ?? null)
+        && preg_match('#data:image/\w+;base64,[A-Za-z0-9+/=]+#', $msg['content'], $m)) {
+        $dataUri = $m[0];
+    }
+    if (!$dataUri) {
+        return ['ok' => false, 'error' => 'هذا الموديل لا يُرجع صوراً فعلياً — جرّب موديل توليد صور مختلف من الإعدادات، أو استخدم استيراد الأيقونة من Google Play بدلاً من ذلك.'];
+    }
+    if (!preg_match('#^data:image/(\w+);base64,(.+)$#s', $dataUri, $m)) {
+        return ['ok' => false, 'error' => 'صيغة الصورة المُرجعة غير مدعومة'];
+    }
+    $bin = base64_decode($m[2], true);
+    if (!$bin) return ['ok' => false, 'error' => 'تعذر فك ترميز الصورة المُرجعة'];
+    return ['ok' => true, 'bin' => $bin];
+}
+
+// Tries every configured key with the single admin-configured image model.
+function ai_generate_image(PDO $pdo, string $prompt): array {
+    $keys  = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) return ['ok' => false, 'error' => 'لم يتم إضافة مفتاح OpenRouter بعد.'];
+    $model = trim(get_cfg($pdo, 'openrouter_image_model'));
+    if (!$model) return ['ok' => false, 'error' => 'لم يتم تحديد موديل توليد صور في الإعدادات. النماذج المجانية القادرة على توليد صور نادرة جداً — يمكنك تجربة موديل مدفوع، أو استخدام استيراد الأيقونة من Google Play بدلاً من ذلك.'];
+    $last = ['ok' => false, 'error' => 'فشل غير متوقع'];
+    foreach ($keys as $key) {
+        $last = ai_generate_image_raw($key, $model, $prompt);
+        if ($last['ok']) return $last;
+    }
+    return $last;
+}
+
 // Convenience: builds the key/model list from saved settings and runs a plain-text prompt.
 // Returns ['ok'=>bool,'content'=>?string,'error'=>?string]
 function ai_text(PDO $pdo, string $prompt): array {
@@ -391,6 +465,38 @@ function is_admin(): bool { return !empty($_SESSION['admin_id']); }
 
 function require_admin(): void {
     if (!is_admin()) { header('Location: ' . url('admin.php?page=login')); exit; }
+}
+
+function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? ''; }
+
+/**
+ * Optional defense-in-depth IP allowlist for the whole admin panel (including
+ * the login page). Disabled by default — an empty `admin_ip_allowlist` setting
+ * means no restriction. This is always ADDITIONAL to username/password login,
+ * never a replacement for it, and is configured by an already-logged-in admin
+ * from Settings (which auto-includes their own current IP, so saving it can
+ * never lock them out of the account that just saved it).
+ */
+function admin_ip_check(PDO $pdo): void {
+    $raw = trim(get_cfg($pdo, 'admin_ip_allowlist'));
+    if ($raw === '') return;
+    $allowed = array_filter(array_map('trim', preg_split('/[\r\n,]+/', $raw)));
+    if (in_array(client_ip(), $allowed, true)) return;
+
+    http_response_code(403);
+    $ip = h(client_ip());
+    die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>الوصول مرفوض</title>
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#03080f;color:#e8f4f8;padding:40px 16px;line-height:1.9;text-align:center}
+    .box{max-width:480px;margin:60px auto;background:#0a1628;border:1px solid rgba(255,68,102,.3);border-radius:14px;padding:32px}
+    h1{color:#ff4466;font-size:20px;margin:0 0 14px}
+    code{background:#152642;color:#00f5ff;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
+    </style></head><body><div class="box">
+    <h1>الوصول مرفوض</h1>
+    <p>عنوان IP الخاص بك غير مدرج ضمن قائمة الوصول المسموح بها للوحة التحكم.</p>
+    <p>عنوانك الحالي:<br><code>' . $ip . '</code></p>
+    </div></body></html>');
 }
 
 function process_icon(array $file, string $slug): ?string {

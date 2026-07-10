@@ -265,6 +265,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── AI-generate icon ── */
+  const btnGenIcon = document.getElementById('btn-gen-icon-ai');
+  if (btnGenIcon) {
+    btnGenIcon.addEventListener('click', async () => {
+      const name = document.getElementById('f-name')?.value.trim();
+      const desc = document.getElementById('f-short-desc')?.value.trim();
+      const status = document.getElementById('icon-ai-status');
+      if (!name) { status.textContent = 'اكتب اسم التطبيق أولاً'; return; }
+      btnGenIcon.disabled = true;
+      status.textContent = '⏳ جاري توليد الأيقونة...';
+      try {
+        const res = await fetch('admin.php?ajax=generate_icon_ai', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: desc })
+        });
+        const data = await res.json();
+        if (!data.success) { status.textContent = '❌ ' + data.error; btnGenIcon.disabled = false; return; }
+        const preview = document.getElementById('icon-preview');
+        if (preview) { preview.src = data.url; preview.style.display = 'block'; }
+        const hidden = document.getElementById('f-ai-icon-path');
+        if (hidden) hidden.value = data.path;
+        status.textContent = '✅ تم التوليد — راجع الأيقونة ثم احفظ التطبيق';
+      } catch { status.textContent = '❌ خطأ في الاتصال'; }
+      btnGenIcon.disabled = false;
+    });
+  }
+
+  /* ── AI-generate screenshot (repeatable) ── */
+  const btnGenShot = document.getElementById('btn-gen-shot-ai');
+  if (btnGenShot) {
+    btnGenShot.addEventListener('click', async () => {
+      const name = document.getElementById('f-name')?.value.trim();
+      const desc = document.getElementById('f-short-desc')?.value.trim();
+      const status = document.getElementById('shot-ai-status');
+      const preview = document.getElementById('ai-shots-preview');
+      if (!name) { status.textContent = 'اكتب اسم التطبيق أولاً'; return; }
+      btnGenShot.disabled = true;
+      status.textContent = '⏳ جاري توليد صورة...';
+      try {
+        const res = await fetch('admin.php?ajax=generate_screenshot_ai', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: desc })
+        });
+        const data = await res.json();
+        if (!data.success) { status.textContent = '❌ ' + data.error; btnGenShot.disabled = false; return; }
+        const img = document.createElement('img');
+        img.src = data.url;
+        img.style.cssText = 'width:70px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border-c)';
+        preview.appendChild(img);
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden'; hidden.name = 'ai_screenshot_paths[]'; hidden.value = data.path;
+        preview.appendChild(hidden);
+        status.textContent = '✅ تمت إضافة صورة — يمكنك التوليد مجدداً لصور إضافية';
+      } catch { status.textContent = '❌ خطأ في الاتصال'; }
+      btnGenShot.disabled = false;
+    });
+  }
+
   /* ── Continue long description ── */
   const btnContinue = document.getElementById('btn-continue-desc');
   const descField = document.getElementById('f-long-desc');
@@ -351,6 +409,50 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch { status.textContent = '❌ خطأ في الاتصال'; }
       btnBulkSeo.disabled = false;
     });
+  }
+
+  /* ── AI admin assistant (whitelisted-actions console) ── */
+  const assistantInput = document.getElementById('assistant-input');
+  const assistantBtn = document.getElementById('btn-assistant-send');
+  const assistantLog = document.getElementById('assistant-log');
+  function assistantAppend(role, text) {
+    if (!assistantLog) return;
+    const bubble = document.createElement('div');
+    const isUser = role === 'user';
+    bubble.style.cssText = `align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;` +
+      (isUser ? 'background:rgba(0,245,255,.1);border:1px solid rgba(0,245,255,.25);color:var(--white)'
+              : 'background:var(--navy-600);border:1px solid var(--border-c);color:var(--white)');
+    bubble.textContent = text;
+    assistantLog.appendChild(bubble);
+    assistantLog.scrollTop = assistantLog.scrollHeight;
+  }
+  async function sendAssistantMessage() {
+    const msg = assistantInput?.value.trim();
+    if (!msg) return;
+    assistantAppend('user', msg);
+    assistantInput.value = '';
+    assistantBtn.disabled = true;
+    assistantAppend('assistant', '⏳ ...');
+    try {
+      const res = await fetch('admin.php?ajax=assistant', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      assistantLog.lastChild.remove();
+      if (!data.success) { assistantAppend('assistant', '❌ ' + data.error); assistantBtn.disabled = false; return; }
+      let text = data.reply || '';
+      if (data.result) text += (text ? '\n\n' : '') + data.result;
+      assistantAppend('assistant', text || '(تم التنفيذ)');
+    } catch {
+      assistantLog.lastChild.remove();
+      assistantAppend('assistant', '❌ خطأ في الاتصال');
+    }
+    assistantBtn.disabled = false;
+  }
+  if (assistantBtn) {
+    assistantBtn.addEventListener('click', sendAssistantMessage);
+    assistantInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendAssistantMessage(); });
   }
 });
 
