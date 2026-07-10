@@ -1,0 +1,121 @@
+/* ════════════════════════════════════════════
+   YASSOTA — main.js
+   ════════════════════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ── Reveal on Scroll ── */
+  const reveals = document.querySelectorAll('.reveal');
+  if (reveals.length && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    reveals.forEach(el => io.observe(el));
+  } else {
+    reveals.forEach(el => el.classList.add('visible'));
+  }
+
+  /* ── Sidebar Toggle (mobile) ── */
+  const navToggle = document.querySelector('.nav-toggle');
+  const sidebar = document.querySelector('.sidebar');
+  if (navToggle && sidebar) {
+    navToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.addEventListener('click', (e) => {
+      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== navToggle)
+        sidebar.classList.remove('open');
+    });
+  }
+
+  /* ── Category Chips Filter ── */
+  document.querySelectorAll('.cat-chip[data-cat]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const url = new URL(location.href);
+      const val = chip.dataset.cat;
+      if (val === 'all') url.searchParams.delete('cat'); else url.searchParams.set('cat', val);
+      url.searchParams.delete('page');
+      location.href = url.toString();
+    });
+  });
+
+  /* ── Live Timer (REC) ── */
+  const timerEl = document.querySelector('.rec-timer');
+  if (timerEl) {
+    let s = 0;
+    setInterval(() => {
+      s++;
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      timerEl.textContent = mm + ':' + ss;
+    }, 1000);
+  }
+
+  /* ── Lightbox ── */
+  const lightbox = document.querySelector('.lightbox');
+  if (lightbox) {
+    const lbImg = lightbox.querySelector('.lightbox-img');
+    const shots = [...document.querySelectorAll('.screenshot-thumb img')];
+    let cur = 0;
+    const open = (i) => { cur = i; lbImg.src = shots[i].src; lightbox.classList.add('open'); };
+    const close = () => lightbox.classList.remove('open');
+    const prev = () => open((cur - 1 + shots.length) % shots.length);
+    const next = () => open((cur + 1) % shots.length);
+
+    document.querySelectorAll('.screenshot-thumb').forEach((el, i) => el.addEventListener('click', () => open(i)));
+    lightbox.querySelector('.lightbox-close')?.addEventListener('click', close);
+    lightbox.querySelector('.lightbox-prev')?.addEventListener('click', prev);
+    lightbox.querySelector('.lightbox-next')?.addEventListener('click', next);
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) close(); });
+    document.addEventListener('keydown', (e) => {
+      if (!lightbox.classList.contains('open')) return;
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowRight') prev();
+      if (e.key === 'ArrowLeft') next();
+    });
+  }
+
+  /* ── FAQ Accordion ── */
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.querySelector('.faq-q')?.addEventListener('click', () => {
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(o => o.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+
+  /* ── Sticky Download Bar (mobile, on scroll) ── */
+  const stickyDl = document.querySelector('.sticky-dl');
+  if (stickyDl) {
+    const hero = document.querySelector('.app-hero') || document.querySelector('.hero-banner');
+    const io2 = new IntersectionObserver(
+      (entries) => stickyDl.classList.toggle('visible', !entries[0].isIntersecting),
+      { threshold: 0 }
+    );
+    if (hero) io2.observe(hero);
+  }
+
+  /* ── Smooth card hover ripple ── */
+  document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(el => {
+    el.addEventListener('click', function (e) {
+      const ripple = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      ripple.style.cssText = `
+        position:absolute;border-radius:50%;
+        width:100px;height:100px;
+        top:${e.clientY - rect.top - 50}px;
+        left:${e.clientX - rect.left - 50}px;
+        background:rgba(0,245,255,.15);
+        transform:scale(0);
+        animation:ripple .5s ease forwards;
+        pointer-events:none;
+      `;
+      if (getComputedStyle(this).position === 'static') this.style.position = 'relative';
+      this.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 500);
+    });
+  });
+});
+
+/* Global ripple keyframe */
+const style = document.createElement('style');
+style.textContent = '@keyframes ripple{to{transform:scale(4);opacity:0}}';
+document.head.appendChild(style);

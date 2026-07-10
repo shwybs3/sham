@@ -1,0 +1,13 @@
+# Local/dev-only — never commit real credentials or uploaded user content
+config.local.php
+uploads/icons/*
+uploads/screenshots/*
+uploads/.cache/
+uploads/.openrouter_models_cache.json
+uploads/*.log
+db-error.log
+*.log
+.DS_Store
+
+!uploads/icons/.gitkeep
+!uploads/screenshots/.gitkeep
