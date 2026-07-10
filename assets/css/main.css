@@ -264,6 +264,7 @@ button, input, textarea, select { font-family: inherit; }
   position: absolute; inset: 0;
   background: linear-gradient(135deg, rgba(0,245,255,.04), transparent);
   opacity: 0; transition: var(--transition);
+  pointer-events: none; /* purely decorative hover glow — must not swallow clicks on the icon link or download button beneath it */
 }
 .app-card:hover {
   border-color: rgba(0,245,255,.4);

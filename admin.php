@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+admin_ip_check($pdo);
 
 /* ══════════════════════════════════════════════════════
    AJAX: Generate AI data (multi-key × multi-model rotation)
@@ -330,6 +331,16 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
+
+    // Optional IP allowlist — auto-include the saving admin's current IP so a save can never lock them out.
+    $newAllowlist = trim($_POST['admin_ip_allowlist'] ?? '');
+    if ($newAllowlist !== '') {
+        $ips = array_filter(array_map('trim', preg_split('/[\r\n,]+/', $newAllowlist)));
+        if (!in_array(client_ip(), $ips, true)) $ips[] = client_ip();
+        set_cfg($pdo, 'admin_ip_allowlist', implode("\n", array_unique($ips)));
+    } else {
+        set_cfg($pdo, 'admin_ip_allowlist', '');
+    }
     $msg = 'تم حفظ الإعدادات';
 }
 
@@ -569,7 +580,7 @@ $navLinks = [
 <!-- ═══ MOBILE TOPBAR (يظهر فقط على الشاشات الصغيرة) ═══ -->
 <div class="admin-mobile-topbar">
   <button type="button" class="admin-menu-toggle" id="admin-menu-toggle" aria-label="القائمة" aria-expanded="false">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="12" cy="19" r="2.1"/></svg>
   </button>
   <div class="admin-logo" style="padding:0;border:none;margin:0;font-size:16px">yass<span>ota</span></div>
   <a href="admin.php?page=logout" style="color:var(--danger)">
@@ -1225,6 +1236,19 @@ elseif ($page === 'settings'): ?>
       <label class="form-label">MoneyTag Zone ID</label>
       <input class="form-input" type="text" name="moneytag_zone" value="<?= h(get_cfg($pdo,'moneytag_zone','258058')) ?>">
       <div class="form-hint">الرمز الحالي المفعّل: 258058 على الرابط quge5.com/88/tag.min.js</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>تقييد وصول لوحة التحكم بعنوان IP <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      حماية إضافية فوق تسجيل الدخول بكلمة المرور — وليست بديلاً عنه. اترك الحقل فارغاً لتعطيل هذا القيد (الوضع الافتراضي).
+      إذا فعّلته، عنوانك الحالي <strong style="color:var(--cyan)"><?= h(client_ip()) ?></strong> يُضاف تلقائياً لمنع إقفال وصولك عن طريق الخطأ.
+    </p>
+    <div class="form-group">
+      <label class="form-label">عناوين IP المسموح بها (سطر لكل عنوان)</label>
+      <textarea class="form-textarea" name="admin_ip_allowlist" rows="3" placeholder="اتركه فارغاً لتعطيل القيد"><?= h(get_cfg($pdo,'admin_ip_allowlist')) ?></textarea>
+      <div class="form-hint">أي عنوان IP خارج هذه القائمة سيُمنع من فتح admin.php بالكامل، بما فيها صفحة تسجيل الدخول.</div>
     </div>
   </div>
 
