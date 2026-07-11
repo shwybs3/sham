@@ -63,7 +63,7 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   <meta name="twitter:title" content="<?= h($seoTitle) ?>">
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
-  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
   <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
@@ -88,9 +88,9 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
     <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= number_format($totalApps) ?> تطبيق</span>
   </div>
 
-  <?php if (!empty($category['description'])): ?>
+  <?php $catDescription = clean_long_text($category['description'] ?? ''); if ($catDescription !== ''): ?>
   <div class="section-box reveal" style="margin-bottom:16px">
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($category['description'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($catDescription)) ?></div>
   </div>
   <?php endif; ?>
 
@@ -101,6 +101,6 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
 </div>
 
 <?php render_site_footer(); ?>
-<script src="assets/js/main.js"></script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>

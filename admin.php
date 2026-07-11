@@ -736,6 +736,16 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $forcedDraft = true;
     }
 
+    // Self-heal a common data-entry mistake: a Play Store URL pasted into the
+    // "Play Store version" field (which should only ever hold a short string
+    // like "12.8.0") instead of the dedicated Play Store URL field.
+    $playStoreVersionIn = trim($_POST['play_store_version'] ?? '');
+    $playstoreUrlIn     = trim($_POST['playstore_url'] ?? '');
+    if (str_contains($playStoreVersionIn, '://')) {
+        if ($playstoreUrlIn === '') $playstoreUrlIn = $playStoreVersionIn;
+        $playStoreVersionIn = '';
+    }
+
     $d = [
         'name'              => $name,
         'seo_title'         => trim($_POST['seo_title'] ?? ''),
@@ -748,8 +758,8 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'offers_text'       => trim($_POST['offers_text'] ?? ''),
         'developer'         => trim($_POST['developer'] ?? ''),
         'version'           => trim($_POST['version'] ?? ''),
-        'play_store_version'=> trim($_POST['play_store_version'] ?? ''),
-        'playstore_url'     => trim($_POST['playstore_url'] ?? ''),
+        'play_store_version'=> $playStoreVersionIn,
+        'playstore_url'     => $playstoreUrlIn,
         'android_version'   => trim($_POST['android_version'] ?? ''),
         'size_mb'           => trim($_POST['size_mb'] ?? ''),
         'license'           => trim($_POST['license'] ?? 'Free'),
@@ -859,7 +869,7 @@ if ($page === 'login'): ?>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
 <body>
 <div class="admin-login">
@@ -908,7 +918,7 @@ $navLinks = [
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
 <body>
 <!-- ═══ MOBILE TOPBAR (يظهر فقط على الشاشات الصغيرة) ═══ -->
@@ -1765,6 +1775,6 @@ elseif ($page === 'assistant'): ?>
 </div><!-- /admin-main -->
 </div><!-- /admin-wrap -->
 
-<script src="assets/js/admin.js"></script>
+<script src="<?= h(asset_url('assets/js/admin.js')) ?>"></script>
 </body>
 </html>

@@ -15,7 +15,7 @@ $metaDesc = 'شروط استخدام منصة yassota لتحميل التطبي�
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
   <link rel="canonical" href="<?= h(url('terms.php')) ?>">
-  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
 </head>
@@ -64,6 +64,6 @@ $metaDesc = 'شروط استخدام منصة yassota لتحميل التطبي�
 </div>
 
 <?php render_site_footer(); ?>
-<script src="assets/js/main.js"></script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>

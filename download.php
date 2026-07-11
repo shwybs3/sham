@@ -38,8 +38,8 @@ if (!$hasLink) $url = '#';
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تحميل <?= h($app['name']) ?> — yassota</title>
   <meta name="robots" content="noindex,follow">
-  <link rel="stylesheet" href="<?= h(url('assets/css/main.css')) ?>">
-  <link rel="stylesheet" href="<?= h(url('assets/css/download.css')) ?>">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
   <!-- MoneyTag -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -67,7 +67,7 @@ if (!$hasLink) $url = '#';
 
     <!-- App icon -->
     <?php if ($app['icon_path']): ?>
-      <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="dl-app-icon">
+      <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dl-app-icon">
     <?php else: ?>
       <div class="dl-icon-placeholder">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5">

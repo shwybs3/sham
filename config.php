@@ -517,6 +517,18 @@ function ai_text(PDO $pdo, string $prompt): array {
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
 }
 
+// Trims and collapses 3+ consecutive blank lines down to a single blank
+// line. AI-generated long-form text occasionally contains long runs of
+// blank lines (from concatenating multiple "continue writing" passes, or
+// a model emitting extra whitespace); left as-is, nl2br() turns each one
+// into a <br>, which renders as a large empty visual gap on the page even
+// though the field technically isn't empty.
+function clean_long_text(?string $s): string {
+    $s = trim($s ?? '');
+    if ($s === '') return '';
+    return preg_replace('/\n{3,}/', "\n\n", $s);
+}
+
 // Extract the first {...} JSON object from a raw AI response (strips markdown fences).
 function ai_extract_json(string $raw): ?array {
     $raw = trim(preg_replace(['/^```json\s*/mi', '/\s*```$/m', '/^```\s*/m'], '', $raw));

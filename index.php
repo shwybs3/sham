@@ -53,7 +53,7 @@ $siteName = 'yassota';
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="yassota — تحميل التطبيقات">
   <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">
-  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <!-- MoneyTag Ads -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -173,6 +173,6 @@ $siteName = 'yassota';
 
 <?php render_site_footer(); ?>
 
-<script src="assets/js/main.js"></script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>

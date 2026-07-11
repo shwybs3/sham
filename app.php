@@ -30,6 +30,15 @@ $cons         = json_decode($app['cons'] ?? '[]', true) ?: [];
 $installSteps = json_decode($app['install_steps'] ?? '[]', true) ?: [];
 $faq          = json_decode($app['faq'] ?? '[]', true) ?: [];
 
+// Cleaned long-form text — trimmed and with runs of blank lines collapsed,
+// so a field that's empty or whitespace-only never renders a big visual
+// gap via nl2br(), and the section it belongs to is skipped entirely.
+$longDescription = clean_long_text($app['long_description'] ?? '') ?: clean_long_text($app['short_description'] ?? '');
+$whatsNew        = clean_long_text($app['whats_new'] ?? '');
+$offersText      = clean_long_text($app['offers_text'] ?? '');
+$privacyPolicy   = clean_long_text($app['privacy_policy'] ?? '');
+$termsContent    = clean_long_text($app['terms_content'] ?? '');
+
 // Related apps
 $related = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
     WHERE category_id=? AND id!=? AND status='published' LIMIT 6");
@@ -99,8 +108,8 @@ function wave(): string {
   <meta property="og:url" content="<?= h(app_url($app['slug'])) ?>">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $schema ?></script>
-  <link rel="stylesheet" href="assets/css/main.css">
-  <link rel="stylesheet" href="assets/css/detail.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/detail.css')) ?>">
   <!-- MoneyTag -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -216,9 +225,15 @@ function wave(): string {
   <!-- Meta Info Grid -->
   <div class="app-meta-grid reveal">
     <?php
+    // Defensive: this field is meant to hold a short version string (e.g. "12.8.0"),
+    // but old/manually-entered data sometimes has a full Play Store URL pasted into
+    // it by mistake — never render that as a "version".
+    $playStoreVersion = $app['play_store_version'] ?? '';
+    if (str_contains($playStoreVersion, '://')) $playStoreVersion = null;
+
     $metas = [
         ['label'=>'الإصدار','val'=>$app['version'],'class'=>'version'],
-        ['label'=>'إصدار جوجل بلاي','val'=>$app['play_store_version'],'class'=>'version'],
+        ['label'=>'إصدار جوجل بلاي','val'=>$playStoreVersion,'class'=>'version'],
         ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],'class'=>''],
         ['label'=>'الحجم','val'=>$app['size_mb'] ? $app['size_mb'].' MB' : null,'class'=>'size'],
         ['label'=>'المطور','val'=>$app['developer'],'class'=>''],
@@ -258,11 +273,11 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- Description -->
-  <?php if ($app['long_description'] || $app['short_description']): ?>
+  <?php if ($longDescription !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">الوصف</span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85">
-      <?= nl2br(h($app['long_description'] ?: $app['short_description'])) ?>
+      <?= nl2br(h($longDescription)) ?>
     </div>
   </div>
   <?= wave() ?>
@@ -341,10 +356,10 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- What's New -->
-  <?php if ($app['whats_new']): ?>
+  <?php if ($whatsNew !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">ما الجديد</span></div>
-    <p style="color:var(--muted);font-size:14px;line-height:1.8"><?= nl2br(h($app['whats_new'])) ?></p>
+    <p style="color:var(--muted);font-size:14px;line-height:1.8"><?= nl2br(h($whatsNew)) ?></p>
   </div>
   <?= wave() ?>
   <?php endif; ?>
@@ -370,28 +385,28 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- What this app offers -->
-  <?php if (!empty($app['offers_text'])): ?>
+  <?php if ($offersText !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">ماذا يقدّم <?= h($app['name']) ?>؟</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['offers_text'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($offersText)) ?></div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
 
   <!-- Privacy Policy -->
-  <?php if (!empty($app['privacy_policy'])): ?>
+  <?php if ($privacyPolicy !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">سياسة الخصوصية</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['privacy_policy'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($privacyPolicy)) ?></div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
 
   <!-- Terms of Use -->
-  <?php if (!empty($app['terms_content'])): ?>
+  <?php if ($termsContent !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">شروط الاستخدام</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['terms_content'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($termsContent)) ?></div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
@@ -440,6 +455,6 @@ function wave(): string {
   <p>&copy; <?= date('Y') ?> yassota</p>
 </footer>
 
-<script src="assets/js/main.js"></script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
