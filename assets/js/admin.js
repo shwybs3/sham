@@ -212,6 +212,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Repair legacy text encoding button ── */
+  const btnRepairEnc = document.getElementById('btn-repair-encoding');
+  if (btnRepairEnc) {
+    btnRepairEnc.addEventListener('click', async () => {
+      const out = document.getElementById('repair-encoding-result');
+      btnRepairEnc.disabled = true;
+      out.innerHTML = '<div style="color:var(--muted);font-size:13px">⏳ جاري الفحص والإصلاح...</div>';
+      try {
+        const res = await fetch('admin.php?ajax=repair_encoding');
+        const data = await res.json();
+        out.innerHTML = data.success
+          ? `<div style="color:var(--success);font-size:13px">✅ ${data.message}</div>`
+          : `<div style="color:var(--danger);font-size:13px">❌ ${data.error}</div>`;
+      } catch { out.innerHTML = '<div style="color:var(--danger)">تعذر الاتصال</div>'; }
+      btnRepairEnc.disabled = false;
+    });
+  }
+
   /* ── Populate free-model selects on settings page ── */
   const selPrimary = document.getElementById('sel-primary-model');
   const selFallback = document.getElementById('sel-fallback-model');

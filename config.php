@@ -627,6 +627,25 @@ function ai_extract_json(string $raw): ?array {
 // render as a blank gap instead of the actual (mostly valid) text.
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
+// Defense-in-depth for the same blank-description problem: strip invalid
+// UTF-8 bytes at SAVE time (not only at render time via h()'s
+// ENT_SUBSTITUTE), so bad bytes never reach the database in the first
+// place — some hosts run MySQL in non-strict mode and will silently accept
+// or mangle them on INSERT. Safe to run on already-clean text (no-op).
+function clean_utf8(?string $s): string {
+    $s = $s ?? '';
+    if ($s === '') return '';
+    $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $s);
+    return $clean !== false ? $clean : mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+}
+
+// Recursive clean_utf8() over an array (e.g. $_POST) so every text field in
+// a submitted form is sanitized in one call, arrays and nested arrays included.
+function clean_utf8_deep($v) {
+    if (is_array($v)) return array_map('clean_utf8_deep', $v);
+    return is_string($v) ? clean_utf8($v) : $v;
+}
+
 function url(string $path = ''): string { return SITE_URL . '/' . ltrim($path, '/'); }
 
 function csrf_token(): string {
@@ -823,4 +842,16 @@ function nav_guard_script(): string {
 })();
 </script>
 HTML;
+}
+
+// Real Google AdSense auto-relaxed ad unit, used in every "ad-zone" slot
+// site-wide. Renders nothing visible until AdSense approves the site (empty
+// <ins> until then), then starts serving real ads with no further code
+// changes. Previously these slots held an aggressive third-party popunder/
+// redirect network (MoneyTag) instead — the kind of interstitial, click-
+// hijacking ad behavior Google's Publisher Policies explicitly reject sites
+// for, and very likely a real contributor to the AdSense rejection. It has
+// been removed site-wide rather than just worked around.
+function ad_slot(): string {
+    return '<ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
 }

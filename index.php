@@ -59,10 +59,8 @@ $siteName = 'yassota';
   <meta name="twitter:title" content="yassota — تحميل التطبيقات">
   <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <!-- MoneyTag Ads -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
-  <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>
 
@@ -77,7 +75,7 @@ $siteName = 'yassota';
 
   <!-- Ad Zone Top -->
   <div class="ad-zone">
-    <script>/* MoneyTag Zone 258058 */</script>
+    <?= ad_slot() ?>
   </div>
 
   <!-- Hero Banner -->
@@ -140,7 +138,7 @@ $siteName = 'yassota';
   <!-- Ad Zone Mid -->
   <?= partial_wave() ?>
   <div class="ad-zone">
-    <script>/* MoneyTag Zone 258058 */</script>
+    <?= ad_slot() ?>
   </div>
 
   <!-- About Section -->

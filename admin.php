@@ -156,6 +156,45 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fix_db' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Repair legacy invalid-UTF-8 bytes already stored in the DB
+   (older rows saved before clean_utf8() was applied at save time can
+   still contain bad bytes, which is what caused long descriptions to
+   render as a blank gap). One-time, safe to re-run, only writes rows
+   that actually changed.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'repair_encoding' && is_admin()) {
+    header('Content-Type: application/json');
+    $textCols = ['name','seo_title','meta_description','keywords','short_description','long_description',
+        'privacy_policy','terms_content','offers_text','whats_new','developer'];
+    $fixed = 0; $scanned = 0;
+    $rows = $pdo->query("SELECT id," . implode(',', $textCols) . " FROM apps")->fetchAll();
+    foreach ($rows as $row) {
+        $scanned++;
+        $set = []; $vals = [];
+        foreach ($textCols as $col) {
+            $clean = clean_utf8($row[$col] ?? '');
+            if ($clean !== ($row[$col] ?? '')) { $set[] = "$col=?"; $vals[] = $clean; }
+        }
+        if ($set) {
+            $vals[] = $row['id'];
+            $pdo->prepare("UPDATE apps SET " . implode(',', $set) . " WHERE id=?")->execute($vals);
+            $fixed++;
+        }
+    }
+    $catRows = $pdo->query("SELECT id,description FROM categories")->fetchAll();
+    foreach ($catRows as $row) {
+        $clean = clean_utf8($row['description'] ?? '');
+        if ($clean !== ($row['description'] ?? '')) {
+            $pdo->prepare("UPDATE categories SET description=? WHERE id=?")->execute([$clean, $row['id']]);
+            $fixed++;
+        }
+    }
+    bump_cache_version($pdo);
+    echo json_encode(['success'=>true,'message'=>"تم فحص {$scanned} تطبيق، وإصلاح ترميز {$fixed} صف."], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Regenerate SEO fields for one app (used by bulk tool)
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'regen_seo' && is_admin()) {
@@ -180,6 +219,7 @@ P;
     if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
     $data = ai_extract_json($r['content']);
     if (!$data) { echo json_encode(['success'=>false,'error'=>'رد غير صالح من الموديل']); exit; }
+    $data = clean_utf8_deep($data);
 
     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
         ->execute([trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''), $id]);
@@ -410,6 +450,7 @@ P;
                 "\n\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
             $gr = ai_text($pdo, $genPrompt);
             $data = $gr['ok'] ? ai_extract_json($gr['content']) : null;
+            $data = clean_utf8_deep($data ?? []);
             $slug = unique_slug($pdo, $name);
             $pdo->prepare("INSERT INTO apps (name,slug,seo_title,meta_description,keywords,short_description,long_description,developer,version,android_version,size_mb,rating,whats_new,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
                 ->execute([
@@ -433,6 +474,7 @@ P;
             $sr = ai_text($pdo, $seoPrompt);
             $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
             if (!$sd) { $result = 'فشل التوليد'; break; }
+            $sd = clean_utf8_deep($sd);
             $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
                 ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
             $result = "تم تحديث SEO للتطبيق #{$id} — {$a['name']}";
@@ -448,6 +490,7 @@ P;
                 $sr = ai_text($pdo, "التطبيق: \"{$a['name']}\"\n\n" . seo_prompt_standards() . "\n\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
                 $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
                 if ($sd) {
+                    $sd = clean_utf8_deep($sd);
                     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
                         ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
                     $done++;
@@ -576,6 +619,7 @@ P;
     if (!$result['ok']) { echo json_encode(['success'=>false,'error'=>'فشل توليد المحتوى بالذكاء الاصطناعي']); exit; }
     $data = ai_extract_json($result['content']);
     if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+    $data = clean_utf8_deep($data);
 
     $finalName = trim($data['name'] ?? $name) ?: $name;
     $slug = unique_slug($pdo, $finalName);
@@ -690,6 +734,11 @@ if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
 
 // ─── Save / Update app ───
 if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    // Strip any invalid UTF-8 bytes from every submitted field before they
+    // ever reach the database — belt-and-suspenders alongside h()'s
+    // ENT_SUBSTITUTE, in case the hosting DB is non-strict and would
+    // otherwise silently store/mangle bad bytes.
+    $_POST = clean_utf8_deep($_POST);
     $isEdit = $page === 'edit-app';
     $appId  = (int)($_POST['app_id'] ?? 0);
     $name   = trim($_POST['name'] ?? '');
@@ -1736,6 +1785,15 @@ elseif ($page === 'database'):
     فحص وإصلاح الجداول الآن
   </button>
   <div id="db-fix-result" style="margin-top:12px"></div>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:24px;margin-bottom:8px">
+    إذا كانت أوصاف بعض التطبيقات القديمة تظهر كفراغ بدل النص، اضغط الزر التالي لإصلاح ترميز النصوص المخزَّنة (يفحص كل التطبيقات ويصلح أي بايتات غير صالحة، آمن للتكرار):
+  </p>
+  <button type="button" id="btn-repair-encoding" class="btn-save" style="margin-top:4px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M4.5 15a8 8 0 0014.5 4.5M19.5 9A8 8 0 005 4.5"/></svg>
+    إصلاح ترميز النصوص القديمة
+  </button>
+  <div id="repair-encoding-result" style="margin-top:12px"></div>
 </div>
 
 <?php
@@ -1799,10 +1857,10 @@ elseif ($page === 'settings'): ?>
 
   <div class="panel">
     <h2>إعدادات الإعلانات</h2>
-    <div class="form-group">
-      <label class="form-label">MoneyTag Zone ID</label>
-      <input class="form-input" type="text" name="moneytag_zone" value="<?= h(get_cfg($pdo,'moneytag_zone','258058')) ?>">
-      <div class="form-hint">الرمز الحالي المفعّل: 258058 على الرابط quge5.com/88/tag.min.js</div>
+    <div class="form-hint" style="line-height:1.9">
+      يستخدم الموقع الآن Google AdSense فقط (ca-pub-5506877998492189) في كل صفحاته. تمت إزالة شبكة MoneyTag
+      (كانت تعمل بنظام النوافذ المنبثقة/popunder) لأن هذا النوع من الإعلانات يخالف صراحةً سياسات ناشري Google
+      ويقلل فرص قبول الموقع في AdSense — إعادة إضافتها لاحقاً غير مستحسنة قبل أو بعد الموافقة.
     </div>
   </div>
 

@@ -68,7 +68,6 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
-  <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>
 

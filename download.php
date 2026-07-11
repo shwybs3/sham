@@ -53,10 +53,8 @@ if (!$hasLink) $url = '#';
   <meta name="robots" content="noindex,follow">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
-  <!-- MoneyTag -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
-  <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>
 
@@ -75,7 +73,7 @@ if (!$hasLink) $url = '#';
 
     <!-- Ad top -->
     <div class="ad-zone" style="margin-bottom:24px;min-height:60px">
-      <script>/* MoneyTag 258058 */</script>
+      <?= ad_slot() ?>
     </div>
 
     <!-- App icon -->
@@ -130,7 +128,7 @@ if (!$hasLink) $url = '#';
 
     <!-- Ad mid -->
     <div class="ad-zone" style="margin-bottom:20px;min-height:60px">
-      <script>/* MoneyTag 258058 */</script>
+      <?= ad_slot() ?>
     </div>
 
     <!-- Manual download button (hidden until countdown ends) -->
@@ -165,6 +163,13 @@ if (!$hasLink) $url = '#';
        style="display:block;margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
       ← العودة لصفحة <?= h($app['name']) ?>
     </a>
+
+    <nav style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:20px;font-size:11px">
+      <a href="<?= h(url('privacy-policy.php')) ?>" style="color:var(--muted)">سياسة الخصوصية</a>
+      <a href="<?= h(url('terms.php')) ?>" style="color:var(--muted)">شروط الاستخدام</a>
+      <a href="<?= h(url('contact.php')) ?>" style="color:var(--muted)">اتصل بنا</a>
+      <a href="<?= h(url('dmca.php')) ?>" style="color:var(--muted)">DMCA</a>
+    </nav>
   </div>
 </div>
 

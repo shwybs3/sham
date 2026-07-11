@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/partials.php';
 
 $slug = trim($_GET['slug'] ?? '');
 if (!$slug) { header('Location: index.php'); exit; }
@@ -169,27 +170,12 @@ function wave(): string {
   <?php if ($faqSchema): ?><script type="application/ld+json"><?= $faqSchema ?></script><?php endif; ?>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/detail.css')) ?>">
-  <!-- MoneyTag -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
-  <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>
 
-<!-- Header -->
-<header class="site-header">
-  <a href="index.php" class="logo">yass<span>ota</span></a>
-  <form action="index.php" method="get" class="header-search">
-    <input type="text" name="q" placeholder="ابحث...">
-    <button type="submit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
-  </form>
-  <nav class="header-nav">
-    <a href="index.php">الرئيسية</a>
-    <?php if ($app['cat_slug']): ?>
-    <a href="category.php?slug=<?= h($app['cat_slug']) ?>"><?= h($app['cat_name']) ?></a>
-    <?php endif; ?>
-  </nav>
-</header>
+<?php render_site_header('', $app['cat_slug'] === 'games' ? 'games' : ($app['cat_slug'] === 'apps' ? 'apps' : 'home')); ?>
 
 <div class="page-wrap">
 
@@ -279,7 +265,7 @@ function wave(): string {
   <?= wave() ?>
 
   <!-- Ad -->
-  <div class="ad-zone"><script>/* MoneyTag 258058 */</script></div>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- Meta Info Grid -->
   <div class="app-meta-grid reveal">
@@ -394,7 +380,7 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- Ad -->
-  <div class="ad-zone"><script>/* MoneyTag 258058 */</script></div>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- Install Steps -->
   <?php if ($installSteps): ?>
@@ -585,10 +571,7 @@ function wave(): string {
   </div>
 </div>
 
-<footer class="site-footer" style="grid-column:1/-1">
-  <div class="footer-logo">yass<span style="color:var(--purple)">ota</span></div>
-  <p>&copy; <?= date('Y') ?> yassota</p>
-</footer>
+<?php render_site_footer(); ?>
 
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
