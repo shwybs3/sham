@@ -142,6 +142,30 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'contact_messages';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_versions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      version VARCHAR(60),
+      changelog TEXT,
+      download_url VARCHAR(600),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'app_versions';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      rating TINYINT NOT NULL,
+      body TEXT NOT NULL,
+      status ENUM('pending','approved') NOT NULL DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'comments';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -589,6 +613,16 @@ function unique_slug(PDO $pdo, string $base): string {
 function app_url(string $slug): string { return url(rawurlencode($slug)); }
 function download_url(string $slug, int $mirror = 1): string {
     return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
+}
+
+// CSS/JS URL with a cache-busting ?v= based on the file's own mtime — required
+// because .htaccess caches these for a month; without this, a bug fix to
+// main.css/main.js would silently not reach any browser that already has the
+// old file cached, until that month expires or the visitor hard-refreshes.
+function asset_url(string $relPath): string {
+    $full = ROOT_PATH . '/' . ltrim($relPath, '/');
+    $v = is_file($full) ? filemtime($full) : time();
+    return url($relPath) . '?v=' . $v;
 }
 
 function is_admin(): bool { return !empty($_SESSION['admin_id']); }
