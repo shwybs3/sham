@@ -5,6 +5,7 @@ header('Content-Type: application/xml; charset=utf-8');
 $apps = $pdo->query("SELECT slug, updated_at FROM apps WHERE status='published'")->fetchAll();
 $cats = $pdo->query("SELECT slug FROM categories")->fetchAll();
 $developers = $pdo->query("SELECT DISTINCT developer FROM apps WHERE status='published' AND developer IS NOT NULL AND developer<>''")->fetchAll(PDO::FETCH_COLUMN);
+$articles = $pdo->query("SELECT ar.slug, ar.created_at FROM app_articles ar JOIN apps a ON ar.app_id=a.id WHERE a.status='published'")->fetchAll();
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -29,6 +30,13 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <loc><?= h(app_url($a['slug'])) ?></loc>
     <lastmod><?= date('Y-m-d', strtotime($a['updated_at'])) ?></lastmod>
     <changefreq>weekly</changefreq><priority>0.8</priority>
+  </url>
+  <?php endforeach; ?>
+  <?php foreach ($articles as $art): ?>
+  <url>
+    <loc><?= h(article_url($art['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($art['created_at'])) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.5</priority>
   </url>
   <?php endforeach; ?>
 </urlset>

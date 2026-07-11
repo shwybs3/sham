@@ -28,6 +28,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  /* ── Generate 3 related articles for an app ── */
+  const btnGenArticles = document.getElementById('btn-generate-articles');
+  if (btnGenArticles) {
+    btnGenArticles.addEventListener('click', async () => {
+      const appId = btnGenArticles.dataset.appId;
+      const out = document.getElementById('generate-articles-status');
+      btnGenArticles.disabled = true;
+      out.innerHTML = '<span style="color:var(--muted)">⏳ جاري توليد 3 مقالات...</span>';
+      try {
+        const res = await fetch(`admin.php?ajax=generate_articles&app_id=${appId}`);
+        const data = await res.json();
+        if (data.success) {
+          out.innerHTML = `<span style="color:var(--success)">✅ تم إنشاء ${data.created} مقالات — أعد تحميل الصفحة لرؤيتها</span>`;
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          out.innerHTML = `<span style="color:var(--danger)">❌ ${data.error || 'فشل التوليد'}</span>`;
+        }
+      } catch { out.innerHTML = '<span style="color:var(--danger)">تعذر الاتصال</span>'; }
+      btnGenArticles.disabled = false;
+    });
+  }
+
   /* ── Dynamic list builder (features, pros, cons, steps, faq) ── */
   window.initDynamicList = (containerId, fieldName, placeholder, secondField) => {
     const container = document.getElementById(containerId);

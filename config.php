@@ -166,6 +166,19 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'comments';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_articles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      slug VARCHAR(280) NOT NULL UNIQUE,
+      seo_title VARCHAR(255),
+      meta_description VARCHAR(320),
+      body MEDIUMTEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'app_articles';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -173,6 +186,14 @@ function ensure_schema(PDO $pdo): array {
         if (!$fk) {
             $pdo->exec("ALTER TABLE apps ADD CONSTRAINT fk_apps_category
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL");
+        }
+    } catch (Throwable $e) { /* non-critical */ }
+    try {
+        $fk2 = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='app_articles' AND CONSTRAINT_TYPE='FOREIGN KEY'")->fetchColumn();
+        if (!$fk2) {
+            $pdo->exec("ALTER TABLE app_articles ADD CONSTRAINT fk_articles_app
+                FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE");
         }
     } catch (Throwable $e) { /* non-critical */ }
 
@@ -683,7 +704,7 @@ function slugify(string $t): string {
 const RESERVED_SLUGS = [
     'index', 'app', 'admin', 'download', 'category', 'developer', 'top', 'updates',
     'sitemap', 'robots', 'config', 'partials', 'install', 'uploads', 'assets',
-    'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy',
+    'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy', 'article',
 ];
 
 function unique_slug(PDO $pdo, string $base): string {
@@ -703,6 +724,19 @@ function unique_slug(PDO $pdo, string $base): string {
 function app_url(string $slug): string { return url(rawurlencode($slug)); }
 function download_url(string $slug, int $mirror = 1): string {
     return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
+}
+function article_url(string $slug): string { return url('article.php?slug=' . rawurlencode($slug)); }
+
+function unique_article_slug(PDO $pdo, string $base): string {
+    $slug = slugify($base);
+    $orig = $slug; $i = 1;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM app_articles WHERE slug=?");
+    $stmt->execute([$slug]);
+    while ($stmt->fetchColumn() > 0) {
+        $slug = $orig . '-' . (++$i);
+        $stmt->execute([$slug]);
+    }
+    return $slug;
 }
 
 // CSS/JS URL with a cache-busting ?v= based on the file's own mtime — required

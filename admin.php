@@ -400,6 +400,47 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_cat_description' && is_a
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate 3 short related articles for an app —
+   internal linking back to its download page (SEO + AdSense).
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_articles' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
+    $stmt->execute([$appId]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف لموقع تحميل تطبيقات أندرويد. اكتب 3 مقالات قصيرة أصلية ومفيدة (وليست إعلانية مبالغاً فيها)
+عن تطبيق "{$a['name']}" ({$a['short_description']}), بأنواع مختلفة، مثلاً: شرح كيفية استخدام التطبيق للمبتدئين، مقارنة
+بينه وبين بدائل مشهورة في نفس المجال، أو نصائح وحيل لاستخدامه بفعالية. كل مقال بطول 250-450 كلمة، فقرات طبيعية بدون
+Markdown، تنتهي كل مقالة بجملة طبيعية تدعو القارئ لتحميل "{$a['name']}" (دون رابط، الرابط سيُضاف تلقائياً).
+أعد JSON فقط بالشكل التالي، بدون أي نص خارج JSON:
+{"articles":[{"title":"","body":""},{"title":"","body":""},{"title":"","body":""}]}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    $data = clean_utf8_deep($data ?? []);
+    $articles = $data['articles'] ?? [];
+    if (!$articles) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن بالشكل المتوقع']); exit; }
+
+    $created = 0;
+    foreach ($articles as $art) {
+        $title = trim($art['title'] ?? '');
+        $body  = trim($art['body'] ?? '');
+        if (!$title || !$body) continue;
+        $slug = unique_article_slug($pdo, $a['name'] . '-' . $title);
+        $pdo->prepare("INSERT INTO app_articles (app_id,title,slug,body) VALUES (?,?,?,?)")
+            ->execute([$appId, $title, $slug, $body]);
+        $created++;
+    }
+    echo json_encode(['success'=>true,'created'=>$created], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -750,6 +791,13 @@ if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
     $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([(int)$_GET['del']]);
     bump_cache_version($pdo);
     header('Location: admin.php?page=apps&msg=deleted'); exit;
+}
+
+// ─── Delete a related article ───
+if ($page === 'edit-app' && isset($_GET['del_article']) && isset($_GET['t']) &&
+    hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
+    $pdo->prepare("DELETE FROM app_articles WHERE id=?")->execute([(int)$_GET['del_article']]);
+    header('Location: admin.php?page=edit-app&id=' . (int)($_GET['id'] ?? 0)); exit;
 }
 
 // ─── Save / Update app ───
@@ -1559,6 +1607,46 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     <?= $isEdit ? 'حفظ التعديلات' : 'إضافة التطبيق' ?>
   </button>
 </form>
+
+<?php if ($isEdit):
+  $articlesStmt = $pdo->prepare("SELECT id,title,slug,created_at FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
+  $articlesStmt->execute([$app['id']]);
+  $appArticles = $articlesStmt->fetchAll();
+?>
+<div class="panel" style="margin-bottom:40px">
+  <h2>مقالات ذات صلة (روابط داخلية للـSEO وAdSense)</h2>
+  <p class="form-hint" style="margin-bottom:14px">
+    مقالات قصيرة أصلية تربط بصفحة تحميل هذا التطبيق (مثل "كيفية استخدام <?= h($app['name']) ?> للمبتدئين" أو
+    "<?= h($app['name']) ?> مقابل بدائله") — تُحسّن الربط الداخلي وتفيد في قبول AdSense.
+  </p>
+  <button type="button" id="btn-generate-articles" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    توليد 3 مقالات جديدة بالذكاء الاصطناعي
+  </button>
+  <div class="ai-status" id="generate-articles-status"></div>
+
+  <?php if ($appArticles): ?>
+  <table class="admin-table" style="width:100%;margin-top:16px">
+    <thead><tr><th>العنوان</th><th>تاريخ الإنشاء</th><th></th></tr></thead>
+    <tbody>
+      <?php foreach ($appArticles as $art): ?>
+      <tr>
+        <td data-label="العنوان"><?= h($art['title']) ?></td>
+        <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($art['created_at'])) ?></td>
+        <td data-label="إجراءات" class="td-actions">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a href="<?= h(article_url($art['slug'])) ?>" target="_blank" class="btn-view">عرض</a>
+            <a href="admin.php?page=edit-app&id=<?= (int)$app['id'] ?>&del_article=<?= (int)$art['id'] ?>&t=<?= csrf_token() ?>"
+               class="btn-del" data-confirm="حذف هذا المقال؟">حذف</a>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <script>
 window.EXISTING_DATA = <?= json_encode([

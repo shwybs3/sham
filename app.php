@@ -46,6 +46,12 @@ $related = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
 $related->execute([$app['category_id'], $app['id']]);
 $relatedApps = $related->fetchAll();
 
+// Related articles (AI-generated "how to use X", "X vs Y" etc. — internal
+// linking back to this app's download page)
+$articlesStmt = $pdo->prepare("SELECT id,title,slug FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
+$articlesStmt->execute([$app['id']]);
+$relatedArticles = $articlesStmt->fetchAll();
+
 // Version history (populated when the admin edits an app with "save as new version" checked)
 $versionsStmt = $pdo->prepare("SELECT * FROM app_versions WHERE app_id=? ORDER BY created_at DESC");
 $versionsStmt->execute([$app['id']]);
@@ -528,6 +534,21 @@ function wave(): string {
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">شروط الاستخدام</span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($termsContent)) ?></div>
+  </div>
+  <?= wave() ?>
+  <?php endif; ?>
+
+  <!-- Related Articles -->
+  <?php if ($relatedArticles): ?>
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">مقالات ذات صلة بـ <?= h($app['name']) ?></span></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <?php foreach ($relatedArticles as $art): ?>
+      <a href="<?= h(article_url($art['slug'])) ?>" class="sidebar-link" style="border:1px solid var(--border-c);border-radius:10px;padding:14px 16px">
+        <?= svgi('arrow-l') ?> <span style="flex:1"><?= h($art['title']) ?></span>
+      </a>
+      <?php endforeach; ?>
+    </div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
