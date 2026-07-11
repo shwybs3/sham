@@ -26,6 +26,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Mobile search toggle (header-search is hidden by default on small screens) ── */
+  const searchToggle = document.querySelector('.mobile-search-toggle');
+  const searchForm = document.querySelector('.header-search');
+  if (searchToggle && searchForm) {
+    searchToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = searchForm.classList.toggle('mobile-open');
+      if (isOpen) searchForm.querySelector('input')?.focus();
+    });
+    document.addEventListener('click', (e) => {
+      if (searchForm.classList.contains('mobile-open') && !searchForm.contains(e.target) && e.target !== searchToggle)
+        searchForm.classList.remove('mobile-open');
+    });
+  }
+
   /* ── Category Chips Filter ── */
   document.querySelectorAll('.cat-chip[data-cat]').forEach(chip => {
     chip.addEventListener('click', () => {

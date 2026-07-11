@@ -55,6 +55,8 @@ $siteName = 'yassota';
   <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">
   <link rel="stylesheet" href="assets/css/main.css">
   <!-- MoneyTag Ads -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
+     crossorigin="anonymous"></script>
   <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>
@@ -148,6 +150,7 @@ $siteName = 'yassota';
         <p style="color:var(--muted);font-size:14px;line-height:1.8">
           yassota منصة عربية متخصصة في توفير أفضل تطبيقات وألعاب أندرويد. نسعى لتقديم محتوى موثوق وآمن ومجاني للمستخدم العربي، مع معلومات دقيقة عن كل تطبيق من إصدار ومطور وحجم.
         </p>
+        <a href="about.php" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> اقرأ المزيد عن yassota</a>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <?php

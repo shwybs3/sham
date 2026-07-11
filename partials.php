@@ -37,7 +37,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 <header class="site-header">
   <a href="index.php" class="logo">yass<span>ota</span></a>
 
-  <form action="index.php" method="get" class="header-search">
+  <form action="index.php" method="get" class="header-search" id="header-search-form">
     <input type="text" name="q" placeholder="ابحث عن تطبيق أو لعبة..." value="<?= h($search) ?>">
     <button type="submit"><?= partial_icon('search') ?></button>
   </form>
@@ -46,6 +46,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="index.php" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
     <a href="index.php?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
     <a href="index.php?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
+    <button type="button" class="mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
     <button class="nav-toggle" aria-label="القائمة"><?= partial_icon('menu') ?></button>
   </nav>
 </header>
@@ -119,6 +120,16 @@ function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نت
 function render_site_footer(): void { ?>
 <footer class="site-footer">
   <div class="footer-logo">yass<span style="color:var(--purple)">ota</span></div>
+  <nav style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:14px 0;font-size:12px">
+    <a href="about.php" style="color:var(--muted)">من نحن</a>
+    <a href="contact.php" style="color:var(--muted)">اتصل بنا</a>
+    <a href="privacy-policy.php" style="color:var(--muted)">سياسة الخصوصية</a>
+    <a href="terms.php" style="color:var(--muted)">شروط الاستخدام</a>
+    <a href="cookie-policy.php" style="color:var(--muted)">سياسة الكوكيز</a>
+    <a href="dmca.php" style="color:var(--muted)">DMCA</a>
+    <a href="top.php?by=downloads" style="color:var(--muted)">الأكثر تحميلاً</a>
+    <a href="updates.php" style="color:var(--muted)">آخر التحديثات</a>
+  </nav>
   <p>&copy; <?= date('Y') ?> yassota — جميع الحقوق محفوظة</p>
 </footer>
 <?php }

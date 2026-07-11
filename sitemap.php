@@ -12,6 +12,12 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url><loc><?= SITE_URL ?>/top.php?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/top.php?by=views</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/updates.php</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/about.php</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc><?= SITE_URL ?>/contact.php</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc><?= SITE_URL ?>/privacy-policy.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/terms.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/cookie-policy.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/dmca.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <?php foreach ($cats as $c): ?>
   <url><loc><?= SITE_URL ?>/category.php?slug=<?= urlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <?php endforeach; ?>

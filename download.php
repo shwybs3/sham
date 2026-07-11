@@ -35,6 +35,8 @@ if (!$hasLink) $url = '#';
   <link rel="stylesheet" href="assets/css/main.css">
   <link rel="stylesheet" href="assets/css/download.css">
   <!-- MoneyTag -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
+     crossorigin="anonymous"></script>
   <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
 </head>
 <body>

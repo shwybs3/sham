@@ -646,7 +646,7 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
-    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','moneytag_zone'] as $k) {
+    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','moneytag_zone','contact_email'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
@@ -803,6 +803,17 @@ if ($page === 'categories') {
     }
 }
 
+// ─── Contact messages ───
+if ($page === 'messages') {
+    if (isset($_GET['del_msg']) && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+        $pdo->prepare("DELETE FROM contact_messages WHERE id=?")->execute([(int)$_GET['del_msg']]);
+        header('Location: admin.php?page=messages&msg=deleted'); exit;
+    }
+    if (isset($_GET['view'])) {
+        $pdo->prepare("UPDATE contact_messages SET status='read' WHERE id=?")->execute([(int)$_GET['view']]);
+    }
+}
+
 // ─── Fetch data for forms ───
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
 $editApp = null;
@@ -885,6 +896,7 @@ $navLinks = [
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
+    'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -1537,6 +1549,41 @@ elseif ($page === 'categories'):
 </div>
 
 <?php
+/* ─────────────── CONTACT MESSAGES ─────────────── */
+elseif ($page === 'messages'):
+  $msgs = $pdo->query("SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200")->fetchAll();
+?>
+
+<div class="admin-header"><h1>رسائل التواصل</h1></div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>الاسم</th><th>البريد</th><th>الموضوع</th><th>التاريخ</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($msgs as $m): ?>
+  <tr>
+    <td data-label="الاسم" style="font-weight:700"><?= h($m['name']) ?></td>
+    <td data-label="البريد" style="font-family:var(--f-mono);font-size:12px"><?= h($m['email']) ?></td>
+    <td data-label="الموضوع"><?= h($m['subject'] ?: '—') ?></td>
+    <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($m['created_at'])) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $m['status']==='new'?'status-published':'status-draft' ?>"><?= $m['status']==='new'?'جديدة':'مقروءة' ?></span></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a href="admin.php?page=messages&view=<?= $m['id'] ?>#msg-<?= $m['id'] ?>" class="btn-view">عرض</a>
+        <a href="admin.php?page=messages&del_msg=<?= $m['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذه الرسالة؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <tr id="msg-<?= $m['id'] ?>">
+    <td colspan="6" style="padding-top:0;color:var(--muted);font-size:13px;line-height:1.8;white-space:pre-wrap"><?= h($m['message']) ?></td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$msgs): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد رسائل بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
 /* ─────────────── CONNECTION TEST ─────────────── */
 elseif ($page === 'connection'): ?>
 
@@ -1657,6 +1704,15 @@ elseif ($page === 'settings'): ?>
       <label class="form-label">MoneyTag Zone ID</label>
       <input class="form-input" type="text" name="moneytag_zone" value="<?= h(get_cfg($pdo,'moneytag_zone','258058')) ?>">
       <div class="form-hint">الرمز الحالي المفعّل: 258058 على الرابط quge5.com/88/tag.min.js</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>معلومات التواصل</h2>
+    <div class="form-group">
+      <label class="form-label">البريد الإلكتروني للتواصل / DMCA</label>
+      <input class="form-input" type="email" name="contact_email" value="<?= h(get_cfg($pdo,'contact_email')) ?>" placeholder="contact@yourdomain.com">
+      <div class="form-hint">يظهر في صفحات اتصل بنا، سياسة الخصوصية، وDMCA.</div>
     </div>
   </div>
 

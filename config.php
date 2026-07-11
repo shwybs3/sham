@@ -130,6 +130,18 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'settings';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      email VARCHAR(190) NOT NULL,
+      subject VARCHAR(200),
+      message TEXT NOT NULL,
+      status ENUM('new','read') NOT NULL DEFAULT 'new',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'contact_messages';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -515,7 +527,12 @@ function ai_extract_json(string $raw): ?array {
 
 /* ─── Helpers ─── */
 
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+// ENT_SUBSTITUTE is critical here: without it, htmlspecialchars() silently
+// returns an EMPTY STRING for the *entire* input if it contains even one
+// invalid UTF-8 byte anywhere — which is exactly what long AI-generated
+// Arabic text occasionally contains, and is why long descriptions could
+// render as a blank gap instead of the actual (mostly valid) text.
+function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
 function url(string $path = ''): string { return SITE_URL . '/' . ltrim($path, '/'); }
 
