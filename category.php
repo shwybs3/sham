@@ -17,6 +17,8 @@ if (!$category) {
     exit;
 }
 
+if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
 $offset  = ($page - 1) * $perPage;
@@ -104,3 +106,4 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
+<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

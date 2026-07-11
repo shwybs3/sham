@@ -96,6 +96,30 @@ $schema = json_encode([
     "author" => ["@type" => "Organization", "name" => $app['developer']],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+$breadcrumbItems = [
+    ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('index.php')],
+];
+if ($app['cat_slug']) {
+    $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category.php?slug=' . $app['cat_slug'])];
+}
+$breadcrumbItems[] = ["@type" => "ListItem", "position" => count($breadcrumbItems) + 1, "name" => $app['name'], "item" => app_url($app['slug'])];
+$breadcrumbSchema = json_encode([
+    "@context" => "https://schema.org", "@type" => "BreadcrumbList",
+    "itemListElement" => $breadcrumbItems,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+$faqSchema = null;
+if ($faq) {
+    $faqSchema = json_encode([
+        "@context" => "https://schema.org", "@type" => "FAQPage",
+        "mainEntity" => array_map(fn($item) => [
+            "@type" => "Question",
+            "name" => $item['q'] ?? '',
+            "acceptedAnswer" => ["@type" => "Answer", "text" => $item['a'] ?? ''],
+        ], $faq),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
 // SVGs inline
 function svgi(string $n): string {
     $i = [
@@ -141,6 +165,8 @@ function wave(): string {
   <meta property="og:url" content="<?= h(app_url($app['slug'])) ?>">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $schema ?></script>
+  <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
+  <?php if ($faqSchema): ?><script type="application/ld+json"><?= $faqSchema ?></script><?php endif; ?>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/detail.css')) ?>">
   <!-- MoneyTag -->

@@ -221,6 +221,48 @@ function ensure_schema(PDO $pdo): array {
 }
 ensure_schema($pdo);
 
+/* ═══════════════════════════════════════════════
+   Lightweight page cache — file-based, for the
+   expensive public listing pages only (index/category/
+   top/updates). app.php is deliberately never cached
+   since it must always increment the view counter and
+   show fresh comments. Invalidated instantly (not just
+   on a timer) whenever an app is added/edited/deleted,
+   via a version token bumped in admin.php.
+   ═══════════════════════════════════════════════ */
+function cache_version(PDO $pdo): int {
+    return (int)get_cfg($pdo, 'cache_version', '1');
+}
+function bump_cache_version(PDO $pdo): void {
+    set_cfg($pdo, 'cache_version', (string)(cache_version($pdo) + 1));
+}
+function page_cache_dir(): string {
+    $dir = UPLOAD_PATH . '/.cache';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir;
+}
+function page_cache_file(PDO $pdo, string $key): string {
+    return page_cache_dir() . '/' . md5($key . '|v' . cache_version($pdo)) . '.html';
+}
+// Call at the very top of a cacheable page. If a fresh cached copy exists,
+// echoes it and returns true (the caller must exit immediately). Otherwise
+// starts output buffering and returns false — call page_cache_end() at the
+// very end of the page to save+flush what was rendered.
+function page_cache_start(PDO $pdo, string $key, int $ttl = 300): bool {
+    $file = page_cache_file($pdo, $key);
+    if (is_file($file) && (time() - filemtime($file)) < $ttl) {
+        echo file_get_contents($file);
+        return true;
+    }
+    ob_start();
+    return false;
+}
+function page_cache_end(PDO $pdo, string $key): void {
+    $html = ob_get_clean();
+    @file_put_contents(page_cache_file($pdo, $key), $html);
+    echo $html;
+}
+
 function get_cfg(PDO $pdo, string $k, string $d = ''): string {
     $r = $pdo->prepare("SELECT `value` FROM settings WHERE `key`=?");
     $r->execute([$k]);
@@ -551,6 +593,21 @@ function clean_long_text(?string $s): string {
     $s = trim($s ?? '');
     if ($s === '') return '';
     return preg_replace('/\n{3,}/', "\n\n", $s);
+}
+
+// Shared SEO-field standards embedded in every AI prompt that generates
+// seo_title/meta_description/keywords, so the whole site produces the same
+// search-optimized pattern real Arabic app-download sites rank with —
+// not the generic "SEO title less than 60 chars" instruction that produced
+// weak, unspecific output before.
+function seo_prompt_standards(): string {
+    $year = date('Y');
+    return <<<P
+اتبع بدقة معايير SEO التالية عند كتابة الحقول التالية (لا تكتب حقولاً عامة أو مبهمة):
+- seo_title: يبدأ بكلمة "تحميل"، يتضمن اسم التطبيق كاملاً (بالإنجليزية إن كان اسمه إنجليزياً)، ثم "APK" إن كان تطبيق/لعبة أندرويد، ثم "آخر إصدار {$year}"، ثم "للأندرويد مجاناً"، ثم فاصل " | " ثم صياغة ثانية مختصرة تبدأ بـ"تنزيل" واسم التطبيق و"برابط مباشر". مثال على الشكل المطلوب (لا تنسخه، استخدمه كقالب فقط): "تحميل PUBG MOBILE APK آخر إصدار {$year} للأندرويد مجانًا | تنزيل ببجي موبايل برابط مباشر".
+- meta_description: يبدأ بفعل أمر مثل "قم بتحميل" أو "حمّل"، يذكر اسم التطبيق ونوعه (لعبة/تطبيق) و"APK" و"آخر إصدار {$year}" و"للأندرويد مجاناً برابط مباشر وسريع"، ثم جملة تسويقية قصيرة عن أبرز مزايا هذا التطبيق تحديداً (وليست عامة). الطول 140-160 حرفاً.
+- keywords: 15 إلى 18 كلمة/عبارة مفتاحية عربية طويلة الذيل مفصولة بفاصلة، تغطي أشكال البحث الشائعة: "تحميل [الاسم]"، "تنزيل [الاسم]"، "[الاسم] APK"، "[الاسم] آخر إصدار"، "تحميل [الاسم] للأندرويد"، "[الاسم] مجاناً"، "تحديث [الاسم]"، "[الاسم] Android"، "تحميل [الاسم] برابط مباشر"، "[الاسم] {$year}" وهكذا — بدون تكرار حرفي لنفس الصياغة، وبمزيج من العربية والإنجليزية عندما يكون اسم التطبيق إنجليزياً معروفاً.
+P;
 }
 
 // Extract the first {...} JSON object from a raw AI response (strips markdown fences).

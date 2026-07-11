@@ -3,6 +3,8 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $today   = isset($_GET['today']);
+if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
 $offset  = ($page - 1) * $perPage;
@@ -85,3 +87,4 @@ $breadcrumbSchema = json_encode([
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
+<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

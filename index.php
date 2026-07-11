@@ -9,6 +9,11 @@ $offset  = ($page - 1) * $perPage;
 $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
 
+// Cache the rendered page for anonymous browsing (not search results — low
+// reuse, would just grow the cache directory for little benefit).
+$cacheable = $search === '';
+if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
 
 $where  = "WHERE a.status='published'";
@@ -176,3 +181,4 @@ $siteName = 'yassota';
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
+<?php if ($cacheable) page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

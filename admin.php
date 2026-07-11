@@ -15,16 +15,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate' && is_admin()) {
 
     $models = build_model_rotation($pdo);
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير تسويق تطبيقات أندرويد. التطبيق: "{$name}"
+أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات. (يمكن للأدمن توسيعه لاحقاً حتى 1500-3000 كلمة بزر "متابعة الكتابة").
+
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
   "name":"الاسم الرسمي",
-  "seo_title":"عنوان SEO أقل من 60 حرف",
-  "meta_description":"وصف meta أقل من 155 حرف",
-  "keywords":"كلمات مفتاحية مفصولة بفاصلة",
+  "seo_title":"",
+  "meta_description":"",
+  "keywords":"",
   "short_description":"جملة أو جملتين",
-  "long_description":"وصف طويل احترافي عدة فقرات",
+  "long_description":"",
   "developer":"اسم المطور المحتمل",
   "version":"رقم إصدار مثل 3.1.0",
   "android_version":"مثل: 7.0 فأعلى",
@@ -160,13 +166,15 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'regen_seo' && is_admin()) {
     $app = $stmt->fetch();
     if (!$app) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير SEO محترف لمتاجر التطبيقات العربية. التطبيق: "{$app['name']}"
+التطبيق: "{$app['name']}"
 الوصف الحالي: "{$app['short_description']}"
+
+{$seoStandards}
+
 أعد JSON صالح فقط بدون أي نص إضافي:
-{"seo_title":"عنوان SEO جذاب أقل من 60 حرف يتضمن اسم التطبيق وكلمة مفتاحية قوية",
-"meta_description":"وصف Meta مقنع أقل من 155 حرف يحفّز على النقر",
-"keywords":"12-15 كلمة مفتاحية عربية قوية مفصولة بفاصلة، منها كلمات طويلة الذيل"}
+{"seo_title":"","meta_description":"","keywords":""}
 P;
     $r = ai_text($pdo, $prompt);
     if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
@@ -398,7 +406,8 @@ P;
         case 'create_app_draft':
             $name = trim($params['name'] ?? '');
             if (!$name) { $result = 'لم يتم تحديد اسم التطبيق'; break; }
-            $genPrompt = "أنت خبير تسويق تطبيقات أندرويد. التطبيق: \"{$name}\"\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
+            $genPrompt = "أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف. التطبيق: \"{$name}\"\n\n" . seo_prompt_standards() .
+                "\n\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
             $gr = ai_text($pdo, $genPrompt);
             $data = $gr['ok'] ? ai_extract_json($gr['content']) : null;
             $slug = unique_slug($pdo, $name);
@@ -419,7 +428,8 @@ P;
             $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
             $stmt->execute([$id]); $a = $stmt->fetch();
             if (!$a) { $result = "لم يتم العثور على تطبيق برقم #{$id}"; break; }
-            $seoPrompt = "أنت خبير SEO محترف. التطبيق: \"{$a['name']}\" الوصف الحالي: \"{$a['short_description']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}";
+            $seoPrompt = "التطبيق: \"{$a['name']}\" الوصف الحالي: \"{$a['short_description']}\"\n\n" . seo_prompt_standards() .
+                "\n\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}";
             $sr = ai_text($pdo, $seoPrompt);
             $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
             if (!$sd) { $result = 'فشل التوليد'; break; }
@@ -435,7 +445,7 @@ P;
                 $stmt = $pdo->prepare("SELECT name,short_description FROM apps WHERE id=?");
                 $stmt->execute([$id]); $a = $stmt->fetch();
                 if (!$a) continue;
-                $sr = ai_text($pdo, "أنت خبير SEO. التطبيق: \"{$a['name']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
+                $sr = ai_text($pdo, "التطبيق: \"{$a['name']}\"\n\n" . seo_prompt_standards() . "\n\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
                 $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
                 if ($sd) {
                     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
@@ -459,6 +469,7 @@ P;
             @unlink($tmp);
             if (!$path) { $result = 'تم توليد الصورة لكن تعذّرت معالجتها'; break; }
             $pdo->prepare("UPDATE apps SET icon_path=? WHERE id=?")->execute([$path, $id]);
+            bump_cache_version($pdo);
             $result = "تم توليد وحفظ أيقونة جديدة للتطبيق #{$id} — {$a['name']}";
             break;
 
@@ -530,16 +541,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
     if (!$keys) { echo json_encode(['success'=>false,'error'=>'لم يتم إضافة مفتاح OpenRouter بعد.']); exit; }
     $models = build_model_rotation($pdo);
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير تسويق تطبيقات أندرويد. التطبيق: "{$name}"
+أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات. (يمكن للأدمن توسيعه لاحقاً حتى 1500-3000 كلمة بزر "متابعة الكتابة").
+
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
   "name":"الاسم الرسمي",
-  "seo_title":"عنوان SEO أقل من 60 حرف",
-  "meta_description":"وصف meta أقل من 155 حرف",
-  "keywords":"كلمات مفتاحية مفصولة بفاصلة",
+  "seo_title":"",
+  "meta_description":"",
+  "keywords":"",
   "short_description":"جملة أو جملتين",
-  "long_description":"وصف طويل احترافي عدة فقرات",
+  "long_description":"",
   "developer":"اسم المطور المحتمل",
   "version":"رقم إصدار مثل 3.1.0",
   "android_version":"مثل: 7.0 فأعلى",
@@ -667,6 +684,7 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
     hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
     $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([(int)$_GET['del']]);
+    bump_cache_version($pdo);
     header('Location: admin.php?page=apps&msg=deleted'); exit;
 }
 
@@ -796,12 +814,14 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
+        bump_cache_version($pdo);
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
     } else {
         $d['slug'] = $slug;
         $cols = implode(',', array_keys($d));
         $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+        bump_cache_version($pdo);
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'added_no_link' : 'added')); exit;
     }
 }
@@ -812,6 +832,7 @@ if ($page === 'categories') {
         // Updating a category's SEO description
         $pdo->prepare("UPDATE categories SET description=? WHERE id=?")
             ->execute([trim($_POST['description'] ?? ''), (int)$_POST['cat_id']]);
+        bump_cache_version($pdo);
         header('Location: admin.php?page=categories&msg=updated'); exit;
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $n = trim($_POST['name'] ?? '');
