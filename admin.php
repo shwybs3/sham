@@ -768,7 +768,8 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
-    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','moneytag_zone','contact_email'] as $k) {
+    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
+              'google_site_verification','bing_site_verification'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
@@ -1027,7 +1028,7 @@ if ($page === 'login'): ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1077,7 +1078,7 @@ $navLinks = [
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1978,6 +1979,27 @@ elseif ($page === 'settings'): ?>
       <label class="form-label">البريد الإلكتروني للتواصل / DMCA</label>
       <input class="form-input" type="email" name="contact_email" value="<?= h(get_cfg($pdo,'contact_email')) ?>" placeholder="contact@yourdomain.com">
       <div class="form-hint">يظهر في صفحات اتصل بنا، سياسة الخصوصية، وDMCA.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>التحقق من ملكية الموقع (Search Console)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      لظهور الموقع في نتائج البحث بشكل جيد يجب ربطه بـ
+      <a href="https://search.google.com/search-console" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">Google Search Console</a>
+      و<a href="https://www.bing.com/webmasters" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">Bing Webmaster Tools</a> —
+      اختر طريقة "وسم HTML meta" من كل أداة، والصق الكود (بين علامتي الاقتباس فقط، مثال: <code>AbCdEf123...</code>) هنا، ثم احفظ.
+      بعد الحفظ اضغط زر التحقق في تلك الأداة، ثم أرسل خريطة الموقع (Sitemap) على الرابط <code>/sitemap.php</code>.
+    </p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Google Search Console verification code</label>
+        <input class="form-input" type="text" name="google_site_verification" value="<?= h(get_cfg($pdo,'google_site_verification')) ?>" placeholder="مثال: AbCdEfGhIjKlMnOpQrStUvWxYz">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bing Webmaster verification code</label>
+        <input class="form-input" type="text" name="bing_site_verification" value="<?= h(get_cfg($pdo,'bing_site_verification')) ?>" placeholder="مثال: 1234567890ABCDEF">
+      </div>
     </div>
   </div>
 

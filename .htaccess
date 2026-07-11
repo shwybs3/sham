@@ -48,6 +48,9 @@ DirectoryIndex index.php
 <FilesMatch "\.(sql|log|env|json)$">
   Require all denied
 </FilesMatch>
+<Files "manifest.json">
+  Require all granted
+</Files>
 
 <FilesMatch "config\.php$">
   Require all denied

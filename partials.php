@@ -132,6 +132,19 @@ function render_site_footer(): void { ?>
   </nav>
   <p>&copy; <?= date('Y') ?> yassota — جميع الحقوق محفوظة</p>
 </footer>
+<?php
+render_cookie_banner();
+}
+
+/* ── Cookie consent banner — dismissible, remembered via localStorage.
+   Supports AdSense's EU user-consent requirement and is generally expected
+   on any site running third-party ad/analytics cookies. ── */
+function render_cookie_banner(string $policyUrl = 'cookie-policy.php'): void { ?>
+<div id="cookie-consent" class="cookie-consent" hidden>
+  <p>نستخدم ملفات تعريف الارتباط (Cookies) لتحسين تجربتك وعرض إعلانات ذات صلة. بمتابعة تصفح الموقع فإنك توافق على
+    <a href="<?= h($policyUrl) ?>">سياسة ملفات تعريف الارتباط</a>.</p>
+  <button type="button" id="cookie-consent-accept" class="btn-primary" style="padding:9px 22px;font-size:13px;flex-shrink:0">موافق</button>
+</div>
 <?php }
 
 /* ── Pagination, identical shape on every listing page ── */

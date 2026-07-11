@@ -900,12 +900,35 @@ HTML;
 // hijacking ad behavior Google's Publisher Policies explicitly reject sites
 // for, and very likely a real contributor to the AdSense rejection. It has
 // been removed site-wide rather than just worked around.
+// Search-engine ownership verification meta tags, printed in every page
+// <head> when the admin has filled in the codes under Settings. Empty by
+// default (no tag output) until configured — required before Search
+// Console / Bing Webmaster Tools will accept the site, which in turn is
+// required before Google will crawl/index it reliably or show it well in
+// search results.
+function search_console_meta(PDO $pdo): string {
+    $out = '';
+    $g = trim(get_cfg($pdo, 'google_site_verification'));
+    $b = trim(get_cfg($pdo, 'bing_site_verification'));
+    if ($g !== '') $out .= '<meta name="google-site-verification" content="' . h($g) . '">' . "\n  ";
+    if ($b !== '') $out .= '<meta name="msvalidate.01" content="' . h($b) . '">' . "\n  ";
+    return $out;
+}
+
+// Favicon + web-app manifest + theme-color + search-console verification,
+// printed once in every page <head> right after the charset meta tag.
+function head_extras(PDO $pdo): string {
+    return '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
+        . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
+        . '<meta name="theme-color" content="#2563eb">' . "\n  "
+        . search_console_meta($pdo);
+}
+
 function ad_slot(): string {
-    // The "إعلان" label is always rendered regardless of whether AdSense has
-    // an ad to fill this slot with. Before approval (or on a genuinely
-    // unfilled request) Google's own script sets height/display on the
-    // <ins> element itself to collapse it — without the label + the
-    // !important CSS guards on .ad-zone, that made the whole box appear to
-    // vanish instead of just showing empty ad space.
-    return '<span class="ad-zone-label">إعلان</span><ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
+    // The parent .ad-zone starts hidden (display:none, no reserved space)
+    // — main.js watches this <ins> for AdSense's own data-ad-status
+    // attribute and only reveals the parent when the slot actually filled
+    // with an ad. An unfilled slot (the normal state pre-approval, or any
+    // time Google has nothing to serve) stays fully collapsed.
+    return '<ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
 }

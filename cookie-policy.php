@@ -11,6 +11,7 @@ $metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الار
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
+  <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">

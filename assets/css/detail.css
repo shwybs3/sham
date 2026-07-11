@@ -34,14 +34,6 @@
   box-shadow: 0 4px 20px rgba(15,23,42,.1);
   object-fit: cover;
 }
-.rec-overlay {
-  position: absolute; bottom: -6px; right: -6px;
-  background: #fff; border: 1px solid var(--border-c);
-  border-radius: 8px; padding: 4px 8px;
-  display: flex; align-items: center; gap: 5px;
-  font-family: var(--f-mono); font-size: 10px; font-weight: 600; color: var(--danger);
-  box-shadow: 0 2px 8px rgba(15,23,42,.08);
-}
 .app-hero-info { flex: 1; }
 .app-hero-name {
   font-family: var(--f-head); font-size: clamp(22px,4vw,34px); font-weight: 900;

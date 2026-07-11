@@ -11,6 +11,7 @@ $metaDesc = 'سياسة الخصوصية الخاصة بمنصة yassota: الب
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
+  <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">

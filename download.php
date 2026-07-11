@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/partials.php';
 
 $slug   = trim($_GET['slug'] ?? '');
 $id     = (int)($_GET['id'] ?? 0);
@@ -48,6 +49,7 @@ if (!$hasLink) $url = '#';
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
+  <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تحميل <?= h($app['name']) ?> — yassota</title>
   <meta name="robots" content="noindex,follow">
@@ -173,6 +175,8 @@ if (!$hasLink) $url = '#';
   </div>
 </div>
 
+<?php render_cookie_banner(url('cookie-policy.php')); ?>
+
 <script>
 const DOWNLOAD_URL = <?= json_encode($url) ?>;
 const HAS_LINK = <?= $hasLink ? 'true' : 'false' ?>;
@@ -231,6 +235,7 @@ if (HAS_LINK && countEl) {
   if (ringProg) ringProg.style.strokeDashoffset = '0';
 }
 </script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 
 </body>
 </html>

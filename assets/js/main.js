@@ -4,6 +4,30 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  /* ── Cookie consent banner ── */
+  const cookieBar = document.getElementById('cookie-consent');
+  if (cookieBar) {
+    if (!localStorage.getItem('cookie_consent')) cookieBar.hidden = false;
+    document.getElementById('cookie-consent-accept')?.addEventListener('click', () => {
+      localStorage.setItem('cookie_consent', '1');
+      cookieBar.hidden = true;
+    });
+  }
+
+  /* ── Ad zones: stay hidden (zero space) until AdSense actually fills the
+     slot. Google marks each <ins> with data-ad-status="filled"/"unfilled"
+     once it resolves the request, so watch for that attribute instead of
+     guessing from a timeout. ── */
+  document.querySelectorAll('.ad-zone').forEach(zone => {
+    const ins = zone.querySelector('ins.adsbygoogle');
+    if (!ins) return;
+    const sync = () => {
+      zone.classList.toggle('ad-filled', ins.getAttribute('data-ad-status') === 'filled');
+    };
+    new MutationObserver(sync).observe(ins, { attributes: true, attributeFilter: ['data-ad-status'] });
+    sync();
+  });
+
   /* ── Reveal on Scroll ── */
   const reveals = document.querySelectorAll('.reveal');
   if (reveals.length && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -51,18 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
       location.href = url.toString();
     });
   });
-
-  /* ── Live Timer (REC) ── */
-  const timerEl = document.querySelector('.rec-timer');
-  if (timerEl) {
-    let s = 0;
-    setInterval(() => {
-      s++;
-      const mm = String(Math.floor(s / 60)).padStart(2, '0');
-      const ss = String(s % 60).padStart(2, '0');
-      timerEl.textContent = mm + ':' + ss;
-    }, 1000);
-  }
 
   /* ── Lightbox ── */
   const lightbox = document.querySelector('.lightbox');

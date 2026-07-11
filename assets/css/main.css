@@ -199,28 +199,6 @@ button, input, textarea, select { font-family: inherit; }
   margin-bottom: 10px;
 }
 .hero-banner p { color: var(--muted); font-size: 15px; max-width: 500px; }
-.hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: center; }
-.hero-rec {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 20px; background: rgba(37,99,235,.04); border: 1px solid var(--border-c);
-  border-radius: var(--radius); min-width: 130px; text-align: center;
-}
-.rec-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--f-mono); font-size: 11px; font-weight: 600;
-  color: var(--danger); letter-spacing: 2px;
-}
-.rec-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--danger);
-  animation: recPulse 1.4s ease-in-out infinite;
-}
-.rec-timer {
-  font-family: var(--f-mono); font-size: 26px; font-weight: 700;
-  color: var(--cyan);
-  letter-spacing: 2px;
-}
-.rec-label { font-size: 11px; color: var(--muted); }
 
 /* ════ WAVE DIVIDER ════ */
 .wave-divider {
@@ -463,13 +441,22 @@ button, input, textarea, select { font-family: inherit; }
 .sticky-dl.visible { transform: translateY(0); }
 .sticky-dl-inner { display: flex; align-items: center; gap: 12px; }
 .sticky-dl-icon { width: 42px; height: 42px; border-radius: 10px; object-fit: cover; }
-.sticky-dl-name { flex: 1; font-family: var(--f-head); font-size: 14px; font-weight: 700; }
 
-/* ════ ANIMATIONS ════ */
-@keyframes recPulse {
-  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38,.5); }
-  50% { opacity: .7; transform: scale(1.2); box-shadow: 0 0 0 6px rgba(220,38,38,0); }
+/* ════ COOKIE CONSENT ════ */
+.cookie-consent {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 300;
+  background: var(--white); color: #fff;
+  padding: 16px 24px;
+  display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;
+  box-shadow: 0 -4px 20px rgba(15,23,42,.15);
 }
+.cookie-consent[hidden] { display: none; }
+.cookie-consent p { margin: 0; font-size: 13px; line-height: 1.6; max-width: 640px; color: rgba(255,255,255,.85); }
+.cookie-consent a { color: #93c5fd; text-decoration: underline; }
+@media (max-width: 600px) {
+  .cookie-consent { flex-direction: column; text-align: center; padding: 16px; }
+}
+.sticky-dl-name { flex: 1; font-family: var(--f-head); font-size: 14px; font-weight: 700; }
 
 /* ════ RESPONSIVE ════ */
 @media (max-width: 900px) {
@@ -484,8 +471,6 @@ button, input, textarea, select { font-family: inherit; }
   .sidebar.open { display: block; transform: translateX(0); }
   .nav-toggle { display: block; }
   .mobile-search-toggle { display: flex; align-items: center; justify-content: center; }
-  .hero-grid { grid-template-columns: 1fr; }
-  .hero-rec { display: none; }
   .sticky-dl { display: block; }
   .header-search {
     display: none;
@@ -508,25 +493,17 @@ button, input, textarea, select { font-family: inherit; }
 .stars { color: #d97706; font-family: var(--f-mono); font-size: 13px; }
 .app-card-size { font-family: var(--f-mono); font-size: 11px; }
 
-/* ════ AD ZONE ════ */
+/* ════ AD ZONE ════
+   Hidden by default (no reserved empty box, no layout gap) — main.js
+   reveals it only once AdSense confirms the slot actually filled with an
+   ad (data-ad-status="filled"). Unfilled/no-ad state takes zero space. */
 .ad-zone {
-  background: var(--navy-600);
-  border: 1px dashed rgba(15,23,42,.12);
-  border-radius: var(--radius);
-  padding: 12px;
-  text-align: center;
+  display: none;
   margin: 20px 0;
-  min-height: 90px !important;
-  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
   overflow: hidden;
-  position: relative;
+  text-align: center;
 }
-/* Google's own script sets inline height/display on the .ins element when
-   a slot is unfilled (always true pre-approval) — these !important rules
-   keep the reserved space visible instead of the whole box collapsing. */
-.ad-zone ins.adsbygoogle { min-height: 90px !important; display: block !important; width: 100% !important; }
-.ad-zone-label {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-  font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
-  opacity: .5; pointer-events: none; z-index: 1;
+.ad-zone.ad-filled {
+  display: block;
 }

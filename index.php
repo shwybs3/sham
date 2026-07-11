@@ -43,12 +43,28 @@ $featured = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN ca
 
 $activeNav = $catSlug === 'games' ? 'games' : ($catSlug === 'apps' ? 'apps' : 'home');
 $siteName = 'yassota';
+
+$websiteSchema = json_encode([
+    "@context" => "https://schema.org", "@type" => "WebSite",
+    "name" => "yassota", "url" => url(''),
+    "potentialAction" => [
+        "@type" => "SearchAction",
+        "target" => url('') . '?q={search_term_string}',
+        "query-input" => "required name=search_term_string",
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$orgSchema = json_encode([
+    "@context" => "https://schema.org", "@type" => "Organization",
+    "name" => "yassota", "url" => url(''),
+    "logo" => url('favicon.svg'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
+  <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($search ? "نتائج: $search" : ($catSlug ? ucfirst($catSlug) : 'تحميل أفضل التطبيقات')) ?> — yassota</title>
   <meta name="description" content="حمّل أفضل تطبيقات وألعاب أندرويد مجاناً على yassota — سريع، آمن، مباشر">
@@ -58,6 +74,8 @@ $siteName = 'yassota';
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="yassota — تحميل التطبيقات">
   <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">
+  <script type="application/ld+json"><?= $websiteSchema ?></script>
+  <script type="application/ld+json"><?= $orgSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -81,17 +99,8 @@ $siteName = 'yassota';
   <!-- Hero Banner -->
   <?php if (!$search && !$catSlug): ?>
   <div class="hero-banner reveal">
-    <div class="hero-grid">
-      <div>
-        <h1>أفضل التطبيقات<br>في مكان واحد</h1>
-        <p>حمّل أحدث تطبيقات وألعاب أندرويد مجاناً وبسرعة — بدون تسجيل، بدون مشكلات.</p>
-      </div>
-      <div class="hero-rec">
-        <div class="rec-badge"><span class="rec-dot"></span>REC</div>
-        <div class="rec-timer">00:00</div>
-        <div class="rec-label">مدة التصفح الحالية</div>
-      </div>
-    </div>
+    <h1>أفضل التطبيقات<br>في مكان واحد</h1>
+    <p>حمّل أحدث تطبيقات وألعاب أندرويد مجاناً وبسرعة — بدون تسجيل، بدون مشكلات.</p>
   </div>
   <?= partial_wave() ?>
   <?php endif; ?>
