@@ -38,12 +38,12 @@ try {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>فشل الاتصال بقاعدة البيانات</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#03080f;color:#e8f4f8;padding:40px 16px;line-height:1.9}
-    .box{max-width:680px;margin:0 auto;background:#0a1628;border:1px solid rgba(255,68,102,.3);border-radius:14px;padding:32px}
-    h1{color:#ff4466;font-size:20px;margin:0 0 6px} p.sub{color:#7a9ab8;font-size:13px;margin:0 0 20px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9}
+    .box{max-width:680px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
+    h1{color:#dc2626;font-size:20px;margin:0 0 6px} p.sub{color:#64748b;font-size:13px;margin:0 0 20px}
     ol{padding-inline-start:20px;font-size:14px} li{margin-bottom:10px}
-    code{background:#152642;color:#00f5ff;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
-    .err{margin-top:22px;background:#152642;border:1px solid rgba(255,68,102,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#ff8fa3;direction:ltr;text-align:left;word-break:break-all}
+    code{background:#f1f4f9;color:#2563eb;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
+    .err{margin-top:22px;background:#f1f4f9;border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#b91c1c;direction:ltr;text-align:left;word-break:break-all}
     </style></head><body><div class="box">
     <h1>تعذر الاتصال بقاعدة البيانات</h1>
     <p class="sub">اتبع الخطوات التالية للحل:</p>
@@ -776,10 +776,10 @@ function admin_ip_check(PDO $pdo): void {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>الوصول مرفوض</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#03080f;color:#e8f4f8;padding:40px 16px;line-height:1.9;text-align:center}
-    .box{max-width:480px;margin:60px auto;background:#0a1628;border:1px solid rgba(255,68,102,.3);border-radius:14px;padding:32px}
-    h1{color:#ff4466;font-size:20px;margin:0 0 14px}
-    code{background:#152642;color:#00f5ff;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9;text-align:center}
+    .box{max-width:480px;margin:60px auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
+    h1{color:#dc2626;font-size:20px;margin:0 0 14px}
+    code{background:#f1f4f9;color:#2563eb;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
     </style></head><body><div class="box">
     <h1>الوصول مرفوض</h1>
     <p>عنوان IP الخاص بك غير مدرج ضمن قائمة الوصول المسموح بها للوحة التحكم.</p>

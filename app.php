@@ -132,8 +132,8 @@ function svgi(string $n): string {
     $i = [
         'download' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>',
         'play'  => '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>',
-        'check' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e676" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',
-        'x'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4466" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+        'check' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',
+        'x'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>',
         'q'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>',
         'chevron' => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>',
         'zoom'  => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6m-3-3h6"/></svg>',
@@ -141,17 +141,17 @@ function svgi(string $n): string {
         'arrow-l' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
         'arrow-r' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>',
         'external' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
-        'rec'   => '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#ff4466"/></svg>',
+        'rec'   => '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#dc2626"/></svg>',
         'mirror'=> '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
         'star'  => '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
         'android'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--success)"><path d="M17.523 15.341c-.414 0-.75-.336-.75-.75V9.75c0-.414.336-.75.75-.75s.75.336.75.75v4.841c0 .414-.336.75-.75.75zM6.477 15.341c-.414 0-.75-.336-.75-.75V9.75c0-.414.336-.75.75-.75s.75.336.75.75v4.841c0 .414-.336.75-.75.75zM8.25 17.25V8.25h7.5v9h-7.5zM15 7.5H9l-1.5-2.625 1.299-.75L10.5 6h3l1.701-1.875 1.299.75L15 7.5z"/></svg>',
-        'playstore'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 3.5v17l14-8.5-14-8.5z" fill="url(#psg)" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/><defs><linearGradient id="psg" x1="4" y1="3.5" x2="18" y2="12" gradientUnits="userSpaceOnUse"><stop stop-color="#00f5ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs></svg>',
+        'playstore'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 3.5v17l14-8.5-14-8.5z" fill="url(#psg)" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/><defs><linearGradient id="psg" x1="4" y1="3.5" x2="18" y2="12" gradientUnits="userSpaceOnUse"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>',
     ];
     return $i[$n] ?? '';
 }
 function wave(): string {
     return '<svg class="wave-divider" viewBox="0 0 1200 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M0,20 C150,40 350,0 600,20 C850,40 1050,0 1200,20" stroke="#00f5ff" stroke-width="1.5" fill="none"/>
+      <path d="M0,20 C150,40 350,0 600,20 C850,40 1050,0 1200,20" stroke="#2563eb" stroke-width="1.5" fill="none"/>
     </svg>';
 }
 ?>
@@ -230,7 +230,7 @@ function wave(): string {
         <?php if ($app['icon_path']): ?>
           <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="app-hero-icon">
         <?php else: ?>
-          <div class="app-hero-icon" style="background:linear-gradient(135deg,#152642,#1e3356);display:flex;align-items:center;justify-content:center">
+          <div class="app-hero-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec);display:flex;align-items:center;justify-content:center">
             <?= svgi('android') ?>
           </div>
         <?php endif; ?>
@@ -238,7 +238,7 @@ function wave(): string {
       </div>
 
       <div class="app-hero-info">
-        <h1 class="app-hero-name neon-text"><?= h($app['name']) ?></h1>
+        <h1 class="app-hero-name"><?= h($app['name']) ?></h1>
         <div class="app-hero-developer"><?php if ($app['developer']): ?><a href="developer.php?name=<?= urlencode($app['developer']) ?>" style="color:inherit"><?= h($app['developer']) ?></a><?php endif; ?></div>
 
         <div class="app-badges">
@@ -443,7 +443,7 @@ function wave(): string {
       <table class="admin-table" style="width:100%;min-width:480px">
         <thead><tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th><th></th></tr></thead>
         <tbody>
-          <tr style="background:rgba(0,245,255,.04)">
+          <tr style="background:rgba(37,99,235,.04)">
             <td style="font-family:var(--f-mono);color:var(--cyan)">v<?= h($app['version']) ?> (الحالي)</td>
             <td style="color:var(--muted);font-size:12px"><?= h(time_ago($app['updated_at'])) ?></td>
             <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth($whatsNew, 0, 120, '...')) ?></td>

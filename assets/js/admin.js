@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bubble = document.createElement('div');
     const isUser = role === 'user';
     bubble.style.cssText = `align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;` +
-      (isUser ? 'background:rgba(0,245,255,.1);border:1px solid rgba(0,245,255,.25);color:var(--white)'
+      (isUser ? 'background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.22);color:var(--white)'
               : 'background:var(--navy-600);border:1px solid var(--border-c);color:var(--white)');
     bubble.textContent = text;
     assistantLog.appendChild(bubble);

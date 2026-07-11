@@ -16,7 +16,7 @@ $app = $stmt->fetch();
 
 if (!$app) {
     http_response_code(404);
-    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#03080f;color:#e8f4f8;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
+    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#f5f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
     exit;
 }
 

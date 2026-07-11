@@ -1306,7 +1306,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 </div>
 
 <!-- Import from Google Play -->
-<div class="ai-box" style="--border-p: rgba(0,245,255,.25)">
+<div class="ai-box" style="--border-p: rgba(37,99,235,.25)">
   <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--cyan)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:4px"><path d="M4 3.5v17l14-8.5-14-8.5z"/></svg>
     استيراد بيانات أولية من رابط Google Play

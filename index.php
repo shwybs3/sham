@@ -112,7 +112,7 @@ $siteName = 'yassota';
     <?php if ($featured['icon_path']): ?>
       <img src="<?= h($featured['icon_path']) ?>" alt="<?= h($featured['name']) ?>" class="featured-icon">
     <?php else: ?>
-      <div class="featured-icon" style="background:linear-gradient(135deg,#152642,#1e3356)"></div>
+      <div class="featured-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec)"></div>
     <?php endif; ?>
     <div class="featured-info">
       <div class="app-card-cat">مميز — <?= h($featured['cat_name'] ?? '') ?></div>
