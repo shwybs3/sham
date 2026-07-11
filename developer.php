@@ -3,7 +3,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $dev = trim($_GET['name'] ?? '');
-if ($dev === '') { header('Location: ' . url('index.php')); exit; }
+if ($dev === '') { header('Location: ' . url('')); exit; }
 
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -19,7 +19,7 @@ if ($totalApps === 0) {
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">لا توجد تطبيقات منشورة لهذا المطور</p>
-    <a href="index.php" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
+    <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
 
@@ -35,7 +35,7 @@ $metaDesc = "تصفح كل تطبيقات وألعاب المطور {$dev} ال�
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
-        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('index.php')],
+        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
         ["@type" => "ListItem", "position" => 2, "name" => $dev, "item" => url('developer.php?name=' . urlencode($dev))],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -70,7 +70,7 @@ $breadcrumbSchema = json_encode([
 <main class="main-content">
 
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <span><?= partial_icon('developer') ?> <?= h($dev) ?></span>
   </nav>

@@ -52,7 +52,7 @@ $siteName = 'yassota';
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($search ? "نتائج: $search" : ($catSlug ? ucfirst($catSlug) : 'تحميل أفضل التطبيقات')) ?> — yassota</title>
   <meta name="description" content="حمّل أفضل تطبيقات وألعاب أندرويد مجاناً على yassota — سريع، آمن، مباشر">
-  <link rel="canonical" href="<?= h(url('index.php')) ?>">
+  <link rel="canonical" href="<?= h(url('')) ?>">
   <meta property="og:title" content="yassota — تحميل التطبيقات">
   <meta property="og:description" content="أفضل تطبيقات أندرويد مجاناً">
   <meta name="twitter:card" content="summary_large_image">

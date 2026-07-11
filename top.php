@@ -24,7 +24,7 @@ $metaDesc = "قائمة محدّثة بأكثر التطبيقات والألع�
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
-        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('index.php')],
+        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
         ["@type" => "ListItem", "position" => 2, "name" => $title, "item" => url('top.php?by=' . $by)],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -59,7 +59,7 @@ $breadcrumbSchema = json_encode([
 <main class="main-content">
 
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <span><?= h($title) ?></span>
   </nav>

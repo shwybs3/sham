@@ -35,15 +35,15 @@ function partial_wave(): string {
 /* ── Header (logo, search, top nav) ── */
 function render_site_header(string $search = '', string $activeNav = 'home'): void { ?>
 <header class="site-header">
-  <a href="index.php" class="logo">yass<span>ota</span></a>
+  <a href="/" class="logo">yass<span>ota</span></a>
 
-  <form action="index.php" method="get" class="header-search" id="header-search-form">
+  <form action="/" method="get" class="header-search" id="header-search-form">
     <input type="text" name="q" placeholder="ابحث عن تطبيق أو لعبة..." value="<?= h($search) ?>">
     <button type="submit"><?= partial_icon('search') ?></button>
   </form>
 
   <nav class="header-nav">
-    <a href="index.php" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
+    <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
     <a href="index.php?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
     <a href="index.php?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
     <button type="button" class="mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
@@ -59,7 +59,7 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
 <aside class="sidebar">
   <div class="sidebar-section">
     <div class="sidebar-title">الأقسام</div>
-    <a href="index.php" class="sidebar-link <?= !$activeCatSlug ? 'active' : '' ?>">
+    <a href="/" class="sidebar-link <?= !$activeCatSlug ? 'active' : '' ?>">
       <?= partial_icon('home') ?> الكل
     </a>
     <?php foreach ($categories as $cat): ?>

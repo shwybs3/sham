@@ -28,7 +28,7 @@ $metaDesc = 'كيفية تقديم بلاغ إزالة محتوى بموجب DMC
 
 <main class="main-content">
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>DMCA</span>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>DMCA</span>
   </nav>
 
   <div class="section-head reveal"><span class="section-title">سياسة DMCA وحقوق النشر</span></div>

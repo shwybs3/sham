@@ -1,8 +1,15 @@
 Options -Indexes
+DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^robots\.txt$ robots.php [L]
+
+  # Canonical homepage: redirect old /index.php links/bookmarks to the root
+  # (matched against the original client request line so the internal
+  # rewrite to index.php below never re-triggers this and loops).
+  RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]
+  RewriteRule ^index\.php$ / [R=301,L,QSA]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f

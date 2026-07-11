@@ -61,9 +61,9 @@ if (!$hasLink) $url = '#';
 <!-- Header minimal (all links absolute — this page is served from a nested
      /{slug}/download URL, so plain relative paths would resolve wrong) -->
 <header class="site-header">
-  <a href="<?= h(url('index.php')) ?>" class="logo">yass<span>ota</span></a>
+  <a href="<?= h(url('')) ?>" class="logo">yass<span>ota</span></a>
   <nav class="header-nav">
-    <a href="<?= h(url('index.php')) ?>">الرئيسية</a>
+    <a href="<?= h(url('')) ?>">الرئيسية</a>
     <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
   </nav>
 </header>

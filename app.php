@@ -3,7 +3,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $slug = trim($_GET['slug'] ?? '');
-if (!$slug) { header('Location: index.php'); exit; }
+if (!$slug) { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
     FROM apps a LEFT JOIN categories c ON a.category_id=c.id
@@ -17,7 +17,7 @@ if (!$app) {
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">التطبيق غير موجود</p>
-    <a href="index.php" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
+    <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
 
@@ -98,7 +98,7 @@ $schema = json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 $breadcrumbItems = [
-    ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('index.php')],
+    ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
 ];
 if ($app['cat_slug']) {
     $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category.php?slug=' . $app['cat_slug'])];
@@ -183,7 +183,7 @@ function wave(): string {
 <aside class="sidebar">
   <div class="sidebar-section">
     <div class="sidebar-title">التنقل</div>
-    <a href="index.php" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
+    <a href="/" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
     <?php if ($app['cat_slug']): ?>
     <a href="category.php?slug=<?= h($app['cat_slug']) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
     <?php endif; ?>
@@ -208,7 +208,7 @@ function wave(): string {
 
   <!-- Breadcrumb -->
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <?php if ($app['cat_slug']): ?>
       <a href="category.php?slug=<?= h($app['cat_slug']) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>

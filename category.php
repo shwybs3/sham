@@ -13,7 +13,7 @@ if (!$category) {
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">التصنيف غير موجود</p>
-    <a href="index.php" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
+    <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
 
@@ -41,7 +41,7 @@ $metaDesc = !empty($category['description'])
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
-        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('index.php')],
+        ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
         ["@type" => "ListItem", "position" => 2, "name" => $category['name'], "item" => url('category.php?slug=' . $category['slug'])],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -79,7 +79,7 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
 <main class="main-content">
 
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <span><?= h($category['name']) ?></span>
   </nav>

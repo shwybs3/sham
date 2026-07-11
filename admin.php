@@ -2,6 +2,17 @@
 require_once __DIR__ . '/config.php';
 admin_ip_check($pdo);
 
+// AI-generation AJAX calls can legitimately take tens of seconds (external
+// OpenRouter requests). PHP's default file-based session handler holds an
+// exclusive lock on the session file for the whole request — without
+// releasing it here, one long-running generation blocks every other
+// request from the SAME logged-in admin (e.g. a second browser tab, or the
+// page trying to poll status) until it finishes. None of the AJAX handlers
+// below write to $_SESSION after this point, so closing it early is safe.
+if (isset($_GET['ajax']) && is_admin()) {
+    session_write_close();
+}
+
 /* ══════════════════════════════════════════════════════
    AJAX: Generate AI data (multi-key × multi-model rotation)
    ══════════════════════════════════════════════════════ */
@@ -481,7 +492,14 @@ P;
             break;
 
         case 'regenerate_seo_all':
-            $ids = $pdo->query("SELECT id FROM apps WHERE status='published'")->fetchAll(PDO::FETCH_COLUMN);
+            // Capped per call — looping over every published app in one PHP
+            // request (with each AI call taking real seconds) is exactly the
+            // kind of single request that can hold a PHP worker for minutes
+            // and make the rest of the site feel slow while it runs. Ask
+            // again to continue with the next batch instead.
+            $batchLimit = 15;
+            $allIds = $pdo->query("SELECT id FROM apps WHERE status='published' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+            $ids = array_slice($allIds, 0, $batchLimit);
             $done = 0;
             foreach ($ids as $id) {
                 $stmt = $pdo->prepare("SELECT name,short_description FROM apps WHERE id=?");
@@ -496,7 +514,9 @@ P;
                     $done++;
                 }
             }
-            $result = "تم تحديث SEO لـ {$done} من أصل " . count($ids) . " تطبيق منشور.";
+            $remaining = count($allIds) - count($ids);
+            $result = "تم تحديث SEO لـ {$done} من أصل " . count($ids) . " (دفعة واحدة من {$batchLimit} كحد أقصى)."
+                . ($remaining > 0 ? " تبقّى {$remaining} تطبيق — اكتب نفس الطلب مرة أخرى لمتابعة الدفعة التالية." : " تم الانتهاء من كل التطبيقات المنشورة.");
             break;
 
         case 'generate_icon':
@@ -1041,7 +1061,7 @@ $navLinks = [
       <?= $nav['label'] ?>
     </a>
     <?php endforeach; ?>
-    <a href="index.php" target="_blank" style="margin-top:auto">
+    <a href="/" target="_blank" style="margin-top:auto">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
       عرض الموقع
     </a>

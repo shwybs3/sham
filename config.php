@@ -367,7 +367,12 @@ function build_model_rotation(PDO $pdo, bool $forceAll = false): array {
 }
 
 // Low level call to OpenRouter chat completions. Returns ['ok'=>bool,'content'=>?string,'error'=>?string,'http'=>int]
-function openrouter_call(string $key, string $model, string $prompt, int $timeout = 55): array {
+// timeout is intentionally short (not the 55s this used to be): a failed/
+// rate-limited/unavailable free model almost always fails fast, and this
+// value is multiplied by every (key × model) pair openrouter_call_rotating()
+// tries — a long per-attempt timeout is what made a single content-generation
+// request able to block a PHP worker for many minutes.
+function openrouter_call(string $key, string $model, string $prompt, int $timeout = 20): array {
     if (!$key) return ['ok' => false, 'content' => null, 'error' => 'لا يوجد مفتاح API', 'http' => 0];
     $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
     curl_setopt_array($ch, [
@@ -395,11 +400,20 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
     return ['ok' => true, 'content' => $content, 'error' => null, 'http' => $code];
 }
 
-// High level: tries every key × every model until one succeeds. Returns full trace for diagnostics.
+// High level: tries key × model combinations until one succeeds. Returns full trace for diagnostics.
+// Capped at MAX_ATTEMPTS total combinations — with several keys and a live-
+// fetched free-model list this cross product can reach 100+ pairs, and at
+// 20s/attempt that's still 30+ minutes worst case if every one fails or
+// times out. Capping bounds a single request to at most a couple of minutes
+// while still trying enough combinations to almost always succeed.
 function openrouter_call_rotating(array $keys, array $models, string $prompt): array {
     $trace = [];
+    $attempts = 0;
+    $maxAttempts = 12;
     foreach ($keys as $key) {
         foreach ($models as $model) {
+            if ($attempts >= $maxAttempts) break 2;
+            $attempts++;
             $r = openrouter_call($key, $model, $prompt);
             $trace[] = ['model' => $model, 'key_tail' => substr($key, -4), 'ok' => $r['ok'], 'error' => $r['error'], 'http' => $r['http']];
             if ($r['ok']) {
@@ -853,5 +867,11 @@ HTML;
 // for, and very likely a real contributor to the AdSense rejection. It has
 // been removed site-wide rather than just worked around.
 function ad_slot(): string {
-    return '<ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
+    // The "إعلان" label is always rendered regardless of whether AdSense has
+    // an ad to fill this slot with. Before approval (or on a genuinely
+    // unfilled request) Google's own script sets height/display on the
+    // <ins> element itself to collapse it — without the label + the
+    // !important CSS guards on .ad-zone, that made the whole box appear to
+    // vanish instead of just showing empty ad space.
+    return '<span class="ad-zone-label">إعلان</span><ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
 }
