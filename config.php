@@ -164,6 +164,9 @@ function ensure_schema(PDO $pdo): array {
             'needs_update'     => "TINYINT(1) NOT NULL DEFAULT 0 AFTER status",
             'source_url'       => "VARCHAR(600) NULL AFTER download_url",
         ],
+        'categories' => [
+            'description' => "MEDIUMTEXT NULL AFTER icon_svg",
+        ],
     ];
     foreach ($wanted as $table => $cols) {
         try {

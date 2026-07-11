@@ -324,6 +324,23 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_screenshot_ai' && is_adm
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate an SEO description for a category
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_cat_description' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'اسم التصنيف مطلوب']); exit; }
+
+    $prompt = "اكتب فقرة تعريفية احترافية بطول 80-150 كلمة لصفحة تصنيف \"{$name}\" على متجر تطبيقات أندرويد عربي، تشرح للزائر ما يجده في هذا التصنيف بأسلوب طبيعي يخدم SEO. فقرة نصية عادية فقط بدون عناوين أو Markdown، وبدون مقدمات مثل \"بالتأكيد\".";
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $content = trim(preg_replace('/^```\w*|```$/m', '', $r['content']));
+    echo json_encode(['success'=>true,'content'=>$content], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -770,7 +787,12 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
 
 // ─── Categories ───
 if ($page === 'categories') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check() && isset($_POST['cat_id'])) {
+        // Updating a category's SEO description
+        $pdo->prepare("UPDATE categories SET description=? WHERE id=?")
+            ->execute([trim($_POST['description'] ?? ''), (int)$_POST['cat_id']]);
+        header('Location: admin.php?page=categories&msg=updated'); exit;
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $n = trim($_POST['name'] ?? '');
         if ($n) $pdo->prepare("INSERT IGNORE INTO categories (name,slug,sort_order) VALUES(?,?,?)")
             ->execute([$n, slugify($n), (int)($_POST['sort_order']??0)]);
@@ -1490,8 +1512,23 @@ elseif ($page === 'categories'):
       <td style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= h($c['slug']) ?></td>
       <td style="font-family:var(--f-mono)"><?= $c['cnt'] ?></td>
       <td>
+        <a href="category.php?slug=<?= h($c['slug']) ?>" target="_blank" class="btn-view">عرض</a>
         <a href="admin.php?page=categories&del_cat=<?= $c['id'] ?>&t=<?= csrf_token() ?>"
            class="btn-del" data-confirm="حذف التصنيف «<?= h($c['name']) ?>»؟">حذف</a>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="4" style="padding-top:0">
+        <form method="post" action="admin.php?page=categories" class="cat-desc-form" data-cat-name="<?= h($c['name']) ?>">
+          <?= csrf_field() ?>
+          <input type="hidden" name="cat_id" value="<?= $c['id'] ?>">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label class="form-label" style="margin:0">وصف SEO للتصنيف (يظهر أعلى صفحة التصنيف)</label>
+            <button type="button" class="add-item-btn btn-gen-cat-desc" style="margin:0;padding:6px 14px;font-size:12px">توليد بالذكاء الاصطناعي</button>
+          </div>
+          <textarea class="form-textarea" name="description" rows="2" placeholder="فقرة قصيرة تشرح هذا التصنيف..."><?= h($c['description'] ?? '') ?></textarea>
+          <button type="submit" class="btn-edit" style="margin-top:6px">حفظ الوصف</button>
+        </form>
       </td>
     </tr>
     <?php endforeach; ?>

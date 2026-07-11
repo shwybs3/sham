@@ -116,7 +116,7 @@ function wave(): string {
   <nav class="header-nav">
     <a href="index.php">الرئيسية</a>
     <?php if ($app['cat_slug']): ?>
-    <a href="index.php?cat=<?= h($app['cat_slug']) ?>"><?= h($app['cat_name']) ?></a>
+    <a href="category.php?slug=<?= h($app['cat_slug']) ?>"><?= h($app['cat_name']) ?></a>
     <?php endif; ?>
   </nav>
 </header>
@@ -129,7 +129,7 @@ function wave(): string {
     <div class="sidebar-title">التنقل</div>
     <a href="index.php" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
     <?php if ($app['cat_slug']): ?>
-    <a href="index.php?cat=<?= h($app['cat_slug']) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
+    <a href="category.php?slug=<?= h($app['cat_slug']) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
     <?php endif; ?>
   </div>
   <?php if ($relatedApps): ?>
@@ -155,7 +155,7 @@ function wave(): string {
     <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <?php if ($app['cat_slug']): ?>
-      <a href="index.php?cat=<?= h($app['cat_slug']) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
+      <a href="category.php?slug=<?= h($app['cat_slug']) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
       <span>/</span>
     <?php endif; ?>
     <span><?= h($app['name']) ?></span>
@@ -177,7 +177,7 @@ function wave(): string {
 
       <div class="app-hero-info">
         <h1 class="app-hero-name neon-text"><?= h($app['name']) ?></h1>
-        <div class="app-hero-developer"><?= h($app['developer'] ?? '') ?></div>
+        <div class="app-hero-developer"><?php if ($app['developer']): ?><a href="developer.php?name=<?= urlencode($app['developer']) ?>" style="color:inherit"><?= h($app['developer']) ?></a><?php endif; ?></div>
 
         <div class="app-badges">
           <?php if ($app['cat_name']): ?><span class="badge badge-cyan"><?= h($app['cat_name']) ?></span><?php endif; ?>

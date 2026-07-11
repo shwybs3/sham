@@ -4,12 +4,19 @@ header('Content-Type: application/xml; charset=utf-8');
 
 $apps = $pdo->query("SELECT slug, updated_at FROM apps WHERE status='published'")->fetchAll();
 $cats = $pdo->query("SELECT slug FROM categories")->fetchAll();
+$developers = $pdo->query("SELECT DISTINCT developer FROM apps WHERE status='published' AND developer IS NOT NULL AND developer<>''")->fetchAll(PDO::FETCH_COLUMN);
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc><?= SITE_URL ?>/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc><?= SITE_URL ?>/top.php?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/top.php?by=views</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/updates.php</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <?php foreach ($cats as $c): ?>
-  <url><loc><?= SITE_URL ?>/index.php?cat=<?= urlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/category.php?slug=<?= urlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <?php endforeach; ?>
+  <?php foreach ($developers as $d): ?>
+  <url><loc><?= SITE_URL ?>/developer.php?name=<?= urlencode($d) ?></loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <?php endforeach; ?>
   <?php foreach ($apps as $a): ?>
   <url>

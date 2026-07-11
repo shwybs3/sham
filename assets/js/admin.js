@@ -4,6 +4,30 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  /* ── AI-generate a category SEO description ── */
+  document.querySelectorAll('.btn-gen-cat-desc').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const form = btn.closest('form');
+      const name = form?.dataset.catName;
+      const textarea = form?.querySelector('textarea[name=description]');
+      if (!name || !textarea) return;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const res = await fetch('admin.php?ajax=generate_cat_description', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.success) textarea.value = data.content;
+        else alert(data.error || 'فشل التوليد');
+      } catch { alert('خطأ في الاتصال'); }
+      btn.textContent = original;
+      btn.disabled = false;
+    });
+  });
+
   /* ── Dynamic list builder (features, pros, cons, steps, faq) ── */
   window.initDynamicList = (containerId, fieldName, placeholder, secondField) => {
     const container = document.getElementById(containerId);
