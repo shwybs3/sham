@@ -105,7 +105,7 @@ $siteName = 'yassota';
 
   <!-- Featured App -->
   <?php if ($featured && !$search && !$catSlug): ?>
-  <a href="app.php?slug=<?= h($featured['slug']) ?>" class="featured-card reveal" data-hardnav="1">
+  <a href="<?= h(app_url($featured['slug'])) ?>" class="featured-card reveal" data-hardnav="1">
     <?php if ($featured['icon_path']): ?>
       <img src="<?= h($featured['icon_path']) ?>" alt="<?= h($featured['name']) ?>" class="featured-icon">
     <?php else: ?>

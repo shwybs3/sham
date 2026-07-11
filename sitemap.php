@@ -26,7 +26,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <?php endforeach; ?>
   <?php foreach ($apps as $a): ?>
   <url>
-    <loc><?= SITE_URL ?>/app.php?slug=<?= urlencode($a['slug']) ?></loc>
+    <loc><?= h(app_url($a['slug'])) ?></loc>
     <lastmod><?= date('Y-m-d', strtotime($a['updated_at'])) ?></lastmod>
     <changefreq>weekly</changefreq><priority>0.8</priority>
   </url>

@@ -3,6 +3,20 @@ Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^robots\.txt$ robots.php [L]
+
+  # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
+
+  # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
+  # (skipped automatically for any URL matching a real file/directory above,
+  # e.g. /admin.php, /assets/..., /uploads/... — see RESERVED_SLUGS in
+  # config.php for the matching guard against an app slug ever colliding
+  # with a route name like /about or /contact)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/?$ app.php?slug=$1 [L,QSA]
 </IfModule>
 
 <IfModule mod_deflate.c>

@@ -1098,7 +1098,7 @@ elseif ($page === 'apps'):
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           تعديل / تحديث
         </a>
-        <a href="app.php?slug=<?= h($a['slug']) ?>" target="_blank" class="btn-view">
+        <a href="<?= h(app_url($a['slug'])) ?>" target="_blank" class="btn-view">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           عرض
         </a>

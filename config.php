@@ -553,8 +553,16 @@ function slugify(string $t): string {
     return mb_strtolower(trim($t, '-')) ?: 'app-' . time();
 }
 
+// Route names that must never collide with an app's pretty URL (/{slug}).
+const RESERVED_SLUGS = [
+    'index', 'app', 'admin', 'download', 'category', 'developer', 'top', 'updates',
+    'sitemap', 'robots', 'config', 'partials', 'install', 'uploads', 'assets',
+    'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy',
+];
+
 function unique_slug(PDO $pdo, string $base): string {
     $slug = slugify($base);
+    if (in_array($slug, RESERVED_SLUGS, true)) $slug .= '-app';
     $orig = $slug; $i = 1;
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM apps WHERE slug=?");
     $stmt->execute([$slug]);
@@ -563,6 +571,12 @@ function unique_slug(PDO $pdo, string $base): string {
         $stmt->execute([$slug]);
     }
     return $slug;
+}
+
+// Pretty-URL helpers: yassota.com/{slug} and yassota.com/{slug}/download
+function app_url(string $slug): string { return url(rawurlencode($slug)); }
+function download_url(string $slug, int $mirror = 1): string {
+    return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
 }
 
 function is_admin(): bool { return !empty($_SESSION['admin_id']); }

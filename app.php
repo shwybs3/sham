@@ -91,12 +91,12 @@ function wave(): string {
   <title><?= h($app['seo_title'] ?: $app['name']) ?></title>
   <meta name="description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
-  <link rel="canonical" href="<?= h(url('app.php?slug=' . $app['slug'])) ?>">
+  <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
   <meta property="og:type" content="website">
   <meta property="og:title" content="<?= h($app['seo_title'] ?: $app['name']) ?>">
   <meta property="og:description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
   <?php if ($app['icon_path']): ?><meta property="og:image" content="<?= h(url($app['icon_path'])) ?>"><?php endif; ?>
-  <meta property="og:url" content="<?= h(url('app.php?slug=' . $app['slug'])) ?>">
+  <meta property="og:url" content="<?= h(app_url($app['slug'])) ?>">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $schema ?></script>
   <link rel="stylesheet" href="assets/css/main.css">
@@ -138,7 +138,7 @@ function wave(): string {
   <div class="sidebar-section">
     <div class="sidebar-title">تطبيقات مشابهة</div>
     <?php foreach ($relatedApps as $r): ?>
-    <a href="app.php?slug=<?= h($r['slug']) ?>" class="sidebar-link" style="gap:10px">
+    <a href="<?= h(app_url($r['slug'])) ?>" class="sidebar-link" style="gap:10px">
       <?php if ($r['icon_path']): ?>
         <img src="<?= h($r['icon_path']) ?>" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" alt="">
       <?php endif; ?>
@@ -189,7 +189,7 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <a href="download.php?id=<?= $app['id'] ?>" class="btn-download-hero" data-hardnav="1">
+          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
             <?= svgi('download') ?> تحميل مجاني
           </a>
           <?php if (!empty($app['playstore_url'])): ?>
@@ -198,10 +198,10 @@ function wave(): string {
           </a>
           <?php endif; ?>
           <?php if ($app['mirror2_url']): ?>
-          <a href="download.php?id=<?= $app['id'] ?>&m=2" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
+          <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
           <?php endif; ?>
           <?php if ($app['mirror3_url']): ?>
-          <a href="download.php?id=<?= $app['id'] ?>&m=3" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
+          <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
           <?php endif; ?>
         </div>
       </div>
@@ -402,7 +402,7 @@ function wave(): string {
   <div class="apps-grid">
     <?php foreach ($relatedApps as $r): ?>
     <div class="app-card reveal">
-      <a href="app.php?slug=<?= h($r['slug']) ?>" data-hardnav="1">
+      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
         <?php if ($r['icon_path']): ?>
           <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
         <?php endif; ?>
@@ -411,7 +411,7 @@ function wave(): string {
           <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
         </div>
       </a>
-      <a href="download.php?id=<?= $r['id'] ?>" class="btn-dl-card" data-hardnav="1">
+      <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
         <?= svgi('download') ?> تحميل
       </a>
     </div>
@@ -429,7 +429,7 @@ function wave(): string {
       <img src="<?= h($app['icon_path']) ?>" class="sticky-dl-icon" alt="">
     <?php endif; ?>
     <div class="sticky-dl-name"><?= h($app['name']) ?></div>
-    <a href="download.php?id=<?= $app['id'] ?>" class="btn-primary" style="padding:10px 20px;font-size:14px;flex-shrink:0" data-hardnav="1">
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-primary" style="padding:10px 20px;font-size:14px;flex-shrink:0" data-hardnav="1">
       <?= svgi('download') ?> تحميل
     </a>
   </div>

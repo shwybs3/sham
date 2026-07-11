@@ -1,11 +1,17 @@
 <?php
 require_once __DIR__ . '/config.php';
 
+$slug   = trim($_GET['slug'] ?? '');
 $id     = (int)($_GET['id'] ?? 0);
 $mirror = (int)($_GET['m'] ?? 1);
 
-$stmt = $pdo->prepare("SELECT * FROM apps WHERE id=? AND status='published'");
-$stmt->execute([$id]);
+if ($slug !== '') {
+    $stmt = $pdo->prepare("SELECT * FROM apps WHERE slug=? AND status='published'");
+    $stmt->execute([$slug]);
+} else {
+    $stmt = $pdo->prepare("SELECT * FROM apps WHERE id=? AND status='published'");
+    $stmt->execute([$id]);
+}
 $app = $stmt->fetch();
 
 if (!$app) {
@@ -15,7 +21,7 @@ if (!$app) {
 }
 
 // سجّل التحميل
-$pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$id]);
+$pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
 
 // حدد الرابط
 $url = $app['download_url'];
@@ -32,8 +38,8 @@ if (!$hasLink) $url = '#';
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تحميل <?= h($app['name']) ?> — yassota</title>
   <meta name="robots" content="noindex,follow">
-  <link rel="stylesheet" href="assets/css/main.css">
-  <link rel="stylesheet" href="assets/css/download.css">
+  <link rel="stylesheet" href="<?= h(url('assets/css/main.css')) ?>">
+  <link rel="stylesheet" href="<?= h(url('assets/css/download.css')) ?>">
   <!-- MoneyTag -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -41,12 +47,13 @@ if (!$hasLink) $url = '#';
 </head>
 <body>
 
-<!-- Header minimal -->
+<!-- Header minimal (all links absolute — this page is served from a nested
+     /{slug}/download URL, so plain relative paths would resolve wrong) -->
 <header class="site-header">
-  <a href="index.php" class="logo">yass<span>ota</span></a>
+  <a href="<?= h(url('index.php')) ?>" class="logo">yass<span>ota</span></a>
   <nav class="header-nav">
-    <a href="index.php">الرئيسية</a>
-    <a href="app.php?slug=<?= h($app['slug']) ?>">← صفحة التطبيق</a>
+    <a href="<?= h(url('index.php')) ?>">الرئيسية</a>
+    <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
   </nav>
 </header>
 
@@ -132,16 +139,16 @@ if (!$hasLink) $url = '#';
     <div class="dl-mirrors" style="margin-top:16px">
       <span style="font-size:12px;color:var(--muted)">روابط بديلة:</span>
       <?php if ($app['mirror2_url']): ?>
-        <a href="download.php?id=<?= $app['id'] ?>&m=2" class="dl-mirror-btn" data-hardnav="1">مرآة 2</a>
+        <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 2</a>
       <?php endif; ?>
       <?php if ($app['mirror3_url']): ?>
-        <a href="download.php?id=<?= $app['id'] ?>&m=3" class="dl-mirror-btn" data-hardnav="1">مرآة 3</a>
+        <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 3</a>
       <?php endif; ?>
     </div>
     <?php endif; ?>
 
     <!-- Back link -->
-    <a href="app.php?slug=<?= h($app['slug']) ?>"
+    <a href="<?= h(app_url($app['slug'])) ?>"
        style="display:block;margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
       ← العودة لصفحة <?= h($app['name']) ?>
     </a>

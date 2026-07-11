@@ -81,7 +81,7 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
 /* ── One app card, identical everywhere it's used ── */
 function render_app_card(array $app): void { ?>
 <div class="app-card reveal">
-  <a href="app.php?slug=<?= h($app['slug']) ?>" data-hardnav="1">
+  <a href="<?= h(app_url($app['slug'])) ?>" data-hardnav="1">
     <?php if (!empty($app['icon_path'])): ?>
       <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="app-card-icon" loading="lazy">
     <?php else: ?>
@@ -99,7 +99,7 @@ function render_app_card(array $app): void { ?>
       <span class="app-card-size"><?= h($app['size_mb'] ? $app['size_mb'] . ' MB' : '') ?></span>
     </div>
   </a>
-  <a href="download.php?id=<?= (int)$app['id'] ?>" class="btn-dl-card" data-hardnav="1">
+  <a href="<?= h(download_url($app['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
     <?= partial_icon('download') ?> تحميل
   </a>
 </div>
