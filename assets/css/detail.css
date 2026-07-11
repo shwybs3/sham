@@ -1,5 +1,14 @@
 /* ════ APP DETAIL PAGE ════ */
 
+/* Star rating radio widget (comments form) — visually reversed so the
+   5-star label comes first in the DOM/tab order while displaying right-to-left */
+.star-input { display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 4px; font-size: 26px; }
+.star-input input { position: absolute; opacity: 0; width: 0; height: 0; }
+.star-input label { color: var(--border-c); cursor: pointer; transition: color .15s; line-height: 1; }
+.star-input input:checked ~ label,
+.star-input label:hover,
+.star-input label:hover ~ label { color: #fbbf24; }
+
 /* Hero Section */
 .app-hero {
   position: relative;

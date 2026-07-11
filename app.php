@@ -45,6 +45,39 @@ $related = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
 $related->execute([$app['category_id'], $app['id']]);
 $relatedApps = $related->fetchAll();
 
+// Version history (populated when the admin edits an app with "save as new version" checked)
+$versionsStmt = $pdo->prepare("SELECT * FROM app_versions WHERE app_id=? ORDER BY created_at DESC");
+$versionsStmt->execute([$app['id']]);
+$versionHistory = $versionsStmt->fetchAll();
+
+// Approved comments + rating aggregate
+$commentsStmt = $pdo->prepare("SELECT * FROM comments WHERE app_id=? AND status='approved' ORDER BY created_at DESC LIMIT 50");
+$commentsStmt->execute([$app['id']]);
+$comments = $commentsStmt->fetchAll();
+$commentCount = count($comments);
+$avgRating = $commentCount ? round(array_sum(array_column($comments, 'rating')) / $commentCount, 1) : (float)$app['rating'];
+
+// Handle a new comment submission
+$commentSubmitted = false; $commentError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_submit'])) {
+    if (!empty($_POST['website'])) {
+        $commentSubmitted = true; // honeypot — pretend success, don't store
+    } elseif (!csrf_check()) {
+        $commentError = 'جلسة غير صالحة، أعد تحميل الصفحة وحاول مجدداً.';
+    } else {
+        $cName = trim($_POST['name'] ?? '');
+        $cRating = max(1, min(5, (int)($_POST['rating'] ?? 0)));
+        $cBody = trim($_POST['body'] ?? '');
+        if (!$cName || !$cRating || !$cBody) {
+            $commentError = 'يرجى تعبئة الاسم والتقييم والتعليق.';
+        } else {
+            $pdo->prepare("INSERT INTO comments (app_id,name,rating,body) VALUES (?,?,?,?)")
+                ->execute([$app['id'], $cName, $cRating, $cBody]);
+            $commentSubmitted = true;
+        }
+    }
+}
+
 // Schema.org
 $schema = json_encode([
     "@context" => "https://schema.org",
@@ -56,8 +89,8 @@ $schema = json_encode([
     "softwareVersion" => $app['version'],
     "aggregateRating" => [
         "@type" => "AggregateRating",
-        "ratingValue" => $app['rating'],
-        "ratingCount" => max(10, intval($app['downloads'] / 3)),
+        "ratingValue" => $avgRating,
+        "ratingCount" => max(10, $commentCount * 3, intval($app['downloads'] / 3)),
     ],
     "offers" => ["@type" => "Offer", "price" => "0", "priceCurrency" => "USD"],
     "author" => ["@type" => "Organization", "name" => $app['developer']],
@@ -383,6 +416,82 @@ function wave(): string {
   </div>
   <?= wave() ?>
   <?php endif; ?>
+
+  <!-- Changelog / Version History + Comparison -->
+  <?php if ($versionHistory): ?>
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">سجل التحديثات ومقارنة الإصدارات</span></div>
+    <div style="overflow-x:auto">
+      <table class="admin-table" style="width:100%;min-width:480px">
+        <thead><tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th><th></th></tr></thead>
+        <tbody>
+          <tr style="background:rgba(0,245,255,.04)">
+            <td style="font-family:var(--f-mono);color:var(--cyan)">v<?= h($app['version']) ?> (الحالي)</td>
+            <td style="color:var(--muted);font-size:12px"><?= h(time_ago($app['updated_at'])) ?></td>
+            <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth($whatsNew, 0, 120, '...')) ?></td>
+            <td><a href="<?= h(download_url($app['slug'])) ?>" class="btn-edit" data-hardnav="1">تحميل</a></td>
+          </tr>
+          <?php foreach ($versionHistory as $v): ?>
+          <tr>
+            <td style="font-family:var(--f-mono)">v<?= h($v['version'] ?: '—') ?></td>
+            <td style="color:var(--muted);font-size:12px"><?= h(time_ago($v['created_at'])) ?></td>
+            <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth(clean_long_text($v['changelog'] ?? ''), 0, 120, '...')) ?></td>
+            <td><?php if ($v['download_url']): ?><a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="btn-view" data-hardnav="1">تحميل هذا الإصدار</a><?php endif; ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <?= wave() ?>
+  <?php endif; ?>
+
+  <!-- Comments & Ratings -->
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">التعليقات والتقييمات (<?= $commentCount ?>)</span></div>
+
+    <?php if ($comments): ?>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <?php foreach ($comments as $c): ?>
+      <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:700;font-size:13px"><?= h($c['name']) ?></span>
+          <span style="color:#fbbf24;font-family:var(--f-mono);font-size:12px"><?= str_repeat('★', (int)$c['rating']) . str_repeat('☆', 5 - (int)$c['rating']) ?></span>
+        </div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.7;margin:0"><?= nl2br(h($c['body'])) ?></p>
+        <div style="color:var(--muted);font-size:11px;margin-top:6px"><?= h(time_ago($c['created_at'])) ?></div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:20px">لا توجد تقييمات بعد — كن أول من يقيّم هذا التطبيق.</p>
+    <?php endif; ?>
+
+    <?php if ($commentSubmitted): ?>
+      <div style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:var(--success);padding:14px 18px;border-radius:10px">
+        ✅ شكراً لك، تم استلام تقييمك وسيظهر بعد المراجعة.
+      </div>
+    <?php else: ?>
+      <?php if ($commentError): ?>
+        <div style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:14px"><?= h($commentError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="<?= h(app_url($app['slug'])) ?>#comment-form" id="comment-form" style="display:flex;flex-direction:column;gap:12px;max-width:520px">
+        <?= csrf_field() ?>
+        <input type="hidden" name="comment_submit" value="1">
+        <input type="text" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px" aria-hidden="true">
+        <div class="star-input" dir="ltr">
+          <?php for ($s = 5; $s >= 1; $s--): ?>
+          <input type="radio" name="rating" id="star-<?= $s ?>" value="<?= $s ?>" <?= $s === 5 ? 'checked' : '' ?>>
+          <label for="star-<?= $s ?>">★</label>
+          <?php endfor; ?>
+        </div>
+        <input type="text" name="name" placeholder="اسمك" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px">
+        <textarea name="body" placeholder="رأيك في التطبيق..." rows="3" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical"></textarea>
+        <button type="submit" class="btn-primary" style="align-self:flex-start">إرسال التقييم</button>
+      </form>
+    <?php endif; ?>
+  </div>
+  <?= wave() ?>
 
   <!-- What this app offers -->
   <?php if ($offersText !== ''): ?>

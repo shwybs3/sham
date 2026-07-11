@@ -680,7 +680,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
 
     // Slug
     if ($isEdit && $appId) {
-        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots FROM apps WHERE id=?");
+        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots,version,download_url,whats_new FROM apps WHERE id=?");
         $existing->execute([$appId]); $existing = $existing->fetch();
         $slug = $existing['slug'];
     } else {
@@ -782,6 +782,17 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
     ];
 
     if ($isEdit && $appId) {
+        // Optionally snapshot the version being replaced into app_versions
+        // before overwriting it, so old versions/changelogs stay browsable
+        // and downloadable instead of being silently lost on every edit.
+        if (!empty($_POST['save_as_new_version']) && $existing) {
+            $versionChanged = trim($existing['version'] ?? '') !== trim($d['version'] ?? '')
+                || trim($existing['download_url'] ?? '') !== trim($downloadUrl);
+            if ($versionChanged && trim($existing['version'] ?? '') !== '') {
+                $pdo->prepare("INSERT INTO app_versions (app_id,version,changelog,download_url) VALUES (?,?,?,?)")
+                    ->execute([$appId, $existing['version'], $existing['whats_new'], $existing['download_url']]);
+            }
+        }
         $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
@@ -821,6 +832,18 @@ if ($page === 'messages') {
     }
     if (isset($_GET['view'])) {
         $pdo->prepare("UPDATE contact_messages SET status='read' WHERE id=?")->execute([(int)$_GET['view']]);
+    }
+}
+
+// ─── Comment moderation ───
+if ($page === 'comments' && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+    if (isset($_GET['approve'])) {
+        $pdo->prepare("UPDATE comments SET status='approved' WHERE id=?")->execute([(int)$_GET['approve']]);
+        header('Location: admin.php?page=comments&msg=updated'); exit;
+    }
+    if (isset($_GET['del_comment'])) {
+        $pdo->prepare("DELETE FROM comments WHERE id=?")->execute([(int)$_GET['del_comment']]);
+        header('Location: admin.php?page=comments&msg=deleted'); exit;
     }
 }
 
@@ -907,6 +930,7 @@ $navLinks = [
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
+    'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -1432,6 +1456,12 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <input type="checkbox" name="needs_update" value="1" <?= !empty($app['needs_update'])?'checked':'' ?>>
       <span style="color:#fbbf24">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
     </label>
+    <?php if ($isEdit): ?>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <input type="checkbox" name="save_as_new_version" value="1" checked>
+      <span style="color:var(--cyan)">إذا تغيّر رقم الإصدار أو رابط التحميل، احفظ الإصدار الحالي (<?= h($app['version'] ?? '—') ?>) في سجل التحديثات قبل الاستبدال — يبقى قابلاً للتصفح والتحميل من صفحة التطبيق</span>
+    </label>
+    <?php endif; ?>
   </div>
 
   <button type="submit" class="btn-save" style="margin-bottom:40px">
@@ -1589,6 +1619,44 @@ elseif ($page === 'messages'):
   </tr>
   <?php endforeach; ?>
   <?php if (!$msgs): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد رسائل بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── COMMENTS MODERATION ─────────────── */
+elseif ($page === 'comments'):
+  $cmts = $pdo->query("SELECT c.*, a.name AS app_name, a.slug AS app_slug FROM comments c
+      LEFT JOIN apps a ON c.app_id=a.id ORDER BY c.status='pending' DESC, c.created_at DESC LIMIT 200")->fetchAll();
+?>
+
+<div class="admin-header"><h1>التعليقات والتقييمات</h1></div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>التطبيق</th><th>الاسم</th><th>التقييم</th><th>التعليق</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($cmts as $c): ?>
+  <tr>
+    <td data-label="التطبيق" style="font-weight:700"><?= h($c['app_name'] ?? '—') ?></td>
+    <td data-label="الاسم"><?= h($c['name']) ?></td>
+    <td data-label="التقييم" style="color:#fbbf24;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
+    <td data-label="التعليق" style="max-width:280px;color:var(--muted);font-size:13px"><?= h(mb_strimwidth($c['body'], 0, 100, '...')) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $c['status']==='approved'?'status-published':'status-draft' ?>"><?= $c['status']==='approved'?'منشور':'قيد المراجعة' ?></span></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <?php if ($c['status'] !== 'approved'): ?>
+        <a href="admin.php?page=comments&approve=<?= $c['id'] ?>&t=<?= csrf_token() ?>" class="btn-edit">نشر</a>
+        <?php endif; ?>
+        <?php if ($c['app_slug']): ?>
+        <a href="<?= h(app_url($c['app_slug'])) ?>" target="_blank" class="btn-view">عرض التطبيق</a>
+        <?php endif; ?>
+        <a href="admin.php?page=comments&del_comment=<?= $c['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذا التعليق؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$cmts): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد تعليقات بعد</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>

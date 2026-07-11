@@ -23,10 +23,23 @@ if (!$app) {
 // سجّل التحميل
 $pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
 
-// حدد الرابط
-$url = $app['download_url'];
-if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
-if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
+// حدد الرابط — يدعم تحميل إصدار قديم مؤرشف عبر ?ver=
+$archivedVersion = null;
+if (!empty($_GET['ver'])) {
+    $verStmt = $pdo->prepare("SELECT * FROM app_versions WHERE id=? AND app_id=?");
+    $verStmt->execute([(int)$_GET['ver'], $app['id']]);
+    $archivedVersion = $verStmt->fetch();
+}
+
+if ($archivedVersion && !empty($archivedVersion['download_url'])) {
+    $url = $archivedVersion['download_url'];
+    $displayVersion = $archivedVersion['version'];
+} else {
+    $url = $app['download_url'];
+    if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
+    if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
+    $displayVersion = $app['version'];
+}
 $hasLink = !empty($url);
 if (!$hasLink) $url = '#';
 ?>
@@ -79,8 +92,8 @@ if (!$hasLink) $url = '#';
 
     <div class="dl-app-name"><?= h($app['name']) ?></div>
     <div class="dl-app-version">
-      <?php if ($app['version']): ?>
-        <span style="font-family:var(--f-mono)">v<?= h($app['version']) ?></span>
+      <?php if ($displayVersion): ?>
+        <span style="font-family:var(--f-mono)">v<?= h($displayVersion) ?></span>
       <?php endif; ?>
       <?php if ($app['size_mb']): ?>
         · <span style="font-family:var(--f-mono)"><?= h($app['size_mb']) ?> MB</span>
