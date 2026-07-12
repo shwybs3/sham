@@ -1,32 +1,163 @@
 Options -Indexes
+DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Force HTTPS — required for AdSense and for the cookie-consent /
+  # localStorage behavior to be trustworthy. IMPORTANT: only keep this
+  # enabled once your hosting actually has a valid SSL certificate active
+  # (most cPanel hosts auto-provision one via AutoSSL/Let's Encrypt) — if
+  # SSL isn't active yet, this causes a redirect loop. Comment out the two
+  # lines below if that happens, until SSL is confirmed working.
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
   RewriteRule ^robots\.txt$ robots.php [L]
+
+  # Canonical homepage: redirect old /index.php links/bookmarks to the root
+  RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]
+  RewriteRule ^index\.php$ / [R=301,L,QSA]
+
+  # Hide .php extensions — redirect direct .php requests to clean URLs
+  RewriteCond %{THE_REQUEST} \s/blog-post\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /blog/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/category\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /category/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/developer\.php\?name=([^&\s]+) [NC]
+  RewriteRule ^ /developer/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/blog\.php[\s?] [NC]
+  RewriteRule ^ /blog [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/top\.php[\s?] [NC]
+  RewriteRule ^ /top [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/updates\.php[\s?] [NC]
+  RewriteRule ^ /updates [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/rss\.php[\s?] [NC]
+  RewriteRule ^ /rss [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/article\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /article/%1 [R=301,L]
+
+  # Admin: hide admin.php
+  RewriteRule ^admin/?$ admin.php [L,QSA]
+
+  # Blog post: /blog/{slug} → blog-post.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^blog/([^/]+)/?$ blog-post.php?slug=$1 [L,QSA]
+
+  # Blog listing: /blog → blog.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^blog/?$ blog.php [L,QSA]
+
+  # Category page: /category/{slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^category/([^/]+)/?$ category.php?slug=$1 [L,QSA]
+
+  # Developer page: /developer/{name}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^developer/([^/]+)/?$ developer.php?name=$1 [L,QSA]
+
+  # Article page: /article/{slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^article/([^/]+)/?$ article.php?slug=$1 [L,QSA]
+
+  # Top / Updates / RSS clean URLs
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^top/?$ top.php [L,QSA]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^updates/?$ updates.php [L,QSA]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^rss/?$ rss.php [L,QSA]
+
+  # Static pages — clean URLs (no .php extension)
+  RewriteRule ^about/?$ about.php [L]
+  RewriteRule ^contact/?$ contact.php [L]
+  RewriteRule ^privacy-policy/?$ privacy-policy.php [L]
+  RewriteRule ^terms/?$ terms.php [L]
+  RewriteRule ^cookie-policy/?$ cookie-policy.php [L]
+  RewriteRule ^dmca/?$ dmca.php [L]
+
+  # 301 redirects for old .php links to static pages
+  RewriteCond %{THE_REQUEST} \s/(about|contact|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
+  RewriteRule ^(.+)\.php$ /$1 [R=301,L]
+
+  # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
+
+  # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/?$ app.php?slug=$1 [L,QSA]
 </IfModule>
 
+# ── Compression ──────────────────────────────────
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml font/woff2 font/woff font/ttf
+  DeflateCompressionLevel 6
 </IfModule>
 
+# ── Browser caching ───────────────────────────────
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType image/webp "access plus 1 year"
-  ExpiresByType image/jpeg "access plus 1 year"
-  ExpiresByType image/png  "access plus 1 year"
-  ExpiresByType text/css   "access plus 1 month"
-  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresDefault                          "access plus 1 month"
+  ExpiresByType text/html                 "access plus 1 hour"
+  ExpiresByType text/css                  "access plus 3 months"
+  ExpiresByType application/javascript    "access plus 3 months"
+  ExpiresByType image/webp                "access plus 1 year"
+  ExpiresByType image/jpeg                "access plus 1 year"
+  ExpiresByType image/png                 "access plus 1 year"
+  ExpiresByType image/gif                 "access plus 1 year"
+  ExpiresByType image/svg+xml             "access plus 3 months"
+  ExpiresByType image/x-icon              "access plus 1 year"
+  ExpiresByType font/woff2                "access plus 1 year"
+  ExpiresByType font/woff                 "access plus 1 year"
+  ExpiresByType application/json          "access plus 0 seconds"
 </IfModule>
 
+# ── Cache-Control & security headers ─────────────
 <IfModule mod_headers.c>
-  Header set X-Content-Type-Options "nosniff"
-  Header set X-Frame-Options "SAMEORIGIN"
-  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  # Security
+  Header set X-Content-Type-Options  "nosniff"
+  Header set X-Frame-Options         "SAMEORIGIN"
+  Header set Referrer-Policy         "strict-origin-when-cross-origin"
+  Header set X-XSS-Protection        "1; mode=block"
+  # Keep-alive
+  Header set Connection              "keep-alive"
+  # Vary for correct caching of compressed content
+  Header append Vary Accept-Encoding
+  # Static assets — immutable for 1 year
+  <FilesMatch "\.(css|js|woff2?|ttf|webp|jpg|jpeg|png|gif|ico|svg)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # HTML — 1 hour, must-revalidate
+  <FilesMatch "\.php$">
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+  </FilesMatch>
 </IfModule>
+
+# ── ETag optimization ─────────────────────────────
+FileETag MTime Size
 
 <FilesMatch "\.(sql|log|env|json)$">
   Require all denied
 </FilesMatch>
+<Files "manifest.json">
+  Require all granted
+</Files>
 
 <FilesMatch "config\.php$">
   Require all denied

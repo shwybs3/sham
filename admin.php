@@ -1,6 +1,23 @@
 <?php
+// Raise PHP limits for admin only — long descriptions can be several MBs
+@ini_set('post_max_size', '64M');
+@ini_set('upload_max_filesize', '64M');
+@ini_set('max_input_vars', '5000');
+@ini_set('memory_limit', '256M');
+
 require_once __DIR__ . '/config.php';
 admin_ip_check($pdo);
+
+// AI-generation AJAX calls can legitimately take tens of seconds (external
+// OpenRouter requests). PHP's default file-based session handler holds an
+// exclusive lock on the session file for the whole request — without
+// releasing it here, one long-running generation blocks every other
+// request from the SAME logged-in admin (e.g. a second browser tab, or the
+// page trying to poll status) until it finishes. None of the AJAX handlers
+// below write to $_SESSION after this point, so closing it early is safe.
+if (isset($_GET['ajax']) && is_admin()) {
+    session_write_close();
+}
 
 /* ══════════════════════════════════════════════════════
    AJAX: Generate AI data (multi-key × multi-model rotation)
@@ -15,16 +32,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate' && is_admin()) {
 
     $models = build_model_rotation($pdo);
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير تسويق تطبيقات أندرويد. التطبيق: "{$name}"
+أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات. (يمكن للأدمن توسيعه لاحقاً حتى 1500-3000 كلمة بزر "متابعة الكتابة").
+
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
   "name":"الاسم الرسمي",
-  "seo_title":"عنوان SEO أقل من 60 حرف",
-  "meta_description":"وصف meta أقل من 155 حرف",
-  "keywords":"كلمات مفتاحية مفصولة بفاصلة",
+  "seo_title":"",
+  "meta_description":"",
+  "keywords":"",
   "short_description":"جملة أو جملتين",
-  "long_description":"وصف طويل احترافي عدة فقرات",
+  "long_description":"",
   "developer":"اسم المطور المحتمل",
   "version":"رقم إصدار مثل 3.1.0",
   "android_version":"مثل: 7.0 فأعلى",
@@ -46,22 +69,30 @@ P;
     if (!$result['ok']) {
         echo json_encode([
             'success' => false,
-            'error'   => 'فشل الاتصال بـ OpenRouter بعد تجربة ' . count($result['trace']) . ' محاولة (مفاتيح × موديلات). راجع صفحة "اختبار الاتصال" للتفاصيل.',
+            'error'   => openrouter_diagnose_trace($result['trace']),
             'trace'   => $result['trace'],
         ]);
         exit;
     }
 
-    $raw = trim(preg_replace(['/^```json\s*/m','/\s*```$/m','/^```\s*/m'], '', $result['content']));
-    $s = strpos($raw, '{'); $e = strrpos($raw, '}');
-    $data = ($s !== false && $e !== false) ? json_decode(substr($raw, $s, $e-$s+1), true) : null;
+    $data = ai_extract_json($result['content']);
 
     if ($data) {
         $data['success'] = true;
         $data['used_model'] = $result['model'];
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
     } else {
-        echo json_encode(['success'=>false,'error'=>'الاتصال نجح لكن الرد لم يكن JSON صالح، حاول مجدداً (الموديل المستخدم: '.$result['model'].')']);
+        // Model returned text instead of JSON — retry once with a stricter prompt
+        $strictPrompt = "أجب بـJSON فقط بدون أي نص قبله أو بعده، ولا Markdown، ولا شرح. الطلب هو:\n\n" . $prompt;
+        $retry = openrouter_call_rotating($keys, array_slice($models, 0, 4), $strictPrompt);
+        $data2 = $retry['ok'] ? ai_extract_json($retry['content']) : null;
+        if ($data2) {
+            $data2['success'] = true;
+            $data2['used_model'] = $retry['model'];
+            echo json_encode($data2, JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode(['success'=>false,'error'=>'لم يُرجع الذكاء الاصطناعي JSON صالح بعد محاولتين. جرّب تغيير الموديل في الإعدادات أو تفعيل "التدوير التلقائي" (الموديل: '.$result['model'].')']);
+        }
     }
     exit;
 }
@@ -96,24 +127,31 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_connection' && is_admin()) {
     if (!is_dir(UPLOAD_PATH)) { @mkdir(UPLOAD_PATH, 0755, true); $upOk = is_dir(UPLOAD_PATH) && is_writable(UPLOAD_PATH); }
     $checks[] = ['label'=>'صلاحية الكتابة في مجلد uploads','ok'=>$upOk,'detail'=>$upOk?'قابل للكتابة':'غير قابل للكتابة — غيّر الصلاحيات إلى 755'];
 
-    // OpenRouter
-    $keys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
-    if (!$keys) {
-        $checks[] = ['label'=>'مفتاح OpenRouter API','ok'=>false,'detail'=>'لم يتم إضافة أي مفتاح بعد'];
-    } else {
-        $models = build_model_rotation($pdo, true);
-        $r = openrouter_call_rotating($keys, $models, 'قل "مرحبا" فقط بدون أي إضافات.');
+    // AI provider test
+    $aiProvider = get_cfg($pdo, 'ai_provider', 'openrouter');
+    if ($aiProvider === 'aifreeforever') {
+        $r = aifreeforever_call('قل "مرحبا" فقط بدون أي إضافات.');
         $checks[] = [
-            'label' => 'الاتصال بـ OpenRouter (' . count($keys) . ' مفتاح × ' . count($models) . ' موديل)',
-            'ok' => $r['ok'],
-            'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : 'فشلت كل المحاولات — راجع تفاصيل الأخطاء أدناه',
-            'trace' => $r['trace'],
-            'working_model' => $r['ok'] ? $r['model'] : null,
+            'label'  => 'الاتصال بـ aifreeforever',
+            'ok'     => $r['ok'],
+            'detail' => $r['ok'] ? 'نجح الاتصال ✓ (aifreeforever)' : $r['error'],
         ];
-        // Auto-save the first working model as primary for next time
-        $primaryNow = get_cfg($pdo, 'openrouter_model', '');
-        if ($r['ok'] && $r['model'] !== $primaryNow) {
-            set_cfg($pdo, 'openrouter_model', $r['model']);
+    } else {
+        $keys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
+        if (!$keys) {
+            $checks[] = ['label'=>'مفتاح OpenRouter API','ok'=>false,'detail'=>'لم يتم إضافة أي مفتاح بعد'];
+        } else {
+            $models = build_model_rotation($pdo, true);
+            $r = openrouter_call_rotating($keys, $models, 'قل "مرحبا" فقط بدون أي إضافات.');
+            $checks[] = [
+                'label' => 'الاتصال بـ OpenRouter (' . count($keys) . ' مفتاح × ' . count($models) . ' موديل)',
+                'ok' => $r['ok'],
+                'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : openrouter_diagnose_trace($r['trace']),
+                'trace' => $r['trace'] ?? null,
+                'working_model' => $r['ok'] ? $r['model'] : null,
+            ];
+            $primaryNow = get_cfg($pdo, 'openrouter_model', '');
+            if ($r['ok'] && $r['model'] !== $primaryNow) set_cfg($pdo, 'openrouter_model', $r['model']);
         }
     }
 
@@ -150,6 +188,102 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fix_db' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Repair legacy invalid-UTF-8 bytes already stored in the DB
+   (older rows saved before clean_utf8() was applied at save time can
+   still contain bad bytes, which is what caused long descriptions to
+   render as a blank gap). One-time, safe to re-run, only writes rows
+   that actually changed.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'repair_encoding' && is_admin()) {
+    header('Content-Type: application/json');
+    $textCols = ['name','seo_title','meta_description','keywords','short_description','long_description',
+        'privacy_policy','terms_content','offers_text','whats_new','developer'];
+    $fixed = 0; $scanned = 0;
+    $rows = $pdo->query("SELECT id," . implode(',', $textCols) . " FROM apps")->fetchAll();
+    foreach ($rows as $row) {
+        $scanned++;
+        $set = []; $vals = [];
+        foreach ($textCols as $col) {
+            $clean = clean_utf8($row[$col] ?? '');
+            if ($clean !== ($row[$col] ?? '')) { $set[] = "$col=?"; $vals[] = $clean; }
+        }
+        if ($set) {
+            $vals[] = $row['id'];
+            $pdo->prepare("UPDATE apps SET " . implode(',', $set) . " WHERE id=?")->execute($vals);
+            $fixed++;
+        }
+    }
+    $catRows = $pdo->query("SELECT id,description FROM categories")->fetchAll();
+    foreach ($catRows as $row) {
+        $clean = clean_utf8($row['description'] ?? '');
+        if ($clean !== ($row['description'] ?? '')) {
+            $pdo->prepare("UPDATE categories SET description=? WHERE id=?")->execute([$clean, $row['id']]);
+            $fixed++;
+        }
+    }
+    bump_cache_version($pdo);
+    echo json_encode(['success'=>true,'message'=>"تم فحص {$scanned} تطبيق، وإصلاح ترميز {$fixed} صف."], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   Database backup — streams a plain .sql dump built via PDO
+   (no shell_exec/mysqldump dependency, since shared hosts
+   commonly disable shell_exec). Structure + data for every
+   table, safe to re-import with a plain SQL client.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'db_backup' && is_admin()) {
+    header('Content-Type: application/sql; charset=utf-8');
+    header('Content-Disposition: attachment; filename="yassota-backup-' . date('Y-m-d-His') . '.sql"');
+    echo "-- yassota database backup — " . date('Y-m-d H:i:s') . "\n";
+    echo "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n";
+    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tables as $table) {
+        $createRow = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
+        $create = $createRow['Create Table'] ?? $createRow[1] ?? '';
+        echo "DROP TABLE IF EXISTS `$table`;\n$create;\n\n";
+
+        $cols = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+        $colList = '`' . implode('`,`', $cols) . '`';
+        $rowStmt = $pdo->query("SELECT * FROM `$table`");
+        while ($row = $rowStmt->fetch(PDO::FETCH_NUM)) {
+            $vals = array_map(fn($v) => $v === null ? 'NULL' : $pdo->quote((string)$v), $row);
+            echo "INSERT INTO `$table` ($colList) VALUES (" . implode(',', $vals) . ");\n";
+        }
+        echo "\n";
+        @ob_flush(); @flush();
+    }
+    echo "SET FOREIGN_KEY_CHECKS=1;\n";
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: VirusTotal — scan the download link / check a pending scan
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'vt_scan' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,download_url FROM apps WHERE id=?");
+    $stmt->execute([$id]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+    $r = vt_scan_url($pdo, $id, $a['download_url'] ?? '');
+    echo json_encode(['success'=>$r['ok'], 'status'=>$r['status'] ?? null, 'error'=>$r['error'] ?? null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'vt_check' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,vt_analysis_id FROM apps WHERE id=?");
+    $stmt->execute([$id]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+    $r = vt_check_pending($pdo, $id, $a['vt_analysis_id'] ?? '');
+    echo json_encode(['success'=>$r['ok'], 'status'=>$r['status'] ?? null, 'error'=>$r['error'] ?? null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Regenerate SEO fields for one app (used by bulk tool)
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'regen_seo' && is_admin()) {
@@ -160,18 +294,21 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'regen_seo' && is_admin()) {
     $app = $stmt->fetch();
     if (!$app) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير SEO محترف لمتاجر التطبيقات العربية. التطبيق: "{$app['name']}"
+التطبيق: "{$app['name']}"
 الوصف الحالي: "{$app['short_description']}"
+
+{$seoStandards}
+
 أعد JSON صالح فقط بدون أي نص إضافي:
-{"seo_title":"عنوان SEO جذاب أقل من 60 حرف يتضمن اسم التطبيق وكلمة مفتاحية قوية",
-"meta_description":"وصف Meta مقنع أقل من 155 حرف يحفّز على النقر",
-"keywords":"12-15 كلمة مفتاحية عربية قوية مفصولة بفاصلة، منها كلمات طويلة الذيل"}
+{"seo_title":"","meta_description":"","keywords":""}
 P;
     $r = ai_text($pdo, $prompt);
     if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
     $data = ai_extract_json($r['content']);
     if (!$data) { echo json_encode(['success'=>false,'error'=>'رد غير صالح من الموديل']); exit; }
+    $data = clean_utf8_deep($data);
 
     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
         ->execute([trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''), $id]);
@@ -324,6 +461,163 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_screenshot_ai' && is_adm
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate an SEO description for a category
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_cat_description' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'اسم التصنيف مطلوب']); exit; }
+
+    $prompt = "اكتب فقرة تعريفية احترافية بطول 80-150 كلمة لصفحة تصنيف \"{$name}\" على متجر تطبيقات أندرويد عربي، تشرح للزائر ما يجده في هذا التصنيف بأسلوب طبيعي يخدم SEO. فقرة نصية عادية فقط بدون عناوين أو Markdown، وبدون مقدمات مثل \"بالتأكيد\".";
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $content = trim(preg_replace('/^```\w*|```$/m', '', $r['content']));
+    echo json_encode(['success'=>true,'content'=>$content], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Generate 3 short related articles for an app —
+   internal linking back to its download page (SEO + AdSense).
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_articles' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
+    $stmt->execute([$appId]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف لموقع تحميل تطبيقات أندرويد. اكتب 3 مقالات قصيرة أصلية ومفيدة (وليست إعلانية مبالغاً فيها)
+عن تطبيق "{$a['name']}" ({$a['short_description']}), بأنواع مختلفة، مثلاً: شرح كيفية استخدام التطبيق للمبتدئين، مقارنة
+بينه وبين بدائل مشهورة في نفس المجال، أو نصائح وحيل لاستخدامه بفعالية. كل مقال بطول 250-450 كلمة، فقرات طبيعية بدون
+Markdown، تنتهي كل مقالة بجملة طبيعية تدعو القارئ لتحميل "{$a['name']}" (دون رابط، الرابط سيُضاف تلقائياً).
+أعد JSON فقط بالشكل التالي، بدون أي نص خارج JSON:
+{"articles":[{"title":"","body":""},{"title":"","body":""},{"title":"","body":""}]}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    $data = clean_utf8_deep($data ?? []);
+    $articles = $data['articles'] ?? [];
+    if (!$articles) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن بالشكل المتوقع']); exit; }
+
+    $created = 0;
+    foreach ($articles as $art) {
+        $title = trim($art['title'] ?? '');
+        $body  = trim($art['body'] ?? '');
+        if (!$title || !$body) continue;
+        $slug = unique_article_slug($pdo, $a['name'] . '-' . $title);
+        $pdo->prepare("INSERT INTO app_articles (app_id,title,slug,body) VALUES (?,?,?,?)")
+            ->execute([$appId, $title, $slug, $body]);
+        $created++;
+    }
+    echo json_encode(['success'=>true,'created'=>$created], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Internal link-safety verification (replaces VirusTotal)
+   Admin marks a download URL as team-verified; badge shows on the
+   app page and download page. No external API, no API keys needed.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'verify_link' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_POST['app_id'] ?? 0);
+    $action = $_POST['action'] ?? 'verify'; // 'verify' or 'unverify'
+    if (!$appId) { echo json_encode(['success'=>false,'error'=>'معرف التطبيق مطلوب']); exit; }
+    if ($action === 'unverify') {
+        $pdo->prepare("UPDATE apps SET link_verified=0, verified_at=NULL WHERE id=?")->execute([$appId]);
+        echo json_encode(['success'=>true,'verified'=>false]);
+    } else {
+        $pdo->prepare("UPDATE apps SET link_verified=1, verified_at=NOW() WHERE id=?")->execute([$appId]);
+        bump_cache_version($pdo);
+        echo json_encode(['success'=>true,'verified'=>true]);
+    }
+    exit;
+}
+
+/* ── AJAX: test Telegram bot ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
+    header('Content-Type: application/json');
+    $r = telegram_api($pdo, 'sendMessage', [
+        'text'       => '✅ اختبار ناجح من لوحة إدارة <b>yassota</b> — بوت تيليجرام يعمل بشكل صحيح!',
+        'parse_mode' => 'HTML',
+    ]);
+    echo json_encode(['success' => $r['ok'], 'error' => $r['error'] ?? null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Generate one general blog post (tutorial/news/
+   comparison/best-of/article) — the general-content system,
+   distinct from the per-app app_articles above.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()) {
+    header('Content-Type: application/json');
+    $type = trim($_GET['type'] ?? 'article');
+    if (!isset(BLOG_TYPES[$type])) $type = 'article';
+    $topic = trim($_GET['topic'] ?? '');
+
+    $typeGuides = [
+        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
+        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
+        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
+        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
+        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
+        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
+    ];
+    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
+{$typeGuides[$type]}
+{$topicLine}
+
+المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
+اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
+
+اتبع معايير SEO:
+- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
+- meta_description: 140-160 حرفاً يلخص المقال.
+- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
+- excerpt: سطر أو سطران يظهران في بطاقة المقال.
+
+أعد JSON صالح فقط بدون أي نص خارج JSON:
+{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+    $data = clean_utf8_deep($data);
+
+    $title = trim($data['title'] ?? '');
+    $body  = trim($data['body'] ?? '');
+    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي ناقص']); exit; }
+    $slug = unique_blog_slug($pdo, $title);
+
+    // Best-effort cover image — never blocks the post from being created.
+    $coverImage = null;
+    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
+    if ($ir['ok']) {
+        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
+        file_put_contents($tmp, $ir['bin']);
+        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
+        @unlink($tmp);
+    }
+
+    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
+        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
+            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
+    $newId = (int)$pdo->lastInsertId();
+    echo json_encode(['success'=>true,'id'=>$newId,'title'=>$title], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -381,9 +675,11 @@ P;
         case 'create_app_draft':
             $name = trim($params['name'] ?? '');
             if (!$name) { $result = 'لم يتم تحديد اسم التطبيق'; break; }
-            $genPrompt = "أنت خبير تسويق تطبيقات أندرويد. التطبيق: \"{$name}\"\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
+            $genPrompt = "أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف. التطبيق: \"{$name}\"\n\n" . seo_prompt_standards() .
+                "\n\nأعد JSON صالح فقط بدون أي نص آخر:\n{\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"1.0.0\",\"android_version\":\"\",\"size_mb\":\"\",\"rating\":4.5,\"whats_new\":\"\"}";
             $gr = ai_text($pdo, $genPrompt);
             $data = $gr['ok'] ? ai_extract_json($gr['content']) : null;
+            $data = clean_utf8_deep($data ?? []);
             $slug = unique_slug($pdo, $name);
             $pdo->prepare("INSERT INTO apps (name,slug,seo_title,meta_description,keywords,short_description,long_description,developer,version,android_version,size_mb,rating,whats_new,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
                 ->execute([
@@ -402,31 +698,43 @@ P;
             $stmt = $pdo->prepare("SELECT id,name,short_description FROM apps WHERE id=?");
             $stmt->execute([$id]); $a = $stmt->fetch();
             if (!$a) { $result = "لم يتم العثور على تطبيق برقم #{$id}"; break; }
-            $seoPrompt = "أنت خبير SEO محترف. التطبيق: \"{$a['name']}\" الوصف الحالي: \"{$a['short_description']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}";
+            $seoPrompt = "التطبيق: \"{$a['name']}\" الوصف الحالي: \"{$a['short_description']}\"\n\n" . seo_prompt_standards() .
+                "\n\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}";
             $sr = ai_text($pdo, $seoPrompt);
             $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
             if (!$sd) { $result = 'فشل التوليد'; break; }
+            $sd = clean_utf8_deep($sd);
             $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
                 ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
             $result = "تم تحديث SEO للتطبيق #{$id} — {$a['name']}";
             break;
 
         case 'regenerate_seo_all':
-            $ids = $pdo->query("SELECT id FROM apps WHERE status='published'")->fetchAll(PDO::FETCH_COLUMN);
+            // Capped per call — looping over every published app in one PHP
+            // request (with each AI call taking real seconds) is exactly the
+            // kind of single request that can hold a PHP worker for minutes
+            // and make the rest of the site feel slow while it runs. Ask
+            // again to continue with the next batch instead.
+            $batchLimit = 15;
+            $allIds = $pdo->query("SELECT id FROM apps WHERE status='published' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+            $ids = array_slice($allIds, 0, $batchLimit);
             $done = 0;
             foreach ($ids as $id) {
                 $stmt = $pdo->prepare("SELECT name,short_description FROM apps WHERE id=?");
                 $stmt->execute([$id]); $a = $stmt->fetch();
                 if (!$a) continue;
-                $sr = ai_text($pdo, "أنت خبير SEO. التطبيق: \"{$a['name']}\"\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
+                $sr = ai_text($pdo, "التطبيق: \"{$a['name']}\"\n\n" . seo_prompt_standards() . "\n\nأعد JSON فقط: {\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\"}");
                 $sd = $sr['ok'] ? ai_extract_json($sr['content']) : null;
                 if ($sd) {
+                    $sd = clean_utf8_deep($sd);
                     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
                         ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
                     $done++;
                 }
             }
-            $result = "تم تحديث SEO لـ {$done} من أصل " . count($ids) . " تطبيق منشور.";
+            $remaining = count($allIds) - count($ids);
+            $result = "تم تحديث SEO لـ {$done} من أصل " . count($ids) . " (دفعة واحدة من {$batchLimit} كحد أقصى)."
+                . ($remaining > 0 ? " تبقّى {$remaining} تطبيق — اكتب نفس الطلب مرة أخرى لمتابعة الدفعة التالية." : " تم الانتهاء من كل التطبيقات المنشورة.");
             break;
 
         case 'generate_icon':
@@ -442,6 +750,7 @@ P;
             @unlink($tmp);
             if (!$path) { $result = 'تم توليد الصورة لكن تعذّرت معالجتها'; break; }
             $pdo->prepare("UPDATE apps SET icon_path=? WHERE id=?")->execute([$path, $id]);
+            bump_cache_version($pdo);
             $result = "تم توليد وحفظ أيقونة جديدة للتطبيق #{$id} — {$a['name']}";
             break;
 
@@ -504,6 +813,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'suggest_trending' && is_admin()) 
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
     header('Content-Type: application/json');
+    @set_time_limit(150); // AI long-form generation + Play Store scrape + icon fetch can run past shared-hosting's 30s default
     $input = json_decode(file_get_contents('php://input'), true);
     $name = trim($input['name'] ?? '');
     $type = in_array($input['type'] ?? 'apps', ['apps','games'], true) ? $input['type'] : 'apps';
@@ -513,16 +823,30 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
     if (!$keys) { echo json_encode(['success'=>false,'error'=>'لم يتم إضافة مفتاح OpenRouter بعد.']); exit; }
     $models = build_model_rotation($pdo);
 
+    $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير تسويق تطبيقات أندرويد. التطبيق: "{$name}"
+أنت كاتب محتوى سوري محترف متخصص بمراجعة التطبيقات، تكتب لموقع تحميل تطبيقات أندرويد عربي. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: هذا هو المطلوب الأهم — نص طويل جداً ومفصّل لا يقل عن 2200 كلمة (كلما كان أطول وأغنى بالتفاصيل كان أفضل)، مكتوب بلهجة سورية خفيفة وأسلوب إنساني ودافئ كأنك تشرح لصديقك ليش هالتطبيق حلو وشو بيقدملك، وليس نصاً روبوتياً أو قائمة جافة. لكن حافظ على وضوح الكلام بحيث يفهمه كل الناطقين بالعربية (لهجة سورية مخفّفة قريبة من الفصحى، لا تستخدم عامية ثقيلة جداً). قسّم النص لعدة فقرات وعناوين فرعية داخل النص (بدون Markdown، فقط أسطر جديدة) تغطي على الأقل:
+  1. مقدمة شخصية دافئة عن التطبيق وليش الناس عم يدورو عليه.
+  2. نظرة عامة موسّعة على التطبيق واستخداماته.
+  3. شرح تفصيلي مطوّل لكل ميزة رئيسية (فقرة كاملة لكل ميزة، مو مجرد جملة).
+  4. لمين هالتطبيق مناسب (نوعية المستخدمين).
+  5. مقارنة سريعة مع بدائل مشابهة وليش هاد أفضل أو مختلف.
+  6. نصائح استخدام عملية وحلول لمشاكل شائعة.
+  7. خاتمة تحفّز القارئ على التحميل.
+  التزم بأسلوب SEO طبيعي (كرر اسم التطبيق وكلمات مثل "تحميل" و"تنزيل" و"APK" بشكل طبيعي ضمن السياق دون حشو مزعج).
+
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
   "name":"الاسم الرسمي",
-  "seo_title":"عنوان SEO أقل من 60 حرف",
-  "meta_description":"وصف meta أقل من 155 حرف",
-  "keywords":"كلمات مفتاحية مفصولة بفاصلة",
-  "short_description":"جملة أو جملتين",
-  "long_description":"وصف طويل احترافي عدة فقرات",
+  "seo_title":"",
+  "meta_description":"",
+  "keywords":"",
+  "short_description":"جملة أو جملتين بأسلوب سوري ودود",
+  "long_description":"",
   "developer":"اسم المطور المحتمل",
   "version":"رقم إصدار مثل 3.1.0",
   "android_version":"مثل: 7.0 فأعلى",
@@ -531,17 +855,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
   "package_name":"com.developer.appname",
   "rating":4.5,
   "whats_new":"آخر التحديثات",
-  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5"],
-  "pros":["إيجابية 1","إيجابية 2","إيجابية 3"],
+  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5","ميزة 6"],
+  "pros":["إيجابية 1","إيجابية 2","إيجابية 3","إيجابية 4"],
   "cons":["سلبية 1","سلبية 2"],
   "install_steps":["خطوة 1","خطوة 2","خطوة 3","خطوة 4"],
-  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"}]
+  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة بلهجة ودودة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"},{"q":"سؤال 4","a":"إجابة 4"}]
 }
 P;
-    $result = openrouter_call_rotating($keys, $models, $prompt);
+    $result = openrouter_call_rotating($keys, $models, $prompt, 90, 9000);
     if (!$result['ok']) { echo json_encode(['success'=>false,'error'=>'فشل توليد المحتوى بالذكاء الاصطناعي']); exit; }
     $data = ai_extract_json($result['content']);
     if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+    $data = clean_utf8_deep($data);
 
     $finalName = trim($data['name'] ?? $name) ?: $name;
     $slug = unique_slug($pdo, $finalName);
@@ -629,10 +954,20 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
-    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','moneytag_zone'] as $k) {
+    // Multi-key inputs — combine array into newline-separated string
+    $multiKeys = array_filter(array_map('trim', $_POST['openrouter_key_multi'] ?? []));
+    $mergedKey = implode("\n", $multiKeys) ?: trim($_POST['openrouter_key'] ?? '');
+    set_cfg($pdo, 'openrouter_key', $mergedKey);
+
+    foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
+              'google_site_verification','bing_site_verification','virustotal_api_key',
+              'ai_provider',
+              'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
-    set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
+    set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
+    set_cfg($pdo, 'admin_email_notifications',   isset($_POST['admin_email_notifications'])   ? '1' : '0');
+    set_cfg($pdo, 'telegram_enabled',            isset($_POST['telegram_enabled'])            ? '1' : '0');
 
     // Optional IP allowlist — auto-include the saving admin's current IP so a save can never lock them out.
     $newAllowlist = trim($_POST['admin_ip_allowlist'] ?? '');
@@ -650,24 +985,106 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
     hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
     $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([(int)$_GET['del']]);
+    bump_cache_version($pdo);
     header('Location: admin.php?page=apps&msg=deleted'); exit;
+}
+
+// ─── Delete a related article ───
+if ($page === 'edit-app' && isset($_GET['del_article']) && isset($_GET['t']) &&
+    hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
+    $pdo->prepare("DELETE FROM app_articles WHERE id=?")->execute([(int)$_GET['del_article']]);
+    header('Location: admin.php?page=edit-app&id=' . (int)($_GET['id'] ?? 0)); exit;
+}
+
+// ─── Delete a blog post ───
+if ($page === 'blog' && isset($_GET['del']) && isset($_GET['t']) &&
+    hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
+    $pdo->prepare("DELETE FROM blog_posts WHERE id=?")->execute([(int)$_GET['del']]);
+    bump_cache_version($pdo);
+    header('Location: admin.php?page=blog&msg=deleted'); exit;
+}
+
+// ─── Save / Update a blog post ───
+if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    $_POST = clean_utf8_deep($_POST);
+    $id    = (int)($_POST['id'] ?? 0);
+    $title = trim($_POST['title'] ?? '');
+    if (!$title) { $blogError = 'العنوان مطلوب'; }
+    else {
+        $type = isset(BLOG_TYPES[$_POST['type'] ?? '']) ? $_POST['type'] : 'article';
+        $customSlug = trim($_POST['slug'] ?? '');
+        if ($id) {
+            $curSlug = $pdo->prepare("SELECT slug FROM blog_posts WHERE id=?");
+            $curSlug->execute([$id]); $curSlug = $curSlug->fetchColumn();
+            $slug = ($customSlug !== '' && $customSlug !== $curSlug)
+                ? unique_blog_slug($pdo, $customSlug, $id)
+                : $curSlug;
+        } else {
+            $slug = unique_blog_slug($pdo, $customSlug !== '' ? $customSlug : $title);
+        }
+        // code-page: assemble language sections from POST into JSON body
+        if ($type === 'code-page') {
+            $sections = [];
+            foreach (array_keys(CODE_PAGE_LANGS) as $lang) {
+                $code = $_POST['cp_' . $lang] ?? '';
+                if (trim($code) !== '') $sections[$lang] = $code;
+            }
+            $bodyVal = json_encode(['sections' => $sections, 'description' => trim($_POST['cp_description'] ?? '')],
+                JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        } else {
+            $bodyVal = trim($_POST['body'] ?? '');
+        }
+        $d = [
+            'type' => $type,
+            'title' => $title,
+            'slug' => $slug,
+            'seo_title' => trim($_POST['seo_title'] ?? ''),
+            'meta_description' => trim($_POST['meta_description'] ?? ''),
+            'keywords' => trim($_POST['keywords'] ?? ''),
+            'excerpt' => trim($_POST['excerpt'] ?? ''),
+            'body' => $bodyVal,
+            'status' => ($_POST['status'] ?? 'draft') === 'published' ? 'published' : 'draft',
+        ];
+        if ($id) {
+            $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
+            $d['id'] = $id;
+            $pdo->prepare("UPDATE blog_posts SET $sets WHERE id=:id")->execute($d);
+        } else {
+            $cols = implode(',', array_keys($d));
+            $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
+            $pdo->prepare("INSERT INTO blog_posts ($cols) VALUES ($vals)")->execute($d);
+            $id = (int)$pdo->lastInsertId();
+        }
+        bump_cache_version($pdo);
+        header('Location: admin.php?page=blog&msg=saved'); exit;
+    }
 }
 
 // ─── Save / Update app ───
 if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    // Strip any invalid UTF-8 bytes from every submitted field before they
+    // ever reach the database — belt-and-suspenders alongside h()'s
+    // ENT_SUBSTITUTE, in case the hosting DB is non-strict and would
+    // otherwise silently store/mangle bad bytes.
+    $_POST = clean_utf8_deep($_POST);
     $isEdit = $page === 'edit-app';
     $appId  = (int)($_POST['app_id'] ?? 0);
     $name   = trim($_POST['name'] ?? '');
 
     if (!$name) { $error = 'اسم التطبيق مطلوب'; goto render; }
 
-    // Slug
+    // Slug — an admin-chosen slug wins if provided (and differs from the
+    // current one on edit); otherwise it's auto-derived from the name, same
+    // as before this field existed.
+    $customSlug = trim($_POST['slug'] ?? '');
     if ($isEdit && $appId) {
-        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots FROM apps WHERE id=?");
+        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots,version,download_url,whats_new FROM apps WHERE id=?");
         $existing->execute([$appId]); $existing = $existing->fetch();
-        $slug = $existing['slug'];
+        $slug = ($customSlug !== '' && $customSlug !== $existing['slug'])
+            ? unique_slug($pdo, $customSlug, $appId)
+            : $existing['slug'];
     } else {
-        $slug = unique_slug($pdo, $name);
+        $slug = unique_slug($pdo, $customSlug !== '' ? $customSlug : $name);
         $existing = null;
     }
 
@@ -719,8 +1136,19 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $forcedDraft = true;
     }
 
+    // Self-heal a common data-entry mistake: a Play Store URL pasted into the
+    // "Play Store version" field (which should only ever hold a short string
+    // like "12.8.0") instead of the dedicated Play Store URL field.
+    $playStoreVersionIn = trim($_POST['play_store_version'] ?? '');
+    $playstoreUrlIn     = trim($_POST['playstore_url'] ?? '');
+    if (str_contains($playStoreVersionIn, '://')) {
+        if ($playstoreUrlIn === '') $playstoreUrlIn = $playStoreVersionIn;
+        $playStoreVersionIn = '';
+    }
+
     $d = [
         'name'              => $name,
+        'slug'              => $slug,
         'seo_title'         => trim($_POST['seo_title'] ?? ''),
         'meta_description'  => trim($_POST['meta_description'] ?? ''),
         'keywords'          => trim($_POST['keywords'] ?? ''),
@@ -731,8 +1159,8 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'offers_text'       => trim($_POST['offers_text'] ?? ''),
         'developer'         => trim($_POST['developer'] ?? ''),
         'version'           => trim($_POST['version'] ?? ''),
-        'play_store_version'=> trim($_POST['play_store_version'] ?? ''),
-        'playstore_url'     => trim($_POST['playstore_url'] ?? ''),
+        'play_store_version'=> $playStoreVersionIn,
+        'playstore_url'     => $playstoreUrlIn,
         'android_version'   => trim($_POST['android_version'] ?? ''),
         'size_mb'           => trim($_POST['size_mb'] ?? ''),
         'license'           => trim($_POST['license'] ?? 'Free'),
@@ -755,22 +1183,52 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
     ];
 
     if ($isEdit && $appId) {
+        // Optionally snapshot the version being replaced into app_versions
+        // before overwriting it, so old versions/changelogs stay browsable
+        // and downloadable instead of being silently lost on every edit.
+        if (!empty($_POST['save_as_new_version']) && $existing) {
+            $versionChanged = trim($existing['version'] ?? '') !== trim($d['version'] ?? '')
+                || trim($existing['download_url'] ?? '') !== trim($downloadUrl);
+            if ($versionChanged && trim($existing['version'] ?? '') !== '') {
+                $pdo->prepare("INSERT INTO app_versions (app_id,version,changelog,download_url) VALUES (?,?,?,?)")
+                    ->execute([$appId, $existing['version'], $existing['whats_new'], $existing['download_url']]);
+            }
+        }
+        $wasPublished = ($existing['status'] ?? '') === 'published';
         $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
+        bump_cache_version($pdo);
+        // Notify Telegram only when transitioning to published (not on repeated edits)
+        if (!$wasPublished && $requestedStatus === 'published') {
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$appId]) ? $pdo->query("SELECT * FROM apps WHERE id=$appId")->fetch() : $d;
+            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+        }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
     } else {
-        $d['slug'] = $slug;
         $cols = implode(',', array_keys($d));
         $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+        $newId = (int)$pdo->lastInsertId();
+        bump_cache_version($pdo);
+        // Notify Telegram on new published apps
+        if ($requestedStatus === 'published' && $newId) {
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id=$newId")->fetch() : array_merge($d, ['id' => $newId]);
+            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+        }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'added_no_link' : 'added')); exit;
     }
 }
 
 // ─── Categories ───
 if ($page === 'categories') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check() && isset($_POST['cat_id'])) {
+        // Updating a category's SEO description
+        $pdo->prepare("UPDATE categories SET description=? WHERE id=?")
+            ->execute([trim($_POST['description'] ?? ''), (int)$_POST['cat_id']]);
+        bump_cache_version($pdo);
+        header('Location: admin.php?page=categories&msg=updated'); exit;
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $n = trim($_POST['name'] ?? '');
         if ($n) $pdo->prepare("INSERT IGNORE INTO categories (name,slug,sort_order) VALUES(?,?,?)")
             ->execute([$n, slugify($n), (int)($_POST['sort_order']??0)]);
@@ -778,6 +1236,31 @@ if ($page === 'categories') {
     if (isset($_GET['del_cat']) && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
         $pdo->prepare("DELETE FROM categories WHERE id=?")->execute([(int)$_GET['del_cat']]);
         header('Location: admin.php?page=categories&msg=deleted'); exit;
+    }
+}
+
+// ─── Contact messages ───
+if ($page === 'messages') {
+    if (isset($_GET['del_msg']) && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+        $pdo->prepare("DELETE FROM contact_messages WHERE id=?")->execute([(int)$_GET['del_msg']]);
+        header('Location: admin.php?page=messages&msg=deleted'); exit;
+    }
+    if (isset($_GET['view'])) {
+        $pdo->prepare("UPDATE contact_messages SET status='read' WHERE id=?")->execute([(int)$_GET['view']]);
+    }
+}
+
+// ─── Comment moderation ───
+if ($page === 'comments' && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+    if (isset($_GET['approve'])) {
+        $pdo->prepare("UPDATE comments SET status='approved' WHERE id=?")->execute([(int)$_GET['approve']]);
+        bump_cache_version($pdo);
+        header('Location: admin.php?page=comments&msg=updated'); exit;
+    }
+    if (isset($_GET['del_comment'])) {
+        $pdo->prepare("DELETE FROM comments WHERE id=?")->execute([(int)$_GET['del_comment']]);
+        bump_cache_version($pdo);
+        header('Location: admin.php?page=comments&msg=deleted'); exit;
     }
 }
 
@@ -823,10 +1306,10 @@ if ($page === 'login'): ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
 <body>
 <div class="admin-login">
@@ -863,6 +1346,10 @@ $navLinks = [
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
+    'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
+    'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
+    'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
+    'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -871,10 +1358,10 @@ $navLinks = [
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
   <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
 <body>
 <!-- ═══ MOBILE TOPBAR (يظهر فقط على الشاشات الصغيرة) ═══ -->
@@ -903,7 +1390,7 @@ $navLinks = [
       <?= $nav['label'] ?>
     </a>
     <?php endforeach; ?>
-    <a href="index.php" target="_blank" style="margin-top:auto">
+    <a href="/" target="_blank" style="margin-top:auto">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
       عرض الموقع
     </a>
@@ -1064,7 +1551,7 @@ elseif ($page === 'apps'):
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           تعديل / تحديث
         </a>
-        <a href="app.php?slug=<?= h($a['slug']) ?>" target="_blank" class="btn-view">
+        <a href="<?= h(app_url($a['slug'])) ?>" target="_blank" class="btn-view">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           عرض
         </a>
@@ -1100,7 +1587,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 </div>
 
 <!-- Import from Google Play -->
-<div class="ai-box" style="--border-p: rgba(0,245,255,.25)">
+<div class="ai-box" style="--border-p: rgba(37,99,235,.25)">
   <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--cyan)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:4px"><path d="M4 3.5v17l14-8.5-14-8.5z"/></svg>
     استيراد بيانات أولية من رابط Google Play
@@ -1143,6 +1630,16 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <div class="form-group full">
         <label class="form-label">اسم التطبيق *</label>
         <input class="form-input" id="f-name" type="text" name="name" value="<?= h($app['name']??'') ?>" required>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">رابط الصفحة (Slug)</label>
+        <input class="form-input" id="f-slug" type="text" name="slug" dir="ltr" style="text-align:left"
+               value="<?= h($app['slug'] ?? '') ?>" placeholder="سيُنشأ تلقائياً من الاسم إن تُرك فارغاً"
+               pattern="[a-zA-Z0-9؀-ۿ\-]*">
+        <span style="font-size:11px;color:var(--muted);display:block;margin-top:4px" dir="ltr">
+          <?= h(SITE_URL) ?>/<span id="slug-preview"><?= h($app['slug'] ?? 'app-name') ?></span>
+          <?php if ($isEdit): ?> — تنبيه: تغييره يغيّر رابط الصفحة الحالي (قد يفقد أي روابط خارجية مؤشرة عليه).<?php endif; ?>
+        </span>
       </div>
       <div class="form-group">
         <label class="form-label">SEO Title</label>
@@ -1388,6 +1885,12 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <input type="checkbox" name="needs_update" value="1" <?= !empty($app['needs_update'])?'checked':'' ?>>
       <span style="color:#fbbf24">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
     </label>
+    <?php if ($isEdit): ?>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <input type="checkbox" name="save_as_new_version" value="1" checked>
+      <span style="color:var(--cyan)">إذا تغيّر رقم الإصدار أو رابط التحميل، احفظ الإصدار الحالي (<?= h($app['version'] ?? '—') ?>) في سجل التحديثات قبل الاستبدال — يبقى قابلاً للتصفح والتحميل من صفحة التطبيق</span>
+    </label>
+    <?php endif; ?>
   </div>
 
   <button type="submit" class="btn-save" style="margin-bottom:40px">
@@ -1395,6 +1898,78 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     <?= $isEdit ? 'حفظ التعديلات' : 'إضافة التطبيق' ?>
   </button>
 </form>
+
+<?php if ($isEdit): ?>
+<div class="panel" style="margin-bottom:40px">
+  <h2>التحقق من سلامة الرابط</h2>
+  <p class="form-hint" style="margin-bottom:14px">
+    بعد التأكد يدوياً من أن رابط التحميل آمن وسليم، اضغط "تحقق الفريق" لإظهار شارة "رابط تم التحقق من سلامته بواسطة فريق yassota" على صفحة التطبيق وصفحة التحميل.
+  </p>
+  <div style="margin-bottom:12px" id="verify-status">
+    <?php if ($app['link_verified']): ?>
+      <span class="status-badge status-published">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        تم التحقق من سلامة الرابط<?= $app['verified_at'] ? ' — ' . date('Y-m-d', strtotime($app['verified_at'])) : '' ?>
+      </span>
+    <?php else: ?>
+      <span class="status-badge status-draft">لم يتم التحقق من الرابط بعد</span>
+    <?php endif; ?>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <?php if (!$app['link_verified']): ?>
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="verify">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+      تحقق الفريق — الرابط آمن
+    </button>
+    <?php else: ?>
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(220,38,38,.1);color:var(--danger)">
+      إلغاء التحقق
+    </button>
+    <?php endif; ?>
+  </div>
+  <div id="verify-result" style="margin-top:12px"></div>
+</div>
+<?php endif; ?>
+
+<?php if ($isEdit):
+  $articlesStmt = $pdo->prepare("SELECT id,title,slug,created_at FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
+  $articlesStmt->execute([$app['id']]);
+  $appArticles = $articlesStmt->fetchAll();
+?>
+<div class="panel" style="margin-bottom:40px">
+  <h2>مقالات ذات صلة (روابط داخلية للـSEO وAdSense)</h2>
+  <p class="form-hint" style="margin-bottom:14px">
+    مقالات قصيرة أصلية تربط بصفحة تحميل هذا التطبيق (مثل "كيفية استخدام <?= h($app['name']) ?> للمبتدئين" أو
+    "<?= h($app['name']) ?> مقابل بدائله") — تُحسّن الربط الداخلي وتفيد في قبول AdSense.
+  </p>
+  <button type="button" id="btn-generate-articles" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    توليد 3 مقالات جديدة بالذكاء الاصطناعي
+  </button>
+  <div class="ai-status" id="generate-articles-status"></div>
+
+  <?php if ($appArticles): ?>
+  <table class="admin-table" style="width:100%;margin-top:16px">
+    <thead><tr><th>العنوان</th><th>تاريخ الإنشاء</th><th></th></tr></thead>
+    <tbody>
+      <?php foreach ($appArticles as $art): ?>
+      <tr>
+        <td data-label="العنوان"><?= h($art['title']) ?></td>
+        <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($art['created_at'])) ?></td>
+        <td data-label="إجراءات" class="td-actions">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a href="<?= h(article_url($art['slug'])) ?>" target="_blank" class="btn-view">عرض</a>
+            <a href="admin.php?page=edit-app&id=<?= (int)$app['id'] ?>&del_article=<?= (int)$art['id'] ?>&t=<?= csrf_token() ?>"
+               class="btn-del" data-confirm="حذف هذا المقال؟">حذف</a>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <script>
 window.EXISTING_DATA = <?= json_encode([
@@ -1441,6 +2016,15 @@ elseif ($page === 'bulk-generate'): ?>
     اقترح الأسماء
   </button>
   <div class="ai-status" id="bg-suggest-status"></div>
+
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-c)">
+    <label class="form-label">أو أدخل أسماء التطبيقات يدوياً بنفسك (اسم واحد بكل سطر) — يتخطى اقتراح الذكاء الاصطناعي ويستخدم أسماءك مباشرة</label>
+    <textarea class="form-textarea" id="bg-manual-names" rows="8" placeholder="واتساب&#10;تيليجرام&#10;فيسبوك&#10;ماسنجر&#10;سناب شات&#10;يوتيوب&#10;..." style="font-family:inherit;direction:rtl"></textarea>
+    <button type="button" id="btn-bg-manual" class="btn-save" style="margin-top:10px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+      استخدم هذه الأسماء
+    </button>
+  </div>
 </div>
 
 <div class="panel" id="bg-names-panel" style="display:none">
@@ -1490,13 +2074,500 @@ elseif ($page === 'categories'):
       <td style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= h($c['slug']) ?></td>
       <td style="font-family:var(--f-mono)"><?= $c['cnt'] ?></td>
       <td>
+        <a href="category.php?slug=<?= h($c['slug']) ?>" target="_blank" class="btn-view">عرض</a>
         <a href="admin.php?page=categories&del_cat=<?= $c['id'] ?>&t=<?= csrf_token() ?>"
            class="btn-del" data-confirm="حذف التصنيف «<?= h($c['name']) ?>»؟">حذف</a>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="4" style="padding-top:0">
+        <form method="post" action="admin.php?page=categories" class="cat-desc-form" data-cat-name="<?= h($c['name']) ?>">
+          <?= csrf_field() ?>
+          <input type="hidden" name="cat_id" value="<?= $c['id'] ?>">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label class="form-label" style="margin:0">وصف SEO للتصنيف (يظهر أعلى صفحة التصنيف)</label>
+            <button type="button" class="add-item-btn btn-gen-cat-desc" style="margin:0;padding:6px 14px;font-size:12px">توليد بالذكاء الاصطناعي</button>
+          </div>
+          <textarea class="form-textarea" name="description" rows="2" placeholder="فقرة قصيرة تشرح هذا التصنيف..."><?= h($c['description'] ?? '') ?></textarea>
+          <button type="submit" class="btn-edit" style="margin-top:6px">حفظ الوصف</button>
+        </form>
       </td>
     </tr>
     <?php endforeach; ?>
     </tbody>
   </table>
+</div>
+
+<?php
+/* ─────────────── CONTACT MESSAGES ─────────────── */
+elseif ($page === 'messages'):
+  $msgs = $pdo->query("SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 200")->fetchAll();
+?>
+
+<div class="admin-header"><h1>رسائل التواصل</h1></div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>الاسم</th><th>البريد</th><th>الموضوع</th><th>التاريخ</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($msgs as $m): ?>
+  <tr>
+    <td data-label="الاسم" style="font-weight:700"><?= h($m['name']) ?></td>
+    <td data-label="البريد" style="font-family:var(--f-mono);font-size:12px"><?= h($m['email']) ?></td>
+    <td data-label="الموضوع"><?= h($m['subject'] ?: '—') ?></td>
+    <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($m['created_at'])) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $m['status']==='new'?'status-published':'status-draft' ?>"><?= $m['status']==='new'?'جديدة':'مقروءة' ?></span></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a href="admin.php?page=messages&view=<?= $m['id'] ?>#msg-<?= $m['id'] ?>" class="btn-view">عرض</a>
+        <a href="admin.php?page=messages&del_msg=<?= $m['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذه الرسالة؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <tr id="msg-<?= $m['id'] ?>">
+    <td colspan="6" style="padding-top:0;color:var(--muted);font-size:13px;line-height:1.8;white-space:pre-wrap"><?= h($m['message']) ?></td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$msgs): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد رسائل بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── COMMENTS MODERATION ─────────────── */
+elseif ($page === 'comments'):
+  $cmts = $pdo->query("SELECT c.*, a.name AS app_name, a.slug AS app_slug FROM comments c
+      LEFT JOIN apps a ON c.app_id=a.id ORDER BY c.status='pending' DESC, c.created_at DESC LIMIT 200")->fetchAll();
+?>
+
+<div class="admin-header"><h1>التعليقات والتقييمات</h1></div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>التطبيق</th><th>الاسم</th><th>التقييم</th><th>التعليق</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($cmts as $c): ?>
+  <tr>
+    <td data-label="التطبيق" style="font-weight:700"><?= h($c['app_name'] ?? '—') ?></td>
+    <td data-label="الاسم"><?= h($c['name']) ?></td>
+    <td data-label="التقييم" style="color:#fbbf24;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
+    <td data-label="التعليق" style="max-width:280px;color:var(--muted);font-size:13px"><?= h(mb_strimwidth($c['body'], 0, 100, '...')) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $c['status']==='approved'?'status-published':'status-draft' ?>"><?= $c['status']==='approved'?'منشور':'قيد المراجعة' ?></span></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <?php if ($c['status'] !== 'approved'): ?>
+        <a href="admin.php?page=comments&approve=<?= $c['id'] ?>&t=<?= csrf_token() ?>" class="btn-edit">نشر</a>
+        <?php endif; ?>
+        <?php if ($c['app_slug']): ?>
+        <a href="<?= h(app_url($c['app_slug'])) ?>" target="_blank" class="btn-view">عرض التطبيق</a>
+        <?php endif; ?>
+        <a href="admin.php?page=comments&del_comment=<?= $c['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذا التعليق؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$cmts): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد تعليقات بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── BLOG LIST ─────────────── */
+elseif ($page === 'blog'):
+  $blogTypeFilter = trim($_GET['type'] ?? '');
+  $blogWhere = "";
+  $blogParams = [];
+  if (isset(BLOG_TYPES[$blogTypeFilter])) { $blogWhere = "WHERE type=?"; $blogParams[] = $blogTypeFilter; }
+  $blogStmt = $pdo->prepare("SELECT * FROM blog_posts $blogWhere ORDER BY created_at DESC LIMIT 200");
+  $blogStmt->execute($blogParams);
+  $blogPosts = $blogStmt->fetchAll();
+?>
+
+<div class="admin-header">
+  <h1>المدونة والمحتوى</h1>
+  <a href="admin.php?page=blog-edit" class="btn-edit">+ مقال جديد يدوياً</a>
+</div>
+
+<div class="panel">
+  <h2>توليد مقال جديد بالذكاء الاصطناعي</h2>
+  <div class="form-grid" style="margin-bottom:12px">
+    <div class="form-group">
+      <label class="form-label">القسم</label>
+      <select class="form-select" id="blog-gen-type">
+        <?php foreach (BLOG_TYPES as $t => $label): ?>
+        <option value="<?= h($t) ?>"><?= h($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">الموضوع (اختياري — اتركه فارغاً ليختار الذكاء الاصطناعي موضوعاً مناسباً)</label>
+      <input class="form-input" type="text" id="blog-gen-topic" placeholder="مثال: أفضل تطبيقات تعديل الفيديو 2026">
+    </div>
+  </div>
+  <button type="button" id="btn-generate-blog" class="btn-ai">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    توليد مقال (يُنشأ كمسودة، راجعه ثم انشره)
+  </button>
+  <div id="blog-gen-result" style="margin-top:12px"></div>
+</div>
+
+<div class="cat-chips" style="margin:16px 0">
+  <a href="admin.php?page=blog" class="cat-chip <?= $blogTypeFilter==='' ? 'active':'' ?>" style="text-decoration:none">الكل</a>
+  <?php foreach (BLOG_TYPES as $t => $label): ?>
+  <a href="admin.php?page=blog&type=<?= h($t) ?>" class="cat-chip <?= $blogTypeFilter===$t ? 'active':'' ?>" style="text-decoration:none"><?= h($label) ?></a>
+  <?php endforeach; ?>
+</div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>العنوان</th><th>القسم</th><th>الحالة</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($blogPosts as $bp): ?>
+  <tr>
+    <td data-label="العنوان" style="font-weight:700"><?= h($bp['title']) ?></td>
+    <td data-label="القسم" style="color:var(--muted);font-size:12px">
+      <?= h(blog_type_label($bp['type'])) ?>
+      <?php if ($bp['type'] === 'code-page'): $cpCount = count(decode_code_page($bp['body'] ?? '')); ?>
+        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
+      <?php endif; ?>
+    </td>
+    <td data-label="الحالة"><span class="status-badge <?= $bp['status']==='published'?'status-published':'status-draft' ?>"><?= $bp['status']==='published'?'منشور':'مسودة' ?></span></td>
+    <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($bp['created_at'])) ?></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a href="admin.php?page=blog-edit&id=<?= (int)$bp['id'] ?>" class="btn-edit">تعديل</a>
+        <?php if ($bp['status']==='published'): ?>
+        <a href="<?= h(blog_post_url($bp['slug'])) ?>" target="_blank" class="btn-view">عرض</a>
+        <?php endif; ?>
+        <a href="admin.php?page=blog&del=<?= (int)$bp['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذا المقال؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$blogPosts): ?><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">لا توجد مقالات بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── BLOG EDIT ─────────────── */
+elseif ($page === 'blog-edit'):
+  $blogPost = ['id'=>0,'type'=>'article','title'=>'','seo_title'=>'','meta_description'=>'','keywords'=>'','excerpt'=>'','body'=>'','status'=>'draft'];
+  if (isset($_GET['id'])) {
+    $bstmt = $pdo->prepare("SELECT * FROM blog_posts WHERE id=?");
+    $bstmt->execute([(int)$_GET['id']]);
+    $found = $bstmt->fetch();
+    if ($found) $blogPost = $found;
+  }
+?>
+
+<div class="admin-header">
+  <h1><?= $blogPost['id'] ? 'تعديل: '.h($blogPost['title']) : 'مقال جديد' ?></h1>
+  <a href="admin.php?page=blog" class="btn-edit">← كل المقالات</a>
+</div>
+
+<?php if (!empty($blogError)): ?><div class="alert alert-error"><?= h($blogError) ?></div><?php endif; ?>
+
+<form method="post" action="admin.php?page=blog-edit" id="blog-edit-form">
+  <?= csrf_field() ?>
+  <input type="hidden" name="id" value="<?= (int)$blogPost['id'] ?>">
+  <div class="panel">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">العنوان *</label>
+        <input class="form-input" id="blog-title" type="text" name="title" value="<?= h($blogPost['title']) ?>" required>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">الرابط (Slug)</label>
+        <input class="form-input" id="blog-slug" type="text" name="slug" dir="ltr" style="text-align:left"
+               value="<?= h($blogPost['slug'] ?? '') ?>"
+               placeholder="سيُنشأ تلقائياً من العنوان إن تُرك فارغاً"
+               pattern="[a-zA-Z0-9؀-ۿ\-]*">
+        <span style="font-size:11px;color:var(--muted);display:block;margin-top:4px" dir="ltr">
+          <?= h(SITE_URL) ?>/blog/<span id="blog-slug-preview"><?= h($blogPost['slug'] ?? 'post-slug') ?></span>
+        </span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">القسم</label>
+        <select class="form-select" name="type">
+          <?php foreach (BLOG_TYPES as $t => $label): ?>
+          <option value="<?= h($t) ?>" <?= $blogPost['type']===$t?'selected':'' ?>><?= h($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الحالة</label>
+        <select class="form-select" name="status">
+          <option value="draft" <?= $blogPost['status']==='draft'?'selected':'' ?>>مسودة</option>
+          <option value="published" <?= $blogPost['status']==='published'?'selected':'' ?>>منشور</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">SEO Title</label>
+        <input class="form-input" type="text" name="seo_title" value="<?= h($blogPost['seo_title']) ?>">
+      </div>
+      <div class="form-group">
+        <label class="form-label">الكلمات المفتاحية</label>
+        <input class="form-input" type="text" name="keywords" value="<?= h($blogPost['keywords']) ?>">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Meta Description</label>
+        <input class="form-input" type="text" name="meta_description" value="<?= h($blogPost['meta_description']) ?>">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">ملخص قصير (يظهر في بطاقة المقال)</label>
+        <input class="form-input" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
+      </div>
+      <!-- ══ WYSIWYG editor (shown for all types EXCEPT code-page) ══ -->
+      <div class="form-group full" id="blog-wysiwyg-wrap">
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>نص المقال</span>
+          <span style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="btn-fix-body-html" class="btn-edit" style="font-size:12px;padding:5px 10px" title="تحويل النص العادي لفقرات HTML — مفيد للمقالات القديمة">🔧 تحويل لـ HTML</button>
+            <select id="blog-template-select" class="form-select" style="font-size:12px;padding:4px 8px;height:auto">
+              <option value="">📄 قالب جاهز…</option>
+              <option value="news">📰 قالب خبر</option>
+              <option value="tutorial">📚 قالب شرح خطوة بخطوة</option>
+              <option value="comparison">⚖️ قالب مقارنة</option>
+              <option value="top-list">🏆 قالب قائمة أفضل</option>
+              <option value="review">⭐ قالب مراجعة تطبيق</option>
+            </select>
+            <button type="button" id="blog-toggle-source" class="btn-edit" style="font-size:12px;padding:5px 10px">
+              &lt;/&gt; HTML
+            </button>
+          </span>
+        </label>
+        <!-- WYSIWYG Toolbar -->
+        <div class="wysiwyg-toolbar" id="wysiwyg-toolbar">
+          <select class="ws-sel" id="ws-block">
+            <option value="p">فقرة</option>
+            <option value="h1">H1</option><option value="h2">H2</option>
+            <option value="h3">H3</option><option value="h4">H4</option>
+            <option value="h5">H5</option><option value="h6">H6</option>
+            <option value="blockquote">اقتباس</option><option value="pre">كود</option>
+          </select>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" data-cmd="bold" title="خط عريض"><b>B</b></button>
+          <button class="ws-btn" type="button" data-cmd="italic" title="مائل"><i>I</i></button>
+          <button class="ws-btn" type="button" data-cmd="underline" title="تسطير"><u>U</u></button>
+          <button class="ws-btn" type="button" data-cmd="strikeThrough" title="شطب"><s>S</s></button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="2" title="تصغير">A−</button>
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="4" title="تكبير">A+</button>
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="6" title="كبير جداً">A⁺⁺</button>
+          <span class="ws-sep"></span>
+          <label class="ws-btn" style="cursor:pointer" title="لون النص">
+            <input type="color" id="ws-color" style="width:0;height:0;opacity:0;position:absolute"> A🎨
+          </label>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" data-cmd="justifyRight" title="يمين">⇥</button>
+          <button class="ws-btn" type="button" data-cmd="justifyCenter" title="وسط">⇔</button>
+          <button class="ws-btn" type="button" data-cmd="justifyLeft" title="يسار">⇤</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" data-cmd="insertUnorderedList" title="قائمة نقطية">•≡</button>
+          <button class="ws-btn" type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1≡</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" id="ws-link" title="رابط">🔗</button>
+          <button class="ws-btn" type="button" id="ws-image" title="صورة">🖼</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" id="ws-code" title="كتلة كود">⌨</button>
+          <button class="ws-btn" type="button" data-cmd="insertHorizontalRule" title="خط فاصل">─</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" data-cmd="undo" title="تراجع">↩</button>
+          <button class="ws-btn" type="button" data-cmd="redo" title="إعادة">↪</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" id="ws-fullscreen" title="ملء الشاشة">⛶</button>
+        </div>
+        <div id="wysiwyg-editor" class="wysiwyg-editor" contenteditable="true" dir="auto"><?= $blogPost['type'] !== 'code-page' ? $blogPost['body'] : '' ?></div>
+        <textarea name="body" id="blog-body-hidden" style="display:none"></textarea>
+        <textarea id="blog-body-source" class="form-textarea" name="_body_source" rows="20" style="display:none;font-family:monospace;font-size:13px;direction:ltr"><?= $blogPost['type'] !== 'code-page' ? h($blogPost['body']) : '' ?></textarea>
+      </div>
+
+      <!-- ══ Code-page editor (shown only when type = code-page) ══ -->
+      <div class="form-group full" id="blog-codepage-wrap" style="display:none">
+        <label class="form-label">صفحة المحتوى — أقسام الأكواد</label>
+        <input type="text" name="cp_description" id="cp-description" class="form-input" placeholder="وصف الصفحة (اختياري — يظهر تحت العنوان)..."
+               value="<?= $blogPost['type'] === 'code-page' ? h(json_decode($blogPost['body'] ?? '{}', true)['description'] ?? '') : '' ?>"
+               style="margin-bottom:14px">
+
+        <!-- ══ Smart paste zone ══ -->
+        <div class="cp-smart-zone" id="cp-smart-zone">
+          <div class="cp-smart-header">
+            <div class="cp-smart-meta">
+              <span class="cp-smart-title">📥 الصق الكود هنا — الكشف التلقائي عن اللغة</span>
+              <span class="cp-smart-hint">يدعم: ` ```html ... ``` ` أو <code>=== html ===</code> أو كشف تلقائي</span>
+            </div>
+            <div class="cp-smart-actions">
+              <button type="button" class="cp-smart-btn primary" onclick="cpSmartDetect()">🔍 مزامنة الأقسام</button>
+              <button type="button" class="cp-smart-btn" onclick="cpSmartClear()">🗑 مسح</button>
+            </div>
+          </div>
+          <textarea id="cp-smart-input" class="cp-smart-textarea" spellcheck="false" autocorrect="off"
+            placeholder="الصق الكود هنا — يمكنك خلط كل اللغات في مربع واحد&#10;&#10;مثال باستخدام علامات markdown:&#10;&#10;```html&#10;&lt;h1&gt;مرحبا&lt;/h1&gt;&#10;```&#10;&#10;```css&#10;h1 { color: red; }&#10;```&#10;&#10;```js&#10;console.log('hello');&#10;```&#10;&#10;أو الصق بدون علامات وسيتم الكشف التلقائي"></textarea>
+          <div id="cp-smart-result" class="cp-smart-result" style="display:none"></div>
+        </div>
+
+        <?php
+        $cpSections = $blogPost['type'] === 'code-page' ? decode_code_page($blogPost['body'] ?? '{}') : [];
+        foreach (CODE_PAGE_LANGS as $lang => $meta):
+            $existingCode = $cpSections[$lang] ?? '';
+            $lineCount = $existingCode ? substr_count($existingCode, "\n") + 1 : 0;
+        ?>
+        <div class="cp-section" id="cp-section-<?= $lang ?>" data-lang="<?= $lang ?>">
+          <div class="cp-section-header" onclick="cpToggle('<?= $lang ?>')">
+            <span class="cp-lang-badge" style="--lang-color:<?= h($meta['color']) ?>"><?= $meta['icon'] ?> <?= h($meta['label']) ?></span>
+            <span class="cp-line-count" id="cp-lines-<?= $lang ?>"><?= $lineCount ? $lineCount . ' سطر' : 'فارغ' ?></span>
+            <button type="button" class="cp-toggle-btn" id="cp-toggle-<?= $lang ?>">▼</button>
+          </div>
+          <div class="cp-section-body" id="cp-body-<?= $lang ?>" style="<?= $existingCode ? '' : 'display:none' ?>">
+            <div class="cp-toolbar">
+              <button type="button" class="cp-tool-btn" onclick="cpClear('<?= $lang ?>')" title="مسح المحتوى">🗑 مسح</button>
+              <button type="button" class="cp-tool-btn" onclick="cpCopy('<?= $lang ?>')" title="نسخ المحتوى">📋 نسخ</button>
+              <span class="cp-tool-sep"></span>
+              <button type="button" class="cp-tool-btn cp-expand-btn" onclick="cpExpand('<?= $lang ?>')" title="توسيع المحرر">⛶ توسيع</button>
+            </div>
+            <textarea
+              name="cp_<?= $lang ?>"
+              id="cp-textarea-<?= $lang ?>"
+              class="cp-textarea"
+              placeholder="أدخل كود <?= h($meta['label']) ?> هنا..."
+              spellcheck="false"
+              autocorrect="off"
+              autocapitalize="off"
+              data-lang="<?= $lang ?>"><?= h($existingCode) ?></textarea>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+  <button type="submit" class="btn-save" style="margin-bottom:40px">حفظ المقال</button>
+</form>
+
+<?php
+/* ─────────────── SITE ANALYTICS (real self-tracked data, not GSC) ─────────────── */
+elseif ($page === 'stats'):
+    $days = 30;
+    $dailyRaw = $pdo->query("
+        SELECT DATE(created_at) d, event_type, COUNT(*) c
+        FROM page_events
+        WHERE created_at >= (NOW() - INTERVAL $days DAY)
+        GROUP BY d, event_type
+        ORDER BY d
+    ")->fetchAll();
+    $daily = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $d = date('Y-m-d', strtotime("-$i days"));
+        $daily[$d] = ['view' => 0, 'download' => 0, 'search' => 0];
+    }
+    foreach ($dailyRaw as $row) {
+        if (isset($daily[$row['d']])) $daily[$row['d']][$row['event_type']] = (int)$row['c'];
+    }
+    $maxDaily = 1;
+    foreach ($daily as $d) $maxDaily = max($maxDaily, $d['view'], $d['download']);
+
+    $totalsAllTime = [
+        'views'            => (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM apps")->fetchColumn(),
+        'downloads'        => (int)$pdo->query("SELECT COALESCE(SUM(downloads),0) FROM apps")->fetchColumn(),
+        'apps'             => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
+        'blog'             => (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(),
+        'comments'         => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn(),
+        'pending_comments' => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='pending'")->fetchColumn(),
+    ];
+    $views30     = array_sum(array_column($daily, 'view'));
+    $downloads30 = array_sum(array_column($daily, 'download'));
+
+    $topViewed     = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY views DESC LIMIT 10")->fetchAll();
+    $topDownloaded = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 10")->fetchAll();
+    $topSearches   = $pdo->query("
+        SELECT meta, COUNT(*) c FROM page_events
+        WHERE event_type='search' AND created_at >= (NOW() - INTERVAL $days DAY) AND meta IS NOT NULL AND meta<>''
+        GROUP BY meta ORDER BY c DESC LIMIT 10
+    ")->fetchAll();
+?>
+<div class="admin-header"><h1>إحصائيات الموقع</h1></div>
+
+<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--navy-900);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
+  ℹ️ هذه إحصائيات <strong>حقيقية</strong> يجمعها الموقع نفسه (مشاهدات وتحميلات وعمليات بحث فعلية من الزوار) — وليست بيانات Google Search Console.
+  للحصول على بيانات جوجل الفعلية (الظهور في نتائج البحث، الكلمات المفتاحية، معدل النقر) يجب ربط حساب Google Search Console الخاص بك مباشرة عبر
+  <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a> — وهذا يتطلب حسابك الشخصي ولا يمكن أتمتته من هنا.
+  خطوة توثيق الملكية مفعّلة بالفعل من "الإعدادات ← التحقق من ملكية الموقع".
+</div>
+
+<div class="admin-stats">
+  <div class="stat-card"><div class="stat-num"><?= number_format($views30) ?></div><div class="stat-label">مشاهدات آخر 30 يوم</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--purple)"><?= number_format($downloads30) ?></div><div class="stat-label">تحميلات آخر 30 يوم</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= number_format($totalsAllTime['views']) ?></div><div class="stat-label">إجمالي المشاهدات (كل الوقت)</div></div>
+  <div class="stat-card"><div class="stat-num"><?= number_format($totalsAllTime['downloads']) ?></div><div class="stat-label">إجمالي التحميلات (كل الوقت)</div></div>
+</div>
+
+<div class="panel" style="margin-top:20px">
+  <h2>المشاهدات والتحميلات — آخر 30 يوم</h2>
+  <div style="display:flex;align-items:flex-end;gap:3px;height:180px;margin-top:16px;overflow-x:auto;padding-bottom:4px">
+    <?php foreach ($daily as $d => $v): ?>
+    <div title="<?= h($d) ?>: <?= $v['view'] ?> مشاهدة، <?= $v['download'] ?> تحميل" style="flex:1 0 18px;min-width:18px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px">
+      <div style="background:var(--cyan);border-radius:2px 2px 0 0;height:<?= (int)round($v['view'] / $maxDaily * 140) ?>px;min-height:<?= $v['view'] > 0 ? 2 : 0 ?>px"></div>
+      <div style="background:var(--purple);border-radius:2px 2px 0 0;height:<?= (int)round($v['download'] / $maxDaily * 140) ?>px;min-height:<?= $v['download'] > 0 ? 2 : 0 ?>px"></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted)">
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--cyan);border-radius:2px;margin-inline-end:4px"></span> مشاهدات</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--purple);border-radius:2px;margin-inline-end:4px"></span> تحميلات</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+  <div class="panel">
+    <h2>الأكثر مشاهدة</h2>
+    <table class="admin-table">
+      <thead><tr><th>التطبيق</th><th>مشاهدات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topViewed as $a): ?>
+        <tr><td><a href="<?= h(app_url($a['slug'])) ?>" target="_blank"><?= h($a['name']) ?></a></td><td><?= number_format($a['views']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topViewed): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>الأكثر تحميلاً</h2>
+    <table class="admin-table">
+      <thead><tr><th>التطبيق</th><th>تحميلات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topDownloaded as $a): ?>
+        <tr><td><a href="<?= h(app_url($a['slug'])) ?>" target="_blank"><?= h($a['name']) ?></a></td><td><?= number_format($a['downloads']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topDownloaded): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;margin-bottom:40px">
+  <div class="panel">
+    <h2>أكثر عمليات البحث (آخر 30 يوم)</h2>
+    <table class="admin-table">
+      <thead><tr><th>كلمة البحث</th><th>عدد المرات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topSearches as $s): ?>
+        <tr><td><?= h($s['meta']) ?></td><td><?= number_format($s['c']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topSearches): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>المحتوى</h2>
+    <table class="admin-table">
+      <tbody>
+        <tr><td>تطبيقات منشورة</td><td><?= number_format($totalsAllTime['apps']) ?></td></tr>
+        <tr><td>مقالات منشورة</td><td><?= number_format($totalsAllTime['blog']) ?></td></tr>
+        <tr><td>تقييمات معتمدة</td><td><?= number_format($totalsAllTime['comments']) ?></td></tr>
+        <tr><td>تقييمات بانتظار المراجعة</td><td><?= number_format($totalsAllTime['pending_comments']) ?></td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <?php
@@ -1553,6 +2624,23 @@ elseif ($page === 'database'):
     فحص وإصلاح الجداول الآن
   </button>
   <div id="db-fix-result" style="margin-top:12px"></div>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:24px;margin-bottom:8px">
+    إذا كانت أوصاف بعض التطبيقات القديمة تظهر كفراغ بدل النص، اضغط الزر التالي لإصلاح ترميز النصوص المخزَّنة (يفحص كل التطبيقات ويصلح أي بايتات غير صالحة، آمن للتكرار):
+  </p>
+  <button type="button" id="btn-repair-encoding" class="btn-save" style="margin-top:4px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M4.5 15a8 8 0 0014.5 4.5M19.5 9A8 8 0 005 4.5"/></svg>
+    إصلاح ترميز النصوص القديمة
+  </button>
+  <div id="repair-encoding-result" style="margin-top:12px"></div>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:24px;margin-bottom:8px">
+    نسخة احتياطية كاملة لقاعدة البيانات (بنية الجداول + كل البيانات) كملف SQL — احتفظ بنسخة دورياً، لا يوجد نسخ احتياطي تلقائي حالياً:
+  </p>
+  <a href="admin.php?ajax=db_backup" class="btn-save" style="text-decoration:none;display:inline-flex">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+    تنزيل نسخة احتياطية (.sql)
+  </a>
 </div>
 
 <?php
@@ -1564,14 +2652,59 @@ elseif ($page === 'settings'): ?>
 <form method="post" action="admin.php?page=settings">
   <?= csrf_field() ?>
   <div class="panel">
-    <h2>الذكاء الاصطناعي (OpenRouter)</h2>
+    <h2>مزود الذكاء الاصطناعي</h2>
     <div class="form-group">
-      <label class="form-label">مفتاح/مفاتيح OpenRouter API (اختياري إضافة أكثر من مفتاح)</label>
-      <textarea class="form-textarea" name="openrouter_key" rows="3" placeholder="sk-or-v1-...&#10;sk-or-v1-... (مفتاح ثاني اختياري)"><?= h(get_cfg($pdo,'openrouter_key')) ?></textarea>
-      <div class="form-hint">
-        ضع مفتاحاً واحداً أو أكثر (كل مفتاح بسطر منفصل أو مفصول بفاصلة) — سيتم التبديل بينها تلقائياً عند فشل أي مفتاح.
-        احصل على مفتاح مجاني من <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a>
+      <label class="form-label">اختر مزود الذكاء الاصطناعي لتوليد المحتوى</label>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <?php $aiProv = get_cfg($pdo,'ai_provider','openrouter'); ?>
+        <label class="ai-provider-card <?= $aiProv==='openrouter'?'active':'' ?>" style="flex:1;min-width:200px;border:2px solid <?= $aiProv==='openrouter'?'var(--cyan)':'var(--border-c)' ?>;border-radius:12px;padding:16px;cursor:pointer;display:flex;align-items:flex-start;gap:10px">
+          <input type="radio" name="ai_provider" value="openrouter" <?= $aiProv==='openrouter'?'checked':'' ?> style="margin-top:3px">
+          <div>
+            <div style="font-weight:600;color:var(--white)">OpenRouter</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">يدعم مئات الموديلات المجانية والمدفوعة. يتطلب مفتاح API. الأفضل للتنوع والموديلات المتخصصة.</div>
+          </div>
+        </label>
+        <label class="ai-provider-card <?= $aiProv==='aifreeforever'?'active':'' ?>" style="flex:1;min-width:200px;border:2px solid <?= $aiProv==='aifreeforever'?'var(--cyan)':'var(--border-c)' ?>;border-radius:12px;padding:16px;cursor:pointer;display:flex;align-items:flex-start;gap:10px">
+          <input type="radio" name="ai_provider" value="aifreeforever" <?= $aiProv==='aifreeforever'?'checked':'' ?> style="margin-top:3px">
+          <div>
+            <div style="font-weight:600;color:var(--white)">aifreeforever <span style="font-size:11px;background:var(--cyan);color:#000;border-radius:4px;padding:1px 6px;margin-right:6px">لا يحتاج مفتاح</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">اتصال مباشر بدون مفتاح API. أسرع في كثير من الأحيان. مناسب لتوليد المحتوى العربي.</div>
+          </div>
+        </label>
       </div>
+      <div id="test-aifree-wrap" style="margin-top:10px;<?= $aiProv==='aifreeforever'?'':'display:none' ?>">
+        <button type="button" id="btn-test-aifree" class="btn-ai">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          اختبر اتصال aifreeforever
+        </button>
+        <span id="aifree-test-result" style="font-size:12px;margin-right:10px"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="openrouter-panel" <?= $aiProv==='aifreeforever'?'style="opacity:.5;pointer-events:none"':'' ?>>
+    <h2>إعدادات OpenRouter</h2>
+    <div class="form-group">
+      <label class="form-label">مفاتيح OpenRouter API</label>
+      <div id="openrouter-keys-wrap">
+        <?php
+        $existingKeys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
+        if (!$existingKeys) $existingKeys = [''];
+        foreach ($existingKeys as $ki => $kv): ?>
+        <div class="key-row" style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="<?= h($kv) ?>" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <button type="button" id="btn-add-key" style="margin-top:4px;padding:6px 14px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);border-radius:8px;color:var(--cyan);font-size:12px;cursor:pointer">
+        + إضافة مفتاح آخر
+      </button>
+      <div class="form-hint" style="margin-top:8px">
+        أضف مفتاحاً أو أكثر — سيتم التبديل بينها تلقائياً. احصل على مفتاح مجاني من
+        <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a>
+      </div>
+      <input type="hidden" name="openrouter_key" id="openrouter-key-hidden">
     </div>
     <div class="form-grid">
       <div class="form-group">
@@ -1588,10 +2721,27 @@ elseif ($page === 'settings'): ?>
         </select>
       </div>
     </div>
+    <div class="form-hint" style="margin:8px 0 4px;font-weight:500;color:var(--white);font-size:12px">موديلات مجانية موصى بها (اضغط للاختيار):</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      <?php foreach ([
+        'meta-llama/llama-3.3-70b-instruct:free' => 'Llama 3.3 70B',
+        'qwen/qwen3-coder:free'                   => 'Qwen3 Coder',
+        'openai/gpt-oss-20b:free'                 => 'GPT OSS 20B',
+        'nvidia/nemotron-nano-9b-v2:free'          => 'Nemotron 9B',
+        'google/gemma-3-27b-it:free'               => 'Gemma 3 27B',
+        'mistralai/mistral-7b-instruct:free'       => 'Mistral 7B',
+        'openrouter/free'                          => 'openrouter/free (أي موديل)',
+      ] as $mid => $mlabel): ?>
+      <button type="button" class="preset-model-btn" data-model="<?= h($mid) ?>"
+        style="padding:4px 10px;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.2);border-radius:6px;color:var(--cyan);font-size:11px;cursor:pointer">
+        <?= h($mlabel) ?>
+      </button>
+      <?php endforeach; ?>
+    </div>
     <div class="form-group" style="margin-top:6px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--white)">
         <input type="checkbox" name="openrouter_auto_rotate" value="1" <?= get_cfg($pdo,'openrouter_auto_rotate','1')==='1'?'checked':'' ?>>
-        التبديل التلقائي بين كل الموديلات المجانية حتى ينجح الاتصال
+        التبديل التلقائي بين كل الموديلات المجانية المتاحة حتى ينجح الاتصال
       </label>
     </div>
     <button type="button" id="btn-test-connection-inline" class="btn-ai" style="margin-top:14px">
@@ -1615,11 +2765,96 @@ elseif ($page === 'settings'): ?>
   </div>
 
   <div class="panel">
-    <h2>إعدادات الإعلانات</h2>
+    <h2>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2AABEE" stroke-width="2" style="vertical-align:-4px;margin-left:6px"><path d="M21 5L9 12m12 0L9 12m0 7V5l12 7-12 7z"/></svg>
+      بوت تيليجرام — نشر تلقائي عند إضافة تطبيق جديد
+    </h2>
+    <p class="form-hint" style="margin-bottom:16px">
+      عند نشر تطبيق جديد (حالة: منشور) يُرسل البوت تلقائياً رسالة للقناة تتضمن الأيقونة + وصف مولّد بالذكاء الاصطناعي + أزرار التحميل والصفحة.
+      احصل على توكن من <a href="https://t.me/BotFather" target="_blank" rel="nofollow noopener" style="color:#2AABEE">@BotFather</a> ثم أضف البوت مشرفاً على قناتك.
+    </p>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--white);margin-bottom:16px">
+      <input type="checkbox" name="telegram_enabled" value="1" <?= get_cfg($pdo,'telegram_enabled')==='1'?'checked':'' ?>>
+      <span>تفعيل النشر التلقائي على تيليجرام</span>
+    </label>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Bot Token</label>
+        <input class="form-input" type="text" name="telegram_bot_token" value="<?= h(get_cfg($pdo,'telegram_bot_token')) ?>" placeholder="123456789:AAF..." dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">الحصول عليه من @BotFather → /newbot</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Channel ID أو اسم القناة</label>
+        <input class="form-input" type="text" name="telegram_channel_id" value="<?= h(get_cfg($pdo,'telegram_channel_id')) ?>" placeholder="@yassota_channel أو -100123456789" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">مثال: @channelname أو رقم ID القناة الخاصة</div>
+      </div>
+    </div>
     <div class="form-group">
-      <label class="form-label">MoneyTag Zone ID</label>
-      <input class="form-input" type="text" name="moneytag_zone" value="<?= h(get_cfg($pdo,'moneytag_zone','258058')) ?>">
-      <div class="form-hint">الرمز الحالي المفعّل: 258058 على الرابط quge5.com/88/tag.min.js</div>
+      <label class="form-label">رابط القناة (للزر "اشترك في القناة" على صفحات التحميل)</label>
+      <input class="form-input" type="url" name="telegram_channel_url" value="<?= h(get_cfg($pdo,'telegram_channel_url')) ?>" placeholder="https://t.me/yassota_channel" dir="ltr">
+      <div class="form-hint">إذا تُرك فارغاً لن يظهر زر الاشتراك على صفحات التحميل.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+      <button type="button" id="btn-telegram-test" class="btn-ai" style="background:#2AABEE20;border-color:#2AABEE40;color:#2AABEE">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 5L9 12m12 0L9 12m0 7V5l12 7-12 7z"/></svg>
+        إرسال رسالة اختبارية
+      </button>
+      <span id="telegram-test-result" style="font-size:12px"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>إعدادات الإعلانات</h2>
+    <div class="form-hint" style="line-height:1.9">
+      يستخدم الموقع الآن Google AdSense فقط (ca-pub-5506877998492189) في كل صفحاته. تمت إزالة شبكة MoneyTag
+      (كانت تعمل بنظام النوافذ المنبثقة/popunder) لأن هذا النوع من الإعلانات يخالف صراحةً سياسات ناشري Google
+      ويقلل فرص قبول الموقع في AdSense — إعادة إضافتها لاحقاً غير مستحسنة قبل أو بعد الموافقة.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>معلومات التواصل</h2>
+    <div class="form-group">
+      <label class="form-label">البريد الإلكتروني للتواصل / DMCA</label>
+      <input class="form-input" type="email" name="contact_email" value="<?= h(get_cfg($pdo,'contact_email')) ?>" placeholder="contact@yourdomain.com">
+      <div class="form-hint">يظهر في صفحات اتصل بنا، سياسة الخصوصية، وDMCA.</div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <input type="checkbox" name="admin_email_notifications" value="1" <?= get_cfg($pdo,'admin_email_notifications')==='1'?'checked':'' ?>>
+      <span>إرسال بريد إلكتروني تلقائي للبريد أعلاه عند وصول رسالة تواصل جديدة أو تعليق جديد بانتظار المراجعة</span>
+    </label>
+  </div>
+
+  <div class="panel">
+    <h2>التحقق من ملكية الموقع (Search Console)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      لظهور الموقع في نتائج البحث بشكل جيد يجب ربطه بـ
+      <a href="https://search.google.com/search-console" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">Google Search Console</a>
+      و<a href="https://www.bing.com/webmasters" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">Bing Webmaster Tools</a> —
+      اختر طريقة "وسم HTML meta" من كل أداة، والصق الكود (بين علامتي الاقتباس فقط، مثال: <code>AbCdEf123...</code>) هنا، ثم احفظ.
+      بعد الحفظ اضغط زر التحقق في تلك الأداة، ثم أرسل خريطة الموقع (Sitemap) على الرابط <code>/sitemap.php</code>.
+    </p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Google Search Console verification code</label>
+        <input class="form-input" type="text" name="google_site_verification" value="<?= h(get_cfg($pdo,'google_site_verification')) ?>" placeholder="مثال: AbCdEfGhIjKlMnOpQrStUvWxYz">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bing Webmaster verification code</label>
+        <input class="form-input" type="text" name="bing_site_verification" value="<?= h(get_cfg($pdo,'bing_site_verification')) ?>" placeholder="مثال: 1234567890ABCDEF">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>فحص أمان روابط التحميل (VirusTotal)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      يضيف شارة فحص حقيقية (وليست وهمية) في صفحة تحميل كل تطبيق تبني ثقة الزوار — تظهر فقط بعد فحص فعلي ناجح، لا شيء يظهر بدون مفتاح.
+      احصل على مفتاح مجاني من <a href="https://www.virustotal.com/gui/join-us" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">virustotal.com</a> (حساب مجاني، بدون بطاقة ائتمان).
+    </p>
+    <div class="form-group">
+      <label class="form-label">VirusTotal API Key</label>
+      <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
     </div>
   </div>
 
@@ -1672,6 +2907,6 @@ elseif ($page === 'assistant'): ?>
 </div><!-- /admin-main -->
 </div><!-- /admin-wrap -->
 
-<script src="assets/js/admin.js"></script>
+<script src="<?= h(asset_url('assets/js/admin.js')) ?>"></script>
 </body>
 </html>

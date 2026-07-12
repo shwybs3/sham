@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/partials.php';
 
 $slug = trim($_GET['slug'] ?? '');
-if (!$slug) { header('Location: index.php'); exit; }
+if (!$slug) { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
     FROM apps a LEFT JOIN categories c ON a.category_id=c.id
@@ -16,12 +17,17 @@ if (!$app) {
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">التطبيق غير موجود</p>
-    <a href="index.php" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
+    <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
 
-// Track view
-$pdo->prepare("UPDATE apps SET views=views+1 WHERE id=?")->execute([$app['id']]);
+// Cacheable on GET only (a comment POST must render fresh, never be cached).
+// The view counter is intentionally NOT incremented here — that would mean
+// repeat visitors within the cache TTL are never counted. Instead a small
+// JS beacon (track-view.php) fires on every real page load regardless of
+// whether the HTML came from cache, so view counts stay accurate.
+$cacheable = $_SERVER['REQUEST_METHOD'] !== 'POST';
+if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'], 180)) exit;
 
 $screenshots  = json_decode($app['screenshots'] ?? '[]', true) ?: [];
 $features     = json_decode($app['features'] ?? '[]', true) ?: [];
@@ -30,11 +36,85 @@ $cons         = json_decode($app['cons'] ?? '[]', true) ?: [];
 $installSteps = json_decode($app['install_steps'] ?? '[]', true) ?: [];
 $faq          = json_decode($app['faq'] ?? '[]', true) ?: [];
 
+// Cleaned long-form text — trimmed and with runs of blank lines collapsed,
+// so a field that's empty or whitespace-only never renders a big visual
+// gap via nl2br(), and the section it belongs to is skipped entirely.
+$longDescription = clean_long_text($app['long_description'] ?? '') ?: clean_long_text($app['short_description'] ?? '');
+$whatsNew        = clean_long_text($app['whats_new'] ?? '');
+$offersText      = clean_long_text($app['offers_text'] ?? '');
+$privacyPolicy   = clean_long_text($app['privacy_policy'] ?? '');
+$termsContent    = clean_long_text($app['terms_content'] ?? '');
+
 // Related apps
 $related = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
     WHERE category_id=? AND id!=? AND status='published' LIMIT 6");
 $related->execute([$app['category_id'], $app['id']]);
 $relatedApps = $related->fetchAll();
+
+// Alternatives — distinct from "related apps" above: top-rated apps in the
+// same category not already shown there, plus apps from the same developer.
+$excludeIds = array_merge([(int)$app['id']], array_column($relatedApps, 'id'));
+$placeholders = implode(',', array_fill(0, count($excludeIds), '?'));
+$altStmt = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
+    WHERE category_id=? AND id NOT IN ($placeholders) AND status='published'
+    ORDER BY rating DESC, downloads DESC LIMIT 6");
+$altStmt->execute(array_merge([$app['category_id']], $excludeIds));
+$alternatives = $altStmt->fetchAll();
+
+$devAlternatives = [];
+if (!empty($app['developer'])) {
+    $devExclude = array_merge($excludeIds, array_column($alternatives, 'id'));
+    $devPlaceholders = implode(',', array_fill(0, count($devExclude), '?'));
+    $devStmt = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
+        WHERE developer=? AND id NOT IN ($devPlaceholders) AND status='published'
+        ORDER BY rating DESC LIMIT 4");
+    $devStmt->execute(array_merge([$app['developer']], $devExclude));
+    $devAlternatives = $devStmt->fetchAll();
+}
+
+// Related articles (AI-generated "how to use X", "X vs Y" etc. — internal
+// linking back to this app's download page)
+$articlesStmt = $pdo->prepare("SELECT id,title,slug FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
+$articlesStmt->execute([$app['id']]);
+$relatedArticles = $articlesStmt->fetchAll();
+
+// Version history (populated when the admin edits an app with "save as new version" checked)
+$versionsStmt = $pdo->prepare("SELECT * FROM app_versions WHERE app_id=? ORDER BY created_at DESC");
+$versionsStmt->execute([$app['id']]);
+$versionHistory = $versionsStmt->fetchAll();
+
+$tgUrl = get_cfg($pdo, 'telegram_channel_url', '');
+
+// Approved comments + rating aggregate
+$commentsStmt = $pdo->prepare("SELECT * FROM comments WHERE app_id=? AND status='approved' ORDER BY created_at DESC LIMIT 50");
+$commentsStmt->execute([$app['id']]);
+$comments = $commentsStmt->fetchAll();
+$commentCount = count($comments);
+$avgRating = $commentCount ? round(array_sum(array_column($comments, 'rating')) / $commentCount, 1) : (float)$app['rating'];
+
+// Handle a new comment submission
+$commentSubmitted = false; $commentError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_submit'])) {
+    if (!empty($_POST['website'])) {
+        $commentSubmitted = true; // honeypot — pretend success, don't store
+    } elseif (!csrf_check()) {
+        $commentError = 'جلسة غير صالحة، أعد تحميل الصفحة وحاول مجدداً.';
+    } else {
+        $cName = trim($_POST['name'] ?? '');
+        $cRating = max(1, min(5, (int)($_POST['rating'] ?? 0)));
+        $cBody = trim($_POST['body'] ?? '');
+        if (!$cName || !$cRating || !$cBody) {
+            $commentError = 'يرجى تعبئة الاسم والتقييم والتعليق.';
+        } elseif (!comment_rate_limit_ok($pdo, client_ip())) {
+            $commentError = 'لقد أرسلت عدة تعليقات خلال وقت قصير، يرجى المحاولة لاحقاً.';
+        } else {
+            $pdo->prepare("INSERT INTO comments (app_id,name,rating,body,ip) VALUES (?,?,?,?,?)")
+                ->execute([$app['id'], $cName, $cRating, $cBody, client_ip()]);
+            notify_admin($pdo, "تعليق جديد بانتظار المراجعة على {$app['name']}", "من: {$cName} (تقييم {$cRating}/5)\n\n{$cBody}");
+            $commentSubmitted = true;
+        }
+    }
+}
 
 // Schema.org
 $schema = json_encode([
@@ -47,20 +127,44 @@ $schema = json_encode([
     "softwareVersion" => $app['version'],
     "aggregateRating" => [
         "@type" => "AggregateRating",
-        "ratingValue" => $app['rating'],
-        "ratingCount" => max(10, intval($app['downloads'] / 3)),
+        "ratingValue" => $avgRating,
+        "ratingCount" => max(10, $commentCount * 3, intval($app['downloads'] / 3)),
     ],
     "offers" => ["@type" => "Offer", "price" => "0", "priceCurrency" => "USD"],
     "author" => ["@type" => "Organization", "name" => $app['developer']],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+$breadcrumbItems = [
+    ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
+];
+if ($app['cat_slug']) {
+    $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category/' . $app['cat_slug'])];
+}
+$breadcrumbItems[] = ["@type" => "ListItem", "position" => count($breadcrumbItems) + 1, "name" => $app['name'], "item" => app_url($app['slug'])];
+$breadcrumbSchema = json_encode([
+    "@context" => "https://schema.org", "@type" => "BreadcrumbList",
+    "itemListElement" => $breadcrumbItems,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+$faqSchema = null;
+if ($faq) {
+    $faqSchema = json_encode([
+        "@context" => "https://schema.org", "@type" => "FAQPage",
+        "mainEntity" => array_map(fn($item) => [
+            "@type" => "Question",
+            "name" => $item['q'] ?? '',
+            "acceptedAnswer" => ["@type" => "Answer", "text" => $item['a'] ?? ''],
+        ], $faq),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
 
 // SVGs inline
 function svgi(string $n): string {
     $i = [
         'download' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>',
         'play'  => '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>',
-        'check' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e676" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',
-        'x'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4466" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+        'check' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>',
+        'x'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>',
         'q'     => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>',
         'chevron' => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>',
         'zoom'  => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6m-3-3h6"/></svg>',
@@ -68,17 +172,16 @@ function svgi(string $n): string {
         'arrow-l' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
         'arrow-r' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>',
         'external' => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
-        'rec'   => '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#ff4466"/></svg>',
         'mirror'=> '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
         'star'  => '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
         'android'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--success)"><path d="M17.523 15.341c-.414 0-.75-.336-.75-.75V9.75c0-.414.336-.75.75-.75s.75.336.75.75v4.841c0 .414-.336.75-.75.75zM6.477 15.341c-.414 0-.75-.336-.75-.75V9.75c0-.414.336-.75.75-.75s.75.336.75.75v4.841c0 .414-.336.75-.75.75zM8.25 17.25V8.25h7.5v9h-7.5zM15 7.5H9l-1.5-2.625 1.299-.75L10.5 6h3l1.701-1.875 1.299.75L15 7.5z"/></svg>',
-        'playstore'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 3.5v17l14-8.5-14-8.5z" fill="url(#psg)" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/><defs><linearGradient id="psg" x1="4" y1="3.5" x2="18" y2="12" gradientUnits="userSpaceOnUse"><stop stop-color="#00f5ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs></svg>',
+        'playstore'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 3.5v17l14-8.5-14-8.5z" fill="url(#psg)" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round"/><defs><linearGradient id="psg" x1="4" y1="3.5" x2="18" y2="12" gradientUnits="userSpaceOnUse"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs></svg>',
     ];
     return $i[$n] ?? '';
 }
 function wave(): string {
     return '<svg class="wave-divider" viewBox="0 0 1200 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M0,20 C150,40 350,0 600,20 C850,40 1050,0 1200,20" stroke="#00f5ff" stroke-width="1.5" fill="none"/>
+      <path d="M0,20 C150,40 350,0 600,20 C850,40 1050,0 1200,20" stroke="#2563eb" stroke-width="1.5" fill="none"/>
     </svg>';
 }
 ?>
@@ -87,39 +190,29 @@ function wave(): string {
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
+  <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($app['seo_title'] ?: $app['name']) ?></title>
   <meta name="description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
-  <link rel="canonical" href="<?= h(url('app.php?slug=' . $app['slug'])) ?>">
+  <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
   <meta property="og:type" content="website">
   <meta property="og:title" content="<?= h($app['seo_title'] ?: $app['name']) ?>">
   <meta property="og:description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
   <?php if ($app['icon_path']): ?><meta property="og:image" content="<?= h(url($app['icon_path'])) ?>"><?php endif; ?>
-  <meta property="og:url" content="<?= h(url('app.php?slug=' . $app['slug'])) ?>">
+  <meta property="og:url" content="<?= h(app_url($app['slug'])) ?>">
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $schema ?></script>
-  <link rel="stylesheet" href="assets/css/main.css">
-  <link rel="stylesheet" href="assets/css/detail.css">
-  <!-- MoneyTag -->
-  <script src="https://quge5.com/88/tag.min.js" data-zone="258058" async data-cfasync="false"></script>
+  <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
+  <?php if ($faqSchema): ?><script type="application/ld+json"><?= $faqSchema ?></script><?php endif; ?>
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/detail.css')) ?>">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
+     crossorigin="anonymous"></script>
 </head>
 <body>
 
-<!-- Header -->
-<header class="site-header">
-  <a href="index.php" class="logo">yass<span>ota</span></a>
-  <form action="index.php" method="get" class="header-search">
-    <input type="text" name="q" placeholder="ابحث...">
-    <button type="submit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
-  </form>
-  <nav class="header-nav">
-    <a href="index.php">الرئيسية</a>
-    <?php if ($app['cat_slug']): ?>
-    <a href="index.php?cat=<?= h($app['cat_slug']) ?>"><?= h($app['cat_name']) ?></a>
-    <?php endif; ?>
-  </nav>
-</header>
+<?php render_site_header('', $app['cat_slug'] === 'games' ? 'games' : ($app['cat_slug'] === 'apps' ? 'apps' : 'home')); ?>
 
 <div class="page-wrap">
 
@@ -127,16 +220,16 @@ function wave(): string {
 <aside class="sidebar">
   <div class="sidebar-section">
     <div class="sidebar-title">التنقل</div>
-    <a href="index.php" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
+    <a href="/" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
     <?php if ($app['cat_slug']): ?>
-    <a href="index.php?cat=<?= h($app['cat_slug']) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
+    <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
     <?php endif; ?>
   </div>
   <?php if ($relatedApps): ?>
   <div class="sidebar-section">
     <div class="sidebar-title">تطبيقات مشابهة</div>
     <?php foreach ($relatedApps as $r): ?>
-    <a href="app.php?slug=<?= h($r['slug']) ?>" class="sidebar-link" style="gap:10px">
+    <a href="<?= h(app_url($r['slug'])) ?>" class="sidebar-link" style="gap:10px">
       <?php if ($r['icon_path']): ?>
         <img src="<?= h($r['icon_path']) ?>" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" alt="">
       <?php endif; ?>
@@ -152,10 +245,10 @@ function wave(): string {
 
   <!-- Breadcrumb -->
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="index.php" style="color:var(--cyan)">الرئيسية</a>
+    <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <?php if ($app['cat_slug']): ?>
-      <a href="index.php?cat=<?= h($app['cat_slug']) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
+      <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
       <span>/</span>
     <?php endif; ?>
     <span><?= h($app['name']) ?></span>
@@ -168,16 +261,15 @@ function wave(): string {
         <?php if ($app['icon_path']): ?>
           <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="app-hero-icon">
         <?php else: ?>
-          <div class="app-hero-icon" style="background:linear-gradient(135deg,#152642,#1e3356);display:flex;align-items:center;justify-content:center">
+          <div class="app-hero-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec);display:flex;align-items:center;justify-content:center">
             <?= svgi('android') ?>
           </div>
         <?php endif; ?>
-        <div class="rec-overlay"><?= svgi('rec') ?> REC</div>
       </div>
 
       <div class="app-hero-info">
-        <h1 class="app-hero-name neon-text"><?= h($app['name']) ?></h1>
-        <div class="app-hero-developer"><?= h($app['developer'] ?? '') ?></div>
+        <h1 class="app-hero-name"><?= h($app['name']) ?></h1>
+        <div class="app-hero-developer"><?php if ($app['developer']): ?><a href="<?= h(url('developer/' . rawurlencode($app['developer']))) ?>" style="color:inherit"><?= h($app['developer']) ?></a><?php endif; ?></div>
 
         <div class="app-badges">
           <?php if ($app['cat_name']): ?><span class="badge badge-cyan"><?= h($app['cat_name']) ?></span><?php endif; ?>
@@ -187,7 +279,7 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <a href="download.php?id=<?= $app['id'] ?>" class="btn-download-hero" data-hardnav="1">
+          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
             <?= svgi('download') ?> تحميل مجاني
           </a>
           <?php if (!empty($app['playstore_url'])): ?>
@@ -196,10 +288,10 @@ function wave(): string {
           </a>
           <?php endif; ?>
           <?php if ($app['mirror2_url']): ?>
-          <a href="download.php?id=<?= $app['id'] ?>&m=2" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
+          <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
           <?php endif; ?>
           <?php if ($app['mirror3_url']): ?>
-          <a href="download.php?id=<?= $app['id'] ?>&m=3" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
+          <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
           <?php endif; ?>
         </div>
       </div>
@@ -209,14 +301,20 @@ function wave(): string {
   <?= wave() ?>
 
   <!-- Ad -->
-  <div class="ad-zone"><script>/* MoneyTag 258058 */</script></div>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- Meta Info Grid -->
   <div class="app-meta-grid reveal">
     <?php
+    // Defensive: this field is meant to hold a short version string (e.g. "12.8.0"),
+    // but old/manually-entered data sometimes has a full Play Store URL pasted into
+    // it by mistake — never render that as a "version".
+    $playStoreVersion = $app['play_store_version'] ?? '';
+    if (str_contains($playStoreVersion, '://')) $playStoreVersion = null;
+
     $metas = [
         ['label'=>'الإصدار','val'=>$app['version'],'class'=>'version'],
-        ['label'=>'إصدار جوجل بلاي','val'=>$app['play_store_version'],'class'=>'version'],
+        ['label'=>'إصدار جوجل بلاي','val'=>$playStoreVersion,'class'=>'version'],
         ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],'class'=>''],
         ['label'=>'الحجم','val'=>$app['size_mb'] ? $app['size_mb'].' MB' : null,'class'=>'size'],
         ['label'=>'المطور','val'=>$app['developer'],'class'=>''],
@@ -255,12 +353,12 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Description -->
-  <?php if ($app['long_description'] || $app['short_description']): ?>
-  <div class="section-box reveal">
+  <!-- Description — no .reveal so it loads immediately visible (not hidden on scroll) -->
+  <?php if ($longDescription !== ''): ?>
+  <div class="section-box">
     <div class="section-head"><span class="section-title">الوصف</span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85">
-      <?= nl2br(h($app['long_description'] ?: $app['short_description'])) ?>
+      <?= nl2br(h($longDescription)) ?>
     </div>
   </div>
   <?= wave() ?>
@@ -318,7 +416,7 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- Ad -->
-  <div class="ad-zone"><script>/* MoneyTag 258058 */</script></div>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- Install Steps -->
   <?php if ($installSteps): ?>
@@ -339,10 +437,10 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- What's New -->
-  <?php if ($app['whats_new']): ?>
+  <?php if ($whatsNew !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">ما الجديد</span></div>
-    <p style="color:var(--muted);font-size:14px;line-height:1.8"><?= nl2br(h($app['whats_new'])) ?></p>
+    <p style="color:var(--muted);font-size:14px;line-height:1.8"><?= nl2br(h($whatsNew)) ?></p>
   </div>
   <?= wave() ?>
   <?php endif; ?>
@@ -367,29 +465,139 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
+  <!-- Changelog / Version History + Comparison -->
+  <?php if ($versionHistory): ?>
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">سجل التحديثات ومقارنة الإصدارات</span></div>
+    <div style="overflow-x:auto">
+      <table class="admin-table" style="width:100%;min-width:480px">
+        <thead><tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th><th></th></tr></thead>
+        <tbody>
+          <tr style="background:rgba(37,99,235,.04)">
+            <td style="font-family:var(--f-mono);color:var(--cyan)">v<?= h($app['version']) ?> (الحالي)</td>
+            <td style="color:var(--muted);font-size:12px"><?= h(time_ago($app['updated_at'])) ?></td>
+            <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth($whatsNew, 0, 120, '...')) ?></td>
+            <td><a href="<?= h(download_url($app['slug'])) ?>" class="btn-edit" data-hardnav="1">تحميل</a></td>
+          </tr>
+          <?php foreach ($versionHistory as $v): ?>
+          <tr>
+            <td style="font-family:var(--f-mono)">v<?= h($v['version'] ?: '—') ?></td>
+            <td style="color:var(--muted);font-size:12px"><?= h(time_ago($v['created_at'])) ?></td>
+            <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth(clean_long_text($v['changelog'] ?? ''), 0, 120, '...')) ?></td>
+            <td><?php if ($v['download_url']): ?><a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="btn-view" data-hardnav="1">تحميل هذا الإصدار</a><?php endif; ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <?= wave() ?>
+  <?php endif; ?>
+
+  <!-- Slim download + previous versions + Telegram — above comments -->
+  <div class="quick-actions-zone">
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-slim-dl" data-hardnav="1">
+      <?= svgi('download') ?> تحميل <?= h($app['name']) ?><?= $app['version'] ? ' (v'.h($app['version']).')' : '' ?>
+    </a>
+
+    <?php $dlVersions = array_filter($versionHistory, fn($v) => !empty($v['download_url'])); ?>
+    <?php if ($dlVersions): ?>
+    <details class="prev-versions-slim">
+      <summary>📦 الإصدارات السابقة (<?= count($dlVersions) ?>) — جميعها جاهزة للتحميل</summary>
+      <div class="prev-versions-list">
+        <?php foreach ($dlVersions as $v): ?>
+        <a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="prev-version-chip" data-hardnav="1">
+          <span class="pv-ver">v<?= h($v['version'] ?: '—') ?></span>
+          <span class="pv-date"><?= h(time_ago($v['created_at'])) ?></span>
+          <?= svgi('download') ?>
+        </a>
+        <?php endforeach; ?>
+      </div>
+    </details>
+    <?php endif; ?>
+
+    <?php if ($tgUrl): ?>
+    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
+      اشترك في قناة yassota على تيليجرام
+    </a>
+    <?php endif; ?>
+  </div>
+
+  <!-- Comments & Ratings -->
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">التعليقات والتقييمات (<?= $commentCount ?>)</span></div>
+
+    <?php if ($comments): ?>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <?php foreach ($comments as $c): ?>
+      <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:700;font-size:13px"><?= h($c['name']) ?></span>
+          <span style="color:#fbbf24;font-family:var(--f-mono);font-size:12px"><?= str_repeat('★', (int)$c['rating']) . str_repeat('☆', 5 - (int)$c['rating']) ?></span>
+        </div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.7;margin:0"><?= nl2br(h($c['body'])) ?></p>
+        <div style="color:var(--muted);font-size:11px;margin-top:6px"><?= h(time_ago($c['created_at'])) ?></div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:20px">لا توجد تقييمات بعد — كن أول من يقيّم هذا التطبيق.</p>
+    <?php endif; ?>
+
+    <?php if ($commentSubmitted): ?>
+      <div style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:var(--success);padding:14px 18px;border-radius:10px">
+        ✅ شكراً لك، تم استلام تقييمك وسيظهر بعد المراجعة.
+      </div>
+    <?php else: ?>
+      <?php if ($commentError): ?>
+        <div style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:14px"><?= h($commentError) ?></div>
+      <?php endif; ?>
+      <div id="comment-form-slot" data-app-slug="<?= h($app['slug']) ?>">
+        <p style="color:var(--muted);font-size:13px">⏳ جاري تحميل نموذج التقييم...</p>
+      </div>
+    <?php endif; ?>
+  </div>
+  <?= wave() ?>
+
   <!-- What this app offers -->
-  <?php if (!empty($app['offers_text'])): ?>
+  <?php if ($offersText !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">ماذا يقدّم <?= h($app['name']) ?>؟</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['offers_text'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($offersText)) ?></div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
 
   <!-- Privacy Policy -->
-  <?php if (!empty($app['privacy_policy'])): ?>
+  <?php if ($privacyPolicy !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">سياسة الخصوصية</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['privacy_policy'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($privacyPolicy)) ?></div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
 
   <!-- Terms of Use -->
-  <?php if (!empty($app['terms_content'])): ?>
+  <?php if ($termsContent !== ''): ?>
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">شروط الاستخدام</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($app['terms_content'])) ?></div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($termsContent)) ?></div>
+  </div>
+  <?= wave() ?>
+  <?php endif; ?>
+
+  <!-- Related Articles -->
+  <?php if ($relatedArticles): ?>
+  <div class="section-box reveal">
+    <div class="section-head"><span class="section-title">مقالات ذات صلة بـ <?= h($app['name']) ?></span></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <?php foreach ($relatedArticles as $art): ?>
+      <a href="<?= h(article_url($art['slug'])) ?>" class="sidebar-link" style="border:1px solid var(--border-c);border-radius:10px;padding:14px 16px">
+        <?= svgi('arrow-l') ?> <span style="flex:1"><?= h($art['title']) ?></span>
+      </a>
+      <?php endforeach; ?>
+    </div>
   </div>
   <?= wave() ?>
   <?php endif; ?>
@@ -400,7 +608,7 @@ function wave(): string {
   <div class="apps-grid">
     <?php foreach ($relatedApps as $r): ?>
     <div class="app-card reveal">
-      <a href="app.php?slug=<?= h($r['slug']) ?>" data-hardnav="1">
+      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
         <?php if ($r['icon_path']): ?>
           <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
         <?php endif; ?>
@@ -409,7 +617,30 @@ function wave(): string {
           <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
         </div>
       </a>
-      <a href="download.php?id=<?= $r['id'] ?>" class="btn-dl-card" data-hardnav="1">
+      <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
+        <?= svgi('download') ?> تحميل
+      </a>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
+  <!-- Alternatives -->
+  <?php if ($alternatives || $devAlternatives): ?>
+  <div class="section-head reveal"><span class="section-title">البدائل</span></div>
+  <div class="apps-grid">
+    <?php foreach (array_merge($alternatives, $devAlternatives) as $r): ?>
+    <div class="app-card reveal">
+      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
+        <?php if ($r['icon_path']): ?>
+          <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
+        <?php endif; ?>
+        <div class="app-card-name"><?= h($r['name']) ?></div>
+        <div class="app-card-meta">
+          <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+        </div>
+      </a>
+      <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
         <?= svgi('download') ?> تحميل
       </a>
     </div>
@@ -420,24 +651,10 @@ function wave(): string {
 </main>
 </div>
 
-<!-- Sticky Download Bar (mobile) -->
-<div class="sticky-dl">
-  <div class="sticky-dl-inner">
-    <?php if ($app['icon_path']): ?>
-      <img src="<?= h($app['icon_path']) ?>" class="sticky-dl-icon" alt="">
-    <?php endif; ?>
-    <div class="sticky-dl-name"><?= h($app['name']) ?></div>
-    <a href="download.php?id=<?= $app['id'] ?>" class="btn-primary" style="padding:10px 20px;font-size:14px;flex-shrink:0" data-hardnav="1">
-      <?= svgi('download') ?> تحميل
-    </a>
-  </div>
-</div>
+<?php render_site_footer(); ?>
 
-<footer class="site-footer" style="grid-column:1/-1">
-  <div class="footer-logo">yass<span style="color:var(--purple)">ota</span></div>
-  <p>&copy; <?= date('Y') ?> yassota</p>
-</footer>
-
-<script src="assets/js/main.js"></script>
+<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
+<script>navigator.sendBeacon('<?= h(url('track-view.php')) ?>?id=<?= (int)$app['id'] ?>');</script>
 </body>
 </html>
+<?php if ($cacheable) page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

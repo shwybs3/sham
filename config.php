@@ -38,12 +38,12 @@ try {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>فشل الاتصال بقاعدة البيانات</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#03080f;color:#e8f4f8;padding:40px 16px;line-height:1.9}
-    .box{max-width:680px;margin:0 auto;background:#0a1628;border:1px solid rgba(255,68,102,.3);border-radius:14px;padding:32px}
-    h1{color:#ff4466;font-size:20px;margin:0 0 6px} p.sub{color:#7a9ab8;font-size:13px;margin:0 0 20px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9}
+    .box{max-width:680px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
+    h1{color:#dc2626;font-size:20px;margin:0 0 6px} p.sub{color:#64748b;font-size:13px;margin:0 0 20px}
     ol{padding-inline-start:20px;font-size:14px} li{margin-bottom:10px}
-    code{background:#152642;color:#00f5ff;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
-    .err{margin-top:22px;background:#152642;border:1px solid rgba(255,68,102,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#ff8fa3;direction:ltr;text-align:left;word-break:break-all}
+    code{background:#f1f4f9;color:#2563eb;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
+    .err{margin-top:22px;background:#f1f4f9;border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#b91c1c;direction:ltr;text-align:left;word-break:break-all}
     </style></head><body><div class="box">
     <h1>تعذر الاتصال بقاعدة البيانات</h1>
     <p class="sub">اتبع الخطوات التالية للحل:</p>
@@ -130,6 +130,94 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'settings';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      email VARCHAR(190) NOT NULL,
+      subject VARCHAR(200),
+      message TEXT NOT NULL,
+      status ENUM('new','read') NOT NULL DEFAULT 'new',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'contact_messages';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_versions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      version VARCHAR(60),
+      changelog TEXT,
+      download_url VARCHAR(600),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'app_versions';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      name VARCHAR(150) NOT NULL,
+      rating TINYINT NOT NULL,
+      body TEXT NOT NULL,
+      status ENUM('pending','approved') NOT NULL DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'comments';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_articles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      slug VARCHAR(280) NOT NULL UNIQUE,
+      seo_title VARCHAR(255),
+      meta_description VARCHAR(320),
+      body MEDIUMTEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'app_articles';
+
+    // General-content blog — distinct from app_articles (which are always
+    // tied to one specific app). Covers tutorials/news/comparisons/best-of
+    // roundups/general articles: original editorial content beyond app
+    // listing pages, for internal linking, SEO depth, and AdSense content volume.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blog_posts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      type ENUM('tutorial','news','comparison','best-apps','best-games','article') NOT NULL DEFAULT 'article',
+      title VARCHAR(255) NOT NULL,
+      slug VARCHAR(280) NOT NULL UNIQUE,
+      seo_title VARCHAR(255),
+      meta_description VARCHAR(320),
+      keywords VARCHAR(500),
+      excerpt VARCHAR(500),
+      body MEDIUMTEXT,
+      cover_image VARCHAR(300),
+      status ENUM('published','draft') NOT NULL DEFAULT 'draft',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_type (type),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'blog_posts';
+
+    // Real, self-tracked event log (one row per view/download/search) — the
+    // data source for the admin analytics dashboard. apps.views/downloads
+    // stay as running totals for fast top-N queries; this table adds a
+    // timestamp so the dashboard can show genuine daily trends, unlike the
+    // running counters alone.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS page_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      event_type ENUM('view','download','search') NOT NULL,
+      app_id INT NULL,
+      meta VARCHAR(255) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_type_date (event_type, created_at),
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'page_events';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -137,6 +225,14 @@ function ensure_schema(PDO $pdo): array {
         if (!$fk) {
             $pdo->exec("ALTER TABLE apps ADD CONSTRAINT fk_apps_category
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL");
+        }
+    } catch (Throwable $e) { /* non-critical */ }
+    try {
+        $fk2 = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='app_articles' AND CONSTRAINT_TYPE='FOREIGN KEY'")->fetchColumn();
+        if (!$fk2) {
+            $pdo->exec("ALTER TABLE app_articles ADD CONSTRAINT fk_articles_app
+                FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE");
         }
     } catch (Throwable $e) { /* non-critical */ }
 
@@ -163,6 +259,20 @@ function ensure_schema(PDO $pdo): array {
             'changelog'        => "JSON NULL AFTER whats_new",
             'needs_update'     => "TINYINT(1) NOT NULL DEFAULT 0 AFTER status",
             'source_url'       => "VARCHAR(600) NULL AFTER download_url",
+            'vt_status'        => "VARCHAR(20) NULL AFTER source_url",
+            'vt_malicious'     => "INT NULL AFTER vt_status",
+            'vt_total_engines' => "INT NULL AFTER vt_malicious",
+            'vt_scanned_at'    => "DATETIME NULL AFTER vt_total_engines",
+            'vt_analysis_id'   => "VARCHAR(255) NULL AFTER vt_scanned_at",
+            'vt_permalink'     => "VARCHAR(600) NULL AFTER vt_analysis_id",
+            'link_verified'    => "TINYINT(1) NOT NULL DEFAULT 0 AFTER vt_permalink",
+            'verified_at'      => "DATETIME NULL AFTER link_verified",
+        ],
+        'categories' => [
+            'description' => "MEDIUMTEXT NULL AFTER icon_svg",
+        ],
+        'comments' => [
+            'ip' => "VARCHAR(45) NULL AFTER body",
         ],
     ];
     foreach ($wanted as $table => $cols) {
@@ -181,6 +291,51 @@ function ensure_schema(PDO $pdo): array {
     return $log;
 }
 ensure_schema($pdo);
+
+/* ═══════════════════════════════════════════════
+   Lightweight page cache — file-based, for every public
+   listing/detail page (index/category/top/updates/app).
+   The view counter and the comment submission form are
+   both deliberately kept OUT of the cached HTML (see
+   track-view.php and comment-form.php) so caching app.php
+   doesn't make either one stale or session-mismatched.
+   Invalidated instantly (not just on a timer) whenever an
+   app is added/edited/deleted or a comment is
+   approved/deleted, via a version token bumped in
+   admin.php.
+   ═══════════════════════════════════════════════ */
+function cache_version(PDO $pdo): int {
+    return (int)get_cfg($pdo, 'cache_version', '1');
+}
+function bump_cache_version(PDO $pdo): void {
+    set_cfg($pdo, 'cache_version', (string)(cache_version($pdo) + 1));
+}
+function page_cache_dir(): string {
+    $dir = UPLOAD_PATH . '/.cache';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return $dir;
+}
+function page_cache_file(PDO $pdo, string $key): string {
+    return page_cache_dir() . '/' . md5($key . '|v' . cache_version($pdo)) . '.html';
+}
+// Call at the very top of a cacheable page. If a fresh cached copy exists,
+// echoes it and returns true (the caller must exit immediately). Otherwise
+// starts output buffering and returns false — call page_cache_end() at the
+// very end of the page to save+flush what was rendered.
+function page_cache_start(PDO $pdo, string $key, int $ttl = 300): bool {
+    $file = page_cache_file($pdo, $key);
+    if (is_file($file) && (time() - filemtime($file)) < $ttl) {
+        echo file_get_contents($file);
+        return true;
+    }
+    ob_start();
+    return false;
+}
+function page_cache_end(PDO $pdo, string $key): void {
+    $html = ob_get_clean();
+    @file_put_contents(page_cache_file($pdo, $key), $html);
+    echo $html;
+}
 
 function get_cfg(PDO $pdo, string $k, string $d = ''): string {
     $r = $pdo->prepare("SELECT `value` FROM settings WHERE `key`=?");
@@ -282,12 +437,19 @@ function build_model_rotation(PDO $pdo, bool $forceAll = false): array {
 
     $models[] = 'openrouter/free'; // ضمان أخير يعمل دائماً
 
-    return array_values(array_unique(array_filter($models)));
+    return ai_filter_text_models(array_values(array_unique(array_filter($models))));
 }
 
 // Low level call to OpenRouter chat completions. Returns ['ok'=>bool,'content'=>?string,'error'=>?string,'http'=>int]
-function openrouter_call(string $key, string $model, string $prompt, int $timeout = 55): array {
+// timeout is intentionally short (not the 55s this used to be): a failed/
+// rate-limited/unavailable free model almost always fails fast, and this
+// value is multiplied by every (key × model) pair openrouter_call_rotating()
+// tries — a long per-attempt timeout is what made a single content-generation
+// request able to block a PHP worker for many minutes.
+function openrouter_call(string $key, string $model, string $prompt, int $timeout = 20, int $maxTokens = 0): array {
     if (!$key) return ['ok' => false, 'content' => null, 'error' => 'لا يوجد مفتاح API', 'http' => 0];
+    $body = ['model' => $model, 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7];
+    if ($maxTokens > 0) $body['max_tokens'] = $maxTokens;
     $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
@@ -295,7 +457,7 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
             'Authorization: Bearer ' . $key, 'Content-Type: application/json',
             'HTTP-Referer: ' . SITE_URL, 'X-Title: yassota',
         ],
-        CURLOPT_POSTFIELDS => json_encode(['model' => $model, 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7]),
+        CURLOPT_POSTFIELDS => json_encode($body),
     ]);
     $res = curl_exec($ch);
     $err = curl_error($ch);
@@ -314,12 +476,21 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
     return ['ok' => true, 'content' => $content, 'error' => null, 'http' => $code];
 }
 
-// High level: tries every key × every model until one succeeds. Returns full trace for diagnostics.
-function openrouter_call_rotating(array $keys, array $models, string $prompt): array {
+// High level: tries key × model combinations until one succeeds. Returns full trace for diagnostics.
+// Capped at MAX_ATTEMPTS total combinations — with several keys and a live-
+// fetched free-model list this cross product can reach 100+ pairs, and at
+// 20s/attempt that's still 30+ minutes worst case if every one fails or
+// times out. Capping bounds a single request to at most a couple of minutes
+// while still trying enough combinations to almost always succeed.
+function openrouter_call_rotating(array $keys, array $models, string $prompt, int $timeout = 20, int $maxTokens = 0): array {
     $trace = [];
+    $attempts = 0;
+    $maxAttempts = 12;
     foreach ($keys as $key) {
         foreach ($models as $model) {
-            $r = openrouter_call($key, $model, $prompt);
+            if ($attempts >= $maxAttempts) break 2;
+            $attempts++;
+            $r = openrouter_call($key, $model, $prompt, $timeout, $maxTokens);
             $trace[] = ['model' => $model, 'key_tail' => substr($key, -4), 'ok' => $r['ok'], 'error' => $r['error'], 'http' => $r['http']];
             if ($r['ok']) {
                 return ['ok' => true, 'content' => $r['content'], 'model' => $model, 'trace' => $trace];
@@ -327,6 +498,47 @@ function openrouter_call_rotating(array $keys, array $models, string $prompt): a
         }
     }
     return ['ok' => false, 'content' => null, 'model' => null, 'trace' => $trace];
+}
+
+// Turns a failed openrouter_call_rotating() trace into one concrete Arabic
+// sentence explaining WHY, instead of a generic "connection failed" —
+// the HTTP codes across attempts almost always point at one root cause
+// (bad key, no credits, rate limit, or the host's outbound network itself
+// being blocked) even when the admin never opens the raw trace.
+function openrouter_diagnose_trace(array $trace): string {
+    if (!$trace) return 'لم تتم أي محاولة اتصال.';
+    $codes = array_column($trace, 'http');
+    $count = count($trace);
+    $countOf = fn($c) => count(array_filter($codes, fn($x) => $x === $c));
+
+    if ($countOf(0) === $count) {
+        return "تعذّر الوصول إلى openrouter.ai من الخادم نفسه ({$count} محاولة، فشل اتصال في كل مرة) — الأغلب أن استضافتك تحظر الاتصال الخارجي (outbound HTTPS) من كود PHP، أو أن اسم النطاق openrouter.ai محجوب. تواصل مع شركة الاستضافة للتأكد من السماح باتصالات cURL الخارجية.";
+    }
+    if ($countOf(401) === $count) {
+        return "كل المفاتيح المضافة مرفوضة (HTTP 401 غير مصرح) — المفتاح غير صحيح أو منتهي. احصل على مفتاح جديد من openrouter.ai/keys وأضفه من الإعدادات.";
+    }
+    if ($countOf(402) === $count) {
+        return "الرصيد غير كافٍ لكل المفاتيح (HTTP 402) — الموديلات المجانية قد تتطلب حداً أدنى من الرصيد في حساب OpenRouter حتى لو لم تُستهلك. أضف رصيداً بسيطاً لحسابك على openrouter.ai أو جرّب مفتاح حساب آخر.";
+    }
+    if ($countOf(429) === $count) {
+        return "تم تجاوز الحد المسموح من الطلبات (HTTP 429) على كل المحاولات — الموديلات المجانية لها حد استخدام يومي/دقيق منخفض. انتظر بضع دقائق ثم أعد المحاولة، أو أضف مفتاح OpenRouter إضافي من حساب آخر لزيادة عدد المحاولات المتاحة.";
+    }
+    if ($countOf(404) === $count) {
+        return "كل الموديلات المستخدمة غير موجودة على OpenRouter (HTTP 404) — على الأغلب أسماء الموديلات المحفوظة في الإعدادات لم تعد متوفرة مجاناً. افتح صفحة الإعدادات واختر موديلاً من القائمة المحدّثة، أو فعّل \"التدوير التلقائي\".";
+    }
+    // Mixed causes — summarize the most common one plus the last error text.
+    $tally = array_count_values($codes);
+    arsort($tally);
+    $topCode = array_key_first($tally);
+    $lastErr = end($trace)['error'] ?? '';
+    $label = match (true) {
+        $topCode === 0   => 'فشل اتصال بالخادم',
+        $topCode === 401 => 'مفتاح مرفوض (401)',
+        $topCode === 402 => 'رصيد غير كافٍ (402)',
+        $topCode === 429 => 'تجاوز الحد المسموح (429)',
+        default          => "رمز استجابة {$topCode}",
+    };
+    return "فشلت {$count} محاولة بأسباب متفاوتة — السبب الأكثر تكراراً: {$label} ({$tally[$topCode]} من {$count}). آخر خطأ: \"{$lastErr}\". راجع صفحة \"اختبار الاتصال\" لتفاصيل كل محاولة.";
 }
 
 /* ═══════════════════════════════════════════════
@@ -489,7 +701,74 @@ function import_remote_icon(string $remoteUrl, string $slug): ?string {
 
 // Convenience: builds the key/model list from saved settings and runs a plain-text prompt.
 // Returns ['ok'=>bool,'content'=>?string,'error'=>?string]
+// Models that return classifiers/JSON-schema outputs instead of free text —
+// using them for content generation always produces non-JSON or policy labels
+// instead of the article/SEO copy the prompt asked for.
+const AI_NON_TEXT_MODEL_PATTERNS = ['content-safety', 'moderation', 'guard', 'classifier', 'toxicity'];
+
+function ai_filter_text_models(array $models): array {
+    return array_values(array_filter($models, function(string $m): bool {
+        $m = strtolower($m);
+        foreach (AI_NON_TEXT_MODEL_PATTERNS as $p) {
+            if (str_contains($m, $p)) return false;
+        }
+        return true;
+    }));
+}
+
+// ── Alternative AI provider: aifreeforever.com ──
+// Uses browser-like headers to access the API (no API key required).
+// Returns ['ok'=>bool,'content'=>?string,'error'=>?string,'model'=>string]
+function aifreeforever_call(string $prompt, int $timeout = 25): array {
+    $ch = curl_init('https://aifreeforever.com/api/generate-ai-answer');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_HTTPHEADER     => [
+            'accept: */*',
+            'accept-language: ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7',
+            'content-type: application/json',
+            'origin: https://aifreeforever.com',
+            'referer: https://aifreeforever.com/',
+            'sec-ch-ua: "Chromium";v="107", "Not=A?Brand";v="24"',
+            'sec-ch-ua-mobile: ?1',
+            'sec-ch-ua-platform: "Android"',
+            'sec-fetch-dest: empty',
+            'sec-fetch-mode: cors',
+            'sec-fetch-site: same-origin',
+            'user-agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36',
+        ],
+        CURLOPT_POSTFIELDS => json_encode([
+            'question'            => $prompt,
+            'tone'                => 'friendly',
+            'format'              => 'paragraph',
+            'file'                => null,
+            'conversationHistory' => [],
+        ]),
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err)             return ['ok' => false, 'content' => null, 'error' => "خطأ اتصال: $err",          'model' => 'aifreeforever'];
+    if ($code !== 200)    return ['ok' => false, 'content' => null, 'error' => "رمز استجابة: $code",       'model' => 'aifreeforever'];
+    $d      = json_decode((string)$res, true);
+    $answer = $d['answer'] ?? null;
+    if (!$answer)         return ['ok' => false, 'content' => null, 'error' => 'رد فارغ من aifreeforever', 'model' => 'aifreeforever'];
+    return ['ok' => true, 'content' => $answer, 'error' => null, 'model' => 'aifreeforever'];
+}
+
 function ai_text(PDO $pdo, string $prompt): array {
+    // Switch between providers based on admin setting
+    if (get_cfg($pdo, 'ai_provider', 'openrouter') === 'aifreeforever') {
+        $r = aifreeforever_call($prompt);
+        if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => $r['error']];
+        return ['ok' => true, 'content' => $r['content'], 'error' => null];
+    }
+
+    // OpenRouter path
     $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
     if (!$keys) return ['ok' => false, 'content' => null, 'error' => 'لم يتم إضافة مفتاح OpenRouter بعد.'];
     $primary  = get_cfg($pdo, 'openrouter_model', 'meta-llama/llama-3.1-8b-instruct:free');
@@ -497,9 +776,144 @@ function ai_text(PDO $pdo, string $prompt): array {
     $autoRotate = get_cfg($pdo, 'openrouter_auto_rotate', '1') === '1';
     $models = array_values(array_unique(array_filter([$primary, $fallback])));
     if ($autoRotate) $models = array_values(array_unique(array_merge($models, openrouter_default_free_models())));
+    $models = ai_filter_text_models($models);
+    if (!$models) $models = ['meta-llama/llama-3.1-8b-instruct:free'];
     $r = openrouter_call_rotating($keys, $models, $prompt);
-    if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => 'فشل الاتصال بكل الموديلات المتاحة — راجع صفحة اختبار الاتصال.'];
+    if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => openrouter_diagnose_trace($r['trace'])];
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
+}
+
+/* ── Telegram Bot integration ──────────────────────────────────────────
+   Low-level send function. $body is a complete Telegram Bot API payload
+   array (without chat_id — that's injected from settings). Sends to the
+   configured channel. Returns ['ok'=>bool,'error'=>?string].
+   ────────────────────────────────────────────────────────────────────── */
+function telegram_api(PDO $pdo, string $method, array $body): array {
+    $token  = get_cfg($pdo, 'telegram_bot_token', '');
+    $chatId = get_cfg($pdo, 'telegram_channel_id', '');
+    if (!$token || !$chatId) return ['ok' => false, 'error' => 'Telegram غير مُكوَّن (bot token أو channel ID مفقود)'];
+
+    $body['chat_id'] = $chatId;
+    $ch = curl_init("https://api.telegram.org/bot{$token}/{$method}");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode($body),
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err) return ['ok' => false, 'error' => "cURL: $err"];
+    $d = json_decode((string)$res, true);
+    return ['ok' => $d['ok'] ?? false, 'error' => $d['description'] ?? ($code !== 200 ? "HTTP $code" : null)];
+}
+
+/* Send a notification whenever an app is newly published.
+   - Tries sendPhoto first (shows icon) then falls back to sendMessage.
+   - Uses AI to write the caption if configured, otherwise builds it manually.
+   - Silently returns on failure so it never breaks the save flow.            */
+function telegram_notify_new_app(PDO $pdo, array $app): void {
+    if (get_cfg($pdo, 'telegram_enabled', '0') !== '1') return;
+    if (!get_cfg($pdo, 'telegram_bot_token') || !get_cfg($pdo, 'telegram_channel_id')) return;
+
+    $name     = $app['name']             ?? '';
+    $shortDesc= $app['short_description'] ?? '';
+    $version  = $app['version']          ?? '';
+    $sizeMb   = $app['size_mb']          ?? '';
+    $features = json_decode($app['features'] ?? '[]', true) ?: [];
+    $features = array_slice(array_filter($features), 0, 5);
+
+    // Build caption via AI (best-effort, silent fallback)
+    $caption = '';
+    $provider = get_cfg($pdo, 'ai_provider', 'openrouter');
+    $aiPrompt = "اكتب إعلاناً جذاباً ومختصراً (بحد أقصى 180 كلمة) لإعلان إضافة هذا التطبيق على موقع yassota. "
+              . "النص فقط بدون هاشتاقات زائدة وبدون ماركداون. يمكنك استخدام بعض الإيموجي المناسبة.\n"
+              . "اسم التطبيق: {$name}\n"
+              . "الوصف: {$shortDesc}\n"
+              . ($version ? "الإصدار: v{$version}\n" : '')
+              . ($features ? "المميزات: " . implode('، ', $features) . "\n" : '');
+
+    if ($provider === 'aifreeforever') {
+        $r = aifreeforever_call($aiPrompt, 20);
+        if ($r['ok']) $caption = trim($r['content']);
+    } else {
+        $keys   = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+        $models = build_model_rotation($pdo);
+        if ($keys && $models) {
+            $r = openrouter_call_rotating($keys, array_slice($models, 0, 4), $aiPrompt);
+            if ($r['ok']) $caption = trim($r['content']);
+        }
+    }
+
+    // Manual fallback caption
+    if (!$caption) {
+        $lines = ["🆕 <b>{$name}</b> متاح الآن على yassota!"];
+        if ($shortDesc) $lines[] = "\n{$shortDesc}";
+        if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
+    } else {
+        $lines = [$caption];
+    }
+    // Append version/size as info footer
+    $meta = array_filter([$version ? "🔖 v{$version}" : '', $sizeMb ? "📦 {$sizeMb} MB" : '']);
+    if ($meta) $lines[] = "\n" . implode('  ', $meta);
+
+    $text = implode('', $lines);
+    // Telegram caption limit is 1024 chars
+    if (mb_strlen($text) > 1020) $text = mb_substr($text, 0, 1020) . '…';
+
+    $buttons = [[
+        ['text' => '📥 تحميل التطبيق',  'url' => download_url($app['slug'])],
+        ['text' => '📄 صفحة التطبيق',   'url' => app_url($app['slug'])],
+    ]];
+    $markup = ['inline_keyboard' => $buttons];
+
+    // Try sendPhoto if we have an icon
+    if (!empty($app['icon_path'])) {
+        $iconUrl = rtrim(SITE_URL, '/') . '/' . ltrim($app['icon_path'], '/');
+        $r = telegram_api($pdo, 'sendPhoto', [
+            'photo'        => $iconUrl,
+            'caption'      => $text,
+            'parse_mode'   => 'HTML',
+            'reply_markup' => $markup,
+        ]);
+        if ($r['ok']) return;
+    }
+
+    // sendMessage fallback (also used when there's no icon, or sendPhoto failed)
+    telegram_api($pdo, 'sendMessage', [
+        'text'         => $text,
+        'parse_mode'   => 'HTML',
+        'reply_markup' => $markup,
+    ]);
+}
+
+// Trims and collapses 3+ consecutive blank lines down to a single blank
+// line. AI-generated long-form text occasionally contains long runs of
+// blank lines (from concatenating multiple "continue writing" passes, or
+// a model emitting extra whitespace); left as-is, nl2br() turns each one
+// into a <br>, which renders as a large empty visual gap on the page even
+// though the field technically isn't empty.
+function clean_long_text(?string $s): string {
+    $s = trim($s ?? '');
+    if ($s === '') return '';
+    return preg_replace('/\n{3,}/', "\n\n", $s);
+}
+
+// Shared SEO-field standards embedded in every AI prompt that generates
+// seo_title/meta_description/keywords, so the whole site produces the same
+// search-optimized pattern real Arabic app-download sites rank with —
+// not the generic "SEO title less than 60 chars" instruction that produced
+// weak, unspecific output before.
+function seo_prompt_standards(): string {
+    $year = date('Y');
+    return <<<P
+اتبع بدقة معايير SEO التالية عند كتابة الحقول التالية (لا تكتب حقولاً عامة أو مبهمة):
+- seo_title: يبدأ بكلمة "تحميل"، يتضمن اسم التطبيق كاملاً (بالإنجليزية إن كان اسمه إنجليزياً)، ثم "APK" إن كان تطبيق/لعبة أندرويد، ثم "آخر إصدار {$year}"، ثم "للأندرويد مجاناً"، ثم فاصل " | " ثم صياغة ثانية مختصرة تبدأ بـ"تنزيل" واسم التطبيق و"برابط مباشر". مثال على الشكل المطلوب (لا تنسخه، استخدمه كقالب فقط): "تحميل PUBG MOBILE APK آخر إصدار {$year} للأندرويد مجانًا | تنزيل ببجي موبايل برابط مباشر".
+- meta_description: يبدأ بفعل أمر مثل "قم بتحميل" أو "حمّل"، يذكر اسم التطبيق ونوعه (لعبة/تطبيق) و"APK" و"آخر إصدار {$year}" و"للأندرويد مجاناً برابط مباشر وسريع"، ثم جملة تسويقية قصيرة عن أبرز مزايا هذا التطبيق تحديداً (وليست عامة). الطول 140-160 حرفاً.
+- keywords: 15 إلى 18 كلمة/عبارة مفتاحية عربية طويلة الذيل مفصولة بفاصلة، تغطي أشكال البحث الشائعة: "تحميل [الاسم]"، "تنزيل [الاسم]"، "[الاسم] APK"، "[الاسم] آخر إصدار"، "تحميل [الاسم] للأندرويد"، "[الاسم] مجاناً"، "تحديث [الاسم]"، "[الاسم] Android"، "تحميل [الاسم] برابط مباشر"، "[الاسم] {$year}" وهكذا — بدون تكرار حرفي لنفس الصياغة، وبمزيج من العربية والإنجليزية عندما يكون اسم التطبيق إنجليزياً معروفاً.
+P;
 }
 
 // Extract the first {...} JSON object from a raw AI response (strips markdown fences).
@@ -512,7 +926,31 @@ function ai_extract_json(string $raw): ?array {
 
 /* ─── Helpers ─── */
 
-function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+// ENT_SUBSTITUTE is critical here: without it, htmlspecialchars() silently
+// returns an EMPTY STRING for the *entire* input if it contains even one
+// invalid UTF-8 byte anywhere — which is exactly what long AI-generated
+// Arabic text occasionally contains, and is why long descriptions could
+// render as a blank gap instead of the actual (mostly valid) text.
+function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+
+// Defense-in-depth for the same blank-description problem: strip invalid
+// UTF-8 bytes at SAVE time (not only at render time via h()'s
+// ENT_SUBSTITUTE), so bad bytes never reach the database in the first
+// place — some hosts run MySQL in non-strict mode and will silently accept
+// or mangle them on INSERT. Safe to run on already-clean text (no-op).
+function clean_utf8(?string $s): string {
+    $s = $s ?? '';
+    if ($s === '') return '';
+    $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $s);
+    return $clean !== false ? $clean : mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+}
+
+// Recursive clean_utf8() over an array (e.g. $_POST) so every text field in
+// a submitted form is sanitized in one call, arrays and nested arrays included.
+function clean_utf8_deep($v) {
+    if (is_array($v)) return array_map('clean_utf8_deep', $v);
+    return is_string($v) ? clean_utf8($v) : $v;
+}
 
 function url(string $path = ''): string { return SITE_URL . '/' . ltrim($path, '/'); }
 
@@ -533,16 +971,152 @@ function slugify(string $t): string {
     return mb_strtolower(trim($t, '-')) ?: 'app-' . time();
 }
 
-function unique_slug(PDO $pdo, string $base): string {
+// Route names that must never collide with an app's pretty URL (/{slug}).
+const RESERVED_SLUGS = [
+    'index', 'app', 'admin', 'download', 'category', 'developer', 'top', 'updates',
+    'sitemap', 'robots', 'config', 'partials', 'install', 'uploads', 'assets',
+    'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy', 'article',
+    'rss', 'track-view', 'comment-form', 'manifest.json', 'favicon.svg', 'search-suggest',
+    'blog', 'blog-post',
+];
+
+function unique_slug(PDO $pdo, string $base, int $excludeId = 0): string {
+    $slug = slugify($base);
+    if (in_array($slug, RESERVED_SLUGS, true)) $slug .= '-app';
+    $orig = $slug; $i = 1;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM apps WHERE slug=? AND id<>?");
+    $stmt->execute([$slug, $excludeId]);
+    while ($stmt->fetchColumn() > 0) {
+        $slug = $orig . '-' . (++$i);
+        $stmt->execute([$slug, $excludeId]);
+    }
+    return $slug;
+}
+
+// Pretty-URL helpers: yassota.com/{slug} and yassota.com/{slug}/download
+function app_url(string $slug): string { return url(rawurlencode($slug)); }
+function download_url(string $slug, int $mirror = 1): string {
+    return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
+}
+function article_url(string $slug): string { return url('article/' . rawurlencode($slug)); }
+
+function unique_article_slug(PDO $pdo, string $base): string {
     $slug = slugify($base);
     $orig = $slug; $i = 1;
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM apps WHERE slug=?");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM app_articles WHERE slug=?");
     $stmt->execute([$slug]);
     while ($stmt->fetchColumn() > 0) {
         $slug = $orig . '-' . (++$i);
         $stmt->execute([$slug]);
     }
     return $slug;
+}
+
+/* ── General blog (tutorials/news/comparisons/best-of/articles) ── */
+const BLOG_TYPES = [
+    'tutorial'   => 'الشروحات',
+    'news'       => 'الأخبار',
+    'comparison' => 'المقارنات',
+    'best-apps'  => 'أفضل التطبيقات',
+    'best-games' => 'أفضل الألعاب',
+    'article'    => 'مقالات عامة',
+    'code-page'  => 'صفحة المحتوى',
+];
+
+/* Language sections available in a code-page blog post */
+const CODE_PAGE_LANGS = [
+    'html'   => ['label' => 'HTML',   'icon' => '🌐', 'color' => '#e34f26', 'ext' => '.html'],
+    'css'    => ['label' => 'CSS',    'icon' => '🎨', 'color' => '#1572b6', 'ext' => '.css'],
+    'js'     => ['label' => 'JS',     'icon' => '⚡', 'color' => '#f7df1e', 'ext' => '.js'],
+    'php'    => ['label' => 'PHP',    'icon' => '🐘', 'color' => '#777bb4', 'ext' => '.php'],
+    'python' => ['label' => 'Python', 'icon' => '🐍', 'color' => '#3776ab', 'ext' => '.py'],
+    'java'   => ['label' => 'Java',   'icon' => '☕', 'color' => '#f89820', 'ext' => '.java'],
+    'kotlin' => ['label' => 'Kotlin', 'icon' => '🎯', 'color' => '#7f52ff', 'ext' => '.kt'],
+    'cpp'    => ['label' => 'C++',    'icon' => '⚙️', 'color' => '#00599c', 'ext' => '.cpp'],
+];
+
+/* Decode a code-page body JSON safely, returns assoc array of lang=>code */
+function decode_code_page(string $body): array {
+    $data = json_decode($body, true);
+    if (!is_array($data)) return [];
+    $sections = $data['sections'] ?? $data;
+    $out = [];
+    foreach (array_keys(CODE_PAGE_LANGS) as $lang) {
+        $code = trim($sections[$lang] ?? '');
+        if ($code !== '') $out[$lang] = $code;
+    }
+    return $out;
+}
+/* Render a blog body that might be HTML (from WYSIWYG) or plain text (old AI posts).
+   If it contains HTML tags, output as-is (admin-only authoring — trusted source).
+   If plain text, wrap each double-newline block in <p> so it renders correctly. */
+function render_blog_body(string $body): string {
+    if (trim($body) === '') return '';
+    if (preg_match('/<[a-zA-Z][a-zA-Z0-9]*[\s\/>]/u', $body)) {
+        return $body; // real HTML — output raw
+    }
+    // Plain text fallback: split on blank lines → paragraphs
+    $paras = preg_split('/\n{2,}/', trim($body));
+    $html  = '';
+    foreach ($paras as $p) {
+        $p = trim($p);
+        if ($p === '') continue;
+        // Single-line that looks like a heading (starts with a short bold phrase before : or —)
+        if (preg_match('/^(.{4,60})[:\—\-]\s*$/u', $p)) {
+            $html .= '<h3>' . htmlspecialchars($p, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>';
+        } else {
+            $html .= '<p>' . nl2br(htmlspecialchars($p, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+        }
+    }
+    return $html;
+}
+
+function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
+function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
+function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
+
+function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {
+    $slug = slugify($base);
+    if (!$slug) $slug = 'post-' . time();
+    $orig = $slug; $i = 1;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM blog_posts WHERE slug=? AND id<>?");
+    $stmt->execute([$slug, $excludeId]);
+    while ($stmt->fetchColumn() > 0) {
+        $slug = $orig . '-' . (++$i);
+        $stmt->execute([$slug, $excludeId]);
+    }
+    return $slug;
+}
+
+// CSS/JS URL with a cache-busting ?v= based on the file's own mtime — required
+// because .htaccess caches these for a month; without this, a bug fix to
+// main.css/main.js would silently not reach any browser that already has the
+// old file cached, until that month expires or the visitor hard-refreshes.
+function asset_url(string $relPath): string {
+    $full = ROOT_PATH . '/' . ltrim($relPath, '/');
+    if (!is_file($full)) return url($relPath) . '?v=' . time();
+    $v = filemtime($full);
+
+    // Self-healing CSS minification: regenerate the sibling .min.css file
+    // whenever the source changes (same idempotent pattern as ensure_schema),
+    // and serve that as a normal static file instead — safe (only strips
+    // comments/whitespace) unlike JS, where the same regex trick risks
+    // breaking string or regex literals. JS is served as-is.
+    if (str_ends_with($relPath, '.css')) {
+        $minRelPath = substr($relPath, 0, -4) . '.min.css';
+        $minFull = ROOT_PATH . '/' . ltrim($minRelPath, '/');
+        if (!is_file($minFull) || filemtime($minFull) < $v) {
+            $css = (string)file_get_contents($full);
+            $css = preg_replace('#/\*.*?\*/#s', '', $css);
+            $css = preg_replace('/\s+/', ' ', $css);
+            $css = preg_replace('/\s*([{}:;,>])\s*/', '$1', $css);
+            $css = preg_replace('/;}/', '}', (string)$css);
+            @file_put_contents($minFull, trim((string)$css));
+        }
+        if (is_file($minFull)) return url($minRelPath) . '?v=' . $v;
+    }
+
+    return url($relPath) . '?v=' . $v;
 }
 
 function is_admin(): bool { return !empty($_SESSION['admin_id']); }
@@ -552,6 +1126,94 @@ function require_admin(): void {
 }
 
 function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? ''; }
+
+// Beyond the honeypot+CSRF pair, a bot (or an impatient human) could still
+// flood the pending-comments moderation queue by submitting repeatedly.
+// Simple IP-based cap: max 5 comments per IP per hour, across all apps.
+function comment_rate_limit_ok(PDO $pdo, string $ip): bool {
+    if ($ip === '') return true;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM comments WHERE ip=? AND created_at > (NOW() - INTERVAL 1 HOUR)");
+    $stmt->execute([$ip]);
+    return (int)$stmt->fetchColumn() < 5;
+}
+
+/* ═══════════════════════════════════════════════
+   VirusTotal — real (not simulated) safety-scan badge
+   for the download link. Never shows a badge unless a
+   real API response produced one. Two-step because a
+   fresh URL scan takes VirusTotal itself 30s-2min to
+   finish, and blocking a PHP worker that long is exactly
+   the mistake already fixed for the AI generation calls:
+   vt_scan_url() does one fast lookup/submit and returns
+   immediately; vt_check_pending() does one fast follow-up
+   poll, called again later (a button, not an auto-loop).
+   ═══════════════════════════════════════════════ */
+function vt_api_key(PDO $pdo): string { return trim(get_cfg($pdo, 'virustotal_api_key')); }
+
+function vt_scan_url(PDO $pdo, int $appId, string $url): array {
+    $key = vt_api_key($pdo);
+    if (!$key) return ['ok' => false, 'error' => 'لم يتم إضافة مفتاح VirusTotal API في الإعدادات'];
+    if (!$url) return ['ok' => false, 'error' => 'لا يوجد رابط تحميل لفحصه'];
+
+    // Look up an existing report first (URL identifier per VT's spec).
+    $urlId = rtrim(strtr(base64_encode($url), '+/', '-_'), '=');
+    $ch = curl_init("https://www.virustotal.com/api/v3/urls/$urlId");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ["x-apikey: $key"]]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200) {
+        $d = json_decode((string)$res, true);
+        $stats = $d['data']['attributes']['last_analysis_stats'] ?? null;
+        if ($stats) {
+            $malicious = (int)($stats['malicious'] ?? 0) + (int)($stats['suspicious'] ?? 0);
+            $total = array_sum($stats);
+            $pdo->prepare("UPDATE apps SET vt_status=?, vt_malicious=?, vt_total_engines=?, vt_scanned_at=NOW(), vt_permalink=?, vt_analysis_id=NULL WHERE id=?")
+                ->execute([$malicious > 0 ? 'flagged' : 'clean', $malicious, $total, "https://www.virustotal.com/gui/url/$urlId", $appId]);
+            return ['ok' => true, 'status' => $malicious > 0 ? 'flagged' : 'clean'];
+        }
+    } elseif ($code !== 404) {
+        return ['ok' => false, 'error' => "فشل الاتصال بـ VirusTotal (رمز $code)"];
+    }
+
+    // No existing report — submit a new scan; VT needs time to finish it,
+    // so this only stores the analysis id for a later vt_check_pending() call.
+    $ch = curl_init("https://www.virustotal.com/api/v3/urls");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ["x-apikey: $key", "Content-Type: application/x-www-form-urlencoded"],
+        CURLOPT_POSTFIELDS => http_build_query(['url' => $url]),
+    ]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200) return ['ok' => false, 'error' => "فشل إرسال الرابط للفحص (رمز $code)"];
+    $d = json_decode((string)$res, true);
+    $analysisId = $d['data']['id'] ?? null;
+    $pdo->prepare("UPDATE apps SET vt_status='pending', vt_analysis_id=?, vt_scanned_at=NOW() WHERE id=?")
+        ->execute([$analysisId, $appId]);
+    return ['ok' => true, 'status' => 'pending'];
+}
+
+function vt_check_pending(PDO $pdo, int $appId, string $analysisId): array {
+    $key = vt_api_key($pdo);
+    if (!$key || !$analysisId) return ['ok' => false, 'error' => 'لا يوجد فحص معلّق'];
+    $ch = curl_init("https://www.virustotal.com/api/v3/analyses/$analysisId");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ["x-apikey: $key"]]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200) return ['ok' => false, 'error' => "فشل الاتصال بـ VirusTotal (رمز $code)"];
+    $d = json_decode((string)$res, true);
+    if (($d['data']['attributes']['status'] ?? '') !== 'completed') return ['ok' => true, 'status' => 'pending'];
+    $stats = $d['data']['attributes']['stats'] ?? [];
+    $malicious = (int)($stats['malicious'] ?? 0) + (int)($stats['suspicious'] ?? 0);
+    $total = array_sum($stats);
+    $pdo->prepare("UPDATE apps SET vt_status=?, vt_malicious=?, vt_total_engines=? WHERE id=?")
+        ->execute([$malicious > 0 ? 'flagged' : 'clean', $malicious, $total, $appId]);
+    return ['ok' => true, 'status' => $malicious > 0 ? 'flagged' : 'clean'];
+}
 
 /**
  * Optional defense-in-depth IP allowlist for the whole admin panel (including
@@ -572,10 +1234,10 @@ function admin_ip_check(PDO $pdo): void {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>الوصول مرفوض</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#03080f;color:#e8f4f8;padding:40px 16px;line-height:1.9;text-align:center}
-    .box{max-width:480px;margin:60px auto;background:#0a1628;border:1px solid rgba(255,68,102,.3);border-radius:14px;padding:32px}
-    h1{color:#ff4466;font-size:20px;margin:0 0 14px}
-    code{background:#152642;color:#00f5ff;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9;text-align:center}
+    .box{max-width:480px;margin:60px auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
+    h1{color:#dc2626;font-size:20px;margin:0 0 14px}
+    code{background:#f1f4f9;color:#2563eb;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
     </style></head><body><div class="box">
     <h1>الوصول مرفوض</h1>
     <p>عنوان IP الخاص بك غير مدرج ضمن قائمة الوصول المسموح بها للوحة التحكم.</p>
@@ -686,4 +1348,70 @@ function nav_guard_script(): string {
 })();
 </script>
 HTML;
+}
+
+// Real Google AdSense auto-relaxed ad unit, used in every "ad-zone" slot
+// site-wide. Renders nothing visible until AdSense approves the site (empty
+// <ins> until then), then starts serving real ads with no further code
+// changes. Previously these slots held an aggressive third-party popunder/
+// redirect network (MoneyTag) instead — the kind of interstitial, click-
+// hijacking ad behavior Google's Publisher Policies explicitly reject sites
+// for, and very likely a real contributor to the AdSense rejection. It has
+// been removed site-wide rather than just worked around.
+// Search-engine ownership verification meta tags, printed in every page
+// <head> when the admin has filled in the codes under Settings. Empty by
+// default (no tag output) until configured — required before Search
+// Console / Bing Webmaster Tools will accept the site, which in turn is
+// required before Google will crawl/index it reliably or show it well in
+// search results.
+function search_console_meta(PDO $pdo): string {
+    $out = '';
+    $g = trim(get_cfg($pdo, 'google_site_verification'));
+    $b = trim(get_cfg($pdo, 'bing_site_verification'));
+    if ($g !== '') $out .= '<meta name="google-site-verification" content="' . h($g) . '">' . "\n  ";
+    if ($b !== '') $out .= '<meta name="msvalidate.01" content="' . h($b) . '">' . "\n  ";
+    return $out;
+}
+
+// Favicon + web-app manifest + theme-color + search-console verification,
+// printed once in every page <head> right after the charset meta tag.
+// Best-effort email notification to the configured contact address, gated
+// by an opt-in setting (default off — PHP's mail() is unreliable on some
+// hosts and shouldn't ever be allowed to break the form submission it's
+// attached to, so failures here are silently ignored).
+function notify_admin(PDO $pdo, string $subject, string $body): void {
+    if (get_cfg($pdo, 'admin_email_notifications', '0') !== '1') return;
+    $to = trim(get_cfg($pdo, 'contact_email'));
+    if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
+    $headers = "From: yassota <no-reply@" . parse_url(SITE_URL, PHP_URL_HOST) . ">\r\n"
+        . "Content-Type: text/plain; charset=UTF-8";
+    @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
+}
+
+function head_extras(PDO $pdo): string {
+    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: 'example.com';
+    return '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
+        . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
+        . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
+        . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
+        . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
+        . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
+        . '<meta name="theme-color" content="#2563eb">' . "\n  "
+        . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
+        . '<meta name="language" content="ar">' . "\n  "
+        . '<meta property="og:locale" content="ar_AR">' . "\n  "
+        . '<meta property="og:site_name" content="yassota">' . "\n  "
+        . '<meta name="twitter:site" content="@yassota">' . "\n  "
+        . '<meta name="author" content="yassota">' . "\n  "
+        . '<link rel="alternate" hreflang="ar" href="' . h(SITE_URL) . '">' . "\n  "
+        . search_console_meta($pdo);
+}
+
+function ad_slot(): string {
+    // The parent .ad-zone starts hidden (display:none, no reserved space)
+    // — main.js watches this <ins> for AdSense's own data-ad-status
+    // attribute and only reveals the parent when the slot actually filled
+    // with an ad. An unfilled slot (the normal state pre-approval, or any
+    // time Google has nothing to serve) stays fully collapsed.
+    return '<ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
 }
