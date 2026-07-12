@@ -148,16 +148,27 @@ function render_site_footer(): void { ?>
 render_cookie_banner();
 }
 
-/* ── Cookie consent banner — dismissible, remembered via localStorage.
-   Supports AdSense's EU user-consent requirement and is generally expected
-   on any site running third-party ad/analytics cookies. ── */
+/* ── Combined cookie + terms consent banner — shown once, remembered in localStorage.
+   Covers AdSense EU-consent and the site's general T&C acceptance notice. ── */
 function render_cookie_banner(string $policyUrl = ''): void {
     if (!$policyUrl) $policyUrl = url('cookie-policy');
     ?>
-<div id="cookie-consent" class="cookie-consent" hidden>
-  <p>نستخدم ملفات تعريف الارتباط (Cookies) لتحسين تجربتك وعرض إعلانات ذات صلة. بمتابعة تصفح الموقع فإنك توافق على
-    <a href="<?= h($policyUrl) ?>">سياسة ملفات تعريف الارتباط</a>.</p>
-  <button type="button" id="cookie-consent-accept" class="btn-primary" style="padding:9px 22px;font-size:13px;flex-shrink:0">موافق</button>
+<div id="cookie-consent" class="cookie-consent cookie-consent-v2" hidden>
+  <div class="cc-icon-wrap">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+  </div>
+  <div class="cc-text">
+    <strong>الخصوصية وشروط الاستخدام</strong>
+    <p>باستخدام yassota فإنك توافق على <a href="<?= h(url('cookie-policy')) ?>">سياسة ملفات تعريف الارتباط</a>،
+      <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>،
+      و<a href="<?= h(url('terms')) ?>">شروط الاستخدام</a>.
+      نستخدم Cookies لتحسين التجربة وعرض إعلانات مناسبة.
+    </p>
+  </div>
+  <button type="button" id="cookie-consent-accept" class="cc-accept-btn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+    موافق وأواصل
+  </button>
 </div>
 <?php }
 

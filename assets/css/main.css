@@ -621,3 +621,25 @@ button, input, textarea, select { font-family: inherit; }
   color: #16a34a; font-size: 12px; padding: 5px 13px; border-radius: 40px;
   margin-bottom: 14px;
 }
+
+/* ── Cookie/Terms consent banner v2 ── */
+.cookie-consent-v2 {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+  background: linear-gradient(135deg, var(--navy-600) 0%, #0f2040 100%);
+  border-top: 2px solid var(--cyan);
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  box-shadow: 0 -4px 30px rgba(0,0,0,.5);
+}
+.cc-icon-wrap { flex-shrink: 0; color: var(--cyan); }
+.cc-text { flex: 1; min-width: 200px; font-size: 13px; line-height: 1.6; }
+.cc-text strong { display: block; margin-bottom: 4px; color: var(--white); font-size: 14px; }
+.cc-text a { color: var(--cyan); text-decoration: underline; text-decoration-style: dotted; }
+.cc-accept-btn {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--cyan); color: #000; font-weight: 700; font-size: 13px;
+  transition: background .2s, transform .1s;
+}
+.cc-accept-btn:hover { background: #22d3ee; transform: scale(1.03); }
+.cc-accept-btn svg { flex-shrink: 0; }

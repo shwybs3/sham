@@ -127,24 +127,31 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_connection' && is_admin()) {
     if (!is_dir(UPLOAD_PATH)) { @mkdir(UPLOAD_PATH, 0755, true); $upOk = is_dir(UPLOAD_PATH) && is_writable(UPLOAD_PATH); }
     $checks[] = ['label'=>'صلاحية الكتابة في مجلد uploads','ok'=>$upOk,'detail'=>$upOk?'قابل للكتابة':'غير قابل للكتابة — غيّر الصلاحيات إلى 755'];
 
-    // OpenRouter
-    $keys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
-    if (!$keys) {
-        $checks[] = ['label'=>'مفتاح OpenRouter API','ok'=>false,'detail'=>'لم يتم إضافة أي مفتاح بعد'];
-    } else {
-        $models = build_model_rotation($pdo, true);
-        $r = openrouter_call_rotating($keys, $models, 'قل "مرحبا" فقط بدون أي إضافات.');
+    // AI provider test
+    $aiProvider = get_cfg($pdo, 'ai_provider', 'openrouter');
+    if ($aiProvider === 'aifreeforever') {
+        $r = aifreeforever_call('قل "مرحبا" فقط بدون أي إضافات.');
         $checks[] = [
-            'label' => 'الاتصال بـ OpenRouter (' . count($keys) . ' مفتاح × ' . count($models) . ' موديل)',
-            'ok' => $r['ok'],
-            'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : openrouter_diagnose_trace($r['trace']),
-            'trace' => $r['trace'],
-            'working_model' => $r['ok'] ? $r['model'] : null,
+            'label'  => 'الاتصال بـ aifreeforever',
+            'ok'     => $r['ok'],
+            'detail' => $r['ok'] ? 'نجح الاتصال ✓ (aifreeforever)' : $r['error'],
         ];
-        // Auto-save the first working model as primary for next time
-        $primaryNow = get_cfg($pdo, 'openrouter_model', '');
-        if ($r['ok'] && $r['model'] !== $primaryNow) {
-            set_cfg($pdo, 'openrouter_model', $r['model']);
+    } else {
+        $keys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
+        if (!$keys) {
+            $checks[] = ['label'=>'مفتاح OpenRouter API','ok'=>false,'detail'=>'لم يتم إضافة أي مفتاح بعد'];
+        } else {
+            $models = build_model_rotation($pdo, true);
+            $r = openrouter_call_rotating($keys, $models, 'قل "مرحبا" فقط بدون أي إضافات.');
+            $checks[] = [
+                'label' => 'الاتصال بـ OpenRouter (' . count($keys) . ' مفتاح × ' . count($models) . ' موديل)',
+                'ok' => $r['ok'],
+                'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : openrouter_diagnose_trace($r['trace']),
+                'trace' => $r['trace'] ?? null,
+                'working_model' => $r['ok'] ? $r['model'] : null,
+            ];
+            $primaryNow = get_cfg($pdo, 'openrouter_model', '');
+            if ($r['ok'] && $r['model'] !== $primaryNow) set_cfg($pdo, 'openrouter_model', $r['model']);
         }
     }
 
@@ -529,6 +536,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'verify_link' && is_admin()) {
         bump_cache_version($pdo);
         echo json_encode(['success'=>true,'verified'=>true]);
     }
+    exit;
+}
+
+/* ── AJAX: test Telegram bot ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
+    header('Content-Type: application/json');
+    $r = telegram_api($pdo, 'sendMessage', [
+        'text'       => '✅ اختبار ناجح من لوحة إدارة <b>yassota</b> — بوت تيليجرام يعمل بشكل صحيح!',
+        'parse_mode' => 'HTML',
+    ]);
+    echo json_encode(['success' => $r['ok'], 'error' => $r['error'] ?? null], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -925,12 +943,20 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
-    foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
-              'google_site_verification','bing_site_verification','virustotal_api_key'] as $k) {
+    // Multi-key inputs — combine array into newline-separated string
+    $multiKeys = array_filter(array_map('trim', $_POST['openrouter_key_multi'] ?? []));
+    $mergedKey = implode("\n", $multiKeys) ?: trim($_POST['openrouter_key'] ?? '');
+    set_cfg($pdo, 'openrouter_key', $mergedKey);
+
+    foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
+              'google_site_verification','bing_site_verification','virustotal_api_key',
+              'ai_provider',
+              'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
-    set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
-    set_cfg($pdo, 'admin_email_notifications', isset($_POST['admin_email_notifications']) ? '1' : '0');
+    set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
+    set_cfg($pdo, 'admin_email_notifications',   isset($_POST['admin_email_notifications'])   ? '1' : '0');
+    set_cfg($pdo, 'telegram_enabled',            isset($_POST['telegram_enabled'])            ? '1' : '0');
 
     // Optional IP allowlist — auto-include the saving admin's current IP so a save can never lock them out.
     $newAllowlist = trim($_POST['admin_ip_allowlist'] ?? '');
@@ -1145,16 +1171,28 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
                     ->execute([$appId, $existing['version'], $existing['whats_new'], $existing['download_url']]);
             }
         }
+        $wasPublished = ($existing['status'] ?? '') === 'published';
         $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
         bump_cache_version($pdo);
+        // Notify Telegram only when transitioning to published (not on repeated edits)
+        if (!$wasPublished && $requestedStatus === 'published') {
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$appId]) ? $pdo->query("SELECT * FROM apps WHERE id=$appId")->fetch() : $d;
+            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+        }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
     } else {
         $cols = implode(',', array_keys($d));
         $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+        $newId = (int)$pdo->lastInsertId();
         bump_cache_version($pdo);
+        // Notify Telegram on new published apps
+        if ($requestedStatus === 'published' && $newId) {
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id=$newId")->fetch() : array_merge($d, ['id' => $newId]);
+            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+        }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'added_no_link' : 'added')); exit;
     }
 }
@@ -2535,14 +2573,59 @@ elseif ($page === 'settings'): ?>
 <form method="post" action="admin.php?page=settings">
   <?= csrf_field() ?>
   <div class="panel">
-    <h2>الذكاء الاصطناعي (OpenRouter)</h2>
+    <h2>مزود الذكاء الاصطناعي</h2>
     <div class="form-group">
-      <label class="form-label">مفتاح/مفاتيح OpenRouter API (اختياري إضافة أكثر من مفتاح)</label>
-      <textarea class="form-textarea" name="openrouter_key" rows="3" placeholder="sk-or-v1-...&#10;sk-or-v1-... (مفتاح ثاني اختياري)"><?= h(get_cfg($pdo,'openrouter_key')) ?></textarea>
-      <div class="form-hint">
-        ضع مفتاحاً واحداً أو أكثر (كل مفتاح بسطر منفصل أو مفصول بفاصلة) — سيتم التبديل بينها تلقائياً عند فشل أي مفتاح.
-        احصل على مفتاح مجاني من <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a>
+      <label class="form-label">اختر مزود الذكاء الاصطناعي لتوليد المحتوى</label>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <?php $aiProv = get_cfg($pdo,'ai_provider','openrouter'); ?>
+        <label class="ai-provider-card <?= $aiProv==='openrouter'?'active':'' ?>" style="flex:1;min-width:200px;border:2px solid <?= $aiProv==='openrouter'?'var(--cyan)':'var(--border-c)' ?>;border-radius:12px;padding:16px;cursor:pointer;display:flex;align-items:flex-start;gap:10px">
+          <input type="radio" name="ai_provider" value="openrouter" <?= $aiProv==='openrouter'?'checked':'' ?> style="margin-top:3px">
+          <div>
+            <div style="font-weight:600;color:var(--white)">OpenRouter</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">يدعم مئات الموديلات المجانية والمدفوعة. يتطلب مفتاح API. الأفضل للتنوع والموديلات المتخصصة.</div>
+          </div>
+        </label>
+        <label class="ai-provider-card <?= $aiProv==='aifreeforever'?'active':'' ?>" style="flex:1;min-width:200px;border:2px solid <?= $aiProv==='aifreeforever'?'var(--cyan)':'var(--border-c)' ?>;border-radius:12px;padding:16px;cursor:pointer;display:flex;align-items:flex-start;gap:10px">
+          <input type="radio" name="ai_provider" value="aifreeforever" <?= $aiProv==='aifreeforever'?'checked':'' ?> style="margin-top:3px">
+          <div>
+            <div style="font-weight:600;color:var(--white)">aifreeforever <span style="font-size:11px;background:var(--cyan);color:#000;border-radius:4px;padding:1px 6px;margin-right:6px">لا يحتاج مفتاح</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px">اتصال مباشر بدون مفتاح API. أسرع في كثير من الأحيان. مناسب لتوليد المحتوى العربي.</div>
+          </div>
+        </label>
       </div>
+      <div id="test-aifree-wrap" style="margin-top:10px;<?= $aiProv==='aifreeforever'?'':'display:none' ?>">
+        <button type="button" id="btn-test-aifree" class="btn-ai">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          اختبر اتصال aifreeforever
+        </button>
+        <span id="aifree-test-result" style="font-size:12px;margin-right:10px"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="openrouter-panel" <?= $aiProv==='aifreeforever'?'style="opacity:.5;pointer-events:none"':'' ?>>
+    <h2>إعدادات OpenRouter</h2>
+    <div class="form-group">
+      <label class="form-label">مفاتيح OpenRouter API</label>
+      <div id="openrouter-keys-wrap">
+        <?php
+        $existingKeys = openrouter_keys(get_cfg($pdo,'openrouter_key'));
+        if (!$existingKeys) $existingKeys = [''];
+        foreach ($existingKeys as $ki => $kv): ?>
+        <div class="key-row" style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="<?= h($kv) ?>" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <button type="button" id="btn-add-key" style="margin-top:4px;padding:6px 14px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);border-radius:8px;color:var(--cyan);font-size:12px;cursor:pointer">
+        + إضافة مفتاح آخر
+      </button>
+      <div class="form-hint" style="margin-top:8px">
+        أضف مفتاحاً أو أكثر — سيتم التبديل بينها تلقائياً. احصل على مفتاح مجاني من
+        <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a>
+      </div>
+      <input type="hidden" name="openrouter_key" id="openrouter-key-hidden">
     </div>
     <div class="form-grid">
       <div class="form-group">
@@ -2559,10 +2642,27 @@ elseif ($page === 'settings'): ?>
         </select>
       </div>
     </div>
+    <div class="form-hint" style="margin:8px 0 4px;font-weight:500;color:var(--white);font-size:12px">موديلات مجانية موصى بها (اضغط للاختيار):</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      <?php foreach ([
+        'meta-llama/llama-3.3-70b-instruct:free' => 'Llama 3.3 70B',
+        'qwen/qwen3-coder:free'                   => 'Qwen3 Coder',
+        'openai/gpt-oss-20b:free'                 => 'GPT OSS 20B',
+        'nvidia/nemotron-nano-9b-v2:free'          => 'Nemotron 9B',
+        'google/gemma-3-27b-it:free'               => 'Gemma 3 27B',
+        'mistralai/mistral-7b-instruct:free'       => 'Mistral 7B',
+        'openrouter/free'                          => 'openrouter/free (أي موديل)',
+      ] as $mid => $mlabel): ?>
+      <button type="button" class="preset-model-btn" data-model="<?= h($mid) ?>"
+        style="padding:4px 10px;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.2);border-radius:6px;color:var(--cyan);font-size:11px;cursor:pointer">
+        <?= h($mlabel) ?>
+      </button>
+      <?php endforeach; ?>
+    </div>
     <div class="form-group" style="margin-top:6px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--white)">
         <input type="checkbox" name="openrouter_auto_rotate" value="1" <?= get_cfg($pdo,'openrouter_auto_rotate','1')==='1'?'checked':'' ?>>
-        التبديل التلقائي بين كل الموديلات المجانية حتى ينجح الاتصال
+        التبديل التلقائي بين كل الموديلات المجانية المتاحة حتى ينجح الاتصال
       </label>
     </div>
     <button type="button" id="btn-test-connection-inline" class="btn-ai" style="margin-top:14px">
@@ -2582,6 +2682,45 @@ elseif ($page === 'settings'): ?>
         استخدم بدلاً منه زر "استيراد من Google Play" الذي يجلب الأيقونة الحقيقية للتطبيق (وهو الخيار الموصى به).
         اطّلع على قائمة الموديلات المتاحة من <a href="https://openrouter.ai/models?modality=text-%3Eimage" target="_blank" style="color:var(--cyan)">openrouter.ai/models</a>.
       </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2AABEE" stroke-width="2" style="vertical-align:-4px;margin-left:6px"><path d="M21 5L9 12m12 0L9 12m0 7V5l12 7-12 7z"/></svg>
+      بوت تيليجرام — نشر تلقائي عند إضافة تطبيق جديد
+    </h2>
+    <p class="form-hint" style="margin-bottom:16px">
+      عند نشر تطبيق جديد (حالة: منشور) يُرسل البوت تلقائياً رسالة للقناة تتضمن الأيقونة + وصف مولّد بالذكاء الاصطناعي + أزرار التحميل والصفحة.
+      احصل على توكن من <a href="https://t.me/BotFather" target="_blank" rel="nofollow noopener" style="color:#2AABEE">@BotFather</a> ثم أضف البوت مشرفاً على قناتك.
+    </p>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--white);margin-bottom:16px">
+      <input type="checkbox" name="telegram_enabled" value="1" <?= get_cfg($pdo,'telegram_enabled')==='1'?'checked':'' ?>>
+      <span>تفعيل النشر التلقائي على تيليجرام</span>
+    </label>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Bot Token</label>
+        <input class="form-input" type="text" name="telegram_bot_token" value="<?= h(get_cfg($pdo,'telegram_bot_token')) ?>" placeholder="123456789:AAF..." dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">الحصول عليه من @BotFather → /newbot</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Channel ID أو اسم القناة</label>
+        <input class="form-input" type="text" name="telegram_channel_id" value="<?= h(get_cfg($pdo,'telegram_channel_id')) ?>" placeholder="@yassota_channel أو -100123456789" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">مثال: @channelname أو رقم ID القناة الخاصة</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">رابط القناة (للزر "اشترك في القناة" على صفحات التحميل)</label>
+      <input class="form-input" type="url" name="telegram_channel_url" value="<?= h(get_cfg($pdo,'telegram_channel_url')) ?>" placeholder="https://t.me/yassota_channel" dir="ltr">
+      <div class="form-hint">إذا تُرك فارغاً لن يظهر زر الاشتراك على صفحات التحميل.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+      <button type="button" id="btn-telegram-test" class="btn-ai" style="background:#2AABEE20;border-color:#2AABEE40;color:#2AABEE">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 5L9 12m12 0L9 12m0 7V5l12 7-12 7z"/></svg>
+        إرسال رسالة اختبارية
+      </button>
+      <span id="telegram-test-result" style="font-size:12px"></span>
     </div>
   </div>
 

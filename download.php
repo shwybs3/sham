@@ -21,11 +21,9 @@ if (!$app) {
     exit;
 }
 
-// سجّل التحميل
 $pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
 $pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
 
-// حدد الرابط — يدعم تحميل إصدار قديم مؤرشف عبر ?ver=
 $archivedVersion = null;
 if (!empty($_GET['ver'])) {
     $verStmt = $pdo->prepare("SELECT * FROM app_versions WHERE id=? AND app_id=?");
@@ -34,7 +32,7 @@ if (!empty($_GET['ver'])) {
 }
 
 if ($archivedVersion && !empty($archivedVersion['download_url'])) {
-    $url = $archivedVersion['download_url'];
+    $url            = $archivedVersion['download_url'];
     $displayVersion = $archivedVersion['version'];
 } else {
     $url = $app['download_url'];
@@ -44,6 +42,10 @@ if ($archivedVersion && !empty($archivedVersion['download_url'])) {
 }
 $hasLink = !empty($url);
 if (!$hasLink) $url = '#';
+
+$features    = json_decode($app['features']     ?? '[]', true) ?: [];
+$screenshots = json_decode($app['screenshots']  ?? '[]', true) ?: [];
+$tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -61,8 +63,6 @@ if (!$hasLink) $url = '#';
 </head>
 <body>
 
-<!-- Header minimal (all links absolute — this page is served from a nested
-     /{slug}/download URL, so plain relative paths would resolve wrong) -->
 <header class="site-header">
   <a href="<?= h(url('')) ?>" class="logo">yass<span>ota</span></a>
   <nav class="header-nav">
@@ -74,12 +74,12 @@ if (!$hasLink) $url = '#';
 <div class="dl-page">
   <div class="dl-box">
 
-    <!-- Ad top -->
+    <!-- Top Ad -->
     <div class="ad-zone" style="margin-bottom:24px;min-height:60px">
       <?= ad_slot() ?>
     </div>
 
-    <!-- App icon -->
+    <!-- App icon + name -->
     <?php if ($app['icon_path']): ?>
       <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dl-app-icon">
     <?php else: ?>
@@ -102,57 +102,105 @@ if (!$hasLink) $url = '#';
     </div>
 
     <?php if ($app['link_verified']): ?>
-    <div class="verified-badge">
+    <div class="verified-badge" style="justify-content:center;margin:10px auto">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
       رابط تم التحقق من سلامته بواسطة فريق yassota
     </div>
     <?php endif; ?>
 
-    <!-- Circular Timer -->
-    <?php if ($hasLink): ?>
-    <div class="dl-timer-wrap">
-      <svg width="110" height="110" class="dl-ring" viewBox="0 0 110 110">
-        <circle class="dl-ring-bg" cx="55" cy="55" r="48" fill="none" stroke-width="4"/>
-        <circle class="dl-ring-prog" id="ring-prog" cx="55" cy="55" r="48" fill="none" stroke-width="4"
-          stroke-dasharray="301.59" stroke-dashoffset="0" stroke-linecap="round"/>
-      </svg>
-      <div class="dl-count" id="dl-count">10</div>
-    </div>
+    <!-- Short description -->
+    <?php if (!empty($app['short_description'])): ?>
+    <p class="dl-short-desc"><?= h($app['short_description']) ?></p>
+    <?php endif; ?>
 
-    <div class="dl-status" id="dl-status">
-      <strong style="color:var(--cyan)">جاري تجهيز التحميل...</strong><br>
-      سيبدأ التحميل تلقائياً خلال <span id="sec-text">10</span> ثوانٍ
-    </div>
-
-    <!-- Progress bar -->
-    <div class="dl-progress-bar">
-      <div class="dl-progress-fill" id="dl-progress"></div>
-    </div>
-    <?php else: ?>
-    <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
-      <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
-      لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق. تابع صفحة التطبيق لاحقاً أو تصفح تطبيقات أخرى.
+    <!-- Features list -->
+    <?php if ($features): ?>
+    <div class="dl-features">
+      <div class="dl-features-title">✨ مميزات التطبيق</div>
+      <ul class="dl-features-list">
+        <?php foreach (array_slice($features, 0, 8) as $feat): ?>
+        <li><?= h($feat) ?></li>
+        <?php endforeach; ?>
+      </ul>
     </div>
     <?php endif; ?>
 
+    <!-- Screenshots gallery -->
+    <?php if ($screenshots): ?>
+    <div class="dl-screenshots">
+      <div class="dl-features-title" style="margin-bottom:10px">📱 صور من التطبيق</div>
+      <div class="dl-screenshots-track">
+        <?php foreach (array_slice($screenshots, 0, 6) as $shot): ?>
+        <img src="<?= h(url($shot)) ?>" alt="<?= h($app['name']) ?> screenshot" class="dl-screenshot-img" loading="lazy">
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
-    <!-- Ad mid -->
-    <div class="ad-zone" style="margin-bottom:20px;min-height:60px">
+    <!-- Early scroll-to-download button -->
+    <?php if ($hasLink): ?>
+    <button type="button" class="btn-scroll-early" onclick="document.getElementById('dl-timer-section').scrollIntoView({behavior:'smooth'})">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+      انتقل لزر التحميل ↓
+    </button>
+    <?php endif; ?>
+
+    <!-- Mid Ad -->
+    <div class="ad-zone" style="margin:20px 0;min-height:60px">
       <?= ad_slot() ?>
     </div>
 
-    <!-- Manual download button (hidden until countdown ends) -->
-    <?php if ($hasLink): ?>
-    <a id="btn-manual" href="<?= h($url) ?>" class="btn-manual hidden" download data-hardnav="1">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-        <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
-        <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
-      </svg>
-      ابدأ التحميل الآن
+    <!-- ══ Download section ══ -->
+    <div id="dl-timer-section">
+
+      <?php if ($hasLink): ?>
+      <!-- Circular Timer -->
+      <div class="dl-timer-wrap">
+        <svg width="110" height="110" class="dl-ring" viewBox="0 0 110 110">
+          <circle class="dl-ring-bg" cx="55" cy="55" r="48" fill="none" stroke-width="4"/>
+          <circle class="dl-ring-prog" id="ring-prog" cx="55" cy="55" r="48" fill="none" stroke-width="4"
+            stroke-dasharray="301.59" stroke-dashoffset="0" stroke-linecap="round"/>
+        </svg>
+        <div class="dl-count" id="dl-count">10</div>
+      </div>
+
+      <div class="dl-status" id="dl-status">
+        <strong style="color:var(--cyan)">جاري تجهيز التحميل...</strong><br>
+        سيبدأ التحميل تلقائياً خلال <span id="sec-text">10</span> ثوانٍ
+      </div>
+
+      <!-- Progress bar -->
+      <div class="dl-progress-bar">
+        <div class="dl-progress-fill" id="dl-progress"></div>
+      </div>
+
+      <!-- Manual download button (shown after countdown) -->
+      <a id="btn-manual" href="<?= h($url) ?>" class="btn-manual hidden" download data-hardnav="1">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
+          <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
+        </svg>
+        ابدأ التحميل الآن
+      </a>
+      <div class="dl-manual-label" id="manual-label" style="display:none">
+        لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
+      </div>
+
+      <?php else: ?>
+      <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
+        <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
+        لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق.
+      </div>
+      <?php endif; ?>
+
+    </div><!-- /dl-timer-section -->
+
+    <!-- Telegram subscribe button -->
+    <?php if ($tgUrl): ?>
+    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
+      اشترك في قناة تيليجرام yassota
     </a>
-    <div class="dl-manual-label" id="manual-label" style="display:none">
-      لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
-    </div>
     <?php endif; ?>
 
     <!-- Mirror links -->
@@ -199,47 +247,37 @@ const ringProg  = document.getElementById('ring-prog');
 const btnManual = document.getElementById('btn-manual');
 const manualLbl = document.getElementById('manual-label');
 
-// Circumference of the ring (r=48): 2π*48 ≈ 301.59
 const CIRC = 301.59;
 
 function tick() {
   remaining--;
   const pct = (TOTAL - remaining) / TOTAL;
-
   countEl.textContent = remaining;
   if (secText) secText.textContent = remaining;
   progressEl.style.width = (pct * 100) + '%';
   ringProg.style.strokeDashoffset = CIRC * (1 - pct);
 
   if (remaining <= 0) {
-    // Launch download
     statusEl.innerHTML = '<strong style="color:var(--success)">✓ يبدأ التحميل الآن...</strong>';
     countEl.textContent = '✓';
     countEl.style.fontSize = '22px';
 
     const a = document.createElement('a');
-    a.href = DOWNLOAD_URL;
-    a.download = '';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = DOWNLOAD_URL; a.download = '';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
-    // Show manual button after 2s as fallback
     setTimeout(() => {
-      btnManual.classList.remove('hidden');
-      manualLbl.style.display = 'block';
+      if (btnManual) btnManual.classList.remove('hidden');
+      if (manualLbl) manualLbl.style.display = 'block';
     }, 2000);
   }
 }
 
-// Start ticking every second — only when there's an actual link to download
 if (HAS_LINK && countEl) {
   const timer = setInterval(() => {
     if (remaining <= 0) { clearInterval(timer); return; }
     tick();
   }, 1000);
-
-  // Initialize ring
   if (ringProg) ringProg.style.strokeDashoffset = '0';
 }
 </script>

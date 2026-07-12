@@ -714,7 +714,59 @@ function ai_filter_text_models(array $models): array {
     }));
 }
 
+// ── Alternative AI provider: aifreeforever.com ──
+// Uses browser-like headers to access the API (no API key required).
+// Returns ['ok'=>bool,'content'=>?string,'error'=>?string,'model'=>string]
+function aifreeforever_call(string $prompt, int $timeout = 25): array {
+    $ch = curl_init('https://aifreeforever.com/api/generate-ai-answer');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_HTTPHEADER     => [
+            'accept: */*',
+            'accept-language: ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7',
+            'content-type: application/json',
+            'origin: https://aifreeforever.com',
+            'referer: https://aifreeforever.com/',
+            'sec-ch-ua: "Chromium";v="107", "Not=A?Brand";v="24"',
+            'sec-ch-ua-mobile: ?1',
+            'sec-ch-ua-platform: "Android"',
+            'sec-fetch-dest: empty',
+            'sec-fetch-mode: cors',
+            'sec-fetch-site: same-origin',
+            'user-agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36',
+        ],
+        CURLOPT_POSTFIELDS => json_encode([
+            'question'            => $prompt,
+            'tone'                => 'friendly',
+            'format'              => 'paragraph',
+            'file'                => null,
+            'conversationHistory' => [],
+        ]),
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err)             return ['ok' => false, 'content' => null, 'error' => "خطأ اتصال: $err",          'model' => 'aifreeforever'];
+    if ($code !== 200)    return ['ok' => false, 'content' => null, 'error' => "رمز استجابة: $code",       'model' => 'aifreeforever'];
+    $d      = json_decode((string)$res, true);
+    $answer = $d['answer'] ?? null;
+    if (!$answer)         return ['ok' => false, 'content' => null, 'error' => 'رد فارغ من aifreeforever', 'model' => 'aifreeforever'];
+    return ['ok' => true, 'content' => $answer, 'error' => null, 'model' => 'aifreeforever'];
+}
+
 function ai_text(PDO $pdo, string $prompt): array {
+    // Switch between providers based on admin setting
+    if (get_cfg($pdo, 'ai_provider', 'openrouter') === 'aifreeforever') {
+        $r = aifreeforever_call($prompt);
+        if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => $r['error']];
+        return ['ok' => true, 'content' => $r['content'], 'error' => null];
+    }
+
+    // OpenRouter path
     $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
     if (!$keys) return ['ok' => false, 'content' => null, 'error' => 'لم يتم إضافة مفتاح OpenRouter بعد.'];
     $primary  = get_cfg($pdo, 'openrouter_model', 'meta-llama/llama-3.1-8b-instruct:free');
@@ -727,6 +779,112 @@ function ai_text(PDO $pdo, string $prompt): array {
     $r = openrouter_call_rotating($keys, $models, $prompt);
     if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => openrouter_diagnose_trace($r['trace'])];
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
+}
+
+/* ── Telegram Bot integration ──────────────────────────────────────────
+   Low-level send function. $body is a complete Telegram Bot API payload
+   array (without chat_id — that's injected from settings). Sends to the
+   configured channel. Returns ['ok'=>bool,'error'=>?string].
+   ────────────────────────────────────────────────────────────────────── */
+function telegram_api(PDO $pdo, string $method, array $body): array {
+    $token  = get_cfg($pdo, 'telegram_bot_token', '');
+    $chatId = get_cfg($pdo, 'telegram_channel_id', '');
+    if (!$token || !$chatId) return ['ok' => false, 'error' => 'Telegram غير مُكوَّن (bot token أو channel ID مفقود)'];
+
+    $body['chat_id'] = $chatId;
+    $ch = curl_init("https://api.telegram.org/bot{$token}/{$method}");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode($body),
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err) return ['ok' => false, 'error' => "cURL: $err"];
+    $d = json_decode((string)$res, true);
+    return ['ok' => $d['ok'] ?? false, 'error' => $d['description'] ?? ($code !== 200 ? "HTTP $code" : null)];
+}
+
+/* Send a notification whenever an app is newly published.
+   - Tries sendPhoto first (shows icon) then falls back to sendMessage.
+   - Uses AI to write the caption if configured, otherwise builds it manually.
+   - Silently returns on failure so it never breaks the save flow.            */
+function telegram_notify_new_app(PDO $pdo, array $app): void {
+    if (get_cfg($pdo, 'telegram_enabled', '0') !== '1') return;
+    if (!get_cfg($pdo, 'telegram_bot_token') || !get_cfg($pdo, 'telegram_channel_id')) return;
+
+    $name     = $app['name']             ?? '';
+    $shortDesc= $app['short_description'] ?? '';
+    $version  = $app['version']          ?? '';
+    $sizeMb   = $app['size_mb']          ?? '';
+    $features = json_decode($app['features'] ?? '[]', true) ?: [];
+    $features = array_slice(array_filter($features), 0, 5);
+
+    // Build caption via AI (best-effort, silent fallback)
+    $caption = '';
+    $provider = get_cfg($pdo, 'ai_provider', 'openrouter');
+    $aiPrompt = "اكتب إعلاناً جذاباً ومختصراً (بحد أقصى 180 كلمة) لإعلان إضافة هذا التطبيق على موقع yassota. "
+              . "النص فقط بدون هاشتاقات زائدة وبدون ماركداون. يمكنك استخدام بعض الإيموجي المناسبة.\n"
+              . "اسم التطبيق: {$name}\n"
+              . "الوصف: {$shortDesc}\n"
+              . ($version ? "الإصدار: v{$version}\n" : '')
+              . ($features ? "المميزات: " . implode('، ', $features) . "\n" : '');
+
+    if ($provider === 'aifreeforever') {
+        $r = aifreeforever_call($aiPrompt, 20);
+        if ($r['ok']) $caption = trim($r['content']);
+    } else {
+        $keys   = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+        $models = build_model_rotation($pdo);
+        if ($keys && $models) {
+            $r = openrouter_call_rotating($keys, array_slice($models, 0, 4), $aiPrompt);
+            if ($r['ok']) $caption = trim($r['content']);
+        }
+    }
+
+    // Manual fallback caption
+    if (!$caption) {
+        $lines = ["🆕 <b>{$name}</b> متاح الآن على yassota!"];
+        if ($shortDesc) $lines[] = "\n{$shortDesc}";
+        if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
+    } else {
+        $lines = [$caption];
+    }
+    // Append version/size as info footer
+    $meta = array_filter([$version ? "🔖 v{$version}" : '', $sizeMb ? "📦 {$sizeMb} MB" : '']);
+    if ($meta) $lines[] = "\n" . implode('  ', $meta);
+
+    $text = implode('', $lines);
+    // Telegram caption limit is 1024 chars
+    if (mb_strlen($text) > 1020) $text = mb_substr($text, 0, 1020) . '…';
+
+    $buttons = [[
+        ['text' => '📥 تحميل التطبيق',  'url' => download_url($app['slug'])],
+        ['text' => '📄 صفحة التطبيق',   'url' => app_url($app['slug'])],
+    ]];
+    $markup = ['inline_keyboard' => $buttons];
+
+    // Try sendPhoto if we have an icon
+    if (!empty($app['icon_path'])) {
+        $iconUrl = rtrim(SITE_URL, '/') . '/' . ltrim($app['icon_path'], '/');
+        $r = telegram_api($pdo, 'sendPhoto', [
+            'photo'        => $iconUrl,
+            'caption'      => $text,
+            'parse_mode'   => 'HTML',
+            'reply_markup' => $markup,
+        ]);
+        if ($r['ok']) return;
+    }
+
+    // sendMessage fallback (also used when there's no icon, or sendPhoto failed)
+    telegram_api($pdo, 'sendMessage', [
+        'text'         => $text,
+        'parse_mode'   => 'HTML',
+        'reply_markup' => $markup,
+    ]);
 }
 
 // Trims and collapses 3+ consecutive blank lines down to a single blank

@@ -954,3 +954,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
+/* ── Settings page: AI provider toggle, multi-key manager, free model presets, Telegram test ── */
+(function () {
+  // AI provider radio toggle — dims OpenRouter panel when aifreeforever selected
+  document.querySelectorAll('input[name="ai_provider"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const isFree = radio.value === 'aifreeforever' && radio.checked;
+      const orPanel = document.getElementById('openrouter-panel');
+      const freeWrap = document.getElementById('test-aifree-wrap');
+      if (orPanel) { orPanel.style.opacity = isFree ? '.45' : '1'; orPanel.style.pointerEvents = isFree ? 'none' : ''; }
+      if (freeWrap) freeWrap.style.display = isFree ? '' : 'none';
+      // Update card border highlight
+      document.querySelectorAll('.ai-provider-card').forEach(c => {
+        const inp = c.querySelector('input[type=radio]');
+        c.style.borderColor = inp && inp.checked ? 'var(--cyan)' : 'var(--border-c)';
+      });
+    });
+  });
+
+  // aifreeforever test button
+  const btnFree = document.getElementById('btn-test-aifree');
+  if (btnFree) {
+    btnFree.addEventListener('click', async () => {
+      const resultEl = document.getElementById('aifree-test-result');
+      btnFree.disabled = true; if (resultEl) resultEl.textContent = 'جاري الاختبار...';
+      try {
+        // Quick smoke test — POST to our test_connection endpoint which now checks the current provider
+        const fd = new FormData();
+        const r = await fetch('admin.php?ajax=test_connection', { method: 'POST', body: fd });
+        const d = await r.json();
+        const freeCheck = d.checks && d.checks.find(c => c.label && c.label.includes('aifreeforever'));
+        if (freeCheck) {
+          if (resultEl) resultEl.innerHTML = freeCheck.ok
+            ? '<span style="color:var(--success)">✓ الاتصال ناجح</span>'
+            : `<span style="color:var(--danger)">✗ ${freeCheck.detail}</span>`;
+        } else {
+          if (resultEl) resultEl.innerHTML = '<span style="color:var(--muted)">احفظ الإعدادات أولاً ثم اختبر مجدداً</span>';
+        }
+      } catch (e) { if (resultEl) resultEl.textContent = 'خطأ في الاتصال'; }
+      finally { btnFree.disabled = false; }
+    });
+  }
+
+  // Add API key row
+  const btnAddKey = document.getElementById('btn-add-key');
+  if (btnAddKey) {
+    btnAddKey.addEventListener('click', () => {
+      const wrap = document.getElementById('openrouter-keys-wrap');
+      if (!wrap) return;
+      const row = document.createElement('div');
+      row.className = 'key-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+      row.innerHTML = `<input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+        <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>`;
+      wrap.appendChild(row);
+      row.querySelector('input').focus();
+    });
+  }
+
+  // Preset model buttons
+  document.querySelectorAll('.preset-model-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const model = btn.dataset.model;
+      const primarySel = document.getElementById('sel-primary-model');
+      if (!primarySel) return;
+      // Add option if not already present
+      if (![...primarySel.options].some(o => o.value === model)) {
+        const opt = new Option(model, model);
+        primarySel.appendChild(opt);
+      }
+      primarySel.value = model;
+      btn.style.background = 'rgba(6,182,212,.25)';
+      btn.style.borderColor = 'var(--cyan)';
+      document.querySelectorAll('.preset-model-btn').forEach(b => { if (b !== btn) { b.style.background = ''; b.style.borderColor = ''; } });
+    });
+  });
+
+  // On form submit: merge multi-key inputs into the hidden field
+  const settingsForm = document.querySelector('form[action*="page=settings"]');
+  if (settingsForm) {
+    settingsForm.addEventListener('submit', () => {
+      const inputs = settingsForm.querySelectorAll('.or-key-input');
+      const hidden = document.getElementById('openrouter-key-hidden');
+      if (hidden) hidden.value = [...inputs].map(i => i.value.trim()).filter(Boolean).join('\n');
+    });
+  }
+
+  // Telegram test
+  const btnTg = document.getElementById('btn-telegram-test');
+  if (btnTg) {
+    btnTg.addEventListener('click', async () => {
+      const resEl = document.getElementById('telegram-test-result');
+      btnTg.disabled = true; if (resEl) resEl.textContent = 'جاري الإرسال...';
+      try {
+        const r = await fetch('admin.php?ajax=telegram_test', { method: 'POST' });
+        const d = await r.json();
+        if (resEl) resEl.innerHTML = d.success
+          ? '<span style="color:var(--success)">✓ تم الإرسال بنجاح — تحقق من قناتك</span>'
+          : `<span style="color:var(--danger)">✗ ${d.error || 'فشل الإرسال'}</span>`;
+      } catch (e) { if (resEl) resEl.textContent = 'خطأ'; }
+      finally { btnTg.disabled = false; }
+    });
+  }
+})();
