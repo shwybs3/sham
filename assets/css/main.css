@@ -483,6 +483,14 @@ button, input, textarea, select { font-family: inherit; }
     box-shadow: -8px 0 24px rgba(15,23,42,.08);
   }
   .sidebar.open { display: block; transform: translateX(0); }
+  /* The plain text nav links (الرئيسية/تطبيقات/ألعاب) never collapsed on
+     narrow screens — with both toggle buttons also in this same flex row
+     and no wrap/shrink handling, the row overflowed and pushed nav-toggle
+     (last in DOM, so leftmost in RTL) off past the left edge of the
+     viewport entirely, making the sidebar menu button inaccessible. The
+     sidebar (opened by nav-toggle) already duplicates this navigation, so
+     hiding the redundant text links is the fix, not just more flex tuning. */
+  .header-nav a { display: none; }
   .nav-toggle { display: block; }
   .mobile-search-toggle { display: flex; align-items: center; justify-content: center; }
   .sticky-dl { display: block; }

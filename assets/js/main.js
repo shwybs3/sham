@@ -54,9 +54,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const navToggle = document.querySelector('.nav-toggle');
   const sidebar = document.querySelector('.sidebar');
   if (navToggle && sidebar) {
-    navToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+    navToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle('open');
+    });
     document.addEventListener('click', (e) => {
-      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== navToggle)
+      // .closest() (not strict e.target !== navToggle) — a click on the
+      // icon SVG/path inside the button has e.target set to that child
+      // element, not the button, which made this immediately re-close the
+      // sidebar the instant it opened.
+      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('.nav-toggle'))
         sidebar.classList.remove('open');
     });
   }
@@ -71,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isOpen) searchForm.querySelector('input')?.focus();
     });
     document.addEventListener('click', (e) => {
-      if (searchForm.classList.contains('mobile-open') && !searchForm.contains(e.target) && e.target !== searchToggle)
+      if (searchForm.classList.contains('mobile-open') && !searchForm.contains(e.target) && !e.target.closest('.mobile-search-toggle'))
         searchForm.classList.remove('mobile-open');
     });
   }
