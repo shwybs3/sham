@@ -1058,3 +1058,87 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 })();
+
+/* ══════════════════════════════════════════
+   Code-page editor — blog-edit form
+   ══════════════════════════════════════════ */
+(function () {
+  const typeSelect  = document.querySelector('select[name="type"]');
+  const wysiwygWrap = document.getElementById('blog-wysiwyg-wrap');
+  const cpWrap      = document.getElementById('blog-codepage-wrap');
+  if (!typeSelect || !cpWrap) return;
+
+  function syncEditorMode() {
+    const isCodePage = typeSelect.value === 'code-page';
+    if (wysiwygWrap) wysiwygWrap.style.display = isCodePage ? 'none' : '';
+    cpWrap.style.display = isCodePage ? '' : 'none';
+  }
+  typeSelect.addEventListener('change', syncEditorMode);
+  syncEditorMode(); // run once on load
+
+  // Line counter per textarea
+  function updateLines(lang) {
+    const ta = document.getElementById('cp-textarea-' + lang);
+    const el = document.getElementById('cp-lines-' + lang);
+    if (!ta || !el) return;
+    const lines = ta.value ? ta.value.split('\n').length : 0;
+    el.textContent = lines ? lines + ' سطر' : 'فارغ';
+  }
+
+  document.querySelectorAll('.cp-textarea').forEach(ta => {
+    const lang = ta.dataset.lang;
+    updateLines(lang);
+    ta.addEventListener('input', () => updateLines(lang));
+    // Tab key inserts spaces instead of changing focus
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = ta.selectionStart, end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, s) + '  ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+        updateLines(lang);
+      }
+    });
+  });
+
+  // Ensure sections with existing code start open with toggle button correct
+  document.querySelectorAll('.cp-section').forEach(sec => {
+    const lang   = sec.dataset.lang;
+    const body   = document.getElementById('cp-body-' + lang);
+    const toggle = document.getElementById('cp-toggle-' + lang);
+    if (body && body.style.display !== 'none' && toggle) toggle.classList.add('open');
+  });
+})();
+
+/* Global helpers called from onclick attributes in the code-page editor */
+function cpToggle(lang) {
+  const body   = document.getElementById('cp-body-' + lang);
+  const toggle = document.getElementById('cp-toggle-' + lang);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (toggle) toggle.classList.toggle('open', !open);
+}
+
+function cpClear(lang) {
+  const ta = document.getElementById('cp-textarea-' + lang);
+  if (ta && confirm('مسح كل محتوى قسم ' + lang + '؟')) {
+    ta.value = '';
+    const el = document.getElementById('cp-lines-' + lang);
+    if (el) el.textContent = 'فارغ';
+  }
+}
+
+function cpCopy(lang) {
+  const ta = document.getElementById('cp-textarea-' + lang);
+  if (!ta || !ta.value) return;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = document.querySelector(`[onclick="cpCopy('${lang}')"]`);
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ تم النسخ'; setTimeout(() => btn.textContent = orig, 1800); }
+  });
+}
+
+function cpExpand(lang) {
+  const ta = document.getElementById('cp-textarea-' + lang);
+  if (ta) ta.classList.toggle('cp-expanded');
+}

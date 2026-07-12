@@ -572,16 +572,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()
     $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
 
     $prompt = <<<P
-أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل (وليس ترجمة أو نسخاً) من نوع:
+أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
 {$typeGuides[$type]}
 {$topicLine}
-المقال بطول 700-1200 كلمة، فقرات طبيعية منظمة بعناوين فرعية واضحة حيث يلزم، بدون Markdown (نص عادي فقط، استخدم أسطراً جديدة للفصل بين الفقرات والعناوين)، بأسلوب يخدم قراء يبحثون عن معلومة حقيقية ومفيدة — ليس حشو كلمات لأغراض SEO فقط.
 
-اتبع معايير SEO التالية:
-- seo_title: عنوان جذاب بطول 50-65 حرفاً يتضمن الكلمة المفتاحية الرئيسية.
-- meta_description: 140-160 حرفاً، يلخص المقال ويشجع على النقر.
-- keywords: 10-15 كلمة/عبارة مفتاحية عربية طويلة الذيل مفصولة بفاصلة.
-- excerpt: ملخص قصير جداً (سطر إلى سطرين) يظهر في بطاقة المقال بصفحات القوائم.
+المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
+اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
+
+اتبع معايير SEO:
+- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
+- meta_description: 140-160 حرفاً يلخص المقال.
+- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
+- excerpt: سطر أو سطران يظهران في بطاقة المقال.
 
 أعد JSON صالح فقط بدون أي نص خارج JSON:
 {"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
@@ -1011,6 +1013,18 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
         } else {
             $slug = unique_blog_slug($pdo, $customSlug !== '' ? $customSlug : $title);
         }
+        // code-page: assemble language sections from POST into JSON body
+        if ($type === 'code-page') {
+            $sections = [];
+            foreach (array_keys(CODE_PAGE_LANGS) as $lang) {
+                $code = $_POST['cp_' . $lang] ?? '';
+                if (trim($code) !== '') $sections[$lang] = $code;
+            }
+            $bodyVal = json_encode(['sections' => $sections, 'description' => trim($_POST['cp_description'] ?? '')],
+                JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        } else {
+            $bodyVal = trim($_POST['body'] ?? '');
+        }
         $d = [
             'type' => $type,
             'title' => $title,
@@ -1019,7 +1033,7 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             'meta_description' => trim($_POST['meta_description'] ?? ''),
             'keywords' => trim($_POST['keywords'] ?? ''),
             'excerpt' => trim($_POST['excerpt'] ?? ''),
-            'body' => trim($_POST['body'] ?? ''),
+            'body' => $bodyVal,
             'status' => ($_POST['status'] ?? 'draft') === 'published' ? 'published' : 'draft',
         ];
         if ($id) {
@@ -2281,7 +2295,8 @@ elseif ($page === 'blog-edit'):
         <label class="form-label">ملخص قصير (يظهر في بطاقة المقال)</label>
         <input class="form-input" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
       </div>
-      <div class="form-group full">
+      <!-- ══ WYSIWYG editor (shown for all types EXCEPT code-page) ══ -->
+      <div class="form-group full" id="blog-wysiwyg-wrap">
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
           <span>نص المقال</span>
           <span style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2300,65 +2315,87 @@ elseif ($page === 'blog-edit'):
         </label>
         <!-- WYSIWYG Toolbar -->
         <div class="wysiwyg-toolbar" id="wysiwyg-toolbar">
-          <!-- Format block -->
           <select class="ws-sel" id="ws-block">
             <option value="p">فقرة</option>
-            <option value="h1">H1</option>
-            <option value="h2">H2</option>
-            <option value="h3">H3</option>
-            <option value="h4">H4</option>
-            <option value="h5">H5</option>
-            <option value="h6">H6</option>
-            <option value="blockquote">اقتباس</option>
-            <option value="pre">كود</option>
+            <option value="h1">H1</option><option value="h2">H2</option>
+            <option value="h3">H3</option><option value="h4">H4</option>
+            <option value="h5">H5</option><option value="h6">H6</option>
+            <option value="blockquote">اقتباس</option><option value="pre">كود</option>
           </select>
           <span class="ws-sep"></span>
-          <!-- Text style -->
           <button class="ws-btn" type="button" data-cmd="bold" title="خط عريض"><b>B</b></button>
           <button class="ws-btn" type="button" data-cmd="italic" title="مائل"><i>I</i></button>
           <button class="ws-btn" type="button" data-cmd="underline" title="تسطير"><u>U</u></button>
           <button class="ws-btn" type="button" data-cmd="strikeThrough" title="شطب"><s>S</s></button>
           <span class="ws-sep"></span>
-          <!-- Font size -->
           <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="2" title="تصغير">A−</button>
           <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="4" title="تكبير">A+</button>
           <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="6" title="كبير جداً">A⁺⁺</button>
           <span class="ws-sep"></span>
-          <!-- Color -->
           <label class="ws-btn" style="cursor:pointer" title="لون النص">
             <input type="color" id="ws-color" style="width:0;height:0;opacity:0;position:absolute"> A🎨
           </label>
           <span class="ws-sep"></span>
-          <!-- Alignment -->
           <button class="ws-btn" type="button" data-cmd="justifyRight" title="يمين">⇥</button>
           <button class="ws-btn" type="button" data-cmd="justifyCenter" title="وسط">⇔</button>
           <button class="ws-btn" type="button" data-cmd="justifyLeft" title="يسار">⇤</button>
           <span class="ws-sep"></span>
-          <!-- Lists -->
           <button class="ws-btn" type="button" data-cmd="insertUnorderedList" title="قائمة نقطية">•≡</button>
           <button class="ws-btn" type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1≡</button>
           <span class="ws-sep"></span>
-          <!-- Links / images -->
           <button class="ws-btn" type="button" id="ws-link" title="رابط">🔗</button>
           <button class="ws-btn" type="button" id="ws-image" title="صورة">🖼</button>
           <span class="ws-sep"></span>
-          <!-- Code block -->
           <button class="ws-btn" type="button" id="ws-code" title="كتلة كود">⌨</button>
           <button class="ws-btn" type="button" data-cmd="insertHorizontalRule" title="خط فاصل">─</button>
           <span class="ws-sep"></span>
-          <!-- Undo/Redo -->
           <button class="ws-btn" type="button" data-cmd="undo" title="تراجع">↩</button>
           <button class="ws-btn" type="button" data-cmd="redo" title="إعادة">↪</button>
           <span class="ws-sep"></span>
-          <!-- Fullscreen -->
           <button class="ws-btn" type="button" id="ws-fullscreen" title="ملء الشاشة">⛶</button>
         </div>
-        <!-- Editor surface -->
-        <div id="wysiwyg-editor" class="wysiwyg-editor" contenteditable="true" dir="auto"><?= $blogPost['body'] ?></div>
-        <!-- Hidden field that actually submits -->
+        <div id="wysiwyg-editor" class="wysiwyg-editor" contenteditable="true" dir="auto"><?= $blogPost['type'] !== 'code-page' ? $blogPost['body'] : '' ?></div>
         <textarea name="body" id="blog-body-hidden" style="display:none"></textarea>
-        <!-- Fallback plain source -->
-        <textarea id="blog-body-source" class="form-textarea" name="_body_source" rows="20" style="display:none;font-family:monospace;font-size:13px;direction:ltr"><?= h($blogPost['body']) ?></textarea>
+        <textarea id="blog-body-source" class="form-textarea" name="_body_source" rows="20" style="display:none;font-family:monospace;font-size:13px;direction:ltr"><?= $blogPost['type'] !== 'code-page' ? h($blogPost['body']) : '' ?></textarea>
+      </div>
+
+      <!-- ══ Code-page editor (shown only when type = code-page) ══ -->
+      <div class="form-group full" id="blog-codepage-wrap" style="display:none">
+        <label class="form-label">صفحة المحتوى — أقسام الأكواد</label>
+        <input type="text" name="cp_description" id="cp-description" class="form-input" placeholder="وصف الصفحة (اختياري — يظهر تحت العنوان)..."
+               value="<?= $blogPost['type'] === 'code-page' ? h(json_decode($blogPost['body'] ?? '{}', true)['description'] ?? '') : '' ?>"
+               style="margin-bottom:14px">
+        <?php
+        $cpSections = $blogPost['type'] === 'code-page' ? decode_code_page($blogPost['body'] ?? '{}') : [];
+        foreach (CODE_PAGE_LANGS as $lang => $meta):
+            $existingCode = $cpSections[$lang] ?? '';
+            $lineCount = $existingCode ? substr_count($existingCode, "\n") + 1 : 0;
+        ?>
+        <div class="cp-section" id="cp-section-<?= $lang ?>" data-lang="<?= $lang ?>">
+          <div class="cp-section-header" onclick="cpToggle('<?= $lang ?>')">
+            <span class="cp-lang-badge" style="--lang-color:<?= h($meta['color']) ?>"><?= $meta['icon'] ?> <?= h($meta['label']) ?></span>
+            <span class="cp-line-count" id="cp-lines-<?= $lang ?>"><?= $lineCount ? $lineCount . ' سطر' : 'فارغ' ?></span>
+            <button type="button" class="cp-toggle-btn" id="cp-toggle-<?= $lang ?>">▼</button>
+          </div>
+          <div class="cp-section-body" id="cp-body-<?= $lang ?>" style="<?= $existingCode ? '' : 'display:none' ?>">
+            <div class="cp-toolbar">
+              <button type="button" class="cp-tool-btn" onclick="cpClear('<?= $lang ?>')" title="مسح المحتوى">🗑 مسح</button>
+              <button type="button" class="cp-tool-btn" onclick="cpCopy('<?= $lang ?>')" title="نسخ المحتوى">📋 نسخ</button>
+              <span class="cp-tool-sep"></span>
+              <button type="button" class="cp-tool-btn cp-expand-btn" onclick="cpExpand('<?= $lang ?>')" title="توسيع المحرر">⛶ توسيع</button>
+            </div>
+            <textarea
+              name="cp_<?= $lang ?>"
+              id="cp-textarea-<?= $lang ?>"
+              class="cp-textarea"
+              placeholder="أدخل كود <?= h($meta['label']) ?> هنا..."
+              spellcheck="false"
+              autocorrect="off"
+              autocapitalize="off"
+              data-lang="<?= $lang ?>"><?= h($existingCode) ?></textarea>
+          </div>
+        </div>
+        <?php endforeach; ?>
       </div>
     </div>
   </div>

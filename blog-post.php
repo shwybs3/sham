@@ -20,9 +20,15 @@ if (!$post) {
 }
 if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
+// Detect code-page type — body is JSON with language sections
+$isCodePage  = $post['type'] === 'code-page';
+$cpSections  = $isCodePage ? decode_code_page($post['body'] ?? '') : [];
+// Priority order for code-page sections
+$cpLangOrder = ['html','css','js','php','python','java','kotlin','cpp'];
 // Body is stored as HTML from the WYSIWYG editor (admin-only authoring,
 // so raw HTML output is intentional and safe — no public user input here).
-$body = trim($post['body'] ?? '');
+$body = $isCodePage ? '' : trim($post['body'] ?? '');
+$cpDescription = $isCodePage ? (json_decode($post['body'] ?? '{}', true)['description'] ?? '') : '';
 $seoTitle = $post['seo_title'] ?: $post['title'];
 $metaDesc = $post['meta_description'] ?: ($post['excerpt'] ?: mb_substr(trim(strip_tags($body)), 0, 160));
 
@@ -97,6 +103,63 @@ $articleSchema = json_encode(array_filter([
     <span><?= h($post['title']) ?></span>
   </nav>
 
+  <?php if ($isCodePage): ?>
+  <!-- ── Code-page hero ── -->
+  <div class="cp-page-hero reveal">
+    <div class="cp-page-hero-title"><?= h($post['title']) ?></div>
+    <?php if ($cpDescription): ?><div class="cp-page-hero-desc"><?= h($cpDescription) ?></div><?php endif; ?>
+  </div>
+
+  <!-- Language navigation pills -->
+  <?php $cpFilled = array_filter($cpLangOrder, fn($l) => !empty($cpSections[$l])); ?>
+  <?php if ($cpFilled): ?>
+  <nav class="cp-page-nav reveal">
+    <?php foreach ($cpFilled as $lang):
+        $meta = CODE_PAGE_LANGS[$lang];
+    ?>
+    <a href="#cp-<?= $lang ?>" class="cp-nav-pill" style="--pill-color:<?= h($meta['color']) ?>">
+      <?= $meta['icon'] ?> <?= h($meta['label']) ?>
+    </a>
+    <?php endforeach; ?>
+  </nav>
+  <?php endif; ?>
+
+  <!-- Code sections -->
+  <?php foreach ($cpLangOrder as $lang):
+      if (empty($cpSections[$lang])) continue;
+      $meta  = CODE_PAGE_LANGS[$lang];
+      $code  = $cpSections[$lang];
+      $lines = explode("\n", $code);
+      $lineCount = count($lines);
+  ?>
+  <div class="cp-block reveal" id="cp-<?= $lang ?>">
+    <div class="cp-block-header" onclick="cpPubToggle('<?= $lang ?>')">
+      <span class="cp-block-badge" style="--lang-color:<?= h($meta['color']) ?>"><?= $meta['icon'] ?> <?= h($meta['label']) ?></span>
+      <div class="cp-block-meta">
+        <span><?= $lineCount ?> سطر</span>
+        <button type="button" class="cp-copy-btn" id="cpb-copy-<?= $lang ?>"
+                onclick="event.stopPropagation();cpPubCopy('<?= $lang ?>')">📋 نسخ</button>
+        <button type="button" class="cp-block-toggle open" id="cpb-tog-<?= $lang ?>">▼</button>
+      </div>
+    </div>
+    <div class="cp-code-wrap" id="cpb-wrap-<?= $lang ?>">
+      <div class="cp-code-inner">
+        <div class="cp-line-nums" aria-hidden="true"><?php
+          for ($n = 1; $n <= $lineCount; $n++) echo $n . "\n";
+        ?></div>
+        <pre class="cp-code-content" id="cpb-code-<?= $lang ?>"><?= h($code) ?></pre>
+      </div>
+    </div>
+  </div>
+  <?php endforeach; ?>
+
+  <!-- Hidden raw code stores for copy -->
+  <?php foreach ($cpFilled as $lang): ?>
+  <textarea id="cpraw-<?= $lang ?>" style="display:none" aria-hidden="true"><?= h($cpSections[$lang]) ?></textarea>
+  <?php endforeach; ?>
+
+  <?php else: ?>
+  <!-- ── Regular article (WYSIWYG HTML body) ── -->
   <?php if ($post['cover_image']): ?>
   <img src="<?= h(url($post['cover_image'])) ?>" alt="<?= h($post['title']) ?>" style="width:100%;max-height:340px;object-fit:cover;border-radius:var(--radius-lg);margin-bottom:20px">
   <?php endif; ?>
@@ -108,6 +171,7 @@ $articleSchema = json_encode(array_filter([
   <div class="section-box" style="margin-bottom:20px">
     <div class="blog-body"><?= $body ?></div>
   </div>
+  <?php endif; ?>
 
   <?php if ($relatedApps): ?>
   <div class="section-head reveal"><span class="section-title">تطبيقات وألعاب قد تعجبك</span></div>
@@ -137,6 +201,51 @@ $articleSchema = json_encode(array_filter([
 
 <?php render_site_footer(); ?>
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
+<?php if ($isCodePage): ?>
+<script>
+function cpPubToggle(lang) {
+  const wrap = document.getElementById('cpb-wrap-' + lang);
+  const tog  = document.getElementById('cpb-tog-' + lang);
+  const blk  = document.getElementById('cp-' + lang);
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : '';
+  if (tog) tog.classList.toggle('open', !open);
+  if (blk) blk.classList.toggle('cp-collapsed', open);
+}
+function cpPubCopy(lang) {
+  const raw = document.getElementById('cpraw-' + lang);
+  const btn = document.getElementById('cpb-copy-' + lang);
+  if (!raw) return;
+  navigator.clipboard.writeText(raw.value).then(() => {
+    if (btn) { btn.textContent = '✓ تم النسخ'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋 نسخ'; btn.classList.remove('copied'); }, 2000); }
+  });
+}
+// Smooth scroll for nav pills
+document.querySelectorAll('.cp-nav-pill').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    document.querySelectorAll('.cp-nav-pill').forEach(p => p.classList.remove('active'));
+    a.classList.add('active');
+  });
+});
+// Highlight active pill on scroll
+const cpBlocks = document.querySelectorAll('.cp-block[id]');
+const cpPills  = document.querySelectorAll('.cp-nav-pill');
+const cpObs = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (en.isIntersecting) {
+      const id = en.target.id;
+      cpPills.forEach(p => p.classList.toggle('active', p.getAttribute('href') === '#' + id));
+    }
+  });
+}, { threshold: 0.4 });
+cpBlocks.forEach(b => cpObs.observe(b));
+</script>
+<?php endif; ?>
 </body>
 </html>
 <?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

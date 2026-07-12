@@ -81,9 +81,10 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
   </div>
   <div class="sidebar-section">
     <div class="sidebar-title">المدونة</div>
-    <?php foreach (BLOG_TYPES as $t => $label): ?>
+    <?php foreach (BLOG_TYPES as $t => $label): if ($t === 'code-page') continue; ?>
     <a href="<?= h(blog_type_url($t)) ?>" class="sidebar-link"><?= partial_icon('article') ?> <?= h($label) ?></a>
     <?php endforeach; ?>
+    <a href="<?= h(blog_type_url('code-page')) ?>" class="sidebar-link"><?= partial_icon('info') ?> صفحة المحتوى</a>
   </div>
 </aside>
 <?php }

@@ -1018,7 +1018,33 @@ const BLOG_TYPES = [
     'best-apps'  => 'أفضل التطبيقات',
     'best-games' => 'أفضل الألعاب',
     'article'    => 'مقالات عامة',
+    'code-page'  => 'صفحة المحتوى',
 ];
+
+/* Language sections available in a code-page blog post */
+const CODE_PAGE_LANGS = [
+    'html'   => ['label' => 'HTML',   'icon' => '🌐', 'color' => '#e34f26', 'ext' => '.html'],
+    'css'    => ['label' => 'CSS',    'icon' => '🎨', 'color' => '#1572b6', 'ext' => '.css'],
+    'js'     => ['label' => 'JS',     'icon' => '⚡', 'color' => '#f7df1e', 'ext' => '.js'],
+    'php'    => ['label' => 'PHP',    'icon' => '🐘', 'color' => '#777bb4', 'ext' => '.php'],
+    'python' => ['label' => 'Python', 'icon' => '🐍', 'color' => '#3776ab', 'ext' => '.py'],
+    'java'   => ['label' => 'Java',   'icon' => '☕', 'color' => '#f89820', 'ext' => '.java'],
+    'kotlin' => ['label' => 'Kotlin', 'icon' => '🎯', 'color' => '#7f52ff', 'ext' => '.kt'],
+    'cpp'    => ['label' => 'C++',    'icon' => '⚙️', 'color' => '#00599c', 'ext' => '.cpp'],
+];
+
+/* Decode a code-page body JSON safely, returns assoc array of lang=>code */
+function decode_code_page(string $body): array {
+    $data = json_decode($body, true);
+    if (!is_array($data)) return [];
+    $sections = $data['sections'] ?? $data;
+    $out = [];
+    foreach (array_keys(CODE_PAGE_LANGS) as $lang) {
+        $code = trim($sections[$lang] ?? '');
+        if ($code !== '') $out[$lang] = $code;
+    }
+    return $out;
+}
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
 function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
 function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
