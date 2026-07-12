@@ -2371,6 +2371,24 @@ elseif ($page === 'blog-edit'):
         <input type="text" name="cp_description" id="cp-description" class="form-input" placeholder="وصف الصفحة (اختياري — يظهر تحت العنوان)..."
                value="<?= $blogPost['type'] === 'code-page' ? h(json_decode($blogPost['body'] ?? '{}', true)['description'] ?? '') : '' ?>"
                style="margin-bottom:14px">
+
+        <!-- ══ Smart paste zone ══ -->
+        <div class="cp-smart-zone" id="cp-smart-zone">
+          <div class="cp-smart-header">
+            <div class="cp-smart-meta">
+              <span class="cp-smart-title">📥 الصق الكود هنا — الكشف التلقائي عن اللغة</span>
+              <span class="cp-smart-hint">يدعم: ` ```html ... ``` ` أو <code>=== html ===</code> أو كشف تلقائي</span>
+            </div>
+            <div class="cp-smart-actions">
+              <button type="button" class="cp-smart-btn primary" onclick="cpSmartDetect()">🔍 مزامنة الأقسام</button>
+              <button type="button" class="cp-smart-btn" onclick="cpSmartClear()">🗑 مسح</button>
+            </div>
+          </div>
+          <textarea id="cp-smart-input" class="cp-smart-textarea" spellcheck="false" autocorrect="off"
+            placeholder="الصق الكود هنا — يمكنك خلط كل اللغات في مربع واحد&#10;&#10;مثال باستخدام علامات markdown:&#10;&#10;```html&#10;&lt;h1&gt;مرحبا&lt;/h1&gt;&#10;```&#10;&#10;```css&#10;h1 { color: red; }&#10;```&#10;&#10;```js&#10;console.log('hello');&#10;```&#10;&#10;أو الصق بدون علامات وسيتم الكشف التلقائي"></textarea>
+          <div id="cp-smart-result" class="cp-smart-result" style="display:none"></div>
+        </div>
+
         <?php
         $cpSections = $blogPost['type'] === 'code-page' ? decode_code_page($blogPost['body'] ?? '{}') : [];
         foreach (CODE_PAGE_LANGS as $lang => $meta):

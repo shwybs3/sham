@@ -1130,6 +1130,153 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 })();
 
+/* ══════════════════════════════════════════
+   Smart paste / auto-detect for code-page
+   ══════════════════════════════════════════ */
+(function () {
+  const CP_DEFS = {
+    html:   { label:'HTML',   icon:'🌐', color:'#e34f26', exts:['html','htm','xhtml'] },
+    css:    { label:'CSS',    icon:'🎨', color:'#1572b6', exts:['css','scss','less','sass'] },
+    js:     { label:'JS',     icon:'⚡', color:'#f7df1e', exts:['js','javascript','ts','typescript','mjs'] },
+    php:    { label:'PHP',    icon:'🐘', color:'#777bb4', exts:['php','php7','php8'] },
+    python: { label:'Python', icon:'🐍', color:'#3776ab', exts:['python','py','py3'] },
+    java:   { label:'Java',   icon:'☕', color:'#f89820', exts:['java'] },
+    kotlin: { label:'Kotlin', icon:'🎯', color:'#7f52ff', exts:['kotlin','kt','kts'] },
+    cpp:    { label:'C++',    icon:'⚙️', color:'#00599c', exts:['cpp','c++','cxx','cc','c','h','hpp'] },
+  };
+  window.CP_DEFS = CP_DEFS;
+
+  function normLang(name) {
+    const n = (name || '').toLowerCase().replace(/\s/g,'');
+    if (CP_DEFS[n]) return n;
+    for (const [k, d] of Object.entries(CP_DEFS)) {
+      if (d.exts.includes(n)) return k;
+    }
+    return null;
+  }
+
+  function autoDetect(code) {
+    const s = { html:0, css:0, js:0, php:0, python:0, java:0, kotlin:0, cpp:0 };
+    if (/\<\?php/.test(code))                            s.php    += 25;
+    if (/\$[a-zA-Z_]\w*\s*[=;(,\-]/.test(code))         s.php    += 10;
+    if (/#include\s*[<"]/.test(code))                    s.cpp    += 25;
+    if (/\bint\s+main\s*\(/.test(code))                  s.cpp    += 15;
+    if (/\bcout\s*<</.test(code))                        s.cpp    += 15;
+    if (/\bstd::/.test(code))                            s.cpp    += 10;
+    if (/\bpublic\s+class\b/.test(code))                 s.java   += 15;
+    if (/\bSystem\.out\.print/.test(code))               s.java   += 15;
+    if (/\bimport\s+java\./.test(code))                  s.java   += 12;
+    if (/\bvoid\s+\w+\s*\(/.test(code) && !/fun /.test(code)) s.java += 5;
+    if (/\bfun\s+\w+\s*[\(<]/.test(code))               s.kotlin += 22;
+    if (/\bval\s+\w+\s*[=:]/.test(code))                s.kotlin += 10;
+    if (/\bprintln\s*\(/.test(code))                    s.kotlin += 10;
+    if (/^\s*def\s+\w+\s*\(/m.test(code))               s.python += 18;
+    if (/^\s*import\s+[\w.]+$/m.test(code))             s.python += 8;
+    if (/\bprint\s*\(/.test(code))                      s.python += 7;
+    if (/^\s*class\s+\w+.*:/m.test(code))               s.python += 8;
+    if (/<(!DOCTYPE|html|head|body|div|span|p|a|h[1-6])\b/i.test(code)) s.html += 18;
+    if (/<\/\w+>/.test(code))                           s.html   += 8;
+    if (/\{[^}]*[\w-]+\s*:[^}]+\}/.test(code) && !/</.test(code)) s.css += 18;
+    if (/@(media|keyframes|import|root)\b/.test(code)) s.css    += 15;
+    if (/:root\b/.test(code))                           s.css    += 10;
+    if (/\b(const|let|var)\s+\w+\s*=/.test(code))      s.js     += 12;
+    if (/\b(function|async|await|=>)\b/.test(code))     s.js     += 10;
+    if (/\bdocument\.\w+/.test(code))                   s.js     += 12;
+    if (/\bconsole\./.test(code))                       s.js     += 8;
+    let best='html', top=0;
+    for (const [k,v] of Object.entries(s)) if (v>top){top=v;best=k;}
+    return best;
+  }
+
+  function parseInput(text) {
+    const result = {};
+
+    // 1. Markdown fences: ```lang ... ```
+    const fenceRe = /```([\w+.\-]+)\s*\n([\s\S]*?)```/g;
+    let m, gotFences = false;
+    while ((m = fenceRe.exec(text)) !== null) {
+      const lang = normLang(m[1]);
+      if (lang) { gotFences=true; result[lang]=(result[lang]?result[lang]+'\n':'')+m[2].trimEnd(); }
+    }
+    if (gotFences) return result;
+
+    // 2. === lang === or --- lang --- separators (whole line)
+    const sepRe  = /^[ \t]*(?:={3,}|-{3,})[ \t]*([\w+]+)[ \t]*(?:={3,}|-{3,})[ \t]*$/gim;
+    const sepAll = [...text.matchAll(sepRe)];
+    if (sepAll.length > 0) {
+      const parts = text.split(/^[ \t]*(?:={3,}|-{3,})[ \t]*[\w+]+[ \t]*(?:={3,}|-{3,})[ \t]*$/im);
+      sepAll.forEach((match, i) => {
+        const lang = normLang(match[1]);
+        const code = parts[i+1];
+        if (lang && code?.trim()) result[lang] = code.trim();
+      });
+      if (Object.keys(result).length) return result;
+    }
+
+    // 3. Single-block auto-detect
+    const lang = autoDetect(text);
+    result[lang] = text;
+    return result;
+  }
+
+  function fillSection(lang, code) {
+    const ta     = document.getElementById('cp-textarea-'+lang);
+    const body   = document.getElementById('cp-body-'+lang);
+    const toggle = document.getElementById('cp-toggle-'+lang);
+    const lines  = document.getElementById('cp-lines-'+lang);
+    if (!ta) return false;
+    ta.value = code;
+    ta.dispatchEvent(new Event('input'));
+    if (body)   body.style.display = '';
+    if (toggle) toggle.classList.add('open');
+    if (lines)  lines.textContent = code ? (code.split('\n').length+' سطر') : 'فارغ';
+    return true;
+  }
+
+  window.cpSmartDetect = function() {
+    const raw = (document.getElementById('cp-smart-input')?.value||'').trim();
+    const res = document.getElementById('cp-smart-result');
+    if (!raw) return;
+
+    const sections = parseInput(raw);
+    const keys = Object.keys(sections);
+    const filled = keys.filter(k => fillSection(k, sections[k]));
+
+    if (!res) return;
+    if (!filled.length) {
+      res.style.display=''; res.innerHTML='<span style="color:#f87171">⚠️ لم يتم الكشف عن أي لغة</span>';
+      return;
+    }
+    res.style.display='';
+    res.innerHTML = '<span class="cp-smart-ok">✓ تمت المزامنة:</span> '
+      + filled.map(lang => {
+          const d = CP_DEFS[lang]||{label:lang,icon:'',color:'#64748b'};
+          return `<span class="cp-smart-chip" style="--lc:${d.color}">${d.icon} ${d.label}</span>`;
+        }).join('');
+
+    // scroll to first section
+    const firstSec = document.getElementById('cp-section-'+filled[0]);
+    if (firstSec) firstSec.scrollIntoView({behavior:'smooth',block:'start'});
+  };
+
+  window.cpSmartClear = function() {
+    const inp = document.getElementById('cp-smart-input');
+    const res = document.getElementById('cp-smart-result');
+    if (inp) inp.value='';
+    if (res) { res.style.display='none'; res.innerHTML=''; }
+  };
+
+  // Auto-detect on paste into the smart textarea (100ms delay to read pasted value)
+  document.addEventListener('DOMContentLoaded', function() {
+    const inp = document.getElementById('cp-smart-input');
+    if (!inp) return;
+    inp.addEventListener('paste', function() { setTimeout(window.cpSmartDetect, 120); });
+    inp.addEventListener('keydown', function(e) {
+      if (e.key==='Tab') { e.preventDefault(); const s=inp.selectionStart,end=inp.selectionEnd; inp.value=inp.value.substring(0,s)+'  '+inp.value.substring(end); inp.selectionStart=inp.selectionEnd=s+2; }
+    });
+  });
+})();
+
 /* Global helpers called from onclick attributes in the code-page editor */
 function cpToggle(lang) {
   const body   = document.getElementById('cp-body-' + lang);
