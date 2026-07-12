@@ -120,7 +120,7 @@ $orgSchema = json_encode([
   <?php if ($featured && !$search && !$catSlug): ?>
   <a href="<?= h(app_url($featured['slug'])) ?>" class="featured-card reveal" data-hardnav="1">
     <?php if ($featured['icon_path']): ?>
-      <img src="<?= h($featured['icon_path']) ?>" alt="<?= h($featured['name']) ?>" class="featured-icon">
+      <img src="<?= h(url($featured['icon_path'])) ?>" alt="<?= h($featured['name']) ?>" class="featured-icon">
     <?php else: ?>
       <div class="featured-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec)"></div>
     <?php endif; ?>

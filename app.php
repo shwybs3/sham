@@ -231,7 +231,7 @@ function wave(): string {
     <?php foreach ($relatedApps as $r): ?>
     <a href="<?= h(app_url($r['slug'])) ?>" class="sidebar-link" style="gap:10px">
       <?php if ($r['icon_path']): ?>
-        <img src="<?= h($r['icon_path']) ?>" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" alt="">
+        <img src="<?= h(url($r['icon_path'])) ?>" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" alt="">
       <?php endif; ?>
       <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= h($r['name']) ?></span>
     </a>
@@ -259,7 +259,7 @@ function wave(): string {
     <div class="app-hero-inner">
       <div class="app-hero-icon-wrap">
         <?php if ($app['icon_path']): ?>
-          <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="app-hero-icon">
+          <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="app-hero-icon">
         <?php else: ?>
           <div class="app-hero-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec);display:flex;align-items:center;justify-content:center">
             <?= svgi('android') ?>
@@ -610,7 +610,7 @@ function wave(): string {
     <div class="app-card reveal">
       <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
         <?php if ($r['icon_path']): ?>
-          <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
+          <img src="<?= h(url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
         <?php endif; ?>
         <div class="app-card-name"><?= h($r['name']) ?></div>
         <div class="app-card-meta">
@@ -633,7 +633,7 @@ function wave(): string {
     <div class="app-card reveal">
       <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
         <?php if ($r['icon_path']): ?>
-          <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
+          <img src="<?= h(url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
         <?php endif; ?>
         <div class="app-card-name"><?= h($r['name']) ?></div>
         <div class="app-card-meta">
