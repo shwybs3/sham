@@ -102,24 +102,55 @@ DirectoryIndex index.php
   RewriteRule ^([^/]+)/?$ app.php?slug=$1 [L,QSA]
 </IfModule>
 
+# ── Compression ──────────────────────────────────
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml font/woff2 font/woff font/ttf
+  DeflateCompressionLevel 6
 </IfModule>
 
+# ── Browser caching ───────────────────────────────
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType image/webp "access plus 1 year"
-  ExpiresByType image/jpeg "access plus 1 year"
-  ExpiresByType image/png  "access plus 1 year"
-  ExpiresByType text/css   "access plus 1 month"
-  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresDefault                          "access plus 1 month"
+  ExpiresByType text/html                 "access plus 1 hour"
+  ExpiresByType text/css                  "access plus 3 months"
+  ExpiresByType application/javascript    "access plus 3 months"
+  ExpiresByType image/webp                "access plus 1 year"
+  ExpiresByType image/jpeg                "access plus 1 year"
+  ExpiresByType image/png                 "access plus 1 year"
+  ExpiresByType image/gif                 "access plus 1 year"
+  ExpiresByType image/svg+xml             "access plus 3 months"
+  ExpiresByType image/x-icon              "access plus 1 year"
+  ExpiresByType font/woff2                "access plus 1 year"
+  ExpiresByType font/woff                 "access plus 1 year"
+  ExpiresByType application/json          "access plus 0 seconds"
 </IfModule>
 
+# ── Cache-Control & security headers ─────────────
 <IfModule mod_headers.c>
-  Header set X-Content-Type-Options "nosniff"
-  Header set X-Frame-Options "SAMEORIGIN"
-  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  # Security
+  Header set X-Content-Type-Options  "nosniff"
+  Header set X-Frame-Options         "SAMEORIGIN"
+  Header set Referrer-Policy         "strict-origin-when-cross-origin"
+  Header set X-XSS-Protection        "1; mode=block"
+  # Keep-alive
+  Header set Connection              "keep-alive"
+  # Vary for correct caching of compressed content
+  Header append Vary Accept-Encoding
+  # Static assets — immutable for 1 year
+  <FilesMatch "\.(css|js|woff2?|ttf|webp|jpg|jpeg|png|gif|ico|svg)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # HTML — 1 hour, must-revalidate
+  <FilesMatch "\.php$">
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+  </FilesMatch>
 </IfModule>
+
+# ── ETag optimization ─────────────────────────────
+FileETag MTime Size
 
 <FilesMatch "\.(sql|log|env|json)$">
   Require all denied

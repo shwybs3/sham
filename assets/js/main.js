@@ -173,18 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ── Sticky Download Bar (mobile, on scroll) ── */
-  const stickyDl = document.querySelector('.sticky-dl');
-  if (stickyDl) {
-    const hero = document.querySelector('.app-hero') || document.querySelector('.hero-banner');
-    const io2 = new IntersectionObserver(
-      (entries) => stickyDl.classList.toggle('visible', !entries[0].isIntersecting),
-      { threshold: 0 }
-    );
-    if (hero) io2.observe(hero);
-  }
-
-  /* ── Smooth card hover ripple ── */
+/* ── Smooth card hover ripple ── */
   document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(el => {
     el.addEventListener('click', function (e) {
       const ripple = document.createElement('span');

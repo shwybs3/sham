@@ -279,9 +279,9 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <button onclick="document.getElementById('download-cta').scrollIntoView({behavior:'smooth'})" class="btn-download-hero" style="border:none;cursor:pointer">
+          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
             <?= svgi('download') ?> تحميل مجاني
-          </button>
+          </a>
           <?php if (!empty($app['playstore_url'])): ?>
           <a href="<?= h($app['playstore_url']) ?>" target="_blank" rel="nofollow noopener" class="btn-mirror" title="فتح صفحة التطبيق على Google Play">
             <?= svgi('playstore') ?> Google Play
@@ -494,15 +494,30 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Telegram subscribe button above comments -->
-  <?php if ($tgUrl): ?>
-  <div style="text-align:center;margin:0 0 20px">
-    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-      اشترك في قناة yassota على تيليجرام
+  <!-- Mini app bar + Telegram — above comments -->
+  <div class="mini-app-bar">
+    <?php if ($app['icon_path']): ?>
+      <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>" class="mini-app-icon" loading="lazy">
+    <?php endif; ?>
+    <div class="mini-app-info">
+      <div class="mini-app-name"><?= h($app['name']) ?></div>
+      <div class="mini-app-meta"><?php
+        $mp=[];
+        if($app['version']) $mp[]='v'.h($app['version']);
+        if($app['size_mb']) $mp[]=h($app['size_mb']).' MB';
+        $mp[]='مجاناً للأندرويد';
+        echo implode(' · ',$mp);
+      ?></div>
+    </div>
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-primary mini-app-dl" data-hardnav="1">
+      <?= svgi('download') ?> تحميل
     </a>
+    <?php if ($tgUrl): ?>
+    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-tg-mini" title="قناة yassota على تيليجرام">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
+    </a>
+    <?php endif; ?>
   </div>
-  <?php endif; ?>
 
   <!-- Comments & Ratings -->
   <div class="section-box reveal">
@@ -628,53 +643,7 @@ function wave(): string {
   </div>
   <?php endif; ?>
 
-  <!-- ── Download CTA — last thing on page (the hero button scrolls here) ── -->
-  <div id="download-cta" class="download-cta-section">
-    <?php if ($app['icon_path']): ?>
-      <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>"
-           style="width:72px;height:72px;border-radius:18px;object-fit:cover;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,.15)">
-    <?php endif; ?>
-    <div class="download-cta-title">حمّل <?= h($app['name']) ?> الآن</div>
-    <div class="download-cta-sub">
-      <?php if ($app['version']): ?><span style="font-family:var(--f-mono)">v<?= h($app['version']) ?></span><?php endif; ?>
-      <?php if ($app['size_mb']): ?> · <?= h($app['size_mb']) ?> MB<?php endif; ?>
-      · مجاناً للأندرويد
-    </div>
-    <?php if ($app['link_verified']): ?>
-    <div class="verified-badge" style="justify-content:center;margin-bottom:16px">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-      تم التحقق من سلامة الرابط بواسطة فريق yassota
-    </div>
-    <?php endif; ?>
-    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-scroll-to-dl" data-hardnav="1">
-      <?= svgi('download') ?> تحميل مجاني الآن
-    </a>
-    <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
-    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <?php if ($app['mirror2_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
-      <?php endif; ?>
-      <?php if ($app['mirror3_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-  </div>
-
 </main>
-</div>
-
-<!-- Sticky Download Bar (mobile) -->
-<div class="sticky-dl">
-  <div class="sticky-dl-inner">
-    <?php if ($app['icon_path']): ?>
-      <img src="<?= h($app['icon_path']) ?>" class="sticky-dl-icon" alt="">
-    <?php endif; ?>
-    <div class="sticky-dl-name"><?= h($app['name']) ?></div>
-    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-primary" style="padding:10px 20px;font-size:14px;flex-shrink:0" data-hardnav="1">
-      <?= svgi('download') ?> تحميل
-    </a>
-  </div>
 </div>
 
 <?php render_site_footer(); ?>
