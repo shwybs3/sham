@@ -17,10 +17,79 @@ DirectoryIndex index.php
   RewriteRule ^robots\.txt$ robots.php [L]
 
   # Canonical homepage: redirect old /index.php links/bookmarks to the root
-  # (matched against the original client request line so the internal
-  # rewrite to index.php below never re-triggers this and loops).
   RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]
   RewriteRule ^index\.php$ / [R=301,L,QSA]
+
+  # Hide .php extensions — redirect direct .php requests to clean URLs
+  RewriteCond %{THE_REQUEST} \s/blog-post\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /blog/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/category\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /category/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/developer\.php\?name=([^&\s]+) [NC]
+  RewriteRule ^ /developer/%1 [R=301,L]
+  RewriteCond %{THE_REQUEST} \s/blog\.php[\s?] [NC]
+  RewriteRule ^ /blog [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/top\.php[\s?] [NC]
+  RewriteRule ^ /top [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/updates\.php[\s?] [NC]
+  RewriteRule ^ /updates [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/rss\.php[\s?] [NC]
+  RewriteRule ^ /rss [R=301,L,QSA]
+  RewriteCond %{THE_REQUEST} \s/article\.php\?slug=([^&\s]+) [NC]
+  RewriteRule ^ /article/%1 [R=301,L]
+
+  # Admin: hide admin.php
+  RewriteRule ^admin/?$ admin.php [L,QSA]
+
+  # Blog post: /blog/{slug} → blog-post.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^blog/([^/]+)/?$ blog-post.php?slug=$1 [L,QSA]
+
+  # Blog listing: /blog → blog.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^blog/?$ blog.php [L,QSA]
+
+  # Category page: /category/{slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^category/([^/]+)/?$ category.php?slug=$1 [L,QSA]
+
+  # Developer page: /developer/{name}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^developer/([^/]+)/?$ developer.php?name=$1 [L,QSA]
+
+  # Article page: /article/{slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^article/([^/]+)/?$ article.php?slug=$1 [L,QSA]
+
+  # Top / Updates / RSS clean URLs
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^top/?$ top.php [L,QSA]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^updates/?$ updates.php [L,QSA]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^rss/?$ rss.php [L,QSA]
+
+  # Static pages — clean URLs (no .php extension)
+  RewriteRule ^about/?$ about.php [L]
+  RewriteRule ^contact/?$ contact.php [L]
+  RewriteRule ^privacy-policy/?$ privacy-policy.php [L]
+  RewriteRule ^terms/?$ terms.php [L]
+  RewriteRule ^cookie-policy/?$ cookie-policy.php [L]
+  RewriteRule ^dmca/?$ dmca.php [L]
+
+  # 301 redirects for old .php links to static pages
+  RewriteCond %{THE_REQUEST} \s/(about|contact|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
+  RewriteRule ^(.+)\.php$ /$1 [R=301,L]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -28,10 +97,6 @@ DirectoryIndex index.php
   RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
 
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
-  # (skipped automatically for any URL matching a real file/directory above,
-  # e.g. /admin.php, /assets/..., /uploads/... — see RESERVED_SLUGS in
-  # config.php for the matching guard against an app slug ever colliding
-  # with a route name like /about or /contact)
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^([^/]+)/?$ app.php?slug=$1 [L,QSA]

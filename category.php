@@ -42,7 +42,7 @@ $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
         ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
-        ["@type" => "ListItem", "position" => 2, "name" => $category['name'], "item" => url('category.php?slug=' . $category['slug'])],
+        ["@type" => "ListItem", "position" => 2, "name" => $category['name'], "item" => url('category/' . $category['slug'])],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -57,11 +57,11 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('category.php?slug=' . $category['slug'])) ?>">
+  <link rel="canonical" href="<?= h(url('category/' . $category['slug'])) ?>">
   <meta property="og:type" content="website">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">
-  <meta property="og:url" content="<?= h(url('category.php?slug=' . $category['slug'])) ?>">
+  <meta property="og:url" content="<?= h(url('category/' . $category['slug'])) ?>">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="<?= h($seoTitle) ?>">
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">

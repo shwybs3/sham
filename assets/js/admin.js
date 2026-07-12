@@ -693,3 +693,264 @@ document.addEventListener('DOMContentLoaded', () => {
   sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
   window.addEventListener('resize', () => { if (window.innerWidth > 900) closeMenu(); });
 });
+
+/* ════ WYSIWYG Editor ════ */
+(function () {
+  const editor    = document.getElementById('wysiwyg-editor');
+  const hidden    = document.getElementById('blog-body-hidden');
+  const source    = document.getElementById('blog-body-source');
+  const toolbar   = document.getElementById('wysiwyg-toolbar');
+  const form      = document.getElementById('blog-edit-form');
+  const blockSel  = document.getElementById('ws-block');
+  const tplSel    = document.getElementById('blog-template-select');
+  const toggleSrc = document.getElementById('blog-toggle-source');
+  const fullBtn   = document.getElementById('ws-fullscreen');
+  const colorIn   = document.getElementById('ws-color');
+
+  if (!editor || !form) return;
+
+  let sourceMode = false;
+
+  // Sync hidden field on submit
+  form.addEventListener('submit', () => {
+    if (sourceMode) {
+      hidden.value = source.value;
+    } else {
+      hidden.value = editor.innerHTML;
+    }
+  });
+
+  // Format block (heading / blockquote / pre / p)
+  if (blockSel) {
+    blockSel.addEventListener('change', () => {
+      const v = blockSel.value;
+      if (!v) return;
+      if (v === 'pre') {
+        const lang = prompt('لغة البرمجة (js, php, python, html, css, sql, bash...):', 'js') || 'text';
+        document.execCommand('insertHTML', false,
+          `<pre><code class="language-${lang}">// الكود هنا\n</code></pre><p><br></p>`);
+      } else {
+        document.execCommand('formatBlock', false, v);
+      }
+      editor.focus();
+      blockSel.value = '';
+    });
+  }
+
+  // Toolbar buttons with data-cmd
+  toolbar && toolbar.querySelectorAll('[data-cmd]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      const cmd = btn.dataset.cmd;
+      const val = btn.dataset.val || null;
+      document.execCommand(cmd, false, val);
+      editor.focus();
+    });
+  });
+
+  // Text color picker
+  if (colorIn) {
+    colorIn.addEventListener('input', () => {
+      document.execCommand('foreColor', false, colorIn.value);
+      editor.focus();
+    });
+  }
+
+  // Link
+  const linkBtn = document.getElementById('ws-link');
+  if (linkBtn) {
+    linkBtn.addEventListener('click', () => {
+      const url = prompt('أدخل الرابط (URL):', 'https://');
+      if (url) document.execCommand('createLink', false, url);
+      editor.focus();
+    });
+  }
+
+  // Image by URL
+  const imgBtn = document.getElementById('ws-image');
+  if (imgBtn) {
+    imgBtn.addEventListener('click', () => {
+      const url = prompt('رابط الصورة (URL):', 'https://');
+      if (url) document.execCommand('insertImage', false, url);
+      editor.focus();
+    });
+  }
+
+  // Code block
+  const codeBtn = document.getElementById('ws-code');
+  if (codeBtn) {
+    codeBtn.addEventListener('click', () => {
+      const lang = prompt('لغة البرمجة (js, php, python, html, css, sql, bash, ...):', 'js') || 'text';
+      document.execCommand('insertHTML', false,
+        `<pre><code class="language-${lang}">// الكود هنا\n</code></pre><p><br></p>`);
+      editor.focus();
+    });
+  }
+
+  // Toggle HTML source
+  if (toggleSrc) {
+    toggleSrc.addEventListener('click', () => {
+      if (!sourceMode) {
+        source.value = editor.innerHTML;
+        editor.style.display = 'none';
+        toolbar && (toolbar.style.opacity = '.4');
+        toolbar && (toolbar.style.pointerEvents = 'none');
+        source.style.display = '';
+        toggleSrc.textContent = '👁 معاينة';
+        sourceMode = true;
+      } else {
+        editor.innerHTML = source.value;
+        source.style.display = 'none';
+        editor.style.display = '';
+        toolbar && (toolbar.style.opacity = '');
+        toolbar && (toolbar.style.pointerEvents = '');
+        toggleSrc.textContent = '</> HTML';
+        sourceMode = false;
+      }
+    });
+  }
+
+  // Fullscreen toggle
+  if (fullBtn) {
+    fullBtn.addEventListener('click', () => {
+      const wrap = editor.closest('.form-group');
+      wrap && wrap.classList.toggle('wysiwyg-fullscreen');
+      editor.focus();
+    });
+  }
+
+  // Templates
+  const TEMPLATES = {
+    news: `<h2>عنوان الخبر</h2>
+<p>أعلنت [الجهة] اليوم عن [الخبر]. يأتي هذا الإعلان في سياق [السياق].</p>
+<h3>أبرز التفاصيل</h3>
+<ul><li>تفصيل أول</li><li>تفصيل ثانٍ</li><li>تفصيل ثالث</li></ul>
+<h3>ماذا يعني هذا للمستخدمين؟</h3>
+<p>يُتيح هذا التحديث للمستخدمين [الفائدة]. ويُتوقع أن [التوقع].</p>
+<p>متابعة المستجدات على yassota.</p>`,
+
+    tutorial: `<h2>كيف تفعل [المهمة] خطوة بخطوة</h2>
+<p>في هذا الشرح سنتعلم كيف نُنجز [المهمة] بسهولة.</p>
+<h3>المتطلبات</h3>
+<ul><li>متطلب أول</li><li>متطلب ثانٍ</li></ul>
+<h3>الخطوة الأولى: [اسم الخطوة]</h3>
+<p>شرح تفصيلي للخطوة الأولى...</p>
+<pre><code class="language-bash">// مثال على أمر أو كود</code></pre>
+<h3>الخطوة الثانية: [اسم الخطوة]</h3>
+<p>شرح تفصيلي للخطوة الثانية...</p>
+<h3>النتيجة النهائية</h3>
+<p>الآن أصبح بإمكانك [النتيجة]. شارك تجربتك في التعليقات!</p>`,
+
+    comparison: `<h2>[التطبيق الأول] مقابل [التطبيق الثاني]: أيهما أفضل؟</h2>
+<p>نقارن اليوم بين [الأول] و[الثاني] لمساعدتك في اختيار الأنسب.</p>
+<h3>جدول المقارنة</h3>
+<table><tr><th>الميزة</th><th>${'[الأول]'}</th><th>${'[الثاني]'}</th></tr>
+<tr><td>السعر</td><td>مجاني</td><td>مجاني</td></tr>
+<tr><td>الحجم</td><td>—</td><td>—</td></tr>
+<tr><td>التقييم</td><td>—</td><td>—</td></tr></table>
+<h3>مزايا [الأول]</h3>
+<ul><li>ميزة</li></ul>
+<h3>مزايا [الثاني]</h3>
+<ul><li>ميزة</li></ul>
+<h3>الخلاصة</h3>
+<p>إذا كنت [نوع المستخدم] فـ[التوصية]. يمكنك تحميل كليهما مجاناً من yassota.</p>`,
+
+    'top-list': `<h2>أفضل [العدد] تطبيقات [المجال] لعام ${new Date().getFullYear()}</h2>
+<p>جمعنا لك قائمة بأفضل تطبيقات [المجال] المتاحة الآن على أندرويد.</p>
+<h3>1. [اسم التطبيق]</h3>
+<p>وصف قصير لما يميز هذا التطبيق ولماذا يستحق مكانه الأول في القائمة.</p>
+<h3>2. [اسم التطبيق]</h3>
+<p>وصف قصير...</p>
+<h3>3. [اسم التطبيق]</h3>
+<p>وصف قصير...</p>
+<h3>الخلاصة</h3>
+<p>هذه أفضل خياراتنا لتطبيقات [المجال]. جميعها متاحة للتحميل المجاني على yassota.</p>`,
+
+    review: `<h2>مراجعة [اسم التطبيق]: هل يستحق التحميل؟</h2>
+<p>[اسم التطبيق] هو تطبيق [الفئة] يُتيح للمستخدمين [الوظيفة الرئيسية].</p>
+<h3>واجهة المستخدم</h3>
+<p>تتميز الواجهة بـ[الوصف]. سهل التنقل وبديهي للمستخدم الجديد.</p>
+<h3>المزايا ✅</h3>
+<ul><li>ميزة رئيسية</li><li>ميزة ثانية</li><li>مجاني بالكامل</li></ul>
+<h3>العيوب ❌</h3>
+<ul><li>عيب محتمل</li></ul>
+<h3>التقييم الإجمالي</h3>
+<p>⭐⭐⭐⭐ (4/5) — [جملة ختامية]. <a href="#">حمّل ${('[اسم التطبيق]')} مجاناً الآن</a>.</p>`,
+  };
+
+  if (tplSel) {
+    tplSel.addEventListener('change', () => {
+      const key = tplSel.value;
+      if (!key || !TEMPLATES[key]) return;
+      if (editor.innerHTML.trim() && !confirm('سيُستبدل المحتوى الحالي بالقالب. متأكد؟')) {
+        tplSel.value = ''; return;
+      }
+      editor.innerHTML = TEMPLATES[key];
+      editor.focus();
+      tplSel.value = '';
+    });
+  }
+})();
+
+/* ── Blog slug preview (same pattern as app slug preview) ── */
+(function () {
+  const slugInput  = document.getElementById('blog-slug');
+  const slugPreview= document.getElementById('blog-slug-preview');
+  const titleInput = document.getElementById('blog-title');
+  if (!slugInput || !slugPreview) return;
+
+  const clientSlugify = s => (s || '').trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^؀-ۿa-zA-Z0-9\-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'post-slug';
+
+  const updatePreview = () => {
+    slugPreview.textContent = clientSlugify(slugInput.value || titleInput?.value || '');
+  };
+  slugInput.addEventListener('input', updatePreview);
+  titleInput?.addEventListener('input', () => { if (!slugInput.value) updatePreview(); });
+  updatePreview();
+})();
+
+/* ── Internal security verification (replaces VirusTotal) ── */
+(function () {
+  const btn = document.getElementById('btn-verify-link');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const appId  = btn.dataset.appId;
+    const action = btn.dataset.action || 'verify';
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const fd = new FormData();
+      fd.append('app_id', appId);
+      fd.append('action', action);
+      const r = await fetch('admin.php?ajax=verify_link', { method: 'POST', body: fd });
+      const d = await r.json();
+      const statusEl = document.getElementById('verify-status');
+      const resultEl = document.getElementById('verify-result');
+      if (d.success) {
+        if (statusEl) {
+          statusEl.innerHTML = d.verified
+            ? '<span class="status-badge status-published">✓ تم التحقق من سلامة الرابط</span>'
+            : '<span class="status-badge status-draft">لم يتم التحقق من الرابط بعد</span>';
+        }
+        btn.dataset.action = d.verified ? 'unverify' : 'verify';
+        btn.textContent = d.verified ? 'إلغاء التحقق' : '✓ تحقق الفريق — الرابط آمن';
+        btn.style.background = d.verified ? 'rgba(220,38,38,.1)' : '';
+        btn.style.color      = d.verified ? 'var(--danger)' : '';
+        if (resultEl) resultEl.innerHTML = d.verified
+          ? '<span style="color:var(--success);font-size:13px">✓ تمت إضافة شارة التحقق على صفحة التطبيق وصفحة التحميل</span>'
+          : '<span style="color:var(--muted);font-size:13px">تم إزالة الشارة</span>';
+      } else {
+        if (resultEl) resultEl.innerHTML = `<span style="color:var(--danger)">${d.error}</span>`;
+      }
+    } catch (e) {
+      alert('خطأ في الاتصال');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();

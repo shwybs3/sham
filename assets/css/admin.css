@@ -265,3 +265,58 @@ a { color: inherit; text-decoration: none; }
   .stat-num { font-size: 22px; }
   .btn-save { padding: 12px 22px; font-size: 14px; width: 100%; justify-content: center; }
 }
+
+/* ════ WYSIWYG EDITOR ════ */
+.wysiwyg-toolbar {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 10px;
+  background: #f8fafc; border: 1px solid var(--border-c); border-bottom: none;
+  border-radius: 10px 10px 0 0; align-items: center;
+}
+.ws-btn {
+  min-width: 30px; height: 30px; padding: 0 7px;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  cursor: pointer; font-size: 13px; color: #334155;
+  transition: background .15s, border-color .15s;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ws-btn:hover, .ws-btn.active { background: #e2e8f0; border-color: #cbd5e1; }
+.ws-btn.ws-sm { font-size: 11px; min-width: 28px; }
+.ws-sel {
+  height: 30px; padding: 0 6px; font-size: 12px; border: 1px solid #cbd5e1;
+  border-radius: 6px; background: #fff; color: #334155; cursor: pointer;
+}
+.ws-sep { width: 1px; height: 22px; background: #e2e8f0; margin: 0 4px; flex-shrink: 0; }
+
+.wysiwyg-editor {
+  min-height: 420px; padding: 16px 20px; border: 1px solid var(--border-c);
+  border-radius: 0 0 10px 10px; outline: none; line-height: 1.85;
+  font-size: 15px; color: #1e293b; background: #fff;
+  overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+.wysiwyg-editor:focus { border-color: var(--cyan); }
+.wysiwyg-editor h1,.wysiwyg-editor h2,.wysiwyg-editor h3,
+.wysiwyg-editor h4,.wysiwyg-editor h5,.wysiwyg-editor h6 {
+  margin: 1em 0 0.4em; font-weight: 700; color: #0f172a;
+}
+.wysiwyg-editor h1 { font-size: 1.7em; }
+.wysiwyg-editor h2 { font-size: 1.4em; }
+.wysiwyg-editor h3 { font-size: 1.2em; }
+.wysiwyg-editor blockquote {
+  border-right: 3px solid #2563eb; padding: 10px 16px;
+  background: rgba(37,99,235,.06); margin: 1em 0; border-radius: 0 8px 8px 0;
+}
+.wysiwyg-editor pre {
+  background: #0f172a; color: #e2e8f0; padding: 14px 16px;
+  border-radius: 8px; font-family: monospace; font-size: 13px;
+  overflow-x: auto; direction: ltr; text-align: left; margin: 1em 0;
+}
+.wysiwyg-editor a { color: #2563eb; }
+.wysiwyg-editor img { max-width: 100%; border-radius: 8px; }
+.wysiwyg-editor ul, .wysiwyg-editor ol { padding-right: 1.5em; }
+.wysiwyg-editor table { border-collapse: collapse; width: 100%; }
+.wysiwyg-editor td, .wysiwyg-editor th { border: 1px solid #e2e8f0; padding: 8px 12px; }
+.wysiwyg-editor:empty::before { content: 'ابدأ الكتابة هنا…'; color: #94a3b8; pointer-events: none; }
+
+/* Fullscreen mode */
+.wysiwyg-fullscreen .wysiwyg-toolbar { border-radius: 0; position: fixed; top: 0; right: 0; left: 0; z-index: 10001; }
+.wysiwyg-fullscreen .wysiwyg-editor  { position: fixed; top: 52px; right: 0; left: 0; bottom: 0; z-index: 10000; border-radius: 0; border: none; max-height: none; }

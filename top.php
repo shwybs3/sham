@@ -25,7 +25,7 @@ $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
         ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
-        ["@type" => "ListItem", "position" => 2, "name" => $title, "item" => url('top.php?by=' . $by)],
+        ["@type" => "ListItem", "position" => 2, "name" => $title, "item" => url('top?by=' . $by)],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
@@ -38,7 +38,7 @@ $breadcrumbSchema = json_encode([
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('top.php?by=' . $by)) ?>">
+  <link rel="canonical" href="<?= h(url('top?by=' . $by)) ?>">
   <meta property="og:type" content="website">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">
@@ -66,8 +66,8 @@ $breadcrumbSchema = json_encode([
   </nav>
 
   <div class="cat-chips reveal" style="margin-bottom:20px">
-    <a href="top.php?by=downloads" class="cat-chip <?= $by === 'downloads' ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
-    <a href="top.php?by=views" class="cat-chip <?= $by === 'views' ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('trending') ?> الأكثر زيارة</a>
+    <a href="<?= h(url('top?by=downloads')) ?>" class="cat-chip <?= $by === 'downloads' ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
+    <a href="<?= h(url('top?by=views')) ?>" class="cat-chip <?= $by === 'views' ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('trending') ?> الأكثر زيارة</a>
   </div>
 
   <div class="section-head reveal">

@@ -1,4 +1,10 @@
 <?php
+// Raise PHP limits for admin only — long descriptions can be several MBs
+@ini_set('post_max_size', '64M');
+@ini_set('upload_max_filesize', '64M');
+@ini_set('max_input_vars', '5000');
+@ini_set('memory_limit', '256M');
+
 require_once __DIR__ . '/config.php';
 admin_ip_check($pdo);
 
@@ -69,16 +75,24 @@ P;
         exit;
     }
 
-    $raw = trim(preg_replace(['/^```json\s*/m','/\s*```$/m','/^```\s*/m'], '', $result['content']));
-    $s = strpos($raw, '{'); $e = strrpos($raw, '}');
-    $data = ($s !== false && $e !== false) ? json_decode(substr($raw, $s, $e-$s+1), true) : null;
+    $data = ai_extract_json($result['content']);
 
     if ($data) {
         $data['success'] = true;
         $data['used_model'] = $result['model'];
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
     } else {
-        echo json_encode(['success'=>false,'error'=>'الاتصال نجح لكن الرد لم يكن JSON صالح، حاول مجدداً (الموديل المستخدم: '.$result['model'].')']);
+        // Model returned text instead of JSON — retry once with a stricter prompt
+        $strictPrompt = "أجب بـJSON فقط بدون أي نص قبله أو بعده، ولا Markdown، ولا شرح. الطلب هو:\n\n" . $prompt;
+        $retry = openrouter_call_rotating($keys, array_slice($models, 0, 4), $strictPrompt);
+        $data2 = $retry['ok'] ? ai_extract_json($retry['content']) : null;
+        if ($data2) {
+            $data2['success'] = true;
+            $data2['used_model'] = $retry['model'];
+            echo json_encode($data2, JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode(['success'=>false,'error'=>'لم يُرجع الذكاء الاصطناعي JSON صالح بعد محاولتين. جرّب تغيير الموديل في الإعدادات أو تفعيل "التدوير التلقائي" (الموديل: '.$result['model'].')']);
+        }
     }
     exit;
 }
@@ -494,6 +508,27 @@ P;
         $created++;
     }
     echo json_encode(['success'=>true,'created'=>$created], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Internal link-safety verification (replaces VirusTotal)
+   Admin marks a download URL as team-verified; badge shows on the
+   app page and download page. No external API, no API keys needed.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'verify_link' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_POST['app_id'] ?? 0);
+    $action = $_POST['action'] ?? 'verify'; // 'verify' or 'unverify'
+    if (!$appId) { echo json_encode(['success'=>false,'error'=>'معرف التطبيق مطلوب']); exit; }
+    if ($action === 'unverify') {
+        $pdo->prepare("UPDATE apps SET link_verified=0, verified_at=NULL WHERE id=?")->execute([$appId]);
+        echo json_encode(['success'=>true,'verified'=>false]);
+    } else {
+        $pdo->prepare("UPDATE apps SET link_verified=1, verified_at=NOW() WHERE id=?")->execute([$appId]);
+        bump_cache_version($pdo);
+        echo json_encode(['success'=>true,'verified'=>true]);
+    }
     exit;
 }
 
@@ -940,9 +975,20 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
     if (!$title) { $blogError = 'العنوان مطلوب'; }
     else {
         $type = isset(BLOG_TYPES[$_POST['type'] ?? '']) ? $_POST['type'] : 'article';
+        $customSlug = trim($_POST['slug'] ?? '');
+        if ($id) {
+            $curSlug = $pdo->prepare("SELECT slug FROM blog_posts WHERE id=?");
+            $curSlug->execute([$id]); $curSlug = $curSlug->fetchColumn();
+            $slug = ($customSlug !== '' && $customSlug !== $curSlug)
+                ? unique_blog_slug($pdo, $customSlug, $id)
+                : $curSlug;
+        } else {
+            $slug = unique_blog_slug($pdo, $customSlug !== '' ? $customSlug : $title);
+        }
         $d = [
             'type' => $type,
             'title' => $title,
+            'slug' => $slug,
             'seo_title' => trim($_POST['seo_title'] ?? ''),
             'meta_description' => trim($_POST['meta_description'] ?? ''),
             'keywords' => trim($_POST['keywords'] ?? ''),
@@ -955,7 +1001,6 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             $d['id'] = $id;
             $pdo->prepare("UPDATE blog_posts SET $sets WHERE id=:id")->execute($d);
         } else {
-            $d['slug'] = unique_blog_slug($pdo, $title);
             $cols = implode(',', array_keys($d));
             $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
             $pdo->prepare("INSERT INTO blog_posts ($cols) VALUES ($vals)")->execute($d);
@@ -1795,26 +1840,33 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 
 <?php if ($isEdit): ?>
 <div class="panel" style="margin-bottom:40px">
-  <h2>فحص أمان رابط التحميل (VirusTotal)</h2>
-  <p class="form-hint" style="margin-bottom:14px">شارة حقيقية تظهر على صفحة تحميل هذا التطبيق فقط بعد فحص فعلي ناجح.</p>
-  <div style="margin-bottom:12px">
-    <?php if ($app['vt_status'] === 'clean'): ?>
-      <span class="status-badge status-published">✓ آمن — <?= (int)$app['vt_total_engines'] ?> محرك فحص، 0 تنبيه</span>
-    <?php elseif ($app['vt_status'] === 'flagged'): ?>
-      <span class="status-badge" style="background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25)">⚠ <?= (int)$app['vt_malicious'] ?> من <?= (int)$app['vt_total_engines'] ?> محرك نبّه لهذا الرابط</span>
-    <?php elseif ($app['vt_status'] === 'pending'): ?>
-      <span class="status-badge status-draft">⏳ الفحص قيد التنفيذ — اضغط "تحقق من النتيجة" بعد دقيقة</span>
+  <h2>التحقق من سلامة الرابط</h2>
+  <p class="form-hint" style="margin-bottom:14px">
+    بعد التأكد يدوياً من أن رابط التحميل آمن وسليم، اضغط "تحقق الفريق" لإظهار شارة "رابط تم التحقق من سلامته بواسطة فريق yassota" على صفحة التطبيق وصفحة التحميل.
+  </p>
+  <div style="margin-bottom:12px" id="verify-status">
+    <?php if ($app['link_verified']): ?>
+      <span class="status-badge status-published">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        تم التحقق من سلامة الرابط<?= $app['verified_at'] ? ' — ' . date('Y-m-d', strtotime($app['verified_at'])) : '' ?>
+      </span>
     <?php else: ?>
-      <span class="form-hint">لم يتم فحص هذا الرابط بعد.</span>
+      <span class="status-badge status-draft">لم يتم التحقق من الرابط بعد</span>
     <?php endif; ?>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <button type="button" id="btn-vt-scan" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">فحص رابط التحميل الآن</button>
-    <?php if ($app['vt_status'] === 'pending'): ?>
-    <button type="button" id="btn-vt-check" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">تحقق من النتيجة</button>
+    <?php if (!$app['link_verified']): ?>
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="verify">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+      تحقق الفريق — الرابط آمن
+    </button>
+    <?php else: ?>
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(220,38,38,.1);color:var(--danger)">
+      إلغاء التحقق
+    </button>
     <?php endif; ?>
   </div>
-  <div id="vt-scan-result" style="margin-top:12px"></div>
+  <div id="verify-result" style="margin-top:12px"></div>
 </div>
 <?php endif; ?>
 
@@ -2141,14 +2193,24 @@ elseif ($page === 'blog-edit'):
 
 <?php if (!empty($blogError)): ?><div class="alert alert-error"><?= h($blogError) ?></div><?php endif; ?>
 
-<form method="post" action="admin.php?page=blog-edit">
+<form method="post" action="admin.php?page=blog-edit" id="blog-edit-form">
   <?= csrf_field() ?>
   <input type="hidden" name="id" value="<?= (int)$blogPost['id'] ?>">
   <div class="panel">
     <div class="form-grid">
       <div class="form-group full">
         <label class="form-label">العنوان *</label>
-        <input class="form-input" type="text" name="title" value="<?= h($blogPost['title']) ?>" required>
+        <input class="form-input" id="blog-title" type="text" name="title" value="<?= h($blogPost['title']) ?>" required>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">الرابط (Slug)</label>
+        <input class="form-input" id="blog-slug" type="text" name="slug" dir="ltr" style="text-align:left"
+               value="<?= h($blogPost['slug'] ?? '') ?>"
+               placeholder="سيُنشأ تلقائياً من العنوان إن تُرك فارغاً"
+               pattern="[a-zA-Z0-9؀-ۿ\-]*">
+        <span style="font-size:11px;color:var(--muted);display:block;margin-top:4px" dir="ltr">
+          <?= h(SITE_URL) ?>/blog/<span id="blog-slug-preview"><?= h($blogPost['slug'] ?? 'post-slug') ?></span>
+        </span>
       </div>
       <div class="form-group">
         <label class="form-label">القسم</label>
@@ -2182,8 +2244,83 @@ elseif ($page === 'blog-edit'):
         <input class="form-input" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
       </div>
       <div class="form-group full">
-        <label class="form-label">نص المقال</label>
-        <textarea class="form-textarea" name="body" rows="16"><?= h($blogPost['body']) ?></textarea>
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>نص المقال</span>
+          <span style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="blog-template-select" class="form-select" style="font-size:12px;padding:4px 8px;height:auto">
+              <option value="">📄 قالب جاهز…</option>
+              <option value="news">📰 قالب خبر</option>
+              <option value="tutorial">📚 قالب شرح خطوة بخطوة</option>
+              <option value="comparison">⚖️ قالب مقارنة</option>
+              <option value="top-list">🏆 قالب قائمة أفضل</option>
+              <option value="review">⭐ قالب مراجعة تطبيق</option>
+            </select>
+            <button type="button" id="blog-toggle-source" class="btn-edit" style="font-size:12px;padding:5px 10px">
+              &lt;/&gt; HTML
+            </button>
+          </span>
+        </label>
+        <!-- WYSIWYG Toolbar -->
+        <div class="wysiwyg-toolbar" id="wysiwyg-toolbar">
+          <!-- Format block -->
+          <select class="ws-sel" id="ws-block">
+            <option value="p">فقرة</option>
+            <option value="h1">H1</option>
+            <option value="h2">H2</option>
+            <option value="h3">H3</option>
+            <option value="h4">H4</option>
+            <option value="h5">H5</option>
+            <option value="h6">H6</option>
+            <option value="blockquote">اقتباس</option>
+            <option value="pre">كود</option>
+          </select>
+          <span class="ws-sep"></span>
+          <!-- Text style -->
+          <button class="ws-btn" type="button" data-cmd="bold" title="خط عريض"><b>B</b></button>
+          <button class="ws-btn" type="button" data-cmd="italic" title="مائل"><i>I</i></button>
+          <button class="ws-btn" type="button" data-cmd="underline" title="تسطير"><u>U</u></button>
+          <button class="ws-btn" type="button" data-cmd="strikeThrough" title="شطب"><s>S</s></button>
+          <span class="ws-sep"></span>
+          <!-- Font size -->
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="2" title="تصغير">A−</button>
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="4" title="تكبير">A+</button>
+          <button class="ws-btn ws-sm" type="button" data-cmd="fontSize" data-val="6" title="كبير جداً">A⁺⁺</button>
+          <span class="ws-sep"></span>
+          <!-- Color -->
+          <label class="ws-btn" style="cursor:pointer" title="لون النص">
+            <input type="color" id="ws-color" style="width:0;height:0;opacity:0;position:absolute"> A🎨
+          </label>
+          <span class="ws-sep"></span>
+          <!-- Alignment -->
+          <button class="ws-btn" type="button" data-cmd="justifyRight" title="يمين">⇥</button>
+          <button class="ws-btn" type="button" data-cmd="justifyCenter" title="وسط">⇔</button>
+          <button class="ws-btn" type="button" data-cmd="justifyLeft" title="يسار">⇤</button>
+          <span class="ws-sep"></span>
+          <!-- Lists -->
+          <button class="ws-btn" type="button" data-cmd="insertUnorderedList" title="قائمة نقطية">•≡</button>
+          <button class="ws-btn" type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1≡</button>
+          <span class="ws-sep"></span>
+          <!-- Links / images -->
+          <button class="ws-btn" type="button" id="ws-link" title="رابط">🔗</button>
+          <button class="ws-btn" type="button" id="ws-image" title="صورة">🖼</button>
+          <span class="ws-sep"></span>
+          <!-- Code block -->
+          <button class="ws-btn" type="button" id="ws-code" title="كتلة كود">⌨</button>
+          <button class="ws-btn" type="button" data-cmd="insertHorizontalRule" title="خط فاصل">─</button>
+          <span class="ws-sep"></span>
+          <!-- Undo/Redo -->
+          <button class="ws-btn" type="button" data-cmd="undo" title="تراجع">↩</button>
+          <button class="ws-btn" type="button" data-cmd="redo" title="إعادة">↪</button>
+          <span class="ws-sep"></span>
+          <!-- Fullscreen -->
+          <button class="ws-btn" type="button" id="ws-fullscreen" title="ملء الشاشة">⛶</button>
+        </div>
+        <!-- Editor surface -->
+        <div id="wysiwyg-editor" class="wysiwyg-editor" contenteditable="true" dir="auto"><?= $blogPost['body'] ?></div>
+        <!-- Hidden field that actually submits -->
+        <textarea name="body" id="blog-body-hidden" style="display:none"></textarea>
+        <!-- Fallback plain source -->
+        <textarea id="blog-body-source" class="form-textarea" name="_body_source" rows="20" style="display:none;font-family:monospace;font-size:13px;direction:ltr"><?= h($blogPost['body']) ?></textarea>
       </div>
     </div>
   </div>

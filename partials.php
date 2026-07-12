@@ -48,8 +48,8 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 
   <nav class="header-nav">
     <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
-    <a href="index.php?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
-    <a href="index.php?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
+    <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
+    <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
     <button type="button" class="mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
     <button class="nav-toggle" aria-label="القائمة"><?= partial_icon('menu') ?></button>
   </nav>
@@ -67,7 +67,7 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
       <?= partial_icon('home') ?> الكل
     </a>
     <?php foreach ($categories as $cat): ?>
-    <a href="category.php?slug=<?= h($cat['slug']) ?>" class="sidebar-link <?= $activeCatSlug === $cat['slug'] ? 'active' : '' ?>">
+    <a href="<?= h(url('category/' . $cat['slug'])) ?>" class="sidebar-link <?= $activeCatSlug === $cat['slug'] ? 'active' : '' ?>">
       <?= partial_icon($cat['slug'] === 'games' ? 'games' : 'apps') ?>
       <?= h($cat['name']) ?>
     </a>
@@ -75,9 +75,9 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
   </div>
   <div class="sidebar-section">
     <div class="sidebar-title">اكتشف</div>
-    <a href="top.php?by=downloads" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
-    <a href="top.php?by=views" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر زيارة</a>
-    <a href="updates.php" class="sidebar-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
+    <a href="<?= h(url('top?by=downloads')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
+    <a href="<?= h(url('top?by=views')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر زيارة</a>
+    <a href="<?= h(url('updates')) ?>" class="sidebar-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
   </div>
   <div class="sidebar-section">
     <div class="sidebar-title">المدونة</div>
@@ -131,15 +131,16 @@ function render_site_footer(): void { ?>
 <footer class="site-footer">
   <div class="footer-logo">yass<span style="color:var(--purple)">ota</span></div>
   <nav style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:14px 0;font-size:12px">
-    <a href="about.php" style="color:var(--muted)">من نحن</a>
-    <a href="contact.php" style="color:var(--muted)">اتصل بنا</a>
-    <a href="privacy-policy.php" style="color:var(--muted)">سياسة الخصوصية</a>
-    <a href="terms.php" style="color:var(--muted)">شروط الاستخدام</a>
-    <a href="cookie-policy.php" style="color:var(--muted)">سياسة الكوكيز</a>
-    <a href="dmca.php" style="color:var(--muted)">DMCA</a>
-    <a href="top.php?by=downloads" style="color:var(--muted)">الأكثر تحميلاً</a>
-    <a href="updates.php" style="color:var(--muted)">آخر التحديثات</a>
-    <a href="rss.php" style="color:var(--muted)">RSS</a>
+    <a href="<?= h(url('about')) ?>" style="color:var(--muted)">من نحن</a>
+    <a href="<?= h(url('contact')) ?>" style="color:var(--muted)">اتصل بنا</a>
+    <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--muted)">سياسة الخصوصية</a>
+    <a href="<?= h(url('terms')) ?>" style="color:var(--muted)">شروط الاستخدام</a>
+    <a href="<?= h(url('cookie-policy')) ?>" style="color:var(--muted)">سياسة الكوكيز</a>
+    <a href="<?= h(url('dmca')) ?>" style="color:var(--muted)">DMCA</a>
+    <a href="/top?by=downloads" style="color:var(--muted)">الأكثر تحميلاً</a>
+    <a href="/updates" style="color:var(--muted)">آخر التحديثات</a>
+    <a href="/blog" style="color:var(--muted)">المدونة</a>
+    <a href="/rss" style="color:var(--muted)">RSS</a>
   </nav>
   <p>&copy; <?= date('Y') ?> yassota — جميع الحقوق محفوظة</p>
 </footer>
@@ -150,7 +151,9 @@ render_cookie_banner();
 /* ── Cookie consent banner — dismissible, remembered via localStorage.
    Supports AdSense's EU user-consent requirement and is generally expected
    on any site running third-party ad/analytics cookies. ── */
-function render_cookie_banner(string $policyUrl = 'cookie-policy.php'): void { ?>
+function render_cookie_banner(string $policyUrl = ''): void {
+    if (!$policyUrl) $policyUrl = url('cookie-policy');
+    ?>
 <div id="cookie-consent" class="cookie-consent" hidden>
   <p>نستخدم ملفات تعريف الارتباط (Cookies) لتحسين تجربتك وعرض إعلانات ذات صلة. بمتابعة تصفح الموقع فإنك توافق على
     <a href="<?= h($policyUrl) ?>">سياسة ملفات تعريف الارتباط</a>.</p>

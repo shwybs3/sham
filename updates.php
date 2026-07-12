@@ -68,8 +68,8 @@ $breadcrumbSchema = json_encode([
   </nav>
 
   <div class="cat-chips reveal" style="margin-bottom:20px">
-    <a href="updates.php" class="cat-chip <?= !$today ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('clock') ?> كل التحديثات</a>
-    <a href="updates.php?today=1" class="cat-chip <?= $today ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('clock') ?> تحديثات اليوم فقط</a>
+    <a href="<?= h(url('updates')) ?>" class="cat-chip <?= !$today ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('clock') ?> كل التحديثات</a>
+    <a href="<?= h(url('updates?today=1')) ?>" class="cat-chip <?= $today ? 'active' : '' ?>" style="text-decoration:none"><?= partial_icon('clock') ?> تحديثات اليوم فقط</a>
   </div>
 
   <div class="section-head reveal">

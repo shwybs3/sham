@@ -55,7 +55,7 @@ $metaDesc = 'تعرّف على yassota: منصة عربية لتحميل أفض�
     <p>نحرص على أن تكون صفحات التحميل واضحة ومباشرة، وأن نُبيّن بصراحة عندما لا يتوفر رابط تحميل لتطبيق معيّن بدلاً من تضليل الزائر. كما نلتزم بعدم استخدام أي أساليب تحميل قسري أو نوافذ منبثقة مزعجة تعطّل تجربة التصفح.</p>
 
     <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">من يقف خلف yassota</h3>
-    <p>yassota مشروع مستقل يديره فريق صغير شغوف بعالم التطبيقات والتقنية، يهدف لخدمة المستخدم العربي بمحتوى عالي الجودة ومحدّث باستمرار. نرحّب دائماً باقتراحاتكم وملاحظاتكم عبر <a href="contact.php" style="color:var(--cyan)">صفحة اتصل بنا</a>.</p>
+    <p>yassota مشروع مستقل يديره فريق صغير شغوف بعالم التطبيقات والتقنية، يهدف لخدمة المستخدم العربي بمحتوى عالي الجودة ومحدّث باستمرار. نرحّب دائماً باقتراحاتكم وملاحظاتكم عبر <a href="<?= h(url('contact')) ?>" style="color:var(--cyan)">صفحة اتصل بنا</a>.</p>
 
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:24px">
       <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px;flex:1;min-width:180px">
@@ -68,7 +68,7 @@ $metaDesc = 'تعرّف على yassota: منصة عربية لتحميل أفض�
       </div>
     </div>
 
-    <p style="margin-top:24px">لمزيد من الشفافية، راجع أيضاً <a href="privacy-policy.php" style="color:var(--cyan)">سياسة الخصوصية</a>، <a href="terms.php" style="color:var(--cyan)">شروط الاستخدام</a>، و<a href="dmca.php" style="color:var(--cyan)">سياسة DMCA</a>.</p>
+    <p style="margin-top:24px">لمزيد من الشفافية، راجع أيضاً <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--cyan)">سياسة الخصوصية</a>، <a href="<?= h(url('terms')) ?>" style="color:var(--cyan)">شروط الاستخدام</a>، و<a href="<?= h(url('dmca')) ?>" style="color:var(--cyan)">سياسة DMCA</a>.</p>
   </div>
 </main>
 </div>

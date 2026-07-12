@@ -265,6 +265,8 @@ function ensure_schema(PDO $pdo): array {
             'vt_scanned_at'    => "DATETIME NULL AFTER vt_total_engines",
             'vt_analysis_id'   => "VARCHAR(255) NULL AFTER vt_scanned_at",
             'vt_permalink'     => "VARCHAR(600) NULL AFTER vt_analysis_id",
+            'link_verified'    => "TINYINT(1) NOT NULL DEFAULT 0 AFTER vt_permalink",
+            'verified_at'      => "DATETIME NULL AFTER link_verified",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
@@ -435,7 +437,7 @@ function build_model_rotation(PDO $pdo, bool $forceAll = false): array {
 
     $models[] = 'openrouter/free'; // ضمان أخير يعمل دائماً
 
-    return array_values(array_unique(array_filter($models)));
+    return ai_filter_text_models(array_values(array_unique(array_filter($models))));
 }
 
 // Low level call to OpenRouter chat completions. Returns ['ok'=>bool,'content'=>?string,'error'=>?string,'http'=>int]
@@ -697,6 +699,21 @@ function import_remote_icon(string $remoteUrl, string $slug): ?string {
 
 // Convenience: builds the key/model list from saved settings and runs a plain-text prompt.
 // Returns ['ok'=>bool,'content'=>?string,'error'=>?string]
+// Models that return classifiers/JSON-schema outputs instead of free text —
+// using them for content generation always produces non-JSON or policy labels
+// instead of the article/SEO copy the prompt asked for.
+const AI_NON_TEXT_MODEL_PATTERNS = ['content-safety', 'moderation', 'guard', 'classifier', 'toxicity'];
+
+function ai_filter_text_models(array $models): array {
+    return array_values(array_filter($models, function(string $m): bool {
+        $m = strtolower($m);
+        foreach (AI_NON_TEXT_MODEL_PATTERNS as $p) {
+            if (str_contains($m, $p)) return false;
+        }
+        return true;
+    }));
+}
+
 function ai_text(PDO $pdo, string $prompt): array {
     $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
     if (!$keys) return ['ok' => false, 'content' => null, 'error' => 'لم يتم إضافة مفتاح OpenRouter بعد.'];
@@ -705,6 +722,8 @@ function ai_text(PDO $pdo, string $prompt): array {
     $autoRotate = get_cfg($pdo, 'openrouter_auto_rotate', '1') === '1';
     $models = array_values(array_unique(array_filter([$primary, $fallback])));
     if ($autoRotate) $models = array_values(array_unique(array_merge($models, openrouter_default_free_models())));
+    $models = ai_filter_text_models($models);
+    if (!$models) $models = ['meta-llama/llama-3.1-8b-instruct:free'];
     $r = openrouter_call_rotating($keys, $models, $prompt);
     if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => openrouter_diagnose_trace($r['trace'])];
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
@@ -819,7 +838,7 @@ function app_url(string $slug): string { return url(rawurlencode($slug)); }
 function download_url(string $slug, int $mirror = 1): string {
     return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
 }
-function article_url(string $slug): string { return url('article.php?slug=' . rawurlencode($slug)); }
+function article_url(string $slug): string { return url('article/' . rawurlencode($slug)); }
 
 function unique_article_slug(PDO $pdo, string $base): string {
     $slug = slugify($base);
@@ -843,17 +862,18 @@ const BLOG_TYPES = [
     'article'    => 'مقالات عامة',
 ];
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
-function blog_post_url(string $slug): string { return url('blog-post.php?slug=' . rawurlencode($slug)); }
-function blog_type_url(string $type): string { return url('blog.php?type=' . rawurlencode($type)); }
+function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
+function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
 
-function unique_blog_slug(PDO $pdo, string $base): string {
+function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {
     $slug = slugify($base);
+    if (!$slug) $slug = 'post-' . time();
     $orig = $slug; $i = 1;
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM blog_posts WHERE slug=?");
-    $stmt->execute([$slug]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM blog_posts WHERE slug=? AND id<>?");
+    $stmt->execute([$slug, $excludeId]);
     while ($stmt->fetchColumn() > 0) {
         $slug = $orig . '-' . (++$i);
-        $stmt->execute([$slug]);
+        $stmt->execute([$slug, $excludeId]);
     }
     return $slug;
 }
@@ -1159,12 +1179,21 @@ function notify_admin(PDO $pdo, string $subject, string $body): void {
 }
 
 function head_extras(PDO $pdo): string {
+    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: 'example.com';
     return '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
         . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
+        . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
-        . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss.php')) . '">' . "\n  "
+        . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
         . '<meta name="theme-color" content="#2563eb">' . "\n  "
+        . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
+        . '<meta name="language" content="ar">' . "\n  "
+        . '<meta property="og:locale" content="ar_AR">' . "\n  "
+        . '<meta property="og:site_name" content="yassota">' . "\n  "
+        . '<meta name="twitter:site" content="@yassota">' . "\n  "
+        . '<meta name="author" content="yassota">' . "\n  "
+        . '<link rel="alternate" hreflang="ar" href="' . h(SITE_URL) . '">' . "\n  "
         . search_console_meta($pdo);
 }
 

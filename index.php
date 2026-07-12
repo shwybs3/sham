@@ -163,7 +163,7 @@ $orgSchema = json_encode([
         <p style="color:var(--muted);font-size:14px;line-height:1.8">
           yassota منصة عربية متخصصة في توفير أفضل تطبيقات وألعاب أندرويد. نسعى لتقديم محتوى موثوق وآمن ومجاني للمستخدم العربي، مع معلومات دقيقة عن كل تطبيق من إصدار ومطور وحجم.
         </p>
-        <a href="about.php" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> اقرأ المزيد عن yassota</a>
+        <a href="<?= h(url('about')) ?>" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> اقرأ المزيد عن yassota</a>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <?php

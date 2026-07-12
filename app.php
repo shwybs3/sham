@@ -136,7 +136,7 @@ $breadcrumbItems = [
     ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
 ];
 if ($app['cat_slug']) {
-    $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category.php?slug=' . $app['cat_slug'])];
+    $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category/' . $app['cat_slug'])];
 }
 $breadcrumbItems[] = ["@type" => "ListItem", "position" => count($breadcrumbItems) + 1, "name" => $app['name'], "item" => app_url($app['slug'])];
 $breadcrumbSchema = json_encode([
@@ -220,7 +220,7 @@ function wave(): string {
     <div class="sidebar-title">التنقل</div>
     <a href="/" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
     <?php if ($app['cat_slug']): ?>
-    <a href="category.php?slug=<?= h($app['cat_slug']) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
+    <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
     <?php endif; ?>
   </div>
   <?php if ($relatedApps): ?>
@@ -246,7 +246,7 @@ function wave(): string {
     <a href="/" style="color:var(--cyan)">الرئيسية</a>
     <span>/</span>
     <?php if ($app['cat_slug']): ?>
-      <a href="category.php?slug=<?= h($app['cat_slug']) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
+      <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
       <span>/</span>
     <?php endif; ?>
     <span><?= h($app['name']) ?></span>
@@ -267,7 +267,7 @@ function wave(): string {
 
       <div class="app-hero-info">
         <h1 class="app-hero-name"><?= h($app['name']) ?></h1>
-        <div class="app-hero-developer"><?php if ($app['developer']): ?><a href="developer.php?name=<?= urlencode($app['developer']) ?>" style="color:inherit"><?= h($app['developer']) ?></a><?php endif; ?></div>
+        <div class="app-hero-developer"><?php if ($app['developer']): ?><a href="<?= h(url('developer/' . rawurlencode($app['developer']))) ?>" style="color:inherit"><?= h($app['developer']) ?></a><?php endif; ?></div>
 
         <div class="app-badges">
           <?php if ($app['cat_name']): ?><span class="badge badge-cyan"><?= h($app['cat_name']) ?></span><?php endif; ?>
@@ -277,9 +277,9 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
+          <button onclick="document.getElementById('download-cta').scrollIntoView({behavior:'smooth'})" class="btn-download-hero" style="border:none;cursor:pointer">
             <?= svgi('download') ?> تحميل مجاني
-          </a>
+          </button>
           <?php if (!empty($app['playstore_url'])): ?>
           <a href="<?= h($app['playstore_url']) ?>" target="_blank" rel="nofollow noopener" class="btn-mirror" title="فتح صفحة التطبيق على Google Play">
             <?= svgi('playstore') ?> Google Play
@@ -351,9 +351,9 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Description -->
+  <!-- Description — no .reveal so it loads immediately visible (not hidden on scroll) -->
   <?php if ($longDescription !== ''): ?>
-  <div class="section-box reveal">
+  <div class="section-box">
     <div class="section-head"><span class="section-title">الوصف</span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85">
       <?= nl2br(h($longDescription)) ?>
@@ -615,6 +615,39 @@ function wave(): string {
     <?php endforeach; ?>
   </div>
   <?php endif; ?>
+
+  <!-- ── Download CTA — last thing on page (the hero button scrolls here) ── -->
+  <div id="download-cta" class="download-cta-section">
+    <?php if ($app['icon_path']): ?>
+      <img src="<?= h($app['icon_path']) ?>" alt="<?= h($app['name']) ?>"
+           style="width:72px;height:72px;border-radius:18px;object-fit:cover;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,.15)">
+    <?php endif; ?>
+    <div class="download-cta-title">حمّل <?= h($app['name']) ?> الآن</div>
+    <div class="download-cta-sub">
+      <?php if ($app['version']): ?><span style="font-family:var(--f-mono)">v<?= h($app['version']) ?></span><?php endif; ?>
+      <?php if ($app['size_mb']): ?> · <?= h($app['size_mb']) ?> MB<?php endif; ?>
+      · مجاناً للأندرويد
+    </div>
+    <?php if ($app['link_verified']): ?>
+    <div class="verified-badge" style="justify-content:center;margin-bottom:16px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+      تم التحقق من سلامة الرابط بواسطة فريق yassota
+    </div>
+    <?php endif; ?>
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-scroll-to-dl" data-hardnav="1">
+      <?= svgi('download') ?> تحميل مجاني الآن
+    </a>
+    <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
+    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <?php if ($app['mirror2_url']): ?>
+        <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
+      <?php endif; ?>
+      <?php if ($app['mirror3_url']): ?>
+        <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+  </div>
 
 </main>
 </div>

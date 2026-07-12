@@ -70,9 +70,9 @@ $breadcrumbSchema = json_encode([
   </nav>
 
   <div class="cat-chips reveal" style="margin-bottom:20px">
-    <a href="blog.php" class="cat-chip <?= $type === '' ? 'active' : '' ?>" style="text-decoration:none">الكل</a>
+    <a href="<?= h(url('blog')) ?>" class="cat-chip <?= $type === '' ? 'active' : '' ?>" style="text-decoration:none">الكل</a>
     <?php foreach (BLOG_TYPES as $t => $label): ?>
-    <a href="blog.php?type=<?= h($t) ?>" class="cat-chip <?= $type === $t ? 'active' : '' ?>" style="text-decoration:none"><?= h($label) ?></a>
+    <a href="<?= h(url('blog?type=' . rawurlencode($t))) ?>" class="cat-chip <?= $type === $t ? 'active' : '' ?>" style="text-decoration:none"><?= h($label) ?></a>
     <?php endforeach; ?>
   </div>
 

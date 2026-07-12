@@ -20,7 +20,9 @@ if (!$post) {
 }
 if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
-$body = clean_long_text($post['body'] ?? '');
+// Body is stored as HTML from the WYSIWYG editor (admin-only authoring,
+// so raw HTML output is intentional and safe — no public user input here).
+$body = trim($post['body'] ?? '');
 $seoTitle = $post['seo_title'] ?: $post['title'];
 $metaDesc = $post['meta_description'] ?: ($post['excerpt'] ?: mb_substr(trim(strip_tags($body)), 0, 160));
 
@@ -103,8 +105,8 @@ $articleSchema = json_encode(array_filter([
     <span class="section-title"><?= h($post['title']) ?></span>
   </div>
 
-  <div class="section-box reveal" style="margin-bottom:20px">
-    <div style="color:var(--muted);font-size:14px;line-height:1.9"><?= nl2br(h($body)) ?></div>
+  <div class="section-box" style="margin-bottom:20px">
+    <div class="blog-body"><?= $body ?></div>
   </div>
 
   <?php if ($relatedApps): ?>

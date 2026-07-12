@@ -36,7 +36,7 @@ $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
     "itemListElement" => [
         ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
-        ["@type" => "ListItem", "position" => 2, "name" => $dev, "item" => url('developer.php?name=' . urlencode($dev))],
+        ["@type" => "ListItem", "position" => 2, "name" => $dev, "item" => url('developer/' . rawurlencode($dev))],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
@@ -49,7 +49,7 @@ $breadcrumbSchema = json_encode([
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('developer.php?name=' . urlencode($dev))) ?>">
+  <link rel="canonical" href="<?= h(url('developer/' . rawurlencode($dev))) ?>">
   <meta property="og:type" content="website">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">

@@ -11,20 +11,20 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc><?= SITE_URL ?>/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
-  <url><loc><?= SITE_URL ?>/top.php?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc><?= SITE_URL ?>/top.php?by=views</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc><?= SITE_URL ?>/updates.php</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
-  <url><loc><?= SITE_URL ?>/about.php</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
-  <url><loc><?= SITE_URL ?>/contact.php</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
-  <url><loc><?= SITE_URL ?>/privacy-policy.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-  <url><loc><?= SITE_URL ?>/terms.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-  <url><loc><?= SITE_URL ?>/cookie-policy.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-  <url><loc><?= SITE_URL ?>/dmca.php</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/top?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/top?by=views</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/updates</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc><?= SITE_URL ?>/contact</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc><?= SITE_URL ?>/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/terms</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/cookie-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc><?= SITE_URL ?>/dmca</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <?php foreach ($cats as $c): ?>
-  <url><loc><?= SITE_URL ?>/category.php?slug=<?= urlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/category/<?= rawurlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <?php endforeach; ?>
   <?php foreach ($developers as $d): ?>
-  <url><loc><?= SITE_URL ?>/developer.php?name=<?= urlencode($d) ?></loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/developer/<?= rawurlencode($d) ?></loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <?php endforeach; ?>
   <?php foreach ($apps as $a): ?>
   <url>

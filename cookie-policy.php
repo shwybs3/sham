@@ -45,7 +45,7 @@ $metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الار
     <p>يمكنك حذف أو حظر الكوكيز من إعدادات متصفحك في أي وقت؛ لاحظ أن تعطيل بعض الكوكيز قد يؤثر على بعض وظائف الموقع. للتحكم في إعلانات Google المخصصة تحديداً، تفضّل بزيارة <a href="https://adssettings.google.com" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">إعدادات إعلانات Google</a>. يمكنك أيضاً استخدام إضافات المتصفح لمنع التتبع الإعلاني إن رغبت.</p>
 
     <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">مزيد من المعلومات</h3>
-    <p>لأي استفسار حول استخدامنا لملفات تعريف الارتباط، راجع <a href="privacy-policy.php" style="color:var(--cyan)">سياسة الخصوصية</a> أو تواصل معنا على: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a></p>
+    <p>لأي استفسار حول استخدامنا لملفات تعريف الارتباط، راجع <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--cyan)">سياسة الخصوصية</a> أو تواصل معنا على: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a></p>
   </div>
 </main>
 </div>
