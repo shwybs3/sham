@@ -622,6 +622,23 @@ document.addEventListener('DOMContentLoaded', () => {
       btnBgSuggest.disabled = false;
     });
 
+    document.getElementById('btn-bg-manual')?.addEventListener('click', () => {
+      const raw = document.getElementById('bg-manual-names').value;
+      const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!names.length) { suggestStatus.textContent = '❌ أدخل اسماً واحداً على الأقل'; return; }
+      namesList.innerHTML = '';
+      names.forEach(name => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer';
+        row.innerHTML = `<input type="checkbox" checked value="${escHtml(name)}"><span>${escHtml(name)}</span>`;
+        namesList.appendChild(row);
+      });
+      namesPanel.style.display = 'block';
+      bgResults.innerHTML = '';
+      suggestStatus.textContent = `✅ تم تحميل ${names.length} اسم يدوياً`;
+      namesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
     btnBgCreate.addEventListener('click', async () => {
       const type = document.getElementById('bg-type').value === 'games' ? 'games' : 'apps';
       const checked = [...namesList.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);

@@ -446,8 +446,10 @@ function build_model_rotation(PDO $pdo, bool $forceAll = false): array {
 // value is multiplied by every (key × model) pair openrouter_call_rotating()
 // tries — a long per-attempt timeout is what made a single content-generation
 // request able to block a PHP worker for many minutes.
-function openrouter_call(string $key, string $model, string $prompt, int $timeout = 20): array {
+function openrouter_call(string $key, string $model, string $prompt, int $timeout = 20, int $maxTokens = 0): array {
     if (!$key) return ['ok' => false, 'content' => null, 'error' => 'لا يوجد مفتاح API', 'http' => 0];
+    $body = ['model' => $model, 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7];
+    if ($maxTokens > 0) $body['max_tokens'] = $maxTokens;
     $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
@@ -455,7 +457,7 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
             'Authorization: Bearer ' . $key, 'Content-Type: application/json',
             'HTTP-Referer: ' . SITE_URL, 'X-Title: yassota',
         ],
-        CURLOPT_POSTFIELDS => json_encode(['model' => $model, 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7]),
+        CURLOPT_POSTFIELDS => json_encode($body),
     ]);
     $res = curl_exec($ch);
     $err = curl_error($ch);
@@ -480,7 +482,7 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
 // 20s/attempt that's still 30+ minutes worst case if every one fails or
 // times out. Capping bounds a single request to at most a couple of minutes
 // while still trying enough combinations to almost always succeed.
-function openrouter_call_rotating(array $keys, array $models, string $prompt): array {
+function openrouter_call_rotating(array $keys, array $models, string $prompt, int $timeout = 20, int $maxTokens = 0): array {
     $trace = [];
     $attempts = 0;
     $maxAttempts = 12;
@@ -488,7 +490,7 @@ function openrouter_call_rotating(array $keys, array $models, string $prompt): a
         foreach ($models as $model) {
             if ($attempts >= $maxAttempts) break 2;
             $attempts++;
-            $r = openrouter_call($key, $model, $prompt);
+            $r = openrouter_call($key, $model, $prompt, $timeout, $maxTokens);
             $trace[] = ['model' => $model, 'key_tail' => substr($key, -4), 'ok' => $r['ok'], 'error' => $r['error'], 'http' => $r['http']];
             if ($r['ok']) {
                 return ['ok' => true, 'content' => $r['content'], 'model' => $model, 'trace' => $trace];

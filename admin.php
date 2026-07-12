@@ -813,6 +813,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'suggest_trending' && is_admin()) 
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
     header('Content-Type: application/json');
+    @set_time_limit(150); // AI long-form generation + Play Store scrape + icon fetch can run past shared-hosting's 30s default
     $input = json_decode(file_get_contents('php://input'), true);
     $name = trim($input['name'] ?? '');
     $type = in_array($input['type'] ?? 'apps', ['apps','games'], true) ? $input['type'] : 'apps';
@@ -824,11 +825,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
 
     $seoStandards = seo_prompt_standards();
     $prompt = <<<P
-أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+أنت كاتب محتوى سوري محترف متخصص بمراجعة التطبيقات، تكتب لموقع تحميل تطبيقات أندرويد عربي. التطبيق: "{$name}"
 
 {$seoStandards}
 
-- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات. (يمكن للأدمن توسيعه لاحقاً حتى 1500-3000 كلمة بزر "متابعة الكتابة").
+- long_description: هذا هو المطلوب الأهم — نص طويل جداً ومفصّل لا يقل عن 2200 كلمة (كلما كان أطول وأغنى بالتفاصيل كان أفضل)، مكتوب بلهجة سورية خفيفة وأسلوب إنساني ودافئ كأنك تشرح لصديقك ليش هالتطبيق حلو وشو بيقدملك، وليس نصاً روبوتياً أو قائمة جافة. لكن حافظ على وضوح الكلام بحيث يفهمه كل الناطقين بالعربية (لهجة سورية مخفّفة قريبة من الفصحى، لا تستخدم عامية ثقيلة جداً). قسّم النص لعدة فقرات وعناوين فرعية داخل النص (بدون Markdown، فقط أسطر جديدة) تغطي على الأقل:
+  1. مقدمة شخصية دافئة عن التطبيق وليش الناس عم يدورو عليه.
+  2. نظرة عامة موسّعة على التطبيق واستخداماته.
+  3. شرح تفصيلي مطوّل لكل ميزة رئيسية (فقرة كاملة لكل ميزة، مو مجرد جملة).
+  4. لمين هالتطبيق مناسب (نوعية المستخدمين).
+  5. مقارنة سريعة مع بدائل مشابهة وليش هاد أفضل أو مختلف.
+  6. نصائح استخدام عملية وحلول لمشاكل شائعة.
+  7. خاتمة تحفّز القارئ على التحميل.
+  التزم بأسلوب SEO طبيعي (كرر اسم التطبيق وكلمات مثل "تحميل" و"تنزيل" و"APK" بشكل طبيعي ضمن السياق دون حشو مزعج).
 
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
@@ -836,7 +845,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
   "seo_title":"",
   "meta_description":"",
   "keywords":"",
-  "short_description":"جملة أو جملتين",
+  "short_description":"جملة أو جملتين بأسلوب سوري ودود",
   "long_description":"",
   "developer":"اسم المطور المحتمل",
   "version":"رقم إصدار مثل 3.1.0",
@@ -846,14 +855,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_create_one' && is_admin()) {
   "package_name":"com.developer.appname",
   "rating":4.5,
   "whats_new":"آخر التحديثات",
-  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5"],
-  "pros":["إيجابية 1","إيجابية 2","إيجابية 3"],
+  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5","ميزة 6"],
+  "pros":["إيجابية 1","إيجابية 2","إيجابية 3","إيجابية 4"],
   "cons":["سلبية 1","سلبية 2"],
   "install_steps":["خطوة 1","خطوة 2","خطوة 3","خطوة 4"],
-  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"}]
+  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة بلهجة ودودة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"},{"q":"سؤال 4","a":"إجابة 4"}]
 }
 P;
-    $result = openrouter_call_rotating($keys, $models, $prompt);
+    $result = openrouter_call_rotating($keys, $models, $prompt, 90, 9000);
     if (!$result['ok']) { echo json_encode(['success'=>false,'error'=>'فشل توليد المحتوى بالذكاء الاصطناعي']); exit; }
     $data = ai_extract_json($result['content']);
     if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
@@ -2007,6 +2016,15 @@ elseif ($page === 'bulk-generate'): ?>
     اقترح الأسماء
   </button>
   <div class="ai-status" id="bg-suggest-status"></div>
+
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-c)">
+    <label class="form-label">أو أدخل أسماء التطبيقات يدوياً بنفسك (اسم واحد بكل سطر) — يتخطى اقتراح الذكاء الاصطناعي ويستخدم أسماءك مباشرة</label>
+    <textarea class="form-textarea" id="bg-manual-names" rows="8" placeholder="واتساب&#10;تيليجرام&#10;فيسبوك&#10;ماسنجر&#10;سناب شات&#10;يوتيوب&#10;..." style="font-family:inherit;direction:rtl"></textarea>
+    <button type="button" id="btn-bg-manual" class="btn-save" style="margin-top:10px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+      استخدم هذه الأسماء
+    </button>
+  </div>
 </div>
 
 <div class="panel" id="bg-names-panel" style="display:none">
