@@ -498,6 +498,71 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate one general blog post (tutorial/news/
+   comparison/best-of/article) — the general-content system,
+   distinct from the per-app app_articles above.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()) {
+    header('Content-Type: application/json');
+    $type = trim($_GET['type'] ?? 'article');
+    if (!isset(BLOG_TYPES[$type])) $type = 'article';
+    $topic = trim($_GET['topic'] ?? '');
+
+    $typeGuides = [
+        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
+        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
+        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
+        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
+        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
+        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
+    ];
+    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل (وليس ترجمة أو نسخاً) من نوع:
+{$typeGuides[$type]}
+{$topicLine}
+المقال بطول 700-1200 كلمة، فقرات طبيعية منظمة بعناوين فرعية واضحة حيث يلزم، بدون Markdown (نص عادي فقط، استخدم أسطراً جديدة للفصل بين الفقرات والعناوين)، بأسلوب يخدم قراء يبحثون عن معلومة حقيقية ومفيدة — ليس حشو كلمات لأغراض SEO فقط.
+
+اتبع معايير SEO التالية:
+- seo_title: عنوان جذاب بطول 50-65 حرفاً يتضمن الكلمة المفتاحية الرئيسية.
+- meta_description: 140-160 حرفاً، يلخص المقال ويشجع على النقر.
+- keywords: 10-15 كلمة/عبارة مفتاحية عربية طويلة الذيل مفصولة بفاصلة.
+- excerpt: ملخص قصير جداً (سطر إلى سطرين) يظهر في بطاقة المقال بصفحات القوائم.
+
+أعد JSON صالح فقط بدون أي نص خارج JSON:
+{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+    $data = clean_utf8_deep($data);
+
+    $title = trim($data['title'] ?? '');
+    $body  = trim($data['body'] ?? '');
+    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي ناقص']); exit; }
+    $slug = unique_blog_slug($pdo, $title);
+
+    // Best-effort cover image — never blocks the post from being created.
+    $coverImage = null;
+    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
+    if ($ir['ok']) {
+        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
+        file_put_contents($tmp, $ir['bin']);
+        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
+        @unlink($tmp);
+    }
+
+    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
+        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
+            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
+    $newId = (int)$pdo->lastInsertId();
+    echo json_encode(['success'=>true,'id'=>$newId,'title'=>$title], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -859,6 +924,48 @@ if ($page === 'edit-app' && isset($_GET['del_article']) && isset($_GET['t']) &&
     header('Location: admin.php?page=edit-app&id=' . (int)($_GET['id'] ?? 0)); exit;
 }
 
+// ─── Delete a blog post ───
+if ($page === 'blog' && isset($_GET['del']) && isset($_GET['t']) &&
+    hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
+    $pdo->prepare("DELETE FROM blog_posts WHERE id=?")->execute([(int)$_GET['del']]);
+    bump_cache_version($pdo);
+    header('Location: admin.php?page=blog&msg=deleted'); exit;
+}
+
+// ─── Save / Update a blog post ───
+if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    $_POST = clean_utf8_deep($_POST);
+    $id    = (int)($_POST['id'] ?? 0);
+    $title = trim($_POST['title'] ?? '');
+    if (!$title) { $blogError = 'العنوان مطلوب'; }
+    else {
+        $type = isset(BLOG_TYPES[$_POST['type'] ?? '']) ? $_POST['type'] : 'article';
+        $d = [
+            'type' => $type,
+            'title' => $title,
+            'seo_title' => trim($_POST['seo_title'] ?? ''),
+            'meta_description' => trim($_POST['meta_description'] ?? ''),
+            'keywords' => trim($_POST['keywords'] ?? ''),
+            'excerpt' => trim($_POST['excerpt'] ?? ''),
+            'body' => trim($_POST['body'] ?? ''),
+            'status' => ($_POST['status'] ?? 'draft') === 'published' ? 'published' : 'draft',
+        ];
+        if ($id) {
+            $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
+            $d['id'] = $id;
+            $pdo->prepare("UPDATE blog_posts SET $sets WHERE id=:id")->execute($d);
+        } else {
+            $d['slug'] = unique_blog_slug($pdo, $title);
+            $cols = implode(',', array_keys($d));
+            $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
+            $pdo->prepare("INSERT INTO blog_posts ($cols) VALUES ($vals)")->execute($d);
+            $id = (int)$pdo->lastInsertId();
+        }
+        bump_cache_version($pdo);
+        header('Location: admin.php?page=blog&msg=saved'); exit;
+    }
+}
+
 // ─── Save / Update app ───
 if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
     // Strip any invalid UTF-8 bytes from every submitted field before they
@@ -1130,6 +1237,8 @@ $navLinks = [
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
+    'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
+    'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -1924,6 +2033,147 @@ elseif ($page === 'comments'):
   </tbody>
 </table>
 </div>
+
+<?php
+/* ─────────────── BLOG LIST ─────────────── */
+elseif ($page === 'blog'):
+  $blogTypeFilter = trim($_GET['type'] ?? '');
+  $blogWhere = "";
+  $blogParams = [];
+  if (isset(BLOG_TYPES[$blogTypeFilter])) { $blogWhere = "WHERE type=?"; $blogParams[] = $blogTypeFilter; }
+  $blogStmt = $pdo->prepare("SELECT * FROM blog_posts $blogWhere ORDER BY created_at DESC LIMIT 200");
+  $blogStmt->execute($blogParams);
+  $blogPosts = $blogStmt->fetchAll();
+?>
+
+<div class="admin-header">
+  <h1>المدونة والمحتوى</h1>
+  <a href="admin.php?page=blog-edit" class="btn-edit">+ مقال جديد يدوياً</a>
+</div>
+
+<div class="panel">
+  <h2>توليد مقال جديد بالذكاء الاصطناعي</h2>
+  <div class="form-grid" style="margin-bottom:12px">
+    <div class="form-group">
+      <label class="form-label">القسم</label>
+      <select class="form-select" id="blog-gen-type">
+        <?php foreach (BLOG_TYPES as $t => $label): ?>
+        <option value="<?= h($t) ?>"><?= h($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">الموضوع (اختياري — اتركه فارغاً ليختار الذكاء الاصطناعي موضوعاً مناسباً)</label>
+      <input class="form-input" type="text" id="blog-gen-topic" placeholder="مثال: أفضل تطبيقات تعديل الفيديو 2026">
+    </div>
+  </div>
+  <button type="button" id="btn-generate-blog" class="btn-ai">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    توليد مقال (يُنشأ كمسودة، راجعه ثم انشره)
+  </button>
+  <div id="blog-gen-result" style="margin-top:12px"></div>
+</div>
+
+<div class="cat-chips" style="margin:16px 0">
+  <a href="admin.php?page=blog" class="cat-chip <?= $blogTypeFilter==='' ? 'active':'' ?>" style="text-decoration:none">الكل</a>
+  <?php foreach (BLOG_TYPES as $t => $label): ?>
+  <a href="admin.php?page=blog&type=<?= h($t) ?>" class="cat-chip <?= $blogTypeFilter===$t ? 'active':'' ?>" style="text-decoration:none"><?= h($label) ?></a>
+  <?php endforeach; ?>
+</div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>العنوان</th><th>القسم</th><th>الحالة</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($blogPosts as $bp): ?>
+  <tr>
+    <td data-label="العنوان" style="font-weight:700"><?= h($bp['title']) ?></td>
+    <td data-label="القسم" style="color:var(--muted);font-size:12px"><?= h(blog_type_label($bp['type'])) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $bp['status']==='published'?'status-published':'status-draft' ?>"><?= $bp['status']==='published'?'منشور':'مسودة' ?></span></td>
+    <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($bp['created_at'])) ?></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a href="admin.php?page=blog-edit&id=<?= (int)$bp['id'] ?>" class="btn-edit">تعديل</a>
+        <?php if ($bp['status']==='published'): ?>
+        <a href="<?= h(blog_post_url($bp['slug'])) ?>" target="_blank" class="btn-view">عرض</a>
+        <?php endif; ?>
+        <a href="admin.php?page=blog&del=<?= (int)$bp['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذا المقال؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$blogPosts): ?><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">لا توجد مقالات بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── BLOG EDIT ─────────────── */
+elseif ($page === 'blog-edit'):
+  $blogPost = ['id'=>0,'type'=>'article','title'=>'','seo_title'=>'','meta_description'=>'','keywords'=>'','excerpt'=>'','body'=>'','status'=>'draft'];
+  if (isset($_GET['id'])) {
+    $bstmt = $pdo->prepare("SELECT * FROM blog_posts WHERE id=?");
+    $bstmt->execute([(int)$_GET['id']]);
+    $found = $bstmt->fetch();
+    if ($found) $blogPost = $found;
+  }
+?>
+
+<div class="admin-header">
+  <h1><?= $blogPost['id'] ? 'تعديل: '.h($blogPost['title']) : 'مقال جديد' ?></h1>
+  <a href="admin.php?page=blog" class="btn-edit">← كل المقالات</a>
+</div>
+
+<?php if (!empty($blogError)): ?><div class="alert alert-error"><?= h($blogError) ?></div><?php endif; ?>
+
+<form method="post" action="admin.php?page=blog-edit">
+  <?= csrf_field() ?>
+  <input type="hidden" name="id" value="<?= (int)$blogPost['id'] ?>">
+  <div class="panel">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">العنوان *</label>
+        <input class="form-input" type="text" name="title" value="<?= h($blogPost['title']) ?>" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">القسم</label>
+        <select class="form-select" name="type">
+          <?php foreach (BLOG_TYPES as $t => $label): ?>
+          <option value="<?= h($t) ?>" <?= $blogPost['type']===$t?'selected':'' ?>><?= h($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الحالة</label>
+        <select class="form-select" name="status">
+          <option value="draft" <?= $blogPost['status']==='draft'?'selected':'' ?>>مسودة</option>
+          <option value="published" <?= $blogPost['status']==='published'?'selected':'' ?>>منشور</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">SEO Title</label>
+        <input class="form-input" type="text" name="seo_title" value="<?= h($blogPost['seo_title']) ?>">
+      </div>
+      <div class="form-group">
+        <label class="form-label">الكلمات المفتاحية</label>
+        <input class="form-input" type="text" name="keywords" value="<?= h($blogPost['keywords']) ?>">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Meta Description</label>
+        <input class="form-input" type="text" name="meta_description" value="<?= h($blogPost['meta_description']) ?>">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">ملخص قصير (يظهر في بطاقة المقال)</label>
+        <input class="form-input" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">نص المقال</label>
+        <textarea class="form-textarea" name="body" rows="16"><?= h($blogPost['body']) ?></textarea>
+      </div>
+    </div>
+  </div>
+  <button type="submit" class="btn-save" style="margin-bottom:40px">حفظ المقال</button>
+</form>
 
 <?php
 /* ─────────────── CONNECTION TEST ─────────────── */

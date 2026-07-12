@@ -74,6 +74,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Generate a new blog post (tutorial/news/comparison/best-of/article) via AI ── */
+  const btnGenBlog = document.getElementById('btn-generate-blog');
+  if (btnGenBlog) {
+    btnGenBlog.addEventListener('click', async () => {
+      const type = document.getElementById('blog-gen-type')?.value || 'article';
+      const topic = document.getElementById('blog-gen-topic')?.value || '';
+      const out = document.getElementById('blog-gen-result');
+      btnGenBlog.disabled = true;
+      if (out) out.innerHTML = '<span style="color:var(--muted)">⏳ جاري توليد المقال بالذكاء الاصطناعي (قد يستغرق دقيقة)...</span>';
+      try {
+        const res = await fetch(`admin.php?ajax=generate_blog_post&type=${encodeURIComponent(type)}&topic=${encodeURIComponent(topic)}`);
+        const data = await res.json();
+        if (data.success) {
+          if (out) out.innerHTML = `<span style="color:var(--success)">✅ تم إنشاء المقال "${data.title}" كمسودة.</span> <a href="admin.php?page=blog-edit&id=${data.id}" class="btn-edit" style="margin-inline-start:8px">راجعه الآن ←</a>`;
+        } else {
+          if (out) out.innerHTML = `<span style="color:var(--danger)">❌ ${data.error || 'فشل التوليد'}</span>`;
+        }
+      } catch { if (out) out.innerHTML = '<span style="color:var(--danger)">تعذر الاتصال</span>'; }
+      btnGenBlog.disabled = false;
+    });
+  }
+
   /* ── Dynamic list builder (features, pros, cons, steps, faq) ── */
   window.initDynamicList = (containerId, fieldName, placeholder, secondField) => {
     const container = document.getElementById(containerId);

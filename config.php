@@ -179,6 +179,29 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'app_articles';
 
+    // General-content blog — distinct from app_articles (which are always
+    // tied to one specific app). Covers tutorials/news/comparisons/best-of
+    // roundups/general articles: original editorial content beyond app
+    // listing pages, for internal linking, SEO depth, and AdSense content volume.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blog_posts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      type ENUM('tutorial','news','comparison','best-apps','best-games','article') NOT NULL DEFAULT 'article',
+      title VARCHAR(255) NOT NULL,
+      slug VARCHAR(280) NOT NULL UNIQUE,
+      seo_title VARCHAR(255),
+      meta_description VARCHAR(320),
+      keywords VARCHAR(500),
+      excerpt VARCHAR(500),
+      body MEDIUMTEXT,
+      cover_image VARCHAR(300),
+      status ENUM('published','draft') NOT NULL DEFAULT 'draft',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_type (type),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'blog_posts';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -718,6 +741,7 @@ const RESERVED_SLUGS = [
     'sitemap', 'robots', 'config', 'partials', 'install', 'uploads', 'assets',
     'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy', 'article',
     'rss', 'track-view', 'comment-form', 'manifest.json', 'favicon.svg', 'search-suggest',
+    'blog', 'blog-post',
 ];
 
 function unique_slug(PDO $pdo, string $base): string {
@@ -744,6 +768,31 @@ function unique_article_slug(PDO $pdo, string $base): string {
     $slug = slugify($base);
     $orig = $slug; $i = 1;
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM app_articles WHERE slug=?");
+    $stmt->execute([$slug]);
+    while ($stmt->fetchColumn() > 0) {
+        $slug = $orig . '-' . (++$i);
+        $stmt->execute([$slug]);
+    }
+    return $slug;
+}
+
+/* ── General blog (tutorials/news/comparisons/best-of/articles) ── */
+const BLOG_TYPES = [
+    'tutorial'   => 'الشروحات',
+    'news'       => 'الأخبار',
+    'comparison' => 'المقارنات',
+    'best-apps'  => 'أفضل التطبيقات',
+    'best-games' => 'أفضل الألعاب',
+    'article'    => 'مقالات عامة',
+];
+function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
+function blog_post_url(string $slug): string { return url('blog-post.php?slug=' . rawurlencode($slug)); }
+function blog_type_url(string $type): string { return url('blog.php?type=' . rawurlencode($type)); }
+
+function unique_blog_slug(PDO $pdo, string $base): string {
+    $slug = slugify($base);
+    $orig = $slug; $i = 1;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM blog_posts WHERE slug=?");
     $stmt->execute([$slug]);
     while ($stmt->fetchColumn() > 0) {
         $slug = $orig . '-' . (++$i);

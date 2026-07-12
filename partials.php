@@ -22,6 +22,7 @@ function partial_icon(string $name): string {
         'clock'    => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
         'arrow-r'  => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
         'external' => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+        'article'  => '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>',
     ];
     return $icons[$name] ?? '';
 }
@@ -77,6 +78,12 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     <a href="top.php?by=downloads" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
     <a href="top.php?by=views" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر زيارة</a>
     <a href="updates.php" class="sidebar-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">المدونة</div>
+    <?php foreach (BLOG_TYPES as $t => $label): ?>
+    <a href="<?= h(blog_type_url($t)) ?>" class="sidebar-link"><?= partial_icon('article') ?> <?= h($label) ?></a>
+    <?php endforeach; ?>
   </div>
 </aside>
 <?php }

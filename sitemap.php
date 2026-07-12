@@ -6,6 +6,7 @@ $apps = $pdo->query("SELECT slug, updated_at FROM apps WHERE status='published'"
 $cats = $pdo->query("SELECT slug FROM categories")->fetchAll();
 $developers = $pdo->query("SELECT DISTINCT developer FROM apps WHERE status='published' AND developer IS NOT NULL AND developer<>''")->fetchAll(PDO::FETCH_COLUMN);
 $articles = $pdo->query("SELECT ar.slug, ar.created_at FROM app_articles ar JOIN apps a ON ar.app_id=a.id WHERE a.status='published'")->fetchAll();
+$blogPosts = $pdo->query("SELECT slug, updated_at FROM blog_posts WHERE status='published'")->fetchAll();
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -37,6 +38,14 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <loc><?= h(article_url($art['slug'])) ?></loc>
     <lastmod><?= date('Y-m-d', strtotime($art['created_at'])) ?></lastmod>
     <changefreq>monthly</changefreq><priority>0.5</priority>
+  </url>
+  <?php endforeach; ?>
+  <url><loc><?= SITE_URL ?>/blog.php</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <?php foreach ($blogPosts as $bp): ?>
+  <url>
+    <loc><?= h(blog_post_url($bp['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($bp['updated_at'])) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.6</priority>
   </url>
   <?php endforeach; ?>
 </urlset>
