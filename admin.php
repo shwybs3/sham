@@ -63,7 +63,7 @@ P;
     if (!$result['ok']) {
         echo json_encode([
             'success' => false,
-            'error'   => 'فشل الاتصال بـ OpenRouter بعد تجربة ' . count($result['trace']) . ' محاولة (مفاتيح × موديلات). راجع صفحة "اختبار الاتصال" للتفاصيل.',
+            'error'   => openrouter_diagnose_trace($result['trace']),
             'trace'   => $result['trace'],
         ]);
         exit;
@@ -123,7 +123,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_connection' && is_admin()) {
         $checks[] = [
             'label' => 'الاتصال بـ OpenRouter (' . count($keys) . ' مفتاح × ' . count($models) . ' موديل)',
             'ok' => $r['ok'],
-            'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : 'فشلت كل المحاولات — راجع تفاصيل الأخطاء أدناه',
+            'detail' => $r['ok'] ? ('نجح الاتصال باستخدام الموديل: '.$r['model']) : openrouter_diagnose_trace($r['trace']),
             'trace' => $r['trace'],
             'working_model' => $r['ok'] ? $r['model'] : null,
         ];
@@ -979,13 +979,18 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
 
     if (!$name) { $error = 'اسم التطبيق مطلوب'; goto render; }
 
-    // Slug
+    // Slug — an admin-chosen slug wins if provided (and differs from the
+    // current one on edit); otherwise it's auto-derived from the name, same
+    // as before this field existed.
+    $customSlug = trim($_POST['slug'] ?? '');
     if ($isEdit && $appId) {
         $existing = $pdo->prepare("SELECT slug,icon_path,screenshots,version,download_url,whats_new FROM apps WHERE id=?");
         $existing->execute([$appId]); $existing = $existing->fetch();
-        $slug = $existing['slug'];
+        $slug = ($customSlug !== '' && $customSlug !== $existing['slug'])
+            ? unique_slug($pdo, $customSlug, $appId)
+            : $existing['slug'];
     } else {
-        $slug = unique_slug($pdo, $name);
+        $slug = unique_slug($pdo, $customSlug !== '' ? $customSlug : $name);
         $existing = null;
     }
 
@@ -1049,6 +1054,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
 
     $d = [
         'name'              => $name,
+        'slug'              => $slug,
         'seo_title'         => trim($_POST['seo_title'] ?? ''),
         'meta_description'  => trim($_POST['meta_description'] ?? ''),
         'keywords'          => trim($_POST['keywords'] ?? ''),
@@ -1100,7 +1106,6 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         bump_cache_version($pdo);
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
     } else {
-        $d['slug'] = $slug;
         $cols = implode(',', array_keys($d));
         $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
@@ -1519,6 +1524,16 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <div class="form-group full">
         <label class="form-label">اسم التطبيق *</label>
         <input class="form-input" id="f-name" type="text" name="name" value="<?= h($app['name']??'') ?>" required>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">رابط الصفحة (Slug)</label>
+        <input class="form-input" id="f-slug" type="text" name="slug" dir="ltr" style="text-align:left"
+               value="<?= h($app['slug'] ?? '') ?>" placeholder="سيُنشأ تلقائياً من الاسم إن تُرك فارغاً"
+               pattern="[a-zA-Z0-9؀-ۿ\-]*">
+        <span style="font-size:11px;color:var(--muted);display:block;margin-top:4px" dir="ltr">
+          <?= h(SITE_URL) ?>/<span id="slug-preview"><?= h($app['slug'] ?? 'app-name') ?></span>
+          <?php if ($isEdit): ?> — تنبيه: تغييره يغيّر رابط الصفحة الحالي (قد يفقد أي روابط خارجية مؤشرة عليه).<?php endif; ?>
+        </span>
       </div>
       <div class="form-group">
         <label class="form-label">SEO Title</label>

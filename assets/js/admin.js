@@ -74,6 +74,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Live slug preview on the add/edit-app form ── */
+  const slugInput = document.getElementById('f-slug');
+  const slugPreview = document.getElementById('slug-preview');
+  const nameInputForSlug = document.getElementById('f-name');
+  if (slugInput && slugPreview) {
+    const clientSlugify = (s) => (s || '').trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^؀-ۿa-zA-Z0-9\-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'app-name';
+    const updatePreview = () => {
+      slugPreview.textContent = clientSlugify(slugInput.value || nameInputForSlug?.value || '');
+    };
+    slugInput.addEventListener('input', updatePreview);
+    nameInputForSlug?.addEventListener('input', () => { if (!slugInput.value) updatePreview(); });
+  }
+
   /* ── Generate a new blog post (tutorial/news/comparison/best-of/article) via AI ── */
   const btnGenBlog = document.getElementById('btn-generate-blog');
   if (btnGenBlog) {

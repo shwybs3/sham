@@ -496,6 +496,47 @@ function openrouter_call_rotating(array $keys, array $models, string $prompt): a
     return ['ok' => false, 'content' => null, 'model' => null, 'trace' => $trace];
 }
 
+// Turns a failed openrouter_call_rotating() trace into one concrete Arabic
+// sentence explaining WHY, instead of a generic "connection failed" —
+// the HTTP codes across attempts almost always point at one root cause
+// (bad key, no credits, rate limit, or the host's outbound network itself
+// being blocked) even when the admin never opens the raw trace.
+function openrouter_diagnose_trace(array $trace): string {
+    if (!$trace) return 'لم تتم أي محاولة اتصال.';
+    $codes = array_column($trace, 'http');
+    $count = count($trace);
+    $countOf = fn($c) => count(array_filter($codes, fn($x) => $x === $c));
+
+    if ($countOf(0) === $count) {
+        return "تعذّر الوصول إلى openrouter.ai من الخادم نفسه ({$count} محاولة، فشل اتصال في كل مرة) — الأغلب أن استضافتك تحظر الاتصال الخارجي (outbound HTTPS) من كود PHP، أو أن اسم النطاق openrouter.ai محجوب. تواصل مع شركة الاستضافة للتأكد من السماح باتصالات cURL الخارجية.";
+    }
+    if ($countOf(401) === $count) {
+        return "كل المفاتيح المضافة مرفوضة (HTTP 401 غير مصرح) — المفتاح غير صحيح أو منتهي. احصل على مفتاح جديد من openrouter.ai/keys وأضفه من الإعدادات.";
+    }
+    if ($countOf(402) === $count) {
+        return "الرصيد غير كافٍ لكل المفاتيح (HTTP 402) — الموديلات المجانية قد تتطلب حداً أدنى من الرصيد في حساب OpenRouter حتى لو لم تُستهلك. أضف رصيداً بسيطاً لحسابك على openrouter.ai أو جرّب مفتاح حساب آخر.";
+    }
+    if ($countOf(429) === $count) {
+        return "تم تجاوز الحد المسموح من الطلبات (HTTP 429) على كل المحاولات — الموديلات المجانية لها حد استخدام يومي/دقيق منخفض. انتظر بضع دقائق ثم أعد المحاولة، أو أضف مفتاح OpenRouter إضافي من حساب آخر لزيادة عدد المحاولات المتاحة.";
+    }
+    if ($countOf(404) === $count) {
+        return "كل الموديلات المستخدمة غير موجودة على OpenRouter (HTTP 404) — على الأغلب أسماء الموديلات المحفوظة في الإعدادات لم تعد متوفرة مجاناً. افتح صفحة الإعدادات واختر موديلاً من القائمة المحدّثة، أو فعّل \"التدوير التلقائي\".";
+    }
+    // Mixed causes — summarize the most common one plus the last error text.
+    $tally = array_count_values($codes);
+    arsort($tally);
+    $topCode = array_key_first($tally);
+    $lastErr = end($trace)['error'] ?? '';
+    $label = match (true) {
+        $topCode === 0   => 'فشل اتصال بالخادم',
+        $topCode === 401 => 'مفتاح مرفوض (401)',
+        $topCode === 402 => 'رصيد غير كافٍ (402)',
+        $topCode === 429 => 'تجاوز الحد المسموح (429)',
+        default          => "رمز استجابة {$topCode}",
+    };
+    return "فشلت {$count} محاولة بأسباب متفاوتة — السبب الأكثر تكراراً: {$label} ({$tally[$topCode]} من {$count}). آخر خطأ: \"{$lastErr}\". راجع صفحة \"اختبار الاتصال\" لتفاصيل كل محاولة.";
+}
+
 /* ═══════════════════════════════════════════════
    AI image generation — best-effort, since reliable
    free image-generation models on OpenRouter are
@@ -665,7 +706,7 @@ function ai_text(PDO $pdo, string $prompt): array {
     $models = array_values(array_unique(array_filter([$primary, $fallback])));
     if ($autoRotate) $models = array_values(array_unique(array_merge($models, openrouter_default_free_models())));
     $r = openrouter_call_rotating($keys, $models, $prompt);
-    if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => 'فشل الاتصال بكل الموديلات المتاحة — راجع صفحة اختبار الاتصال.'];
+    if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => openrouter_diagnose_trace($r['trace'])];
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
 }
 
@@ -760,15 +801,15 @@ const RESERVED_SLUGS = [
     'blog', 'blog-post',
 ];
 
-function unique_slug(PDO $pdo, string $base): string {
+function unique_slug(PDO $pdo, string $base, int $excludeId = 0): string {
     $slug = slugify($base);
     if (in_array($slug, RESERVED_SLUGS, true)) $slug .= '-app';
     $orig = $slug; $i = 1;
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM apps WHERE slug=?");
-    $stmt->execute([$slug]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM apps WHERE slug=? AND id<>?");
+    $stmt->execute([$slug, $excludeId]);
     while ($stmt->fetchColumn() > 0) {
         $slug = $orig . '-' . (++$i);
-        $stmt->execute([$slug]);
+        $stmt->execute([$slug, $excludeId]);
     }
     return $slug;
 }
