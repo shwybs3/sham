@@ -85,17 +85,40 @@ $breadcrumbSchema = json_encode([
     <div style="text-align:center;padding:60px 20px;color:var(--muted)"><p style="font-size:16px">لا توجد مقالات بعد</p></div>
   <?php else: ?>
   <div class="blog-grid">
-    <?php foreach ($posts as $p): ?>
-    <a href="<?= h(blog_post_url($p['slug'])) ?>" class="blog-card reveal" data-hardnav="1">
+    <?php foreach ($posts as $p):
+        $isCP   = $p['type'] === 'code-page';
+        $cpSecs = $isCP ? decode_code_page($p['body'] ?? '') : [];
+    ?>
+    <a href="<?= h(blog_post_url($p['slug'])) ?>" class="blog-card reveal <?= $isCP ? 'blog-card-codepage' : '' ?>" data-hardnav="1">
       <?php if ($p['cover_image']): ?>
         <img src="<?= h(url($p['cover_image'])) ?>" alt="<?= h($p['title']) ?>" class="blog-card-img" loading="lazy">
+      <?php elseif ($isCP): ?>
+        <div class="blog-card-img blog-card-img-placeholder blog-card-code-preview">
+          <div class="bc-code-deco">
+            <?php foreach (array_slice(array_keys($cpSecs), 0, 4) as $l):
+                $m = CODE_PAGE_LANGS[$l]; ?>
+            <span style="color:<?= h($m['color']) ?>"><?= $m['icon'] ?> <?= h($m['label']) ?></span>
+            <?php endforeach; ?>
+          </div>
+          <div class="bc-code-lines"><span></span><span></span><span></span></div>
+        </div>
       <?php else: ?>
         <div class="blog-card-img blog-card-img-placeholder"><?= partial_icon('article') ?></div>
       <?php endif; ?>
       <div class="blog-card-body">
-        <span class="blog-card-type"><?= h(blog_type_label($p['type'])) ?></span>
+        <span class="blog-card-type <?= $isCP ? 'blog-card-type-code' : '' ?>"><?= h(blog_type_label($p['type'])) ?></span>
         <div class="blog-card-title"><?= h($p['title']) ?></div>
-        <?php if ($p['excerpt']): ?><p class="blog-card-excerpt"><?= h(mb_strimwidth($p['excerpt'], 0, 110, '...')) ?></p><?php endif; ?>
+        <?php if ($isCP && $cpSecs): ?>
+          <div class="bc-lang-pills">
+            <?php foreach (array_keys($cpSecs) as $l):
+                $m = CODE_PAGE_LANGS[$l]; ?>
+            <span class="bc-lang-pill" style="--lc:<?= h($m['color']) ?>"><?= $m['icon'] ?> <?= h($m['label']) ?></span>
+            <?php endforeach; ?>
+          </div>
+          <p class="blog-card-excerpt"><?= count($cpSecs) ?> <?= count($cpSecs) === 1 ? 'لغة برمجية' : 'لغات برمجية' ?></p>
+        <?php elseif ($p['excerpt']): ?>
+          <p class="blog-card-excerpt"><?= h(mb_strimwidth($p['excerpt'], 0, 110, '...')) ?></p>
+        <?php endif; ?>
       </div>
     </a>
     <?php endforeach; ?>

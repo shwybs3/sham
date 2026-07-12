@@ -2207,7 +2207,12 @@ elseif ($page === 'blog'):
   <?php foreach ($blogPosts as $bp): ?>
   <tr>
     <td data-label="العنوان" style="font-weight:700"><?= h($bp['title']) ?></td>
-    <td data-label="القسم" style="color:var(--muted);font-size:12px"><?= h(blog_type_label($bp['type'])) ?></td>
+    <td data-label="القسم" style="color:var(--muted);font-size:12px">
+      <?= h(blog_type_label($bp['type'])) ?>
+      <?php if ($bp['type'] === 'code-page'): $cpCount = count(decode_code_page($bp['body'] ?? '')); ?>
+        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
+      <?php endif; ?>
+    </td>
     <td data-label="الحالة"><span class="status-badge <?= $bp['status']==='published'?'status-published':'status-draft' ?>"><?= $bp['status']==='published'?'منشور':'مسودة' ?></span></td>
     <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($bp['created_at'])) ?></td>
     <td data-label="إجراءات" class="td-actions">
@@ -2300,6 +2305,7 @@ elseif ($page === 'blog-edit'):
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
           <span>نص المقال</span>
           <span style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="btn-fix-body-html" class="btn-edit" style="font-size:12px;padding:5px 10px" title="تحويل النص العادي لفقرات HTML — مفيد للمقالات القديمة">🔧 تحويل لـ HTML</button>
             <select id="blog-template-select" class="form-select" style="font-size:12px;padding:4px 8px;height:auto">
               <option value="">📄 قالب جاهز…</option>
               <option value="news">📰 قالب خبر</option>

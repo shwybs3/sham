@@ -113,14 +113,19 @@ $articleSchema = json_encode(array_filter([
   <!-- Language navigation pills -->
   <?php $cpFilled = array_filter($cpLangOrder, fn($l) => !empty($cpSections[$l])); ?>
   <?php if ($cpFilled): ?>
-  <nav class="cp-page-nav reveal">
-    <?php foreach ($cpFilled as $lang):
-        $meta = CODE_PAGE_LANGS[$lang];
-    ?>
-    <a href="#cp-<?= $lang ?>" class="cp-nav-pill" style="--pill-color:<?= h($meta['color']) ?>">
-      <?= $meta['icon'] ?> <?= h($meta['label']) ?>
-    </a>
-    <?php endforeach; ?>
+  <nav class="cp-page-nav reveal" style="justify-content:space-between;align-items:center">
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <?php foreach ($cpFilled as $lang):
+          $meta = CODE_PAGE_LANGS[$lang];
+      ?>
+      <a href="#cp-<?= $lang ?>" class="cp-nav-pill" style="--pill-color:<?= h($meta['color']) ?>">
+        <?= $meta['icon'] ?> <?= h($meta['label']) ?>
+      </a>
+      <?php endforeach; ?>
+    </div>
+    <button type="button" class="cp-copy-btn" onclick="cpDownloadAll()" style="margin-inline-start:auto;white-space:nowrap">
+      ⬇️ تحميل الكل
+    </button>
   </nav>
   <?php endif; ?>
 
@@ -139,6 +144,9 @@ $articleSchema = json_encode(array_filter([
         <span><?= $lineCount ?> سطر</span>
         <button type="button" class="cp-copy-btn" id="cpb-copy-<?= $lang ?>"
                 onclick="event.stopPropagation();cpPubCopy('<?= $lang ?>')">📋 نسخ</button>
+        <button type="button" class="cp-copy-btn"
+                onclick="event.stopPropagation();cpDownload('<?= $lang ?>','<?= h($meta['ext']) ?>')"
+                title="تحميل كملف">⬇️ تحميل</button>
         <button type="button" class="cp-block-toggle open" id="cpb-tog-<?= $lang ?>">▼</button>
       </div>
     </div>
@@ -169,7 +177,7 @@ $articleSchema = json_encode(array_filter([
   </div>
 
   <div class="section-box" style="margin-bottom:20px">
-    <div class="blog-body"><?= $body ?></div>
+    <div class="blog-body"><?= render_blog_body($body) ?></div>
   </div>
   <?php endif; ?>
 
@@ -244,6 +252,63 @@ const cpObs = new IntersectionObserver(entries => {
   });
 }, { threshold: 0.4 });
 cpBlocks.forEach(b => cpObs.observe(b));
+
+// Download a single code section as a file
+function cpDownload(lang, ext) {
+  const raw = document.getElementById('cpraw-' + lang);
+  if (!raw || !raw.value) return;
+  const blob = new Blob([raw.value], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = lang + ext; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Basic syntax highlighting with placeholder approach to prevent tag conflicts
+(function applySyntaxHL() {
+  const e = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const tokens = [];
+  const save   = (color, raw) => { const k = `\x02${tokens.length}\x03`; tokens.push(`<span style="color:${color}">${e(raw)}</span>`); return k; };
+
+  document.querySelectorAll('.cp-code-content').forEach(pre => {
+    tokens.length = 0;
+    let code = pre.textContent;
+    // 1) block comments
+    code = code.replace(/\/\*[\s\S]*?\*\//g, m => save('#475569', m));
+    // 2) single-line comments (// and #)
+    code = code.replace(/\/\/[^\n]*/g, m => save('#64748b', m));
+    code = code.replace(/#(?![0-9a-fA-F]{3,6}\b)[^\n]*/g, m => save('#64748b', m));
+    // 3) strings (double, single, backtick)
+    code = code.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*?\1/g, m => save('#86efac', m));
+    // 4) escape remaining for HTML output
+    code = e(code);
+    // 5) numbers
+    code = code.replace(/\b(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, '<span style="color:#fb923c">$1</span>');
+    // 6) keywords
+    const kw = /\b(function|return|const|let|var|if|else|for|while|do|switch|case|break|continue|class|import|export|default|from|new|this|try|catch|finally|throw|async|await|typeof|instanceof|in|of|delete|void|def|print|lambda|elif|True|False|None|with|yield|pass|raise|assert|global|nonlocal|public|private|protected|static|void|int|long|double|float|char|boolean|string|bool|echo|require|require_once|include|include_once|foreach|fn|use|namespace|extends|implements|abstract|interface|trait|final|parent|self|null|true|false|undefined|fun|val|var|when|data|sealed|object|open|companion|override|constructor|init|typealias|is|as|in|out|get|set|by)\b/g;
+    code = code.replace(kw, '<span style="color:#60a5fa">$1</span>');
+    // 7) restore saved tokens
+    code = code.replace(/\x02(\d+)\x03/g, (_, i) => tokens[i]);
+    pre.innerHTML = code;
+  });
+})();
+
+// Download all filled sections as separate files sequentially
+function cpDownloadAll() {
+  const langs = <?= json_encode(array_values($cpFilled)) ?>;
+  const exts  = <?= json_encode(array_combine(
+      array_values($cpFilled),
+      array_map(fn($l) => CODE_PAGE_LANGS[$l]['ext'], array_values($cpFilled))
+  )) ?>;
+  let i = 0;
+  function next() {
+    if (i >= langs.length) return;
+    const lang = langs[i++];
+    cpDownload(lang, exts[lang]);
+    setTimeout(next, 400);
+  }
+  next();
+}
 </script>
 <?php endif; ?>
 </body>

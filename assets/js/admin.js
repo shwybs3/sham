@@ -1060,6 +1060,26 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 
 /* ══════════════════════════════════════════
+   Blog body: "Fix HTML" button — converts plain-text content to HTML paragraphs
+   ══════════════════════════════════════════ */
+(function () {
+  const btn = document.getElementById('btn-fix-body-html');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const editor = document.getElementById('wysiwyg-editor');
+    if (!editor) return;
+    let text = editor.innerText || editor.textContent || '';
+    if (!text.trim()) return;
+    // Split by double newlines → wrap each block in <p>
+    const paras = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+    const html  = paras.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('\n');
+    editor.innerHTML = html;
+    btn.textContent = '✓ تم التحويل';
+    setTimeout(() => btn.textContent = '🔧 تحويل لـ HTML', 2500);
+  });
+})();
+
+/* ══════════════════════════════════════════
    Code-page editor — blog-edit form
    ══════════════════════════════════════════ */
 (function () {

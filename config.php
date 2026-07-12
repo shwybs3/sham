@@ -1045,6 +1045,30 @@ function decode_code_page(string $body): array {
     }
     return $out;
 }
+/* Render a blog body that might be HTML (from WYSIWYG) or plain text (old AI posts).
+   If it contains HTML tags, output as-is (admin-only authoring — trusted source).
+   If plain text, wrap each double-newline block in <p> so it renders correctly. */
+function render_blog_body(string $body): string {
+    if (trim($body) === '') return '';
+    if (preg_match('/<[a-zA-Z][a-zA-Z0-9]*[\s\/>]/u', $body)) {
+        return $body; // real HTML — output raw
+    }
+    // Plain text fallback: split on blank lines → paragraphs
+    $paras = preg_split('/\n{2,}/', trim($body));
+    $html  = '';
+    foreach ($paras as $p) {
+        $p = trim($p);
+        if ($p === '') continue;
+        // Single-line that looks like a heading (starts with a short bold phrase before : or —)
+        if (preg_match('/^(.{4,60})[:\—\-]\s*$/u', $p)) {
+            $html .= '<h3>' . htmlspecialchars($p, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h3>';
+        } else {
+            $html .= '<p>' . nl2br(htmlspecialchars($p, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+        }
+    }
+    return $html;
+}
+
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
 function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
 function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }

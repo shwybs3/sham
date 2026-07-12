@@ -644,6 +644,34 @@ button, input, textarea, select { font-family: inherit; }
 .cc-accept-btn:hover { background: #22d3ee; transform: scale(1.03); }
 .cc-accept-btn svg { flex-shrink: 0; }
 
+/* ─── Blog card: code-page variant ─── */
+.blog-card-codepage { border-color: rgba(124,58,237,.2); }
+.blog-card-codepage:hover { border-color: rgba(124,58,237,.5); box-shadow: 0 12px 32px rgba(124,58,237,.12); }
+.blog-card-code-preview {
+  background: linear-gradient(135deg, #0a0f1a 0%, #1e1b4b 100%) !important;
+  flex-direction: column; gap: 10px; padding: 16px; position: relative; overflow: hidden;
+}
+.bc-code-deco {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  font-size: 15px; font-weight: 700;
+}
+.bc-code-lines { display: flex; flex-direction: column; gap: 5px; width: 80%; }
+.bc-code-lines span {
+  height: 4px; border-radius: 2px; background: rgba(255,255,255,.08);
+  animation: cpShimmer 2s ease-in-out infinite alternate;
+}
+.bc-code-lines span:nth-child(1) { width: 100%; }
+.bc-code-lines span:nth-child(2) { width: 70%; animation-delay: .3s; }
+.bc-code-lines span:nth-child(3) { width: 50%; animation-delay: .6s; }
+@keyframes cpShimmer { from { opacity: .4 } to { opacity: 1 } }
+.blog-card-type-code { color: #a78bfa !important; }
+.bc-lang-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.bc-lang-pill {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+  background: color-mix(in srgb, var(--lc) 15%, transparent);
+  color: var(--lc); border: 1px solid color-mix(in srgb, var(--lc) 35%, transparent);
+}
+
 /* ─── Admin: Code-page section editor ─── */
 .cp-section {
   border: 1px solid var(--border-c); border-radius: 12px; margin-bottom: 12px; overflow: hidden;
