@@ -978,10 +978,12 @@ if ($page === 'messages') {
 if ($page === 'comments' && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
     if (isset($_GET['approve'])) {
         $pdo->prepare("UPDATE comments SET status='approved' WHERE id=?")->execute([(int)$_GET['approve']]);
+        bump_cache_version($pdo);
         header('Location: admin.php?page=comments&msg=updated'); exit;
     }
     if (isset($_GET['del_comment'])) {
         $pdo->prepare("DELETE FROM comments WHERE id=?")->execute([(int)$_GET['del_comment']]);
+        bump_cache_version($pdo);
         header('Location: admin.php?page=comments&msg=deleted'); exit;
     }
 }

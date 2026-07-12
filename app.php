@@ -21,8 +21,13 @@ if (!$app) {
     exit;
 }
 
-// Track view
-$pdo->prepare("UPDATE apps SET views=views+1 WHERE id=?")->execute([$app['id']]);
+// Cacheable on GET only (a comment POST must render fresh, never be cached).
+// The view counter is intentionally NOT incremented here — that would mean
+// repeat visitors within the cache TTL are never counted. Instead a small
+// JS beacon (track-view.php) fires on every real page load regardless of
+// whether the HTML came from cache, so view counts stay accurate.
+$cacheable = $_SERVER['REQUEST_METHOD'] !== 'POST';
+if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'], 180)) exit;
 
 $screenshots  = json_decode($app['screenshots'] ?? '[]', true) ?: [];
 $features     = json_decode($app['features'] ?? '[]', true) ?: [];
@@ -492,20 +497,9 @@ function wave(): string {
       <?php if ($commentError): ?>
         <div style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:14px"><?= h($commentError) ?></div>
       <?php endif; ?>
-      <form method="post" action="<?= h(app_url($app['slug'])) ?>#comment-form" id="comment-form" style="display:flex;flex-direction:column;gap:12px;max-width:520px">
-        <?= csrf_field() ?>
-        <input type="hidden" name="comment_submit" value="1">
-        <input type="text" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px" aria-hidden="true">
-        <div class="star-input" dir="ltr">
-          <?php for ($s = 5; $s >= 1; $s--): ?>
-          <input type="radio" name="rating" id="star-<?= $s ?>" value="<?= $s ?>" <?= $s === 5 ? 'checked' : '' ?>>
-          <label for="star-<?= $s ?>">★</label>
-          <?php endfor; ?>
-        </div>
-        <input type="text" name="name" placeholder="اسمك" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px">
-        <textarea name="body" placeholder="رأيك في التطبيق..." rows="3" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical"></textarea>
-        <button type="submit" class="btn-primary" style="align-self:flex-start">إرسال التقييم</button>
-      </form>
+      <div id="comment-form-slot" data-app-slug="<?= h($app['slug']) ?>">
+        <p style="color:var(--muted);font-size:13px">⏳ جاري تحميل نموذج التقييم...</p>
+      </div>
     <?php endif; ?>
   </div>
   <?= wave() ?>
@@ -594,5 +588,7 @@ function wave(): string {
 <?php render_site_footer(); ?>
 
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
+<script>navigator.sendBeacon('<?= h(url('track-view.php')) ?>?id=<?= (int)$app['id'] ?>');</script>
 </body>
 </html>
+<?php if ($cacheable) page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>

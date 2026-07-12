@@ -745,7 +745,28 @@ function unique_article_slug(PDO $pdo, string $base): string {
 // old file cached, until that month expires or the visitor hard-refreshes.
 function asset_url(string $relPath): string {
     $full = ROOT_PATH . '/' . ltrim($relPath, '/');
-    $v = is_file($full) ? filemtime($full) : time();
+    if (!is_file($full)) return url($relPath) . '?v=' . time();
+    $v = filemtime($full);
+
+    // Self-healing CSS minification: regenerate the sibling .min.css file
+    // whenever the source changes (same idempotent pattern as ensure_schema),
+    // and serve that as a normal static file instead — safe (only strips
+    // comments/whitespace) unlike JS, where the same regex trick risks
+    // breaking string or regex literals. JS is served as-is.
+    if (str_ends_with($relPath, '.css')) {
+        $minRelPath = substr($relPath, 0, -4) . '.min.css';
+        $minFull = ROOT_PATH . '/' . ltrim($minRelPath, '/');
+        if (!is_file($minFull) || filemtime($minFull) < $v) {
+            $css = (string)file_get_contents($full);
+            $css = preg_replace('#/\*.*?\*/#s', '', $css);
+            $css = preg_replace('/\s+/', ' ', $css);
+            $css = preg_replace('/\s*([{}:;,>])\s*/', '$1', $css);
+            $css = preg_replace('/;}/', '}', (string)$css);
+            @file_put_contents($minFull, trim((string)$css));
+        }
+        if (is_file($minFull)) return url($minRelPath) . '?v=' . $v;
+    }
+
     return url($relPath) . '?v=' . $v;
 }
 

@@ -14,6 +14,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Comment form: fetched fresh per visitor instead of being baked into
+     app.php's shared page cache, so the CSRF token always matches the
+     actual visitor's own session. ── */
+  const commentSlot = document.getElementById('comment-form-slot');
+  if (commentSlot) {
+    fetch('comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug))
+      .then(r => r.ok ? r.text() : Promise.reject())
+      .then(html => { commentSlot.innerHTML = html; })
+      .catch(() => { commentSlot.innerHTML = '<p style="color:var(--danger);font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
+  }
+
   /* ── Ad zones: stay hidden (zero space) until AdSense actually fills the
      slot. Google marks each <ins> with data-ad-status="filled"/"unfilled"
      once it resolves the request, so watch for that attribute instead of
