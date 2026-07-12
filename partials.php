@@ -37,10 +37,13 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 <header class="site-header">
   <a href="/" class="logo">yass<span>ota</span></a>
 
-  <form action="/" method="get" class="header-search" id="header-search-form">
-    <input type="text" name="q" placeholder="ابحث عن تطبيق أو لعبة..." value="<?= h($search) ?>">
-    <button type="submit"><?= partial_icon('search') ?></button>
-  </form>
+  <div class="header-search-wrap">
+    <form action="/" method="get" class="header-search" id="header-search-form" autocomplete="off">
+      <input type="text" name="q" id="search-input" placeholder="ابحث عن تطبيق أو لعبة..." value="<?= h($search) ?>">
+      <button type="submit"><?= partial_icon('search') ?></button>
+    </form>
+    <div id="search-suggestions" class="search-suggestions" hidden></div>
+  </div>
 
   <nav class="header-nav">
     <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
@@ -129,6 +132,7 @@ function render_site_footer(): void { ?>
     <a href="dmca.php" style="color:var(--muted)">DMCA</a>
     <a href="top.php?by=downloads" style="color:var(--muted)">الأكثر تحميلاً</a>
     <a href="updates.php" style="color:var(--muted)">آخر التحديثات</a>
+    <a href="rss.php" style="color:var(--muted)">RSS</a>
   </nav>
   <p>&copy; <?= date('Y') ?> yassota — جميع الحقوق محفوظة</p>
 </footer>

@@ -4,6 +4,30 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  /* ── VirusTotal scan / check ── */
+  const vtOut = document.getElementById('vt-scan-result');
+  async function vtRun(action, btn) {
+    const appId = btn.dataset.appId;
+    btn.disabled = true;
+    if (vtOut) vtOut.innerHTML = '<span style="color:var(--muted)">⏳ جاري الاتصال بـ VirusTotal...</span>';
+    try {
+      const res = await fetch(`admin.php?ajax=${action}&app_id=${appId}`);
+      const data = await res.json();
+      if (data.success) {
+        const msg = data.status === 'pending' ? 'تم إرسال الرابط للفحص — يستغرق حتى دقيقتين، اضغط "تحقق من النتيجة" لاحقاً.'
+          : data.status === 'clean' ? '✅ الرابط آمن حسب VirusTotal.'
+          : data.status === 'flagged' ? '⚠️ تنبيه: بعض محركات الفحص أشارت لهذا الرابط.'
+          : 'تم التحديث.';
+        if (vtOut) vtOut.innerHTML = `<span style="color:var(--success)">${msg}</span> <span style="color:var(--muted);font-size:12px">أعد تحميل الصفحة لرؤية الشارة المحدّثة</span>`;
+      } else {
+        if (vtOut) vtOut.innerHTML = `<span style="color:var(--danger)">❌ ${data.error || 'فشل الفحص'}</span>`;
+      }
+    } catch { if (vtOut) vtOut.innerHTML = '<span style="color:var(--danger)">تعذر الاتصال</span>'; }
+    btn.disabled = false;
+  }
+  document.getElementById('btn-vt-scan')?.addEventListener('click', (e) => vtRun('vt_scan', e.currentTarget));
+  document.getElementById('btn-vt-check')?.addEventListener('click', (e) => vtRun('vt_check', e.currentTarget));
+
   /* ── AI-generate a category SEO description ── */
   document.querySelectorAll('.btn-gen-cat-desc').forEach(btn => {
     btn.addEventListener('click', async () => {

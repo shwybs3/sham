@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $pdo->prepare("INSERT INTO contact_messages (name,email,subject,message) VALUES (?,?,?,?)")
                 ->execute([$name, $email, $subject, $message]);
+            notify_admin($pdo, "رسالة تواصل جديدة: {$subject}", "من: {$name} <{$email}>\n\n{$message}");
             $sent = true;
         }
     }

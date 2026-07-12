@@ -72,13 +72,13 @@ button, input, textarea, select { font-family: inherit; }
 }
 .logo span { color: var(--purple); }
 
+.header-search-wrap { position: relative; flex: 1; max-width: 420px; margin: 0 24px; }
 .header-search {
   display: flex;
   background: var(--navy-600);
   border: 1px solid var(--border-c);
   border-radius: 40px;
   overflow: hidden;
-  flex: 1; max-width: 420px; margin: 0 24px;
 }
 .header-search input {
   flex: 1; padding: 10px 18px;
@@ -89,6 +89,20 @@ button, input, textarea, select { font-family: inherit; }
   padding: 10px 18px; background: transparent; border: none;
   cursor: pointer; color: var(--cyan);
 }
+.search-suggestions {
+  position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 150;
+  background: #fff; border: 1px solid var(--border-c); border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(15,23,42,.12);
+  overflow: hidden;
+}
+.search-suggestions a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; font-size: 13px; color: var(--white);
+  border-bottom: 1px solid var(--border-c);
+}
+.search-suggestions a:last-child { border-bottom: none; }
+.search-suggestions a:hover, .search-suggestions a.active { background: rgba(37,99,235,.06); }
+.search-suggestions img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 
 .header-nav { display: flex; gap: 8px; align-items: center; }
 .header-nav a {
@@ -472,6 +486,10 @@ button, input, textarea, select { font-family: inherit; }
   .nav-toggle { display: block; }
   .mobile-search-toggle { display: flex; align-items: center; justify-content: center; }
   .sticky-dl { display: block; }
+  /* Fall through to .site-header (position:sticky) as the positioning
+     context, same as before search-suggestions was added, so the mobile
+     search dropdown still spans the full header width edge-to-edge. */
+  .header-search-wrap { position: static; }
   .header-search {
     display: none;
     position: absolute; top: 100%; inset-inline: 0;

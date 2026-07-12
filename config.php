@@ -220,9 +220,18 @@ function ensure_schema(PDO $pdo): array {
             'changelog'        => "JSON NULL AFTER whats_new",
             'needs_update'     => "TINYINT(1) NOT NULL DEFAULT 0 AFTER status",
             'source_url'       => "VARCHAR(600) NULL AFTER download_url",
+            'vt_status'        => "VARCHAR(20) NULL AFTER source_url",
+            'vt_malicious'     => "INT NULL AFTER vt_status",
+            'vt_total_engines' => "INT NULL AFTER vt_malicious",
+            'vt_scanned_at'    => "DATETIME NULL AFTER vt_total_engines",
+            'vt_analysis_id'   => "VARCHAR(255) NULL AFTER vt_scanned_at",
+            'vt_permalink'     => "VARCHAR(600) NULL AFTER vt_analysis_id",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
+        ],
+        'comments' => [
+            'ip' => "VARCHAR(45) NULL AFTER body",
         ],
     ];
     foreach ($wanted as $table => $cols) {
@@ -243,13 +252,16 @@ function ensure_schema(PDO $pdo): array {
 ensure_schema($pdo);
 
 /* ═══════════════════════════════════════════════
-   Lightweight page cache — file-based, for the
-   expensive public listing pages only (index/category/
-   top/updates). app.php is deliberately never cached
-   since it must always increment the view counter and
-   show fresh comments. Invalidated instantly (not just
-   on a timer) whenever an app is added/edited/deleted,
-   via a version token bumped in admin.php.
+   Lightweight page cache — file-based, for every public
+   listing/detail page (index/category/top/updates/app).
+   The view counter and the comment submission form are
+   both deliberately kept OUT of the cached HTML (see
+   track-view.php and comment-form.php) so caching app.php
+   doesn't make either one stale or session-mismatched.
+   Invalidated instantly (not just on a timer) whenever an
+   app is added/edited/deleted or a comment is
+   approved/deleted, via a version token bumped in
+   admin.php.
    ═══════════════════════════════════════════════ */
 function cache_version(PDO $pdo): int {
     return (int)get_cfg($pdo, 'cache_version', '1');
@@ -705,6 +717,7 @@ const RESERVED_SLUGS = [
     'index', 'app', 'admin', 'download', 'category', 'developer', 'top', 'updates',
     'sitemap', 'robots', 'config', 'partials', 'install', 'uploads', 'assets',
     'about', 'contact', 'privacy-policy', 'terms', 'dmca', 'cookie-policy', 'article',
+    'rss', 'track-view', 'comment-form', 'manifest.json', 'favicon.svg', 'search-suggest',
 ];
 
 function unique_slug(PDO $pdo, string $base): string {
@@ -777,6 +790,94 @@ function require_admin(): void {
 }
 
 function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? ''; }
+
+// Beyond the honeypot+CSRF pair, a bot (or an impatient human) could still
+// flood the pending-comments moderation queue by submitting repeatedly.
+// Simple IP-based cap: max 5 comments per IP per hour, across all apps.
+function comment_rate_limit_ok(PDO $pdo, string $ip): bool {
+    if ($ip === '') return true;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM comments WHERE ip=? AND created_at > (NOW() - INTERVAL 1 HOUR)");
+    $stmt->execute([$ip]);
+    return (int)$stmt->fetchColumn() < 5;
+}
+
+/* ═══════════════════════════════════════════════
+   VirusTotal — real (not simulated) safety-scan badge
+   for the download link. Never shows a badge unless a
+   real API response produced one. Two-step because a
+   fresh URL scan takes VirusTotal itself 30s-2min to
+   finish, and blocking a PHP worker that long is exactly
+   the mistake already fixed for the AI generation calls:
+   vt_scan_url() does one fast lookup/submit and returns
+   immediately; vt_check_pending() does one fast follow-up
+   poll, called again later (a button, not an auto-loop).
+   ═══════════════════════════════════════════════ */
+function vt_api_key(PDO $pdo): string { return trim(get_cfg($pdo, 'virustotal_api_key')); }
+
+function vt_scan_url(PDO $pdo, int $appId, string $url): array {
+    $key = vt_api_key($pdo);
+    if (!$key) return ['ok' => false, 'error' => 'لم يتم إضافة مفتاح VirusTotal API في الإعدادات'];
+    if (!$url) return ['ok' => false, 'error' => 'لا يوجد رابط تحميل لفحصه'];
+
+    // Look up an existing report first (URL identifier per VT's spec).
+    $urlId = rtrim(strtr(base64_encode($url), '+/', '-_'), '=');
+    $ch = curl_init("https://www.virustotal.com/api/v3/urls/$urlId");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ["x-apikey: $key"]]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200) {
+        $d = json_decode((string)$res, true);
+        $stats = $d['data']['attributes']['last_analysis_stats'] ?? null;
+        if ($stats) {
+            $malicious = (int)($stats['malicious'] ?? 0) + (int)($stats['suspicious'] ?? 0);
+            $total = array_sum($stats);
+            $pdo->prepare("UPDATE apps SET vt_status=?, vt_malicious=?, vt_total_engines=?, vt_scanned_at=NOW(), vt_permalink=?, vt_analysis_id=NULL WHERE id=?")
+                ->execute([$malicious > 0 ? 'flagged' : 'clean', $malicious, $total, "https://www.virustotal.com/gui/url/$urlId", $appId]);
+            return ['ok' => true, 'status' => $malicious > 0 ? 'flagged' : 'clean'];
+        }
+    } elseif ($code !== 404) {
+        return ['ok' => false, 'error' => "فشل الاتصال بـ VirusTotal (رمز $code)"];
+    }
+
+    // No existing report — submit a new scan; VT needs time to finish it,
+    // so this only stores the analysis id for a later vt_check_pending() call.
+    $ch = curl_init("https://www.virustotal.com/api/v3/urls");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ["x-apikey: $key", "Content-Type: application/x-www-form-urlencoded"],
+        CURLOPT_POSTFIELDS => http_build_query(['url' => $url]),
+    ]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200) return ['ok' => false, 'error' => "فشل إرسال الرابط للفحص (رمز $code)"];
+    $d = json_decode((string)$res, true);
+    $analysisId = $d['data']['id'] ?? null;
+    $pdo->prepare("UPDATE apps SET vt_status='pending', vt_analysis_id=?, vt_scanned_at=NOW() WHERE id=?")
+        ->execute([$analysisId, $appId]);
+    return ['ok' => true, 'status' => 'pending'];
+}
+
+function vt_check_pending(PDO $pdo, int $appId, string $analysisId): array {
+    $key = vt_api_key($pdo);
+    if (!$key || !$analysisId) return ['ok' => false, 'error' => 'لا يوجد فحص معلّق'];
+    $ch = curl_init("https://www.virustotal.com/api/v3/analyses/$analysisId");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ["x-apikey: $key"]]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200) return ['ok' => false, 'error' => "فشل الاتصال بـ VirusTotal (رمز $code)"];
+    $d = json_decode((string)$res, true);
+    if (($d['data']['attributes']['status'] ?? '') !== 'completed') return ['ok' => true, 'status' => 'pending'];
+    $stats = $d['data']['attributes']['stats'] ?? [];
+    $malicious = (int)($stats['malicious'] ?? 0) + (int)($stats['suspicious'] ?? 0);
+    $total = array_sum($stats);
+    $pdo->prepare("UPDATE apps SET vt_status=?, vt_malicious=?, vt_total_engines=? WHERE id=?")
+        ->execute([$malicious > 0 ? 'flagged' : 'clean', $malicious, $total, $appId]);
+    return ['ok' => true, 'status' => $malicious > 0 ? 'flagged' : 'clean'];
+}
 
 /**
  * Optional defense-in-depth IP allowlist for the whole admin panel (including
@@ -938,11 +1039,25 @@ function search_console_meta(PDO $pdo): string {
 
 // Favicon + web-app manifest + theme-color + search-console verification,
 // printed once in every page <head> right after the charset meta tag.
+// Best-effort email notification to the configured contact address, gated
+// by an opt-in setting (default off — PHP's mail() is unreliable on some
+// hosts and shouldn't ever be allowed to break the form submission it's
+// attached to, so failures here are silently ignored).
+function notify_admin(PDO $pdo, string $subject, string $body): void {
+    if (get_cfg($pdo, 'admin_email_notifications', '0') !== '1') return;
+    $to = trim(get_cfg($pdo, 'contact_email'));
+    if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
+    $headers = "From: yassota <no-reply@" . parse_url(SITE_URL, PHP_URL_HOST) . ">\r\n"
+        . "Content-Type: text/plain; charset=UTF-8";
+    @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
+}
+
 function head_extras(PDO $pdo): string {
     return '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
         . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
+        . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss.php')) . '">' . "\n  "
         . '<meta name="theme-color" content="#2563eb">' . "\n  "
         . search_console_meta($pdo);
 }

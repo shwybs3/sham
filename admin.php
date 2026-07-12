@@ -206,6 +206,63 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'repair_encoding' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   Database backup — streams a plain .sql dump built via PDO
+   (no shell_exec/mysqldump dependency, since shared hosts
+   commonly disable shell_exec). Structure + data for every
+   table, safe to re-import with a plain SQL client.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'db_backup' && is_admin()) {
+    header('Content-Type: application/sql; charset=utf-8');
+    header('Content-Disposition: attachment; filename="yassota-backup-' . date('Y-m-d-His') . '.sql"');
+    echo "-- yassota database backup — " . date('Y-m-d H:i:s') . "\n";
+    echo "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n";
+    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tables as $table) {
+        $createRow = $pdo->query("SHOW CREATE TABLE `$table`")->fetch();
+        $create = $createRow['Create Table'] ?? $createRow[1] ?? '';
+        echo "DROP TABLE IF EXISTS `$table`;\n$create;\n\n";
+
+        $cols = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+        $colList = '`' . implode('`,`', $cols) . '`';
+        $rowStmt = $pdo->query("SELECT * FROM `$table`");
+        while ($row = $rowStmt->fetch(PDO::FETCH_NUM)) {
+            $vals = array_map(fn($v) => $v === null ? 'NULL' : $pdo->quote((string)$v), $row);
+            echo "INSERT INTO `$table` ($colList) VALUES (" . implode(',', $vals) . ");\n";
+        }
+        echo "\n";
+        @ob_flush(); @flush();
+    }
+    echo "SET FOREIGN_KEY_CHECKS=1;\n";
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: VirusTotal — scan the download link / check a pending scan
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'vt_scan' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,download_url FROM apps WHERE id=?");
+    $stmt->execute([$id]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+    $r = vt_scan_url($pdo, $id, $a['download_url'] ?? '');
+    echo json_encode(['success'=>$r['ok'], 'status'=>$r['status'] ?? null, 'error'=>$r['error'] ?? null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'vt_check' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)($_GET['app_id'] ?? 0);
+    $stmt = $pdo->prepare("SELECT id,vt_analysis_id FROM apps WHERE id=?");
+    $stmt->execute([$id]);
+    $a = $stmt->fetch();
+    if (!$a) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+    $r = vt_check_pending($pdo, $id, $a['vt_analysis_id'] ?? '');
+    echo json_encode(['success'=>$r['ok'], 'status'=>$r['status'] ?? null, 'error'=>$r['error'] ?? null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Regenerate SEO fields for one app (used by bulk tool)
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'regen_seo' && is_admin()) {
@@ -769,10 +826,11 @@ if ($page !== 'login') require_admin();
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
     foreach (['openrouter_key','openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
-              'google_site_verification','bing_site_verification'] as $k) {
+              'google_site_verification','bing_site_verification','virustotal_api_key'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate', isset($_POST['openrouter_auto_rotate']) ? '1' : '0');
+    set_cfg($pdo, 'admin_email_notifications', isset($_POST['admin_email_notifications']) ? '1' : '0');
 
     // Optional IP allowlist — auto-include the saving admin's current IP so a save can never lock them out.
     $newAllowlist = trim($_POST['admin_ip_allowlist'] ?? '');
@@ -1611,6 +1669,31 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
   </button>
 </form>
 
+<?php if ($isEdit): ?>
+<div class="panel" style="margin-bottom:40px">
+  <h2>فحص أمان رابط التحميل (VirusTotal)</h2>
+  <p class="form-hint" style="margin-bottom:14px">شارة حقيقية تظهر على صفحة تحميل هذا التطبيق فقط بعد فحص فعلي ناجح.</p>
+  <div style="margin-bottom:12px">
+    <?php if ($app['vt_status'] === 'clean'): ?>
+      <span class="status-badge status-published">✓ آمن — <?= (int)$app['vt_total_engines'] ?> محرك فحص، 0 تنبيه</span>
+    <?php elseif ($app['vt_status'] === 'flagged'): ?>
+      <span class="status-badge" style="background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25)">⚠ <?= (int)$app['vt_malicious'] ?> من <?= (int)$app['vt_total_engines'] ?> محرك نبّه لهذا الرابط</span>
+    <?php elseif ($app['vt_status'] === 'pending'): ?>
+      <span class="status-badge status-draft">⏳ الفحص قيد التنفيذ — اضغط "تحقق من النتيجة" بعد دقيقة</span>
+    <?php else: ?>
+      <span class="form-hint">لم يتم فحص هذا الرابط بعد.</span>
+    <?php endif; ?>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button type="button" id="btn-vt-scan" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">فحص رابط التحميل الآن</button>
+    <?php if ($app['vt_status'] === 'pending'): ?>
+    <button type="button" id="btn-vt-check" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>">تحقق من النتيجة</button>
+    <?php endif; ?>
+  </div>
+  <div id="vt-scan-result" style="margin-top:12px"></div>
+</div>
+<?php endif; ?>
+
 <?php if ($isEdit):
   $articlesStmt = $pdo->prepare("SELECT id,title,slug,created_at FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
   $articlesStmt->execute([$app['id']]);
@@ -1905,6 +1988,14 @@ elseif ($page === 'database'):
     إصلاح ترميز النصوص القديمة
   </button>
   <div id="repair-encoding-result" style="margin-top:12px"></div>
+
+  <p style="color:var(--muted);font-size:13px;margin-top:24px;margin-bottom:8px">
+    نسخة احتياطية كاملة لقاعدة البيانات (بنية الجداول + كل البيانات) كملف SQL — احتفظ بنسخة دورياً، لا يوجد نسخ احتياطي تلقائي حالياً:
+  </p>
+  <a href="admin.php?ajax=db_backup" class="btn-save" style="text-decoration:none;display:inline-flex">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+    تنزيل نسخة احتياطية (.sql)
+  </a>
 </div>
 
 <?php
@@ -1982,6 +2073,10 @@ elseif ($page === 'settings'): ?>
       <input class="form-input" type="email" name="contact_email" value="<?= h(get_cfg($pdo,'contact_email')) ?>" placeholder="contact@yourdomain.com">
       <div class="form-hint">يظهر في صفحات اتصل بنا، سياسة الخصوصية، وDMCA.</div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <input type="checkbox" name="admin_email_notifications" value="1" <?= get_cfg($pdo,'admin_email_notifications')==='1'?'checked':'' ?>>
+      <span>إرسال بريد إلكتروني تلقائي للبريد أعلاه عند وصول رسالة تواصل جديدة أو تعليق جديد بانتظار المراجعة</span>
+    </label>
   </div>
 
   <div class="panel">
@@ -2002,6 +2097,18 @@ elseif ($page === 'settings'): ?>
         <label class="form-label">Bing Webmaster verification code</label>
         <input class="form-input" type="text" name="bing_site_verification" value="<?= h(get_cfg($pdo,'bing_site_verification')) ?>" placeholder="مثال: 1234567890ABCDEF">
       </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>فحص أمان روابط التحميل (VirusTotal)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      يضيف شارة فحص حقيقية (وليست وهمية) في صفحة تحميل كل تطبيق تبني ثقة الزوار — تظهر فقط بعد فحص فعلي ناجح، لا شيء يظهر بدون مفتاح.
+      احصل على مفتاح مجاني من <a href="https://www.virustotal.com/gui/join-us" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">virustotal.com</a> (حساب مجاني، بدون بطاقة ائتمان).
+    </p>
+    <div class="form-group">
+      <label class="form-label">VirusTotal API Key</label>
+      <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
     </div>
   </div>
 

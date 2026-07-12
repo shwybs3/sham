@@ -51,6 +51,27 @@ $related = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
 $related->execute([$app['category_id'], $app['id']]);
 $relatedApps = $related->fetchAll();
 
+// Alternatives — distinct from "related apps" above: top-rated apps in the
+// same category not already shown there, plus apps from the same developer.
+$excludeIds = array_merge([(int)$app['id']], array_column($relatedApps, 'id'));
+$placeholders = implode(',', array_fill(0, count($excludeIds), '?'));
+$altStmt = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
+    WHERE category_id=? AND id NOT IN ($placeholders) AND status='published'
+    ORDER BY rating DESC, downloads DESC LIMIT 6");
+$altStmt->execute(array_merge([$app['category_id']], $excludeIds));
+$alternatives = $altStmt->fetchAll();
+
+$devAlternatives = [];
+if (!empty($app['developer'])) {
+    $devExclude = array_merge($excludeIds, array_column($alternatives, 'id'));
+    $devPlaceholders = implode(',', array_fill(0, count($devExclude), '?'));
+    $devStmt = $pdo->prepare("SELECT id,name,slug,icon_path,rating FROM apps
+        WHERE developer=? AND id NOT IN ($devPlaceholders) AND status='published'
+        ORDER BY rating DESC LIMIT 4");
+    $devStmt->execute(array_merge([$app['developer']], $devExclude));
+    $devAlternatives = $devStmt->fetchAll();
+}
+
 // Related articles (AI-generated "how to use X", "X vs Y" etc. — internal
 // linking back to this app's download page)
 $articlesStmt = $pdo->prepare("SELECT id,title,slug FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
@@ -82,9 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_submit'])) {
         $cBody = trim($_POST['body'] ?? '');
         if (!$cName || !$cRating || !$cBody) {
             $commentError = 'يرجى تعبئة الاسم والتقييم والتعليق.';
+        } elseif (!comment_rate_limit_ok($pdo, client_ip())) {
+            $commentError = 'لقد أرسلت عدة تعليقات خلال وقت قصير، يرجى المحاولة لاحقاً.';
         } else {
-            $pdo->prepare("INSERT INTO comments (app_id,name,rating,body) VALUES (?,?,?,?)")
-                ->execute([$app['id'], $cName, $cRating, $cBody]);
+            $pdo->prepare("INSERT INTO comments (app_id,name,rating,body,ip) VALUES (?,?,?,?,?)")
+                ->execute([$app['id'], $cName, $cRating, $cBody, client_ip()]);
+            notify_admin($pdo, "تعليق جديد بانتظار المراجعة على {$app['name']}", "من: {$cName} (تقييم {$cRating}/5)\n\n{$cBody}");
             $commentSubmitted = true;
         }
     }
@@ -551,6 +575,29 @@ function wave(): string {
   <div class="section-head reveal"><span class="section-title">تطبيقات مشابهة</span></div>
   <div class="apps-grid">
     <?php foreach ($relatedApps as $r): ?>
+    <div class="app-card reveal">
+      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
+        <?php if ($r['icon_path']): ?>
+          <img src="<?= h($r['icon_path']) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
+        <?php endif; ?>
+        <div class="app-card-name"><?= h($r['name']) ?></div>
+        <div class="app-card-meta">
+          <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+        </div>
+      </a>
+      <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
+        <?= svgi('download') ?> تحميل
+      </a>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
+  <!-- Alternatives -->
+  <?php if ($alternatives || $devAlternatives): ?>
+  <div class="section-head reveal"><span class="section-title">البدائل</span></div>
+  <div class="apps-grid">
+    <?php foreach (array_merge($alternatives, $devAlternatives) as $r): ?>
     <div class="app-card reveal">
       <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
         <?php if ($r['icon_path']): ?>

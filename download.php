@@ -100,6 +100,18 @@ if (!$hasLink) $url = '#';
       <?php endif; ?>
     </div>
 
+    <?php if ($app['vt_status'] === 'clean'): ?>
+    <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.25);color:var(--success);font-size:12px;padding:6px 14px;border-radius:40px;margin-bottom:16px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+      رابط آمن — فحصه <?= (int)$app['vt_total_engines'] ?> محرك حماية عبر VirusTotal
+    </div>
+    <?php elseif ($app['vt_status'] === 'flagged'): ?>
+    <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);color:var(--danger);font-size:12px;padding:6px 14px;border-radius:40px;margin-bottom:16px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 9v4m0 4h.01M10.3 3.86l-8.2 14.2A2 2 0 004 21h16a2 2 0 001.9-2.94l-8.2-14.2a2 2 0 00-3.4 0z"/></svg>
+      تنبيه: <?= (int)$app['vt_malicious'] ?> من <?= (int)$app['vt_total_engines'] ?> محرك فحص أشار لهذا الرابط
+    </div>
+    <?php endif; ?>
+
     <!-- Circular Timer -->
     <?php if ($hasLink): ?>
     <div class="dl-timer-wrap">

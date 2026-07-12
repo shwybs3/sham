@@ -76,6 +76,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* ── Search autocomplete ── */
+  const searchInput = document.getElementById('search-input');
+  const suggestBox = document.getElementById('search-suggestions');
+  if (searchInput && suggestBox) {
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let items = [];
+
+    function renderSuggestions(results) {
+      items = results;
+      activeIndex = -1;
+      if (!results.length) { suggestBox.hidden = true; suggestBox.innerHTML = ''; return; }
+      suggestBox.innerHTML = results.map(r =>
+        `<a href="${r.url}" data-hardnav="1">${r.icon ? `<img src="${r.icon}" alt="">` : ''}<span>${r.name}</span></a>`
+      ).join('');
+      suggestBox.hidden = false;
+    }
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { suggestBox.hidden = true; return; }
+      debounceTimer = setTimeout(() => {
+        fetch('search-suggest.php?q=' + encodeURIComponent(q))
+          .then(r => r.ok ? r.json() : [])
+          .then(renderSuggestions)
+          .catch(() => {});
+      }, 200);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      const links = [...suggestBox.querySelectorAll('a')];
+      if (!links.length || suggestBox.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, links.length - 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); }
+      else if (e.key === 'Enter' && activeIndex >= 0) { e.preventDefault(); links[activeIndex].click(); return; }
+      else if (e.key === 'Escape') { suggestBox.hidden = true; return; }
+      else return;
+      links.forEach((a, i) => a.classList.toggle('active', i === activeIndex));
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!suggestBox.contains(e.target) && e.target !== searchInput) suggestBox.hidden = true;
+    });
+  }
+
   /* ── Category Chips Filter ── */
   document.querySelectorAll('.cat-chip[data-cat]').forEach(chip => {
     chip.addEventListener('click', () => {
