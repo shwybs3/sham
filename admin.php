@@ -777,6 +777,160 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: List all 30 pre-written preset apps with import status
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_list' && is_admin()) {
+    header('Content-Type: application/json');
+    $dataDir = ROOT_PATH . '/install/bulk-apps-data';
+    $files = glob($dataDir . '/batch-*.json');
+    sort($files);
+    if (!$files) { echo json_encode(['success'=>false,'error'=>'ملفات البيانات غير موجودة في install/bulk-apps-data/']); exit; }
+
+    $SLUG_MAP = [
+        'واتساب'=>['whatsapp','social'],'تيليجرام'=>['telegram','social'],
+        'فيسبوك'=>['facebook','social'],'ماسنجر'=>['messenger','social'],
+        'سناب شات'=>['snapchat','social'],'ديسكورد'=>['discord','social'],
+        'تويتر X'=>['twitter-x','social'],'ثريدز'=>['threads','social'],
+        'لينكدإن'=>['linkedin','social'],'بينترست'=>['pinterest','social'],
+        'جوجل كروم'=>['google-chrome','tools'],'يوسي براوزر'=>['uc-browser','tools'],
+        'يوتيوب'=>['youtube','apps'],'نتفليكس'=>['netflix','apps'],
+        'سبوتيفاي'=>['spotify','apps'],'شازام'=>['shazam','apps'],
+        'ساوند كلاود'=>['soundcloud','apps'],'أوبرا ميني'=>['opera-mini','tools'],
+        'ترو كولر'=>['truecaller','tools'],'جوجل ترانسليت'=>['google-translate','tools'],
+        'زوم'=>['zoom','tools'],'مايكروسوفت تيمز'=>['microsoft-teams','tools'],
+        'دوولينجو'=>['duolingo','productivity'],'WPS Office'=>['wps-office','productivity'],
+        'أدوبي أكروبات ريدر'=>['adobe-acrobat-reader','productivity'],'كانفا'=>['canva','design'],
+        'بيكس آرت'=>['picsart','design'],'إن شوت'=>['inshot','design'],
+        'بابجي موبايل'=>['pubg-mobile','games'],'فري فاير'=>['free-fire','games'],
+    ];
+
+    $catLabels = ['social'=>'تواصل اجتماعي','tools'=>'أدوات','apps'=>'تطبيقات',
+                  'productivity'=>'إنتاجية','design'=>'تصميم','games'=>'ألعاب'];
+
+    $result = [];
+    foreach ($files as $file) {
+        $batch = json_decode((string)file_get_contents($file), true);
+        if (!$batch || empty($batch['apps'])) continue;
+        foreach ($batch['apps'] as $app) {
+            $name = trim($app['name'] ?? '');
+            if (!$name) continue;
+            $ex = $pdo->prepare("SELECT id FROM apps WHERE name=?");
+            $ex->execute([$name]);
+            $existId = $ex->fetchColumn();
+            $catSlug = $SLUG_MAP[$name][1] ?? 'apps';
+            $result[] = [
+                'name'       => $name,
+                'developer'  => $app['developer'] ?? '',
+                'short_desc' => $app['short_description'] ?? '',
+                'category'   => $catLabels[$catSlug] ?? $catSlug,
+                'cat_slug'   => $catSlug,
+                'existing_id'=> $existId ?: null,
+            ];
+        }
+    }
+    echo json_encode(['success'=>true,'apps'=>$result,'total'=>count($result)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Import one pre-written preset app by name
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(90);
+    $input = json_decode(file_get_contents('php://input'), true);
+    $targetName = trim($input['name'] ?? '');
+    if (!$targetName) { echo json_encode(['success'=>false,'error'=>'اسم مطلوب']); exit; }
+
+    // Find app in data files
+    $dataDir = ROOT_PATH . '/install/bulk-apps-data';
+    $files = glob($dataDir . '/batch-*.json');
+    sort($files);
+    $data = null;
+    foreach ($files as $file) {
+        $batch = json_decode((string)file_get_contents($file), true);
+        if (!$batch) continue;
+        foreach ($batch['apps'] as $app) {
+            if (trim($app['name'] ?? '') === $targetName) { $data = $app; break 2; }
+        }
+    }
+    if (!$data) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود في ملفات البيانات']); exit; }
+
+    // Skip if already exists
+    $ex = $pdo->prepare("SELECT id FROM apps WHERE name=?");
+    $ex->execute([$targetName]);
+    if ($exId = $ex->fetchColumn()) {
+        echo json_encode(['success'=>false,'skipped'=>true,'existing_id'=>(int)$exId,'name'=>$targetName,'error'=>'موجود مسبقاً']);
+        exit;
+    }
+
+    $SLUG_MAP = [
+        'واتساب'=>['whatsapp','social'],'تيليجرام'=>['telegram','social'],
+        'فيسبوك'=>['facebook','social'],'ماسنجر'=>['messenger','social'],
+        'سناب شات'=>['snapchat','social'],'ديسكورد'=>['discord','social'],
+        'تويتر X'=>['twitter-x','social'],'ثريدز'=>['threads','social'],
+        'لينكدإن'=>['linkedin','social'],'بينترست'=>['pinterest','social'],
+        'جوجل كروم'=>['google-chrome','tools'],'يوسي براوزر'=>['uc-browser','tools'],
+        'يوتيوب'=>['youtube','apps'],'نتفليكس'=>['netflix','apps'],
+        'سبوتيفاي'=>['spotify','apps'],'شازام'=>['shazam','apps'],
+        'ساوند كلاود'=>['soundcloud','apps'],'أوبرا ميني'=>['opera-mini','tools'],
+        'ترو كولر'=>['truecaller','tools'],'جوجل ترانسليت'=>['google-translate','tools'],
+        'زوم'=>['zoom','tools'],'مايكروسوفت تيمز'=>['microsoft-teams','tools'],
+        'دوولينجو'=>['duolingo','productivity'],'WPS Office'=>['wps-office','productivity'],
+        'أدوبي أكروبات ريدر'=>['adobe-acrobat-reader','productivity'],'كانفا'=>['canva','design'],
+        'بيكس آرت'=>['picsart','design'],'إن شوت'=>['inshot','design'],
+        'بابجي موبايل'=>['pubg-mobile','games'],'فري فاير'=>['free-fire','games'],
+    ];
+    [$slugBase, $catSlug] = $SLUG_MAP[$targetName] ?? [slugify($targetName), 'apps'];
+    $slug = unique_slug($pdo, $slugBase);
+    $catSt = $pdo->prepare("SELECT id FROM categories WHERE slug=?");
+    $catSt->execute([$catSlug]);
+    $catId = $catSt->fetchColumn();
+    if (!$catId) { $catSt->execute(['apps']); $catId = $catSt->fetchColumn(); }
+
+    // Best-effort Play Store icon
+    $playstoreUrl = playstore_search($targetName . ' ' . ($data['developer'] ?? ''));
+    if (!$playstoreUrl) $playstoreUrl = playstore_search($targetName);
+    $iconPath = null; $packageName = null;
+    if ($playstoreUrl) {
+        $meta = fetch_playstore_meta($playstoreUrl);
+        if ($meta) {
+            $packageName = $meta['package_name'] ?? null;
+            if (!empty($meta['icon_url'])) $iconPath = import_remote_icon($meta['icon_url'], $slug);
+        }
+    }
+
+    $features     = array_values(array_filter($data['features'] ?? []));
+    $pros         = array_values(array_filter($data['pros'] ?? []));
+    $cons         = array_values(array_filter($data['cons'] ?? []));
+    $installSteps = array_values(array_filter($data['install_steps'] ?? []));
+    $faq          = array_is_list($data['faq'] ?? []) ? $data['faq'] : [];
+
+    try {
+        $pdo->prepare("INSERT INTO apps
+            (name,slug,category_id,developer,license,icon_path,short_description,long_description,
+             features,pros,cons,install_steps,faq,whats_new,playstore_url,package_name,rating,
+             seo_title,meta_description,keywords,status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
+            ->execute([
+                $targetName,$slug,$catId,trim($data['developer'] ?? ''),'Free',$iconPath,
+                trim($data['short_description'] ?? ''),trim($data['long_description'] ?? ''),
+                json_encode($features,JSON_UNESCAPED_UNICODE),json_encode($pros,JSON_UNESCAPED_UNICODE),
+                json_encode($cons,JSON_UNESCAPED_UNICODE),json_encode($installSteps,JSON_UNESCAPED_UNICODE),
+                json_encode($faq,JSON_UNESCAPED_UNICODE),trim($data['whats_new'] ?? ''),
+                $playstoreUrl,$packageName,4.5,
+                trim($data['seo_title'] ?? ''),trim($data['meta_description'] ?? ''),trim($data['keywords'] ?? ''),
+            ]);
+        $newId = (int)$pdo->lastInsertId();
+        echo json_encode(['success'=>true,'id'=>$newId,'name'=>$targetName,
+            'has_icon'=>(bool)$iconPath,'edit_url'=>'admin.php?page=edit-app&id='.$newId], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Suggest N trending app/game names via AI
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'suggest_trending' && is_admin()) {
@@ -1345,6 +1499,7 @@ $navLinks = [
     'add-app'   => ['label'=>'إضافة تطبيق',   'icon'=>'M12 5v14m-7-7h14'],
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
+    'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
@@ -2042,6 +2197,234 @@ elseif ($page === 'bulk-generate'): ?>
   </div>
   <div id="bg-results" style="display:flex;flex-direction:column;gap:8px;margin-top:14px"></div>
 </div>
+
+<?php
+/* ─────────────── IMPORT PRESET 30 APPS ─────────────── */
+elseif ($page === 'import-preset'): ?>
+
+<div class="admin-header"><h1>استيراد 30 تطبيقاً جاهزاً</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    30 تطبيقاً شهيراً بمحتوى عربي سوري كامل معدٍّ مسبقاً (وصف طويل + ميزات + إيجابيات/سلبيات + FAQ + SEO).
+    حدّد ما تريد استيراده — التطبيقات الموجودة مسبقاً تُخطَى تلقائياً.
+    كل تطبيق يُحفظ <strong style="color:#fbbf24">كمسودة</strong>، ثم أضف رابط التحميل وانشره.
+  </p>
+</div>
+
+<!-- Controls row -->
+<div class="panel" style="margin-bottom:14px">
+  <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end">
+    <div class="form-group" style="margin:0;width:200px">
+      <label class="form-label">عدد الاستيراد (اختياري)</label>
+      <input type="number" id="ip-count" class="form-input" min="1" max="30" placeholder="الكل">
+    </div>
+    <div class="form-group" style="margin:0;width:180px">
+      <label class="form-label">تصفية حسب التصنيف</label>
+      <select id="ip-cat-filter" class="form-select">
+        <option value="">كل التصنيفات</option>
+        <option value="تواصل اجتماعي">تواصل اجتماعي</option>
+        <option value="تطبيقات">تطبيقات</option>
+        <option value="أدوات">أدوات</option>
+        <option value="إنتاجية">إنتاجية</option>
+        <option value="تصميم">تصميم</option>
+        <option value="ألعاب">ألعاب</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" id="btn-ip-all" class="btn-edit" style="padding:8px 14px;font-size:13px">تحديد الجديدة فقط</button>
+      <button type="button" id="btn-ip-none" class="btn-del" style="padding:8px 14px;font-size:13px">إلغاء الكل</button>
+    </div>
+  </div>
+</div>
+
+<!-- App grid -->
+<div id="ip-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:16px">
+  <div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1;text-align:center">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;display:inline-block"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+    جاري تحميل القائمة...
+  </div>
+</div>
+
+<!-- Start import -->
+<div id="ip-start-row" style="display:none;margin-bottom:16px">
+  <button type="button" id="btn-ip-import" class="btn-save" style="min-width:200px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+    <span id="btn-ip-import-label">بدء الاستيراد</span>
+  </button>
+  <span id="ip-sel-count" style="margin-right:12px;font-size:13px;color:var(--muted)"></span>
+</div>
+
+<!-- Progress -->
+<div id="ip-progress" style="display:none;margin-bottom:14px">
+  <div style="height:10px;background:var(--navy-600);border-radius:6px;overflow:hidden;margin-bottom:8px">
+    <div id="ip-bar" style="height:100%;width:0%;background:linear-gradient(135deg,var(--cyan),var(--purple));transition:width .4s"></div>
+  </div>
+  <div id="ip-status" style="font-size:12px;color:var(--muted)"></div>
+</div>
+
+<!-- Results log -->
+<div id="ip-results" style="display:flex;flex-direction:column;gap:8px"></div>
+
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+.ip-card{background:var(--navy-700);border:1.5px solid var(--border-c);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .2s,box-shadow .2s;display:flex;gap:12px;align-items:flex-start}
+.ip-card:hover{border-color:var(--cyan);box-shadow:0 2px 12px rgba(37,99,235,.08)}
+.ip-card.selected{border-color:var(--cyan);background:rgba(37,99,235,.04)}
+.ip-card.existing{opacity:.5;cursor:default}
+.ip-card.existing .ip-cb{pointer-events:none}
+.ip-cb{width:18px;height:18px;border:2px solid var(--border-c);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s;margin-top:2px}
+.ip-card.selected .ip-cb{background:var(--cyan);border-color:var(--cyan)}
+.ip-card.selected .ip-cb::after{content:'';width:10px;height:6px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg);display:block;margin-bottom:3px}
+.ip-card-body{flex:1;min-width:0}
+.ip-card-name{font-weight:700;font-size:14px;margin-bottom:3px;color:var(--white)}
+.ip-card-dev{font-size:11px;color:var(--muted);margin-bottom:4px}
+.ip-card-cat{display:inline-block;font-size:10px;background:rgba(37,99,235,.1);color:var(--cyan);border-radius:4px;padding:2px 7px;font-weight:600}
+.ip-card-existing{display:inline-block;font-size:10px;background:rgba(22,163,74,.12);color:#16a34a;border-radius:4px;padding:2px 7px;font-weight:600;margin-right:4px}
+.ip-res{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px}
+.ip-res.ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);color:#4ade80}
+.ip-res.skip{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);color:#fbbf24}
+.ip-res.err{background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.2);color:#f87171}
+.ip-res a{color:var(--cyan);text-decoration:underline;font-size:12px;margin-right:auto;white-space:nowrap}
+</style>
+
+<script>
+(function(){
+  let allApps=[], selected=new Set();
+
+  async function loadList(){
+    const r=await fetch('admin.php?ajax=import_preset_list');
+    const d=await r.json();
+    if(!d.success){document.getElementById('ip-grid').innerHTML='<div style="color:#f87171;padding:20px;grid-column:1/-1">'+d.error+'</div>';return;}
+    allApps=d.apps;
+    renderGrid();
+    document.getElementById('ip-start-row').style.display='flex';
+    updateCount();
+  }
+
+  function renderGrid(){
+    const catFilter=document.getElementById('ip-cat-filter').value;
+    const list=catFilter?allApps.filter(a=>a.category===catFilter):allApps;
+    const grid=document.getElementById('ip-grid');
+    if(!list.length){grid.innerHTML='<div style="color:var(--muted);padding:20px;grid-column:1/-1;text-align:center">لا توجد تطبيقات بهذا التصنيف</div>';return;}
+    grid.innerHTML='';
+    list.forEach(a=>{
+      const isExist=!!a.existing_id;
+      const isSel=selected.has(a.name);
+      const card=document.createElement('div');
+      card.className='ip-card'+(isExist?' existing':'')+((!isExist&&isSel)?' selected':'');
+      card.dataset.name=a.name;
+      card.innerHTML=`
+        <div class="ip-cb"></div>
+        <div class="ip-card-body">
+          <div class="ip-card-name">${h(a.name)}</div>
+          <div class="ip-card-dev">${h(a.developer)}</div>
+          <div>
+            <span class="ip-card-cat">${h(a.category)}</span>
+            ${isExist?`<span class="ip-card-existing">✓ مستورد — <a href="admin.php?page=edit-app&id=${a.existing_id}" style="color:inherit" target="_blank">تعديل</a></span>`:''}
+          </div>
+          ${!isExist?`<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${h(a.short_desc)}</div>`:''}
+        </div>`;
+      if(!isExist){
+        card.addEventListener('click',()=>{
+          if(selected.has(a.name)){selected.delete(a.name);card.classList.remove('selected');}
+          else{selected.add(a.name);card.classList.add('selected');}
+          applyCountLimit();
+          updateCount();
+        });
+      }
+      grid.appendChild(card);
+    });
+    applyCountLimit();
+  }
+
+  function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  function applyCountLimit(){
+    const n=parseInt(document.getElementById('ip-count').value)||0;
+    if(!n)return;
+    // if more than n selected, keep first n only
+    const sel=[...selected];
+    if(sel.length>n){
+      sel.slice(n).forEach(name=>{selected.delete(name);const c=document.querySelector('.ip-card[data-name="'+CSS.escape(name)+'"]');if(c)c.classList.remove('selected');});
+    }
+  }
+
+  function updateCount(){
+    const n=selected.size;
+    document.getElementById('ip-sel-count').textContent=n?`${n} تطبيق محدد`:'لم يتم تحديد أي تطبيق';
+    document.getElementById('btn-ip-import-label').textContent=n?`استيراد ${n} تطبيق`:'بدء الاستيراد';
+  }
+
+  document.getElementById('btn-ip-all').addEventListener('click',()=>{
+    const catFilter=document.getElementById('ip-cat-filter').value;
+    const n=parseInt(document.getElementById('ip-count').value)||0;
+    let added=0;
+    allApps.forEach(a=>{
+      if(a.existing_id)return;
+      if(catFilter&&a.category!==catFilter)return;
+      if(n&&added>=n)return;
+      selected.add(a.name);added++;
+    });
+    renderGrid();updateCount();
+  });
+
+  document.getElementById('btn-ip-none').addEventListener('click',()=>{
+    selected.clear();renderGrid();updateCount();
+  });
+
+  document.getElementById('ip-cat-filter').addEventListener('change',renderGrid);
+
+  document.getElementById('ip-count').addEventListener('input',()=>{
+    applyCountLimit();updateCount();
+  });
+
+  document.getElementById('btn-ip-import').addEventListener('click',async()=>{
+    if(!selected.size){alert('حدّد تطبيقاً واحداً على الأقل');return;}
+    const names=[...selected];
+    const total=names.length;
+    let done=0,ok=0,skip=0,fail=0;
+    const prog=document.getElementById('ip-progress');
+    const bar=document.getElementById('ip-bar');
+    const status=document.getElementById('ip-status');
+    const results=document.getElementById('ip-results');
+    prog.style.display='block';results.innerHTML='';
+    document.getElementById('btn-ip-import').disabled=true;
+
+    for(const name of names){
+      status.textContent=`⏳ ${name} — جاري الاستيراد...`;
+      try{
+        const r=await fetch('admin.php?ajax=import_preset_one',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+        const d=await r.json();
+        done++;bar.style.width=(done/total*100)+'%';
+        const row=document.createElement('div');
+        if(d.success){
+          ok++;row.className='ip-res ok';
+          row.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <strong>${h(d.name)}</strong> — تم الإنشاء ${d.has_icon?'(أيقونة ✓)':'(بدون أيقونة)'}<a href="${d.edit_url}" target="_blank">تعديل</a>`;
+          selected.delete(name);const c=document.querySelector('.ip-card[data-name="'+CSS.escape(name)+'"]');
+          if(c){c.className='ip-card existing';c.style.opacity='.5';}
+        } else if(d.skipped){
+          skip++;row.className='ip-res skip';
+          row.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg> ${h(name)} — موجود مسبقاً`;
+        } else {
+          fail++;row.className='ip-res err';
+          row.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ${h(name)} — ${h(d.error||'خطأ')}`;
+        }
+        results.prepend(row);
+      }catch(e){
+        done++;fail++;bar.style.width=(done/total*100)+'%';
+        const row=document.createElement('div');row.className='ip-res err';
+        row.innerHTML=`✗ ${h(name)} — خطأ في الشبكة`;results.prepend(row);
+      }
+    }
+    status.textContent=`🏁 اكتمل — تم استيراد ${ok}${skip?' | تخطّي '+skip:''}${fail?' | فشل '+fail:''}`;
+    document.getElementById('btn-ip-import').disabled=false;
+    updateCount();
+  });
+
+  loadList();
+})();
+</script>
 
 <?php
 /* ─────────────── CATEGORIES ─────────────── */
