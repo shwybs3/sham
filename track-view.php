@@ -6,6 +6,10 @@ require_once __DIR__ . '/config.php';
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id > 0) {
-    $pdo->prepare("UPDATE apps SET views=views+1 WHERE id=? AND status='published'")->execute([$id]);
+    $updated = $pdo->prepare("UPDATE apps SET views=views+1 WHERE id=? AND status='published'");
+    $updated->execute([$id]);
+    if ($updated->rowCount() > 0) {
+        $pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('view', ?)")->execute([$id]);
+    }
 }
 http_response_code(204);

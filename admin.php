@@ -2176,6 +2176,132 @@ elseif ($page === 'blog-edit'):
 </form>
 
 <?php
+/* ─────────────── SITE ANALYTICS (real self-tracked data, not GSC) ─────────────── */
+elseif ($page === 'stats'):
+    $days = 30;
+    $dailyRaw = $pdo->query("
+        SELECT DATE(created_at) d, event_type, COUNT(*) c
+        FROM page_events
+        WHERE created_at >= (NOW() - INTERVAL $days DAY)
+        GROUP BY d, event_type
+        ORDER BY d
+    ")->fetchAll();
+    $daily = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $d = date('Y-m-d', strtotime("-$i days"));
+        $daily[$d] = ['view' => 0, 'download' => 0, 'search' => 0];
+    }
+    foreach ($dailyRaw as $row) {
+        if (isset($daily[$row['d']])) $daily[$row['d']][$row['event_type']] = (int)$row['c'];
+    }
+    $maxDaily = 1;
+    foreach ($daily as $d) $maxDaily = max($maxDaily, $d['view'], $d['download']);
+
+    $totalsAllTime = [
+        'views'            => (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM apps")->fetchColumn(),
+        'downloads'        => (int)$pdo->query("SELECT COALESCE(SUM(downloads),0) FROM apps")->fetchColumn(),
+        'apps'             => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
+        'blog'             => (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(),
+        'comments'         => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn(),
+        'pending_comments' => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='pending'")->fetchColumn(),
+    ];
+    $views30     = array_sum(array_column($daily, 'view'));
+    $downloads30 = array_sum(array_column($daily, 'download'));
+
+    $topViewed     = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY views DESC LIMIT 10")->fetchAll();
+    $topDownloaded = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 10")->fetchAll();
+    $topSearches   = $pdo->query("
+        SELECT meta, COUNT(*) c FROM page_events
+        WHERE event_type='search' AND created_at >= (NOW() - INTERVAL $days DAY) AND meta IS NOT NULL AND meta<>''
+        GROUP BY meta ORDER BY c DESC LIMIT 10
+    ")->fetchAll();
+?>
+<div class="admin-header"><h1>إحصائيات الموقع</h1></div>
+
+<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--navy-900);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
+  ℹ️ هذه إحصائيات <strong>حقيقية</strong> يجمعها الموقع نفسه (مشاهدات وتحميلات وعمليات بحث فعلية من الزوار) — وليست بيانات Google Search Console.
+  للحصول على بيانات جوجل الفعلية (الظهور في نتائج البحث، الكلمات المفتاحية، معدل النقر) يجب ربط حساب Google Search Console الخاص بك مباشرة عبر
+  <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a> — وهذا يتطلب حسابك الشخصي ولا يمكن أتمتته من هنا.
+  خطوة توثيق الملكية مفعّلة بالفعل من "الإعدادات ← التحقق من ملكية الموقع".
+</div>
+
+<div class="admin-stats">
+  <div class="stat-card"><div class="stat-num"><?= number_format($views30) ?></div><div class="stat-label">مشاهدات آخر 30 يوم</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--purple)"><?= number_format($downloads30) ?></div><div class="stat-label">تحميلات آخر 30 يوم</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= number_format($totalsAllTime['views']) ?></div><div class="stat-label">إجمالي المشاهدات (كل الوقت)</div></div>
+  <div class="stat-card"><div class="stat-num"><?= number_format($totalsAllTime['downloads']) ?></div><div class="stat-label">إجمالي التحميلات (كل الوقت)</div></div>
+</div>
+
+<div class="panel" style="margin-top:20px">
+  <h2>المشاهدات والتحميلات — آخر 30 يوم</h2>
+  <div style="display:flex;align-items:flex-end;gap:3px;height:180px;margin-top:16px;overflow-x:auto;padding-bottom:4px">
+    <?php foreach ($daily as $d => $v): ?>
+    <div title="<?= h($d) ?>: <?= $v['view'] ?> مشاهدة، <?= $v['download'] ?> تحميل" style="flex:1 0 18px;min-width:18px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:2px">
+      <div style="background:var(--cyan);border-radius:2px 2px 0 0;height:<?= (int)round($v['view'] / $maxDaily * 140) ?>px;min-height:<?= $v['view'] > 0 ? 2 : 0 ?>px"></div>
+      <div style="background:var(--purple);border-radius:2px 2px 0 0;height:<?= (int)round($v['download'] / $maxDaily * 140) ?>px;min-height:<?= $v['download'] > 0 ? 2 : 0 ?>px"></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted)">
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--cyan);border-radius:2px;margin-inline-end:4px"></span> مشاهدات</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--purple);border-radius:2px;margin-inline-end:4px"></span> تحميلات</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+  <div class="panel">
+    <h2>الأكثر مشاهدة</h2>
+    <table class="admin-table">
+      <thead><tr><th>التطبيق</th><th>مشاهدات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topViewed as $a): ?>
+        <tr><td><a href="<?= h(app_url($a['slug'])) ?>" target="_blank"><?= h($a['name']) ?></a></td><td><?= number_format($a['views']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topViewed): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>الأكثر تحميلاً</h2>
+    <table class="admin-table">
+      <thead><tr><th>التطبيق</th><th>تحميلات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topDownloaded as $a): ?>
+        <tr><td><a href="<?= h(app_url($a['slug'])) ?>" target="_blank"><?= h($a['name']) ?></a></td><td><?= number_format($a['downloads']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topDownloaded): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;margin-bottom:40px">
+  <div class="panel">
+    <h2>أكثر عمليات البحث (آخر 30 يوم)</h2>
+    <table class="admin-table">
+      <thead><tr><th>كلمة البحث</th><th>عدد المرات</th></tr></thead>
+      <tbody>
+      <?php foreach ($topSearches as $s): ?>
+        <tr><td><?= h($s['meta']) ?></td><td><?= number_format($s['c']) ?></td></tr>
+      <?php endforeach; ?>
+      <?php if (!$topSearches): ?><tr><td colspan="2" style="color:var(--muted)">لا بيانات بعد</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>المحتوى</h2>
+    <table class="admin-table">
+      <tbody>
+        <tr><td>تطبيقات منشورة</td><td><?= number_format($totalsAllTime['apps']) ?></td></tr>
+        <tr><td>مقالات منشورة</td><td><?= number_format($totalsAllTime['blog']) ?></td></tr>
+        <tr><td>تقييمات معتمدة</td><td><?= number_format($totalsAllTime['comments']) ?></td></tr>
+        <tr><td>تقييمات بانتظار المراجعة</td><td><?= number_format($totalsAllTime['pending_comments']) ?></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<?php
 /* ─────────────── CONNECTION TEST ─────────────── */
 elseif ($page === 'connection'): ?>
 

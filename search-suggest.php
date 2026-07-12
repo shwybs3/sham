@@ -5,6 +5,8 @@ header('Content-Type: application/json; charset=utf-8');
 $q = trim($_GET['q'] ?? '');
 if (mb_strlen($q) < 2) { echo json_encode([]); exit; }
 
+$pdo->prepare("INSERT INTO page_events (event_type, meta) VALUES ('search', ?)")->execute([mb_substr($q, 0, 255)]);
+
 $stmt = $pdo->prepare("SELECT name,slug,icon_path FROM apps
     WHERE status='published' AND name LIKE ? ORDER BY downloads DESC LIMIT 6");
 $stmt->execute(['%' . $q . '%']);

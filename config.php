@@ -202,6 +202,22 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'blog_posts';
 
+    // Real, self-tracked event log (one row per view/download/search) — the
+    // data source for the admin analytics dashboard. apps.views/downloads
+    // stay as running totals for fast top-N queries; this table adds a
+    // timestamp so the dashboard can show genuine daily trends, unlike the
+    // running counters alone.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS page_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      event_type ENUM('view','download','search') NOT NULL,
+      app_id INT NULL,
+      meta VARCHAR(255) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_type_date (event_type, created_at),
+      INDEX idx_app (app_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'page_events';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS

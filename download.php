@@ -23,6 +23,7 @@ if (!$app) {
 
 // سجّل التحميل
 $pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
+$pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
 
 // حدد الرابط — يدعم تحميل إصدار قديم مؤرشف عبر ?ver=
 $archivedVersion = null;
