@@ -117,7 +117,7 @@
 .screenshot-thumb:hover { border-color: var(--cyan); box-shadow: var(--glow-c); }
 .screenshot-thumb:hover img { transform: scale(1.04); }
 .screenshot-overlay {
-  position: absolute; inset: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: rgba(37,99,235,.06);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: var(--transition);
@@ -126,8 +126,8 @@
 
 /* Lightbox */
 .lightbox {
-  display: none; position: fixed; inset: 0; z-index: 500;
-  background: rgba(15,23,42,.92); backdrop-filter: blur(8px);
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 500;
+  background: rgba(15,23,42,.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   align-items: center; justify-content: center;
 }
 .lightbox.open { display: flex; }

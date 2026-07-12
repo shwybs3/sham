@@ -19,7 +19,7 @@
 }
 .dl-box::before {
   content: '';
-  position: absolute; inset: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: radial-gradient(ellipse at 50% 0%, rgba(37,99,235,.06) 0%, transparent 60%);
   pointer-events: none;
 }
@@ -108,7 +108,7 @@
 /* ── Download page new elements ── */
 .dl-short-desc {
   font-size: 14px; color: var(--muted); line-height: 1.7;
-  text-align: center; margin: 12px 0 16px; max-width: 360px; margin-inline: auto;
+  text-align: center; margin: 12px auto 16px; max-width: 360px;
 }
 .dl-features {
   background: rgba(6,182,212,.06); border: 1px solid rgba(6,182,212,.15);
