@@ -279,7 +279,7 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
+          <a href="#dl-quick-zone" class="btn-download-hero" onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});return false;">
             <?= svgi('download') ?> تحميل مجاني
           </a>
           <?php if (!empty($app['playstore_url'])): ?>
@@ -495,7 +495,7 @@ function wave(): string {
   <?php endif; ?>
 
   <!-- Slim download + previous versions + Telegram — above comments -->
-  <div class="quick-actions-zone">
+  <div id="dl-quick-zone" class="quick-actions-zone">
     <a href="<?= h(download_url($app['slug'])) ?>" class="btn-slim-dl" data-hardnav="1">
       <?= svgi('download') ?> تحميل <?= h($app['name']) ?><?= $app['version'] ? ' (v'.h($app['version']).')' : '' ?>
     </a>

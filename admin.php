@@ -618,6 +618,136 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate one chunk of a long app-review article.
+   Five chunks total → ~4500-6000 Arabic words of HTML.
+   The client chains calls sequentially, passing prev HTML
+   so the model knows what has already been written.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'gen_app_article_chunk' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(120);
+    $input   = json_decode(file_get_contents('php://input'), true);
+    $appId   = (int)($input['app_id'] ?? 0);
+    $chunk   = max(1, min(5, (int)($input['chunk'] ?? 1)));
+    $prevHtml= trim($input['prev_html'] ?? '');
+    if (!$appId) { echo json_encode(['success'=>false,'error'=>'app_id مطلوب']); exit; }
+
+    $app = $pdo->prepare("SELECT a.*,c.name AS cat_name FROM apps a LEFT JOIN categories c ON c.id=a.category_id WHERE a.id=?");
+    $app->execute([$appId]);
+    $app = $app->fetch(PDO::FETCH_ASSOC);
+    if (!$app) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+
+    $aName = $app['name'];
+    $aDev  = $app['developer'] ?? '';
+    $aDesc = $app['long_description'] ?? $app['short_description'] ?? '';
+    $aCat  = $app['cat_name'] ?? '';
+    $aSlug = $app['slug'] ?? '';
+    $ftr   = json_decode($app['features'] ?? '[]', true) ?: [];
+    $pros  = json_decode($app['pros'] ?? '[]', true) ?: [];
+    $cons  = json_decode($app['cons'] ?? '[]', true) ?: [];
+    $faq   = json_decode($app['faq'] ?? '[]', true) ?: [];
+    $steps = json_decode($app['install_steps'] ?? '[]', true) ?: [];
+    $appUrl = url("app/{$aSlug}");
+
+    $ctaHtml = "<div style='text-align:center;margin:28px 0'><a href=\"{$appUrl}\" style='display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:50px;font-size:17px;font-weight:700;text-decoration:none;box-shadow:0 4px 16px rgba(37,99,235,.3)'>⬇ تحميل {$aName} مجاناً</a></div>";
+
+    $sectionTitles = [
+        1 => 'المقدمة + نظرة عامة + سبب الشهرة',
+        2 => 'الميزات التفصيلية مع أمثلة عملية',
+        3 => 'كيفية التحميل والتثبيت + كيفية الاستخدام خطوة بخطوة',
+        4 => 'المميزات والعيوب + المقارنة مع البدائل',
+        5 => 'نصائح احترافية + الأسئلة الشائعة + خلاصة وتوصية',
+    ];
+
+    $ftrList  = implode('، ', array_slice($ftr,0,6));
+    $prosList = implode('، ', array_slice($pros,0,5));
+    $consList = implode('، ', array_slice($cons,0,3));
+    $stepList = implode("\n", array_map(fn($s,$i)=>"- خطوة ".($i+1).": $s", $steps, array_keys($steps)));
+    $faqList  = implode("\n", array_map(fn($f)=>"س: {$f['q']}\nج: {$f['a']}", array_slice($faq,0,5)));
+    $prevNote = $prevHtml ? "ما سبق كتابته (لا تكرره، أكمل بعده مباشرة):\n[تم كتابة ".mb_strlen($prevHtml)." حرفاً من المقال]" : '';
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف ومتخصص في مراجعات تطبيقات الأندرويد. تكتب بالعامية السورية العربية الطبيعية والجذابة.
+
+معلومات التطبيق:
+- الاسم: {$aName}
+- المطور: {$aDev}
+- التصنيف: {$aCat}
+- الميزات: {$ftrList}
+- الإيجابيات: {$prosList}
+- السلبيات: {$consList}
+- خطوات التثبيت: {$stepList}
+- أسئلة شائعة: {$faqList}
+- وصف عام: {$aDesc}
+
+{$prevNote}
+
+اكتب الآن القسم رقم {$chunk} من المقال: {$sectionTitles[$chunk]}
+
+المطلوب:
+- 900-1100 كلمة لهذا القسم (مهم جداً، لا تكتب أقل)
+- HTML فقط (لا Markdown، لا نص خام)
+- استخدم <h2> للعناوين الرئيسية، <h3> للفرعية
+- <p> للفقرات (فقرات كاملة ومفيدة، ليس جملاً قصيرة)
+- <ul><li> للقوائم حيث مناسب
+- <strong> لتمييز المصطلحات المهمة
+- اللهجة: سورية عربية مفهومة، حيوية ومشوّقة من أول سطر
+- المحتوى: حقيقي ومفيد، ليس ملء بلا معنى
+- لا تضع مقدمات مثل "في هذا القسم سنتحدث عن..."
+- لا تكتب "الكاتب" أو "المقال" في النص
+- فقط HTML قابل للوصق مباشرة داخل صفحة المقال، لا شيء آخر
+P;
+
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $html = trim($r['content']);
+    // Strip markdown code fences if model wrapped the HTML
+    $html = preg_replace('/^```(?:html)?\s*/i', '', $html);
+    $html = preg_replace('/\s*```\s*$/i', '', $html);
+    // Inject CTA after chunk 2 and chunk 4
+    if (in_array($chunk, [2, 4])) $html .= "\n" . $ctaHtml;
+
+    echo json_encode(['success'=>true,'chunk'=>$chunk,'html'=>$html,'word_count'=>count(preg_split('/\s+/u',$html,-1,PREG_SPLIT_NO_EMPTY))], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Save a completed app-review article to blog_posts
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_app_article' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true);
+    $appId  = (int)($input['app_id'] ?? 0);
+    $html   = trim($input['html'] ?? '');
+    if (!$appId || !$html) { echo json_encode(['success'=>false,'error'=>'بيانات مطلوبة']); exit; }
+
+    $app = $pdo->prepare("SELECT * FROM apps WHERE id=?"); $app->execute([$appId]); $app=$app->fetch(PDO::FETCH_ASSOC);
+    if (!$app) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+
+    $aName = $app['name'];
+    $title = "مراجعة تطبيق {$aName}: دليل شامل للاستخدام والميزات";
+    $slug  = unique_blog_slug($pdo, $title);
+    $seoTitle = "مراجعة {$aName} " . date('Y') . " — دليل شامل بالعربي";
+    $metaDesc = "مراجعة شاملة لتطبيق {$aName}: الميزات، كيفية الاستخدام، المميزات والعيوب، وكل ما تحتاج معرفته بالعامية السورية.";
+    $kwds  = "تطبيق {$aName}، مراجعة {$aName}، تحميل {$aName}، {$aName} للأندرويد";
+    $excerpt= "مراجعة تفصيلية لتطبيق {$aName} — الميزات، كيفية الاستخدام، المميزات والعيوب وكل ما تحتاج معرفته.";
+    $appUrl = url("app/{$app['slug']}");
+    // Append final CTA
+    $html .= "\n<div style='text-align:center;margin:32px 0'><a href=\"{$appUrl}\" style='display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border-radius:50px;font-size:18px;font-weight:700;text-decoration:none;box-shadow:0 4px 20px rgba(37,99,235,.35)'>⬇ حمّل {$aName} الآن مجاناً</a></div>";
+
+    $existing = $pdo->prepare("SELECT id FROM blog_posts WHERE title=?"); $existing->execute([$title]);
+    if ($eid = $existing->fetchColumn()) {
+        $pdo->prepare("UPDATE blog_posts SET body=?,slug=?,seo_title=?,meta_description=?,keywords=?,excerpt=?,updated_at=NOW() WHERE id=?")->execute([$html,$slug,$seoTitle,$metaDesc,$kwds,$excerpt,$eid]);
+        echo json_encode(['success'=>true,'id'=>(int)$eid,'title'=>$title,'updated'=>true,'view_url'=>url("blog/{$slug}")], JSON_UNESCAPED_UNICODE);
+    } else {
+        $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,status) VALUES ('article',?,?,?,?,?,?,'draft')")->execute([$title,$slug,$seoTitle,$metaDesc,$kwds,$excerpt,$html]);
+        $nId=(int)$pdo->lastInsertId();
+        echo json_encode(['success'=>true,'id'=>$nId,'title'=>$title,'updated'=>false,'view_url'=>url("blog/{$slug}")], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -927,6 +1057,215 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
     } catch (Throwable $e) {
         echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
     }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   Helper: parse SQL INSERT INTO apps ... statements
+   ══════════════════════════════════════════════════════ */
+function parse_sql_app_inserts(string $sql): array {
+    $apps = [];
+    $pattern = '/INSERT\s+INTO\s+[`"\']?apps[`"\']?\s*\(([^)]+)\)\s*VALUES\s*\((.+?)\)\s*;/is';
+    if (!preg_match_all($pattern, $sql, $matches, PREG_SET_ORDER)) return [];
+    foreach ($matches as $m) {
+        $cols = array_map(fn($c) => trim($c, " `\"'\t"), explode(',', $m[1]));
+        $vals = []; $s = $m[2]; $i = 0; $len = strlen($s);
+        while ($i < $len) {
+            while ($i < $len && in_array($s[$i],[' ',"\t","\n","\r",','])) $i++;
+            if ($i >= $len) break;
+            if ($s[$i] === "'") {
+                $val = ''; $i++;
+                while ($i < $len) {
+                    if ($s[$i] === "'" ) {
+                        if (isset($s[$i+1]) && $s[$i+1] === "'") { $val .= "'"; $i += 2; }
+                        else { $i++; break; }
+                    } elseif ($s[$i] === '\\' && isset($s[$i+1])) {
+                        $map = ["'"=>"'",'"'=>'"','\\'=>'\\','n'=>"\n",'r'=>"\r",'t'=>"\t"];
+                        $val .= $map[$s[$i+1]] ?? $s[$i+1]; $i += 2;
+                    } else { $val .= $s[$i++]; }
+                }
+                $vals[] = $val;
+            } elseif (strtoupper(substr($s,$i,4))==='NULL') { $vals[] = null; $i+=4; }
+            else {
+                $start=$i; while ($i<$len && !in_array($s[$i],[',',' ',"\t",')'])) $i++;
+                $vals[] = substr($s,$start,$i-$start);
+            }
+        }
+        if (count($cols) !== count($vals)) continue;
+        $app = array_combine($cols,$vals);
+        foreach (['features','pros','cons','install_steps','faq'] as $f) {
+            if (isset($app[$f]) && is_string($app[$f]) && strlen($app[$f])>1) {
+                $d = json_decode($app[$f],true);
+                if (is_array($d)) $app[$f] = $d;
+            }
+        }
+        $apps[] = $app;
+    }
+    return $apps;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Validate uploaded file — quality check each app
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'file_import_validate' && is_admin()) {
+    header('Content-Type: application/json');
+    if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['success'=>false,'error'=>'لم يتم رفع الملف أو حدث خطأ في الرفع']); exit;
+    }
+    $file = $_FILES['file'];
+    $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $content = (string)file_get_contents($file['tmp_name']);
+    $apps = [];
+
+    // 1. Try JSON (covers .json, .php returning JSON, etc.)
+    $decoded = json_decode($content, true);
+    if ($decoded !== null) {
+        if (isset($decoded['apps']) && is_array($decoded['apps'])) $apps = $decoded['apps'];
+        elseif (array_is_list($decoded)) $apps = $decoded;
+        elseif (isset($decoded['name'])) $apps = [$decoded];
+    }
+    // 2. SQL INSERT statements
+    if (!$apps && in_array($ext, ['sql','txt'])) $apps = parse_sql_app_inserts($content);
+    // 3. PHP: extract JSON blocks
+    if (!$apps && $ext === 'php') {
+        if (preg_match_all('/\{[^{}]*?"name"[^{}]*?\}/s', $content, $jm)) {
+            foreach ($jm[0] as $js) { $a = json_decode($js,true); if ($a&&isset($a['name'])) $apps[]=$a; }
+        }
+    }
+
+    if (!$apps) { echo json_encode(['success'=>false,'error'=>'لم يُعثر على بيانات تطبيقات صالحة. تأكد من الصيغة (JSON مع مصفوفة apps، أو INSERT SQL).']); exit; }
+
+    $norm = function($v) {
+        if (is_array($v)) return array_values(array_filter($v));
+        if (is_string($v)&&strlen($v)) { $d=json_decode($v,true); return is_array($d)?array_values(array_filter($d)):[]; }
+        return [];
+    };
+
+    $results = [];
+    foreach ($apps as $app) {
+        $issues = []; $warnings = []; $score = 100;
+        $name = trim($app['name'] ?? '');
+        if (!$name) { $issues[] = 'الاسم مطلوب'; $score -= 20; }
+        if (!trim($app['developer'] ?? '')) { $warnings[] = 'المطور غير محدد'; $score -= 3; }
+
+        $short = trim($app['short_description'] ?? '');
+        if (!$short) { $issues[] = 'الوصف القصير مطلوب'; $score -= 8; }
+        elseif (mb_strlen($short) < 80) { $issues[] = 'الوصف القصير قصير جداً (أقل من 80 حرف)'; $score -= 6; }
+
+        $long = trim($app['long_description'] ?? '');
+        $wc = $long ? count(preg_split('/\s+/u', $long, -1, PREG_SPLIT_NO_EMPTY)) : 0;
+        if (!$long) { $issues[] = 'الوصف الطويل مطلوب'; $score -= 25; }
+        elseif ($wc < 200) { $issues[] = "الوصف الطويل قصير جداً ({$wc} كلمة، الحد الأدنى 200)"; $score -= 20; }
+        elseif ($wc < 500) { $warnings[] = "الوصف الطويل {$wc} كلمة — يُنصح بـ 500+ للـ SEO الأمثل"; $score -= 8; }
+
+        $seoTitle = trim($app['seo_title'] ?? '');
+        $stLen = mb_strlen($seoTitle);
+        if (!$seoTitle) { $issues[] = 'عنوان SEO مطلوب'; $score -= 10; }
+        elseif ($stLen < 30) { $issues[] = "عنوان SEO قصير ({$stLen} حرف، الأفضل 40-70)"; $score -= 6; }
+        elseif ($stLen > 80) { $warnings[] = "عنوان SEO طويل ({$stLen} حرف)"; $score -= 3; }
+
+        $meta = trim($app['meta_description'] ?? '');
+        $mLen = mb_strlen($meta);
+        if (!$meta) { $issues[] = 'وصف meta مطلوب'; $score -= 10; }
+        elseif ($mLen < 80) { $issues[] = "وصف meta قصير ({$mLen} حرف، الأفضل 120-160)"; $score -= 6; }
+        elseif ($mLen > 180) { $warnings[] = "وصف meta طويل ({$mLen} حرف)"; $score -= 2; }
+
+        $kw = trim($app['keywords'] ?? '');
+        $kwc = $kw ? count(preg_split('/[,،\s]+/u', $kw, -1, PREG_SPLIT_NO_EMPTY)) : 0;
+        if (!$kw) { $issues[] = 'الكلمات المفتاحية مطلوبة'; $score -= 8; }
+        elseif ($kwc < 3) { $warnings[] = "عدد الكلمات المفتاحية قليل ({$kwc}، يُنصح بـ 5+)"; $score -= 3; }
+
+        $fc = count($norm($app['features'] ?? []));
+        if ($fc < 3) { $issues[] = "الميزات غير كافية ({$fc}، الحد الأدنى 3)"; $score -= 8; }
+        elseif ($fc < 5) { $warnings[] = "ميزات قليلة ({$fc}، يُنصح بـ 5+)"; $score -= 2; }
+
+        $pc = count($norm($app['pros'] ?? []));
+        if ($pc < 2) { $issues[] = "الإيجابيات غير كافية ({$pc}، الحد الأدنى 2)"; $score -= 5; }
+
+        $cc = count($norm($app['cons'] ?? []));
+        if ($cc < 1) { $warnings[] = 'السلبيات غائبة (يُنصح بسلبية واحدة على الأقل)'; $score -= 3; }
+
+        $sc = count($norm($app['install_steps'] ?? []));
+        if ($sc < 2) { $issues[] = "خطوات التثبيت غير كافية ({$sc}، الحد الأدنى 2)"; $score -= 5; }
+
+        $faqArr = $norm($app['faq'] ?? []);
+        $faqValid = count(array_filter($faqArr, fn($f) => !empty($f['q']) && !empty($f['a'])));
+        if ($faqValid < 3) { $issues[] = "الأسئلة الشائعة غير كافية ({$faqValid}، الحد الأدنى 3 أسئلة مع إجابات)"; $score -= 8; }
+
+        if (empty($app['screenshots'])) { $warnings[] = 'لا توجد روابط صور للتطبيق'; $score -= 2; }
+
+        $score = max(0, $score);
+        $pass  = empty($issues) && $score >= 55;
+        $results[] = [
+            'name'      => $name ?: '(بدون اسم)',
+            'developer' => trim($app['developer'] ?? ''),
+            'pass'      => $pass,
+            'score'     => $score,
+            'word_count'=> $wc,
+            'issues'    => $issues,
+            'warnings'  => $warnings,
+            'data'      => $app,
+        ];
+    }
+    $passed = count(array_filter($results, fn($r)=>$r['pass']));
+    echo json_encode(['success'=>true,'apps'=>$results,'total'=>count($results),'passed'=>$passed], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Import one validated app from file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'file_import_run' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(120);
+    $input = json_decode(file_get_contents('php://input'), true);
+    $app   = $input['app'] ?? [];
+    if (!$app || empty($app['name'])) { echo json_encode(['success'=>false,'error'=>'بيانات التطبيق مطلوبة']); exit; }
+    $name = trim($app['name']);
+    $ex = $pdo->prepare("SELECT id FROM apps WHERE name=?"); $ex->execute([$name]);
+    if ($exId = $ex->fetchColumn()) { echo json_encode(['success'=>false,'skipped'=>true,'existing_id'=>(int)$exId,'name'=>$name,'error'=>'موجود مسبقاً']); exit; }
+
+    $catSlug = trim($app['category_slug'] ?? $app['cat_slug'] ?? ''); $catId = null;
+    if ($catSlug) { $s=$pdo->prepare("SELECT id FROM categories WHERE slug=?"); $s->execute([$catSlug]); $catId=$s->fetchColumn()||null; }
+    if (!$catId) { $r=$pdo->query("SELECT id FROM categories WHERE slug='apps' LIMIT 1")->fetch(); $catId=$r?$r['id']:null; }
+
+    $slug = unique_slug($pdo, slugify($name));
+    $playstoreUrl = $app['playstore_url'] ?? null; $iconPath=null; $pkg=$app['package_name']??null;
+    if (!$playstoreUrl) {
+        $playstoreUrl = playstore_search($name.' '.($app['developer']??'')) ?: playstore_search($name);
+    }
+    if ($playstoreUrl && !$pkg) {
+        $meta = fetch_playstore_meta($playstoreUrl);
+        if ($meta) { $pkg=$meta['package_name']??null; if (!empty($meta['icon_url'])) $iconPath=import_remote_icon($meta['icon_url'],$slug); }
+    }
+    $norm = function($v) {
+        if (is_array($v)) return array_values(array_filter($v));
+        if (is_string($v)&&strlen($v)) { $d=json_decode($v,true); return is_array($d)?array_values(array_filter($d)):[]; }
+        return [];
+    };
+    $features=$norm($app['features']??[]); $pros=$norm($app['pros']??[]); $cons=$norm($app['cons']??[]);
+    $steps=$norm($app['install_steps']??[]); $faq=$norm($app['faq']??[]);
+    try {
+        $pdo->prepare("INSERT INTO apps
+            (name,slug,category_id,developer,license,icon_path,version,android_version,size_mb,
+             short_description,long_description,features,pros,cons,install_steps,faq,whats_new,
+             playstore_url,package_name,rating,seo_title,meta_description,keywords,status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
+            ->execute([
+                $name,$slug,$catId,trim($app['developer']??''),trim($app['license']??'Free'),$iconPath,
+                trim($app['version']??''),trim($app['android_version']??''),
+                is_numeric($app['size_mb']??'')?(float)$app['size_mb']:null,
+                trim($app['short_description']??''),trim($app['long_description']??''),
+                json_encode($features,JSON_UNESCAPED_UNICODE),json_encode($pros,JSON_UNESCAPED_UNICODE),
+                json_encode($cons,JSON_UNESCAPED_UNICODE),json_encode($steps,JSON_UNESCAPED_UNICODE),
+                json_encode($faq,JSON_UNESCAPED_UNICODE),trim($app['whats_new']??''),
+                $playstoreUrl,$pkg,is_numeric($app['rating']??'')?(float)$app['rating']:4.5,
+                trim($app['seo_title']??''),trim($app['meta_description']??''),trim($app['keywords']??''),
+            ]);
+        $newId=(int)$pdo->lastInsertId();
+        echo json_encode(['success'=>true,'id'=>$newId,'name'=>$name,'has_icon'=>(bool)$iconPath,
+            'edit_url'=>'admin.php?page=edit-app&id='.$newId], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) { echo json_encode(['success'=>false,'error'=>$e->getMessage()]); }
     exit;
 }
 
@@ -1500,10 +1839,12 @@ $navLinks = [
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
+    'file-import'   => ['label'=>'استيراد من ملف',            'icon'=>'M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
     'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
+    'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
@@ -2427,6 +2768,186 @@ elseif ($page === 'import-preset'): ?>
 </script>
 
 <?php
+/* ─────────────── FILE IMPORT ─────────────── */
+elseif ($page === 'file-import'): ?>
+
+<div class="admin-header"><h1>استيراد تطبيقات من ملف</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    ارفع ملف <strong>JSON</strong> أو <strong>SQL</strong> أو <strong>PHP</strong> يحتوي بيانات تطبيقات كاملة.
+    سيتحقق النظام من جودة كل تطبيق — يُرفض أي محتوى ناقص أو ضعيف. التطبيقات الناجحة تُستورد كمسودات.
+    <br><strong style="color:#fbbf24">الشروط الإلزامية:</strong> اسم · وصف طويل (+200 كلمة) · عنوان SEO · وصف meta · كلمات مفتاحية · ميزات · إيجابيات · خطوات تثبيت · FAQ.
+  </p>
+</div>
+
+<div class="panel" style="margin-bottom:16px" id="fi-upload-panel">
+  <label for="fi-file-input" id="fi-drop-zone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:48px 24px;border:2px dashed var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,background .2s">
+    <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--muted)"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <div style="text-align:center">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">اسحب الملف هنا أو انقر للتصفح</div>
+      <div style="font-size:13px;color:var(--muted)">يدعم: .json · .sql · .php · .txt — حجم أقصى 10 MB</div>
+    </div>
+  </label>
+  <input type="file" id="fi-file-input" accept=".json,.sql,.php,.txt" style="display:none">
+  <div id="fi-file-name" style="text-align:center;font-size:13px;color:var(--muted);margin-top:12px;display:none"></div>
+  <div style="text-align:center;margin-top:16px">
+    <button id="fi-validate-btn" class="btn btn-primary" style="display:none">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      تحليل الجودة
+    </button>
+  </div>
+</div>
+
+<div id="fi-results" style="display:none">
+  <div class="panel" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span id="fi-total-badge" style="background:rgba(37,99,235,.1);color:var(--accent);border:1px solid rgba(37,99,235,.25);padding:5px 14px;border-radius:40px;font-size:13px;font-weight:700"></span>
+        <span id="fi-pass-badge" style="background:rgba(22,163,74,.1);color:#16a34a;border:1px solid rgba(22,163,74,.25);padding:5px 14px;border-radius:40px;font-size:13px;font-weight:700"></span>
+        <span id="fi-fail-badge" style="background:rgba(220,38,38,.1);color:#dc2626;border:1px solid rgba(220,38,38,.25);padding:5px 14px;border-radius:40px;font-size:13px;font-weight:700"></span>
+      </div>
+      <button id="fi-import-all-btn" class="btn btn-primary">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        استيراد جميع الناجحة
+      </button>
+    </div>
+    <div id="fi-import-progress" style="display:none;margin-bottom:16px">
+      <div style="height:6px;background:rgba(37,99,235,.1);border-radius:3px;overflow:hidden;margin-bottom:8px">
+        <div id="fi-import-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px;width:0%;transition:width .4s"></div>
+      </div>
+      <div id="fi-import-status" style="font-size:13px;color:var(--muted)"></div>
+    </div>
+    <div id="fi-app-list"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div style="font-size:13px;font-weight:700;margin-bottom:12px">📋 صيغة JSON المقبولة</div>
+  <pre style="font-size:11.5px;color:var(--muted);overflow-x:auto;background:rgba(0,0,0,.25);padding:16px;border-radius:8px;line-height:1.8;direction:ltr;text-align:left">{"apps":[{
+  "name": "اسم التطبيق",
+  "developer": "اسم الشركة",
+  "short_description": "جملة جذابة تصف التطبيق (80+ حرف)",
+  "long_description": "وصف تفصيلي 200+ كلمة ...",
+  "seo_title": "عنوان للبحث 40-70 حرف",
+  "meta_description": "وصف meta 120-160 حرف",
+  "keywords": "كلمة1، كلمة2، كلمة3",
+  "features": ["ميزة 1","ميزة 2","ميزة 3"],
+  "pros": ["إيجابية 1","إيجابية 2"],
+  "cons": ["سلبية 1"],
+  "install_steps": ["خطوة 1","خطوة 2","خطوة 3"],
+  "faq": [{"q":"سؤال؟","a":"إجابة"},{"q":"سؤال 2؟","a":"إجابة 2"},{"q":"سؤال 3؟","a":"إجابة 3"}],
+  "whats_new": "الجديد في هذا الإصدار",
+  "version": "1.0.0",
+  "size_mb": 45,
+  "category_slug": "apps",
+  "playstore_url": "https://play.google.com/store/apps/details?id=..."
+}]}</pre>
+</div>
+
+<script>
+(function(){
+  const drop=document.getElementById('fi-drop-zone'),
+        fileIn=document.getElementById('fi-file-input'),
+        fileName=document.getElementById('fi-file-name'),
+        vBtn=document.getElementById('fi-validate-btn'),
+        results=document.getElementById('fi-results'),
+        appList=document.getElementById('fi-app-list'),
+        importAll=document.getElementById('fi-import-all-btn'),
+        importProg=document.getElementById('fi-import-progress'),
+        importBar=document.getElementById('fi-import-bar'),
+        importSt=document.getElementById('fi-import-status');
+  let selFile=null, vApps=[];
+
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='var(--accent)';drop.style.background='rgba(37,99,235,.05)';});
+  drop.addEventListener('dragleave',()=>{drop.style.borderColor='';drop.style.background='';});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='';drop.style.background='';if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);});
+  fileIn.addEventListener('change',()=>{if(fileIn.files[0])setFile(fileIn.files[0]);});
+
+  function setFile(f){
+    selFile=f;
+    fileName.textContent='📄 '+f.name+' ('+fmtSz(f.size)+')';
+    fileName.style.display='block';
+    vBtn.style.display='inline-flex';
+    results.style.display='none'; vApps=[];
+  }
+  function fmtSz(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  vBtn.addEventListener('click',async()=>{
+    if(!selFile)return;
+    vBtn.disabled=true; vBtn.textContent='جارٍ التحليل...';
+    const fd=new FormData(); fd.append('file',selFile);
+    try{
+      const r=await fetch('admin.php?ajax=file_import_validate',{method:'POST',body:fd});
+      const d=await r.json();
+      if(!d.success){alert('خطأ: '+(d.error||'غير معروف'));return;}
+      vApps=d.apps; renderResults(d);
+    }catch(e){alert('خطأ: '+e.message);}
+    finally{vBtn.disabled=false;vBtn.innerHTML='<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> تحليل الجودة';}
+  });
+
+  function renderResults(d){
+    document.getElementById('fi-total-badge').textContent='الإجمالي: '+d.total;
+    document.getElementById('fi-pass-badge').textContent='✓ ناجح: '+d.passed;
+    document.getElementById('fi-fail-badge').textContent='✗ مرفوض: '+(d.total-d.passed);
+    importAll.textContent='استيراد الناجحة ('+d.passed+')';
+    let h='';
+    d.apps.forEach((a,i)=>{
+      const sc=a.pass?'#16a34a':'#dc2626', si=a.pass?'✓':'✗', st=a.pass?'ناجح':'مرفوض';
+      const sc2=a.score>=80?'#16a34a':a.score>=55?'#d97706':'#dc2626';
+      h+=`<div style="background:var(--panel-bg);border:1px solid ${sc}30;border-radius:10px;padding:16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:${(a.issues.length||a.warnings.length)?'12px':'0'}">
+          <div>
+            <div style="font-size:14px;font-weight:700">${esc(a.name)}</div>
+            <div style="font-size:12px;color:var(--muted)">${esc(a.developer||'—')} · ${a.word_count} كلمة</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="background:${sc2}18;color:${sc2};border:1px solid ${sc2}40;padding:3px 11px;border-radius:40px;font-size:12px;font-weight:700">${a.score}/100</span>
+            <span style="background:${sc}18;color:${sc};border:1px solid ${sc}40;padding:3px 11px;border-radius:40px;font-size:12px;font-weight:700">${si} ${st}</span>
+            ${a.pass?`<button class="btn" style="font-size:12px;padding:5px 14px" onclick="fiImportOne(${i})" id="fi-btn-${i}">استيراد</button>`:''}
+          </div>
+        </div>
+        ${a.issues.map(e=>`<div style="font-size:12px;color:#dc2626;display:flex;gap:6px;margin-bottom:3px"><span>⚠</span><span>${esc(e)}</span></div>`).join('')}
+        ${a.warnings.map(w=>`<div style="font-size:12px;color:#d97706;display:flex;gap:6px;margin-bottom:3px"><span>ℹ</span><span>${esc(w)}</span></div>`).join('')}
+      </div>`;
+    });
+    appList.innerHTML=h; results.style.display='block';
+  }
+
+  async function doImport(idx){
+    const a=vApps[idx]; if(!a||!a.pass)return false;
+    const btn=document.getElementById('fi-btn-'+idx);
+    if(btn){btn.disabled=true;btn.textContent='جارٍ...';}
+    try{
+      const r=await fetch('admin.php?ajax=file_import_run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:a.data})});
+      const d=await r.json();
+      if(d.success){if(btn)btn.outerHTML=`<a href="${d.edit_url}" class="btn" style="font-size:12px;padding:5px 14px;background:rgba(22,163,74,.15);color:#16a34a;border-color:rgba(22,163,74,.3)">✓ تعديل</a>`;return true;}
+      else if(d.skipped){if(btn)btn.outerHTML=`<span style="font-size:12px;color:#d97706">موجود</span>`;return 'skip';}
+      else{if(btn){btn.disabled=false;btn.textContent='استيراد';}alert('فشل: '+(d.error||'خطأ'));return false;}
+    }catch(e){if(btn){btn.disabled=false;btn.textContent='استيراد';}alert('خطأ: '+e.message);return false;}
+  }
+  window.fiImportOne=idx=>doImport(idx);
+
+  importAll.addEventListener('click',async()=>{
+    const passed=vApps.filter(a=>a.pass); if(!passed.length){alert('لا توجد تطبيقات ناجحة');return;}
+    importAll.disabled=true; importProg.style.display='block';
+    let ok=0,skip=0,fail=0;
+    for(let i=0;i<vApps.length;i++){
+      if(!vApps[i].pass)continue;
+      importBar.style.width=((i/vApps.length)*100)+'%';
+      importSt.textContent='جارٍ: '+vApps[i].name+'...';
+      const res=await doImport(i);
+      if(res===true)ok++;else if(res==='skip')skip++;else fail++;
+    }
+    importBar.style.width='100%';
+    importSt.innerHTML=`<strong style="color:var(--white)">🏁 اكتمل</strong> — تم: ${ok}${skip?' · تخطّي: '+skip:''}${fail?' · فشل: '+fail:''}`;
+    importAll.disabled=false;
+  });
+})();
+</script>
+
+<?php
 /* ─────────────── CATEGORIES ─────────────── */
 elseif ($page === 'categories'):
   $cats = $pdo->query("SELECT c.*,(SELECT COUNT(*) FROM apps WHERE category_id=c.id) AS cnt FROM categories c ORDER BY c.sort_order,c.name")->fetchAll();
@@ -2826,6 +3347,140 @@ elseif ($page === 'blog-edit'):
   </div>
   <button type="submit" class="btn-save" style="margin-bottom:40px">حفظ المقال</button>
 </form>
+
+<?php
+/* ─────────────── ARTICLE GENERATOR ─────────────── */
+elseif ($page === 'article-gen'):
+  $allApps = $pdo->query("SELECT id,name,slug,developer FROM apps WHERE status='published' ORDER BY name")->fetchAll();
+?>
+
+<div class="admin-header"><h1>توليد مقالات التطبيقات</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    يولّد النظام لكل تطبيق مقالاً تفصيلياً من <strong>5 أقسام × 900-1100 كلمة = ~5000 كلمة</strong> باللهجة السورية.
+    يشمل كل مقال: مقدمة، ميزات تفصيلية، دليل استخدام، مميزات وعيوب، نصائح وأسئلة شائعة، وأزرار تحميل احترافية.
+    المقالات تُحفظ كمسودات في قسم المدونة ثم تنشرها عند الاستعداد.
+  </p>
+</div>
+
+<!-- App selector grid -->
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div style="font-size:14px;font-weight:700">اختر التطبيقات لتوليد مقالاتها</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="agSelectAll()">تحديد الكل</button>
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="agDeselectAll()">إلغاء الكل</button>
+    </div>
+  </div>
+  <div id="ag-app-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+    <?php foreach ($allApps as $a): ?>
+    <label id="ag-app-<?= $a['id'] ?>" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .2s,background .2s">
+      <input type="checkbox" name="ag_apps[]" value="<?= $a['id'] ?>" style="flex-shrink:0" onchange="agUpdateBtn()">
+      <span>
+        <div style="font-size:13px;font-weight:600"><?= h($a['name']) ?></div>
+        <div style="font-size:11px;color:var(--muted)"><?= h($a['developer']) ?></div>
+      </span>
+    </label>
+    <?php endforeach; ?>
+    <?php if (!$allApps): ?>
+    <p style="color:var(--muted);font-size:13px">لا توجد تطبيقات منشورة بعد.</p>
+    <?php endif; ?>
+  </div>
+  <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <button id="ag-start-btn" class="btn btn-primary" onclick="agStartGeneration()" disabled>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      توليد المقالات المحددة
+    </button>
+    <span id="ag-sel-count" style="font-size:13px;color:var(--muted)">0 محدد</span>
+  </div>
+</div>
+
+<!-- Progress log -->
+<div id="ag-progress-wrap" style="display:none">
+  <div class="panel" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-weight:700;font-size:14px">تقدم التوليد</div>
+      <span id="ag-overall-status" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div style="height:6px;background:rgba(37,99,235,.1);border-radius:3px;overflow:hidden;margin-bottom:12px">
+      <div id="ag-overall-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px;width:0%;transition:width .5s"></div>
+    </div>
+    <div id="ag-log"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function agUpdateBtn(){
+    const checked=document.querySelectorAll('input[name="ag_apps[]"]:checked');
+    document.getElementById('ag-start-btn').disabled=checked.length===0;
+    document.getElementById('ag-sel-count').textContent=checked.length+' محدد';
+  }
+  window.agSelectAll=()=>{document.querySelectorAll('input[name="ag_apps[]"]').forEach(c=>c.checked=true);agUpdateBtn();};
+  window.agDeselectAll=()=>{document.querySelectorAll('input[name="ag_apps[]"]').forEach(c=>c.checked=false);agUpdateBtn();};
+
+  const CHUNKS=5;
+
+  window.agStartGeneration=async()=>{
+    const checked=[...document.querySelectorAll('input[name="ag_apps[]"]:checked')];
+    if(!checked.length)return;
+    document.getElementById('ag-start-btn').disabled=true;
+    document.getElementById('ag-progress-wrap').style.display='block';
+    const log=document.getElementById('ag-log');
+    const bar=document.getElementById('ag-overall-bar');
+    const st=document.getElementById('ag-overall-status');
+    log.innerHTML='';
+    let totalSteps=checked.length*CHUNKS, doneSteps=0;
+
+    for(let ci=0;ci<checked.length;ci++){
+      const appId=checked[ci].value;
+      const appName=checked[ci].closest('label').querySelector('div').textContent;
+      const row=document.createElement('div');
+      row.style.cssText='background:var(--panel-bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px';
+      row.innerHTML=`<div style="font-size:13px;font-weight:700;margin-bottom:8px">${esc(appName)}</div>
+        <div style="height:4px;background:rgba(37,99,235,.1);border-radius:2px;margin-bottom:8px;overflow:hidden"><div class="ag-row-bar" style="height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:2px;width:0%;transition:width .4s"></div></div>
+        <div class="ag-row-status" style="font-size:12px;color:var(--muted)">جارٍ التوليد...</div>`;
+      log.appendChild(row);
+      const rowBar=row.querySelector('.ag-row-bar');
+      const rowSt=row.querySelector('.ag-row-status');
+
+      let fullHtml=''; let ok=true;
+      for(let ch=1;ch<=CHUNKS;ch++){
+        rowSt.textContent=`القسم ${ch}/${CHUNKS}: جارٍ...`;
+        try{
+          const r=await fetch('admin.php?ajax=gen_app_article_chunk',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({app_id:parseInt(appId),chunk:ch,prev_html:fullHtml.slice(-2000)})});
+          const d=await r.json();
+          if(d.success){fullHtml+='\n'+d.html;}
+          else{rowSt.textContent='⚠ خطأ في القسم '+ch+': '+(d.error||'غير معروف');ok=false;break;}
+        }catch(e){rowSt.textContent='⚠ استثناء في القسم '+ch+': '+e.message;ok=false;break;}
+        doneSteps++; rowBar.style.width=(ch/CHUNKS*100)+'%';
+        bar.style.width=(doneSteps/totalSteps*100)+'%';
+        st.textContent=Math.round(doneSteps/totalSteps*100)+'%';
+      }
+      if(ok && fullHtml){
+        rowSt.textContent='حفظ المقال...';
+        try{
+          const sr=await fetch('admin.php?ajax=save_app_article',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({app_id:parseInt(appId),html:fullHtml})});
+          const sd=await sr.json();
+          if(sd.success){
+            rowSt.innerHTML=`✓ مقال محفوظ (${sd.updated?'تحديث':'جديد'}) — <a href="${sd.view_url}" target="_blank" style="color:var(--accent)">معاينة</a> | <a href="admin.php?page=blog&edit=${sd.id}" style="color:var(--accent)">تعديل</a>`;
+            rowBar.style.background='linear-gradient(90deg,#16a34a,#15803d)';
+            const lbl=document.getElementById('ag-app-'+appId);
+            if(lbl)lbl.style.borderColor='#16a34a';
+          }else{rowSt.textContent='⚠ فشل الحفظ: '+(sd.error||'غير معروف');}
+        }catch(e){rowSt.textContent='⚠ خطأ الحفظ: '+e.message;}
+      }
+    }
+    bar.style.width='100%'; st.innerHTML='<strong>🏁 اكتمل</strong>';
+    document.getElementById('ag-start-btn').disabled=false;
+  };
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+})();
+</script>
 
 <?php
 /* ─────────────── SITE ANALYTICS (real self-tracked data, not GSC) ─────────────── */

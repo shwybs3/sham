@@ -236,7 +236,7 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
 <script>
 const DOWNLOAD_URL = <?= json_encode($url) ?>;
 const HAS_LINK = <?= $hasLink ? 'true' : 'false' ?>;
-const TOTAL = 10;
+const TOTAL = 5;
 let remaining = TOTAL;
 
 const countEl   = document.getElementById('dl-count');
