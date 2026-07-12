@@ -3,6 +3,17 @@ DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Force HTTPS — required for AdSense and for the cookie-consent /
+  # localStorage behavior to be trustworthy. IMPORTANT: only keep this
+  # enabled once your hosting actually has a valid SSL certificate active
+  # (most cPanel hosts auto-provision one via AutoSSL/Let's Encrypt) — if
+  # SSL isn't active yet, this causes a redirect loop. Comment out the two
+  # lines below if that happens, until SSL is confirmed working.
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
   RewriteRule ^robots\.txt$ robots.php [L]
 
   # Canonical homepage: redirect old /index.php links/bookmarks to the root

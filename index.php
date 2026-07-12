@@ -71,6 +71,7 @@ $orgSchema = json_encode([
   <link rel="canonical" href="<?= h(url('')) ?>">
   <meta property="og:title" content="yassota — تحميل التطبيقات">
   <meta property="og:description" content="أفضل تطبيقات أندرويد مجاناً">
+  <?php if ($featured && $featured['icon_path']): ?><meta property="og:image" content="<?= h(url($featured['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="yassota — تحميل التطبيقات">
   <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">

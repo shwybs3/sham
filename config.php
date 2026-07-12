@@ -918,7 +918,9 @@ function search_console_meta(PDO $pdo): string {
 // Favicon + web-app manifest + theme-color + search-console verification,
 // printed once in every page <head> right after the charset meta tag.
 function head_extras(PDO $pdo): string {
-    return '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
+    return '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
+        . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
+        . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
         . '<meta name="theme-color" content="#2563eb">' . "\n  "
         . search_console_meta($pdo);
