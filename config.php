@@ -699,6 +699,65 @@ function import_remote_icon(string $remoteUrl, string $slug): ?string {
     return $path;
 }
 
+// Downloads Play Store screenshot images for a given app page URL and saves them to uploads/screenshots/.
+// Returns array of relative paths (e.g. "uploads/screenshots/tiktok-ss1-abc123.webp").
+// Best-effort: returns [] when the page can't be fetched or yields no screenshot URLs.
+function fetch_playstore_screenshots(string $playstoreUrl, string $slug, int $max = 4): array {
+    $ch = curl_init($playstoreUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept-Language: ar,en;q=0.8'],
+    ]);
+    $html = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!$html || $code !== 200) return [];
+
+    // The og:image is the icon — exclude it from screenshot candidates.
+    $iconUrl = null;
+    if (preg_match('#<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']#i', $html, $m)) {
+        $iconUrl = strtok($m[1], '='); // strip size params
+    }
+
+    // Play Store embeds all CDN image URLs in inline JSON/script blocks.
+    preg_match_all('#https://play-lh\.googleusercontent\.com/([A-Za-z0-9_\-]{20,})#', $html, $m);
+    $candidates = array_unique($m[0] ?? []);
+
+    // Filter out icon, dedupe, keep first $max
+    $screenshots = [];
+    foreach ($candidates as $u) {
+        $base = strtok($u, '=');
+        if ($iconUrl && $base === $iconUrl) continue;
+        $screenshots[] = $u;
+        if (count($screenshots) >= $max) break;
+    }
+    if (!$screenshots) return [];
+
+    $dir = UPLOAD_PATH . '/screenshots';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $saved = [];
+    foreach ($screenshots as $i => $ssUrl) {
+        $fetchUrl = preg_replace('#=.*$#', '', $ssUrl) . '=w1280';
+        $tmp = tempnam(sys_get_temp_dir(), 'ss');
+        $ch2 = curl_init($fetchUrl);
+        curl_setopt_array($ch2, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => true]);
+        $bin = curl_exec($ch2);
+        $ok  = curl_getinfo($ch2, CURLINFO_HTTP_CODE) === 200 && $bin;
+        curl_close($ch2);
+        if (!$ok) { @unlink($tmp); continue; }
+        file_put_contents($tmp, $bin);
+        $info = @getimagesize($tmp);
+        if (!$info) { @unlink($tmp); continue; }
+        $fname = $slug . '-ss' . ($i + 1) . '-' . substr(md5($ssUrl), 0, 6) . '.webp';
+        $dest  = "$dir/$fname";
+        if (compress_image_to($tmp, $info['mime'], $dest, 1080, 2000, 82)) {
+            $saved[] = "uploads/screenshots/$fname";
+        }
+        @unlink($tmp);
+    }
+    return $saved;
+}
+
 // Convenience: builds the key/model list from saved settings and runs a plain-text prompt.
 // Returns ['ok'=>bool,'content'=>?string,'error'=>?string]
 // Models that return classifiers/JSON-schema outputs instead of free text —

@@ -932,6 +932,21 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_list' && is_admin()
         'أدوبي أكروبات ريدر'=>['adobe-acrobat-reader','productivity'],'كانفا'=>['canva','design'],
         'بيكس آرت'=>['picsart','design'],'إن شوت'=>['inshot','design'],
         'بابجي موبايل'=>['pubg-mobile','games'],'فري فاير'=>['free-fire','games'],
+        'تيك توك'=>['tiktok','apps'],'إنستغرام'=>['instagram','social'],
+        'كاب كت'=>['capcut','design'],'يوتيوب ميوزيك'=>['youtube-music','apps'],
+        'تويتش'=>['twitch','apps'],'شاهد'=>['shahid','apps'],
+        'جوجل مابس'=>['google-maps','tools'],'جوجل درايف'=>['google-drive','productivity'],
+        'كيبورد جوجل'=>['gboard','tools'],'مايكروسوفت وورد'=>['microsoft-word','productivity'],
+        'ون درايف'=>['onedrive','productivity'],'أدوبي لايتروم'=>['adobe-lightroom','design'],
+        'كلاش أوف كلانز'=>['clash-of-clans','games'],'كلاش رويال'=>['clash-royale','games'],
+        'موبايل ليجندز'=>['mobile-legends','games'],'ماين كرافت'=>['minecraft','games'],
+        'سابواي سيرف'=>['subway-surfers','games'],'تمبل رن 2'=>['temple-run-2','games'],
+        'أمازون شوبينج'=>['amazon-shopping','apps'],'علي إكسبريس'=>['aliexpress','apps'],
+        'شيين'=>['shein','apps'],'تالابات'=>['talabat','apps'],
+        'كريم'=>['careem','apps'],'نمشي'=>['namshi','apps'],
+        'نورد VPN'=>['nordvpn','tools'],'فايرفوكس'=>['firefox','tools'],
+        'برايف براوزر'=>['brave-browser','tools'],'جيميل'=>['gmail','tools'],
+        'مايكروسوفت أوتلوك'=>['microsoft-outlook','productivity'],'أنكي درويد'=>['ankidroid','productivity'],
     ];
 
     $catLabels = ['social'=>'تواصل اجتماعي','tools'=>'أدوات','apps'=>'تطبيقات',
@@ -947,7 +962,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_list' && is_admin()
             $ex = $pdo->prepare("SELECT id FROM apps WHERE name=?");
             $ex->execute([$name]);
             $existId = $ex->fetchColumn();
-            $catSlug = $SLUG_MAP[$name][1] ?? 'apps';
+            $catSlug = $app['category_slug'] ?? ($SLUG_MAP[$name][1] ?? 'apps');
             $result[] = [
                 'name'       => $name,
                 'developer'  => $app['developer'] ?? '',
@@ -1010,24 +1025,63 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
         'أدوبي أكروبات ريدر'=>['adobe-acrobat-reader','productivity'],'كانفا'=>['canva','design'],
         'بيكس آرت'=>['picsart','design'],'إن شوت'=>['inshot','design'],
         'بابجي موبايل'=>['pubg-mobile','games'],'فري فاير'=>['free-fire','games'],
+        // Batch F
+        'تيك توك'=>['tiktok','apps'],'إنستغرام'=>['instagram','social'],
+        'كاب كت'=>['capcut','design'],'يوتيوب ميوزيك'=>['youtube-music','apps'],
+        'تويتش'=>['twitch','apps'],'شاهد'=>['shahid','apps'],
+        // Batch G
+        'جوجل مابس'=>['google-maps','tools'],'جوجل درايف'=>['google-drive','productivity'],
+        'كيبورد جوجل'=>['gboard','tools'],'مايكروسوفت وورد'=>['microsoft-word','productivity'],
+        'ون درايف'=>['onedrive','productivity'],'أدوبي لايتروم'=>['adobe-lightroom','design'],
+        // Batch H
+        'كلاش أوف كلانز'=>['clash-of-clans','games'],'كلاش رويال'=>['clash-royale','games'],
+        'موبايل ليجندز'=>['mobile-legends','games'],'ماين كرافت'=>['minecraft','games'],
+        'سابواي سيرف'=>['subway-surfers','games'],'تمبل رن 2'=>['temple-run-2','games'],
+        // Batch I
+        'أمازون شوبينج'=>['amazon-shopping','apps'],'علي إكسبريس'=>['aliexpress','apps'],
+        'شيين'=>['shein','apps'],'تالابات'=>['talabat','apps'],
+        'كريم'=>['careem','apps'],'نمشي'=>['namshi','apps'],
+        // Batch J
+        'نورد VPN'=>['nordvpn','tools'],'فايرفوكس'=>['firefox','tools'],
+        'برايف براوزر'=>['brave-browser','tools'],'جيميل'=>['gmail','tools'],
+        'مايكروسوفت أوتلوك'=>['microsoft-outlook','productivity'],'أنكي درويد'=>['ankidroid','productivity'],
     ];
     [$slugBase, $catSlug] = $SLUG_MAP[$targetName] ?? [slugify($targetName), 'apps'];
+    // Allow batch data to override category
+    if (!empty($data['category_slug'])) $catSlug = $data['category_slug'];
     $slug = unique_slug($pdo, $slugBase);
     $catSt = $pdo->prepare("SELECT id FROM categories WHERE slug=?");
     $catSt->execute([$catSlug]);
     $catId = $catSt->fetchColumn();
     if (!$catId) { $catSt->execute(['apps']); $catId = $catSt->fetchColumn(); }
 
-    // Best-effort Play Store icon
-    $playstoreUrl = playstore_search($targetName . ' ' . ($data['developer'] ?? ''));
-    if (!$playstoreUrl) $playstoreUrl = playstore_search($targetName);
-    $iconPath = null; $packageName = null;
+    // Prefer playstore_url from batch data; fall back to search
+    $playstoreUrl = trim($data['playstore_url'] ?? '');
+    if (!$playstoreUrl) {
+        $playstoreUrl = playstore_search($targetName . ' ' . ($data['developer'] ?? ''));
+        if (!$playstoreUrl) $playstoreUrl = playstore_search($targetName);
+    }
+
+    // Prefer package_name from batch data; extract from URL as fallback
+    $packageName = trim($data['package_name'] ?? '');
+    if (!$packageName && $playstoreUrl && preg_match('#[?&]id=([a-zA-Z0-9_.]+)#', $playstoreUrl, $pm)) {
+        $packageName = $pm[1];
+    }
+
+    // Icon: fetch from Play Store og:image
+    $iconPath = null;
     if ($playstoreUrl) {
         $meta = fetch_playstore_meta($playstoreUrl);
-        if ($meta) {
-            $packageName = $meta['package_name'] ?? null;
-            if (!empty($meta['icon_url'])) $iconPath = import_remote_icon($meta['icon_url'], $slug);
+        if ($meta && !empty($meta['icon_url'])) {
+            $iconPath = import_remote_icon($meta['icon_url'], $slug);
         }
+        if (!$packageName && !empty($meta['package_name'])) $packageName = $meta['package_name'];
+    }
+
+    // Screenshots: scrape Play Store (best-effort, non-blocking)
+    $screenshots = [];
+    if ($playstoreUrl) {
+        $screenshots = fetch_playstore_screenshots($playstoreUrl, $slug, 4);
     }
 
     $features     = array_values(array_filter($data['features'] ?? []));
@@ -1038,22 +1092,31 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
 
     try {
         $pdo->prepare("INSERT INTO apps
-            (name,slug,category_id,developer,license,icon_path,short_description,long_description,
+            (name,slug,category_id,developer,license,version,android_version,size_mb,
+             icon_path,screenshots,short_description,long_description,
              features,pros,cons,install_steps,faq,whats_new,playstore_url,package_name,rating,
              seo_title,meta_description,keywords,status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft')")
             ->execute([
-                $targetName,$slug,$catId,trim($data['developer'] ?? ''),'Free',$iconPath,
+                $targetName,$slug,$catId,
+                trim($data['developer'] ?? ''),
+                trim($data['license'] ?? 'Free'),
+                trim($data['version'] ?? ''),
+                trim($data['android_version'] ?? ''),
+                trim($data['size_mb'] ?? ''),
+                $iconPath,
+                $screenshots ? json_encode($screenshots, JSON_UNESCAPED_UNICODE) : null,
                 trim($data['short_description'] ?? ''),trim($data['long_description'] ?? ''),
                 json_encode($features,JSON_UNESCAPED_UNICODE),json_encode($pros,JSON_UNESCAPED_UNICODE),
                 json_encode($cons,JSON_UNESCAPED_UNICODE),json_encode($installSteps,JSON_UNESCAPED_UNICODE),
                 json_encode($faq,JSON_UNESCAPED_UNICODE),trim($data['whats_new'] ?? ''),
-                $playstoreUrl,$packageName,4.5,
+                $playstoreUrl ?: null,$packageName ?: null,4.5,
                 trim($data['seo_title'] ?? ''),trim($data['meta_description'] ?? ''),trim($data['keywords'] ?? ''),
             ]);
         $newId = (int)$pdo->lastInsertId();
         echo json_encode(['success'=>true,'id'=>$newId,'name'=>$targetName,
-            'has_icon'=>(bool)$iconPath,'edit_url'=>'admin.php?page=edit-app&id='.$newId], JSON_UNESCAPED_UNICODE);
+            'has_icon'=>(bool)$iconPath,'screenshots'=>count($screenshots),
+            'edit_url'=>'admin.php?page=edit-app&id='.$newId], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
     }
