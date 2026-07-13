@@ -1692,10 +1692,15 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
         bump_cache_version($pdo);
-        // Notify Telegram only when transitioning to published (not on repeated edits)
+        // Notify Telegram only when transitioning to published — deferred until
+        // AFTER the HTTP response is flushed so the admin never sees a freeze.
         if (!$wasPublished && $requestedStatus === 'published') {
-            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$appId]) ? $pdo->query("SELECT * FROM apps WHERE id=$appId")->fetch() : $d;
-            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$appId]) ? $pdo->query("SELECT * FROM apps WHERE id={$appId}")->fetch(PDO::FETCH_ASSOC) : $d;
+            $notifyApp = is_array($saved) ? $saved : $d;
+            register_shutdown_function(function() use ($pdo, $notifyApp) {
+                if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+                telegram_notify_new_app($pdo, $notifyApp);
+            });
         }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
     } else {
@@ -1704,10 +1709,14 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
         $newId = (int)$pdo->lastInsertId();
         bump_cache_version($pdo);
-        // Notify Telegram on new published apps
+        // Deferred Telegram notification — fires after HTTP redirect is sent.
         if ($requestedStatus === 'published' && $newId) {
-            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id=$newId")->fetch() : array_merge($d, ['id' => $newId]);
-            telegram_notify_new_app($pdo, is_array($saved) ? $saved : $d);
+            $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id={$newId}")->fetch(PDO::FETCH_ASSOC) : array_merge($d, ['id' => $newId]);
+            $notifyApp = is_array($saved) ? $saved : array_merge($d, ['id' => $newId]);
+            register_shutdown_function(function() use ($pdo, $notifyApp) {
+                if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+                telegram_notify_new_app($pdo, $notifyApp);
+            });
         }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'added_no_link' : 'added')); exit;
     }

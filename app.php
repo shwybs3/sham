@@ -312,18 +312,27 @@ function wave(): string {
     $playStoreVersion = $app['play_store_version'] ?? '';
     if (str_contains($playStoreVersion, '://')) $playStoreVersion = null;
 
+    $pkgName = $app['package_name'] ?? '';
     $metas = [
-        ['label'=>'الإصدار','val'=>$app['version'],'class'=>'version'],
-        ['label'=>'إصدار جوجل بلاي','val'=>$playStoreVersion,'class'=>'version'],
-        ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],'class'=>''],
-        ['label'=>'الحجم','val'=>$app['size_mb'] ? $app['size_mb'].' MB' : null,'class'=>'size'],
-        ['label'=>'المطور','val'=>$app['developer'],'class'=>''],
-        ['label'=>'التحميلات','val'=>$app['downloads'] > 0 ? number_format($app['downloads']) : null,'class'=>''],
+        ['label'=>'المطور',        'val'=>$app['developer'],                                              'class'=>'', 'link'=>$app['developer'] ? url('developer/'.rawurlencode($app['developer'])) : null],
+        ['label'=>'الإصدار',       'val'=>$app['version'],                                               'class'=>'version', 'link'=>null],
+        ['label'=>'إصدار بلاي',   'val'=>$playStoreVersion,                                              'class'=>'version', 'link'=>null],
+        ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],                                        'class'=>'', 'link'=>null],
+        ['label'=>'الحجم',         'val'=>$app['size_mb'] ? $app['size_mb'].' MB' : null,               'class'=>'size', 'link'=>null],
+        ['label'=>'الترخيص',       'val'=>$app['license'],                                               'class'=>'', 'link'=>null],
+        ['label'=>'اسم الحزمة',    'val'=>$pkgName ?: null,                                              'class'=>'', 'link'=>$pkgName ? 'https://play.google.com/store/apps/details?id='.rawurlencode($pkgName) : null, 'mono'=>true, 'external'=>true],
+        ['label'=>'التحميلات',     'val'=>$app['downloads'] > 0 ? number_format($app['downloads']) : null,'class'=>'', 'link'=>null],
     ];
     foreach ($metas as $m): if (!$m['val']) continue; ?>
     <div class="meta-item reveal">
       <div class="meta-item-label"><?= h($m['label']) ?></div>
-      <div class="meta-item-value <?= $m['class'] ?>"><?= h($m['val']) ?></div>
+      <div class="meta-item-value <?= $m['class'] ?>" <?= !empty($m['mono']) ? 'style="font-size:11px;word-break:break-all"' : '' ?>>
+        <?php if ($m['link']): ?>
+          <a href="<?= h($m['link']) ?>" <?= !empty($m['external']) ? 'target="_blank" rel="nofollow noopener"' : '' ?> style="color:inherit;text-decoration:underline;text-underline-offset:3px"><?= h($m['val']) ?></a>
+        <?php else: ?>
+          <?= h($m['val']) ?>
+        <?php endif; ?>
+      </div>
     </div>
     <?php endforeach; ?>
   </div>

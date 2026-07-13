@@ -796,7 +796,8 @@ function telegram_api(PDO $pdo, string $method, array $body): array {
     $body['chat_id'] = $chatId;
     $ch = curl_init("https://api.telegram.org/bot{$token}/{$method}");
     curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 5,
+        CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
         CURLOPT_POSTFIELDS     => json_encode($body),
     ]);
@@ -818,46 +819,27 @@ function telegram_notify_new_app(PDO $pdo, array $app): void {
     if (get_cfg($pdo, 'telegram_enabled', '0') !== '1') return;
     if (!get_cfg($pdo, 'telegram_bot_token') || !get_cfg($pdo, 'telegram_channel_id')) return;
 
-    $name     = $app['name']             ?? '';
-    $shortDesc= $app['short_description'] ?? '';
-    $version  = $app['version']          ?? '';
-    $sizeMb   = $app['size_mb']          ?? '';
-    $features = json_decode($app['features'] ?? '[]', true) ?: [];
-    $features = array_slice(array_filter($features), 0, 5);
+    $name      = $app['name']              ?? '';
+    $shortDesc = $app['short_description'] ?? '';
+    $version   = $app['version']           ?? '';
+    $sizeMb    = $app['size_mb']           ?? '';
+    $developer = $app['developer']         ?? '';
+    $pkg       = $app['package_name']      ?? '';
+    $features  = array_slice(array_filter(json_decode($app['features'] ?? '[]', true) ?: []), 0, 5);
 
-    // Build caption via AI (best-effort, silent fallback)
-    $caption = '';
-    $provider = get_cfg($pdo, 'ai_provider', 'openrouter');
-    $aiPrompt = "اكتب إعلاناً جذاباً ومختصراً (بحد أقصى 180 كلمة) لإعلان إضافة هذا التطبيق على موقع yassota. "
-              . "النص فقط بدون هاشتاقات زائدة وبدون ماركداون. يمكنك استخدام بعض الإيموجي المناسبة.\n"
-              . "اسم التطبيق: {$name}\n"
-              . "الوصف: {$shortDesc}\n"
-              . ($version ? "الإصدار: v{$version}\n" : '')
-              . ($features ? "المميزات: " . implode('، ', $features) . "\n" : '');
-
-    if ($provider === 'aifreeforever') {
-        $r = aifreeforever_call($aiPrompt, 20);
-        if ($r['ok']) $caption = trim($r['content']);
-    } else {
-        $keys   = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
-        $models = build_model_rotation($pdo);
-        if ($keys && $models) {
-            $r = openrouter_call_rotating($keys, array_slice($models, 0, 4), $aiPrompt);
-            if ($r['ok']) $caption = trim($r['content']);
-        }
-    }
-
-    // Manual fallback caption
-    if (!$caption) {
-        $lines = ["🆕 <b>{$name}</b> متاح الآن على yassota!"];
-        if ($shortDesc) $lines[] = "\n{$shortDesc}";
-        if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
-    } else {
-        $lines = [$caption];
-    }
-    // Append version/size as info footer
-    $meta = array_filter([$version ? "🔖 v{$version}" : '', $sizeMb ? "📦 {$sizeMb} MB" : '']);
-    if ($meta) $lines[] = "\n" . implode('  ', $meta);
+    // Build caption instantly from stored data — never call the AI API here
+    // because this function runs synchronously during the save request and an
+    // AI call would block the admin browser for 15-30 seconds.
+    $lines = ["🆕 <b>{$name}</b> متاح الآن على yassota!"];
+    if ($shortDesc) $lines[] = "\n{$shortDesc}";
+    if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
+    $meta = array_filter([
+        $developer ? "👨‍💻 {$developer}" : '',
+        $version   ? "🔖 v{$version}"   : '',
+        $sizeMb    ? "📦 {$sizeMb} MB"  : '',
+        $pkg       ? "📦 {$pkg}"        : '',
+    ]);
+    if ($meta) $lines[] = "\n" . implode('  ·  ', $meta);
 
     $text = implode('', $lines);
     // Telegram caption limit is 1024 chars
