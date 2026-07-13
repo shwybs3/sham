@@ -31,17 +31,36 @@ if (!empty($_GET['ver'])) {
     $archivedVersion = $verStmt->fetch();
 }
 
+$downloadSource = $app['download_source'] ?? 'playstore';
+$hasLocalApk    = !empty($app['apk_path']) && in_array($downloadSource, ['apk','both'], true);
+
 if ($archivedVersion && !empty($archivedVersion['download_url'])) {
     $url            = $archivedVersion['download_url'];
     $displayVersion = $archivedVersion['version'];
+    $hasLocalApk    = false; // archived versions always use external URL
 } else {
-    $url = $app['download_url'];
-    if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
-    if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
     $displayVersion = $app['version'];
+    if ($hasLocalApk && $downloadSource === 'apk') {
+        // Serve local APK directly — no redirect needed, we'll stream it
+        $url = url('download.php?slug=' . urlencode($app['slug']) . '&apk=1');
+    } else {
+        $url = $app['download_url'];
+        if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
+        if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
+    }
 }
-$hasLink = !empty($url);
+
+// Direct APK stream — triggered by ?apk=1 or when source=apk and the countdown fires
+if (!empty($_GET['apk']) && $hasLocalApk) {
+    serve_apk_file($app['apk_path'], $app['name'], $app['version'] ?: '1.0');
+    // serve_apk_file() calls exit() internally
+}
+
+$hasLink = !empty($url) || $hasLocalApk;
 if (!$hasLink) $url = '#';
+if ($hasLocalApk && empty($url)) {
+    $url = url('download.php?slug=' . urlencode($app['slug']) . '&apk=1');
+}
 
 $features    = json_decode($app['features']     ?? '[]', true) ?: [];
 $screenshots = json_decode($app['screenshots']  ?? '[]', true) ?: [];
@@ -175,12 +194,13 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
       </div>
 
       <!-- Manual download button (shown after countdown) -->
-      <a id="btn-manual" href="<?= h($url) ?>" class="btn-manual hidden" download data-hardnav="1">
+      <?php $manualUrl = $hasLocalApk ? h(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : h($url); ?>
+      <a id="btn-manual" href="<?= $manualUrl ?>" class="btn-manual hidden" <?= $hasLocalApk ? 'download' : '' ?> data-hardnav="1">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
           <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
           <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
         </svg>
-        ابدأ التحميل الآن
+        <?= $hasLocalApk ? 'تحميل APK مباشرةً' : 'ابدأ التحميل الآن' ?>
       </a>
       <div class="dl-manual-label" id="manual-label" style="display:none">
         لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
@@ -216,6 +236,54 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
     </div>
     <?php endif; ?>
 
+    <!-- Security / Hash Info -->
+    <?php if ($hasLocalApk && $app['apk_hash_sha256']): ?>
+    <details style="margin-top:16px;border:1px solid var(--border,rgba(0,0,0,.12));border-radius:10px;padding:12px 14px;text-align:right">
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;list-style:none;user-select:none">
+        🔒 التحقق من سلامة الملف
+      </summary>
+      <div style="margin-top:10px;font-size:11px;line-height:1.8">
+        <?php if ($app['apk_size_bytes']): ?>
+        <div><span style="color:var(--muted)">الحجم الفعلي:</span> <strong><?= h(format_apk_size((int)$app['apk_size_bytes'])) ?></strong></div>
+        <?php endif; ?>
+        <?php if ($app['version']): ?>
+        <div><span style="color:var(--muted)">الإصدار:</span> <strong><?= h($app['version']) ?></strong></div>
+        <?php endif; ?>
+        <div style="margin-top:8px">
+          <div style="color:var(--muted);margin-bottom:2px">SHA-256 (انقر للنسخ):</div>
+          <code style="font-size:10px;word-break:break-all;background:rgba(0,0,0,.04);padding:4px 6px;border-radius:5px;cursor:pointer;display:block"
+                onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.style.color='green';setTimeout(()=>this.style.color='',1500)})"><?= h($app['apk_hash_sha256']) ?></code>
+        </div>
+        <?php if ($app['apk_hash_md5']): ?>
+        <div style="margin-top:6px">
+          <div style="color:var(--muted);margin-bottom:2px">MD5:</div>
+          <code style="font-size:11px;background:rgba(0,0,0,.04);padding:3px 6px;border-radius:5px;cursor:pointer;display:block"
+                onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.style.color='green';setTimeout(()=>this.style.color='',1500)})"><?= h($app['apk_hash_md5']) ?></code>
+        </div>
+        <?php endif; ?>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:10px">
+          ملف APK مُستضاف مباشرةً على خوادم yassota — تم التحقق من سلامته وتطابق البصمة.
+        </p>
+      </div>
+    </details>
+    <?php endif; ?>
+
+    <!-- Source option: both Play + APK -->
+    <?php if ($hasLocalApk && $downloadSource === 'both' && $app['download_url']): ?>
+    <div style="margin-top:12px;text-align:center;font-size:12px;color:var(--muted)">
+      أو تحميل من
+      <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener" style="color:var(--accent,#0d6efd)">Google Play ↗</a>
+    </div>
+    <?php elseif (!$hasLocalApk && $app['download_url'] && str_contains($app['download_url'], 'play.google.com')): ?>
+    <div style="margin-top:12px;text-align:center;font-size:12px">
+      <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener"
+         style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1px solid var(--border,rgba(0,0,0,.15));border-radius:8px;color:var(--text,#0f172a);text-decoration:none;font-size:12px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.37.2.8.2 1.17-.01l13.64-7.84-2.86-2.86-11.95 10.71zm-1.01-21.3A2 2 0 002 3.52v16.96a2 2 0 00.17.95l.09.1 9.5-9.5v-.23l-9.59-9.34zm16.53 9.13l-2.72-1.57-3.13 3.14 3.13 3.13 2.74-1.58a2 2 0 000-3.12zM4.35.25L17.99 8.1l-2.87 2.86L4.08.37.9.25z"/></svg>
+        تحميل من Google Play
+      </a>
+    </div>
+    <?php endif; ?>
+
     <!-- Back link -->
     <a href="<?= h(app_url($app['slug'])) ?>"
        style="display:block;margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
@@ -234,8 +302,9 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
 <?php render_cookie_banner(); ?>
 
 <script>
-const DOWNLOAD_URL = <?= json_encode($url) ?>;
+const DOWNLOAD_URL = <?= $hasLocalApk ? json_encode(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : json_encode($url) ?>;
 const HAS_LINK = <?= $hasLink ? 'true' : 'false' ?>;
+const IS_LOCAL_APK = <?= $hasLocalApk ? 'true' : 'false' ?>;
 const TOTAL = 5;
 let remaining = TOTAL;
 

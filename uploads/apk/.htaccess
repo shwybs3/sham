@@ -1,0 +1,9 @@
+# Block direct access — APK files are served exclusively through download.php
+# which handles auth checks, download counting, and range requests.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^ - [F,L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+  Deny from all
+</IfModule>

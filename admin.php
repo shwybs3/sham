@@ -1,7 +1,7 @@
 <?php
 // Raise PHP limits for admin only — long descriptions can be several MBs
-@ini_set('post_max_size', '64M');
-@ini_set('upload_max_filesize', '64M');
+@ini_set('post_max_size', '512M');
+@ini_set('upload_max_filesize', '500M');
 @ini_set('max_input_vars', '5000');
 @ini_set('memory_limit', '256M');
 
@@ -1478,6 +1478,60 @@ P;
     exit;
 }
 
+/* ══════════════════════════════════════════════════════
+   AJAX: Upload APK file — extracts metadata, stores in uploads/apk/
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_apk' && is_admin()) {
+    @set_time_limit(120);
+    header('Content-Type: application/json');
+
+    $appId = (int)($_POST['app_id'] ?? 0);
+    if (!isset($_FILES['apk']) || $_FILES['apk']['error'] === UPLOAD_ERR_NO_FILE) {
+        echo json_encode(['ok'=>false,'error'=>'لم يتم اختيار ملف']); exit;
+    }
+
+    // Get slug — from existing app or from name field
+    $slug = '';
+    if ($appId > 0) {
+        $r = $pdo->prepare("SELECT slug FROM apps WHERE id=?")->execute([$appId]);
+        $row = $pdo->query("SELECT slug FROM apps WHERE id=$appId")->fetch();
+        if ($row) $slug = $row['slug'];
+    }
+    if (!$slug) {
+        $slug = unique_slug($pdo, trim($_POST['app_name'] ?? 'app'));
+    }
+
+    $result = store_apk_file($_FILES['apk'], $slug);
+    if (!$result['ok']) {
+        echo json_encode(['ok'=>false,'error'=>$result['error']]); exit;
+    }
+
+    // If editing an existing app, delete the old APK file
+    if ($appId > 0) {
+        $old = $pdo->query("SELECT apk_path FROM apps WHERE id=$appId")->fetchColumn();
+        if ($old && file_exists(__DIR__.'/'.$old)) @unlink(__DIR__.'/'.$old);
+    }
+
+    echo json_encode(array_merge(['ok'=>true], $result), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Delete APK file for an app
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'delete_apk' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_POST['app_id'] ?? 0);
+    if (!$appId) { echo json_encode(['ok'=>false]); exit; }
+    $old = $pdo->query("SELECT apk_path FROM apps WHERE id=$appId")->fetchColumn();
+    if ($old && file_exists(__DIR__.'/'.$old)) @unlink(__DIR__.'/'.$old);
+    $pdo->prepare("UPDATE apps SET apk_path=NULL,apk_size_bytes=NULL,apk_hash_sha256=NULL,apk_hash_md5=NULL,apk_uploaded_at=NULL WHERE id=?")
+        ->execute([$appId]);
+    bump_cache_version($pdo);
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
 $page   = $_GET['page'] ?? 'dashboard';
 $msg    = '';
 $error  = '';
@@ -1634,7 +1688,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
     // as before this field existed.
     $customSlug = trim($_POST['slug'] ?? '');
     if ($isEdit && $appId) {
-        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots,version,download_url,whats_new FROM apps WHERE id=?");
+        $existing = $pdo->prepare("SELECT slug,icon_path,screenshots,version,download_url,whats_new,apk_path,apk_size_bytes,apk_hash_sha256,apk_hash_md5,apk_uploaded_at,status FROM apps WHERE id=?");
         $existing->execute([$appId]); $existing = $existing->fetch();
         $slug = ($customSlug !== '' && $customSlug !== $existing['slug'])
             ? unique_slug($pdo, $customSlug, $appId)
@@ -1684,10 +1738,29 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         if (trim($faqQ[$fi])) $faq[] = ['q' => trim($faqQ[$fi]), 'a' => trim($faqA[$fi] ?? '')];
     }
 
-    $downloadUrl = trim($_POST['download_url'] ?? '');
+    $downloadUrl    = trim($_POST['download_url'] ?? '');
+    $downloadSource = in_array($_POST['download_source'] ?? '', ['playstore','apk','both'], true)
+        ? $_POST['download_source'] : 'playstore';
+
+    // Preserve existing APK data if a new one wasn't uploaded this request
+    $apkPath       = $existing['apk_path']       ?? null;
+    $apkSizeBytes  = $existing['apk_size_bytes']  ?? null;
+    $apkHashSha256 = $existing['apk_hash_sha256'] ?? null;
+    $apkHashMd5    = $existing['apk_hash_md5']    ?? null;
+    $apkUploadedAt = $existing['apk_uploaded_at'] ?? null;
+    // If a fresh APK was uploaded via AJAX before form submission, its data arrives in hidden fields
+    if (!empty($_POST['apk_path_new']) && preg_match('#^uploads/apk/[A-Za-z0-9_\-\.]+\.apk$#', $_POST['apk_path_new'])) {
+        $apkPath       = trim($_POST['apk_path_new']);
+        $apkSizeBytes  = (int)($_POST['apk_size_bytes_new'] ?? 0) ?: null;
+        $apkHashSha256 = trim($_POST['apk_hash_sha256_new'] ?? '') ?: null;
+        $apkHashMd5    = trim($_POST['apk_hash_md5_new'] ?? '') ?: null;
+        $apkUploadedAt = date('Y-m-d H:i:s');
+    }
+
     $requestedStatus = ($_POST['status'] ?? 'published') === 'draft' ? 'draft' : 'published';
     $forcedDraft = false;
-    if ($requestedStatus === 'published' && $downloadUrl === '') {
+    $hasDownloadMethod = $downloadUrl !== '' || ($apkPath && in_array($downloadSource, ['apk','both'], true));
+    if ($requestedStatus === 'published' && !$hasDownloadMethod) {
         $requestedStatus = 'draft';
         $forcedDraft = true;
     }
@@ -1726,6 +1799,12 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'download_url'      => $downloadUrl,
         'mirror2_url'       => trim($_POST['mirror2_url'] ?? ''),
         'mirror3_url'       => trim($_POST['mirror3_url'] ?? ''),
+        'download_source'   => $downloadSource,
+        'apk_path'          => $apkPath,
+        'apk_size_bytes'    => $apkSizeBytes,
+        'apk_hash_sha256'   => $apkHashSha256,
+        'apk_hash_md5'      => $apkHashMd5,
+        'apk_uploaded_at'   => $apkUploadedAt,
         'whats_new'         => trim($_POST['whats_new'] ?? ''),
         'status'            => $requestedStatus,
         'needs_update'      => isset($_POST['needs_update']) ? 1 : 0,
@@ -2353,9 +2432,86 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
   <!-- ── Download Links ── -->
   <div class="panel">
     <h2>روابط التحميل</h2>
+
+    <!-- Source selector -->
+    <div class="form-group" style="margin-bottom:18px">
+      <label class="form-label">مصدر التحميل</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+        <?php foreach (['playstore'=>'Google Play فقط','apk'=>'APK مستضاف مباشرة','both'=>'كلاهما (Play + APK)'] as $sv=>$sl): ?>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;padding:7px 14px;border:1px solid var(--border-c);border-radius:8px;<?= ($app['download_source']??'playstore')===$sv?'background:var(--accent-light,#e8f4ff);border-color:var(--accent,#0d6efd)':'' ?>">
+          <input type="radio" name="download_source" value="<?= $sv ?>" <?= ($app['download_source']??'playstore')===$sv?'checked':'' ?> style="accent-color:var(--accent,#0d6efd)">
+          <?= $sl ?>
+        </label>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <!-- APK Upload Zone -->
+    <div id="apk-panel" style="border:1px solid var(--border-c);border-radius:12px;padding:16px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <strong style="font-size:13px">📦 APK مستضاف</strong>
+        <?php if (!empty($app['apk_path'])): ?>
+        <button type="button" id="btn-del-apk" style="font-size:11px;color:var(--danger,#dc3545);background:none;border:none;cursor:pointer">× حذف APK</button>
+        <?php endif; ?>
+      </div>
+
+      <?php if (!empty($app['apk_path'])): ?>
+      <!-- Existing APK info -->
+      <div id="apk-info-box" style="background:var(--bg-light,#f8f9fa);border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><span style="color:var(--muted)">الحجم:</span> <strong><?= h(format_apk_size((int)($app['apk_size_bytes']??0))) ?></strong></div>
+          <div><span style="color:var(--muted)">رُفع:</span> <strong><?= h(substr($app['apk_uploaded_at']??'',0,10)) ?></strong></div>
+          <?php if ($app['apk_hash_sha256']): ?>
+          <div style="grid-column:1/-1">
+            <span style="color:var(--muted)">SHA-256:</span>
+            <code style="font-size:10px;word-break:break-all;cursor:pointer" title="انقر للنسخ" onclick="navigator.clipboard.writeText('<?= h($app['apk_hash_sha256']) ?>');this.style.color='green'"><?= h($app['apk_hash_sha256']) ?></code>
+          </div>
+          <?php endif; ?>
+          <?php if ($app['apk_hash_md5']): ?>
+          <div style="grid-column:1/-1">
+            <span style="color:var(--muted)">MD5:</span>
+            <code style="font-size:11px;cursor:pointer" title="انقر للنسخ" onclick="navigator.clipboard.writeText('<?= h($app['apk_hash_md5']) ?>');this.style.color='green'"><?= h($app['apk_hash_md5']) ?></code>
+          </div>
+          <?php endif; ?>
+        </div>
+        <div style="margin-top:8px"><a href="<?= h(url($app['apk_path'])) ?>" style="font-size:11px;color:var(--accent,#0d6efd)" target="_blank">📥 تحميل الملف المُخزّن</a></div>
+      </div>
+      <!-- Hidden fields to preserve APK data through form save -->
+      <input type="hidden" name="apk_path_new" id="apk_path_new" value="<?= h($app['apk_path']) ?>">
+      <input type="hidden" name="apk_size_bytes_new" id="apk_size_bytes_new" value="<?= h($app['apk_size_bytes']??'') ?>">
+      <input type="hidden" name="apk_hash_sha256_new" id="apk_hash_sha256_new" value="<?= h($app['apk_hash_sha256']??'') ?>">
+      <input type="hidden" name="apk_hash_md5_new" id="apk_hash_md5_new" value="<?= h($app['apk_hash_md5']??'') ?>">
+      <?php else: ?>
+      <input type="hidden" name="apk_path_new" id="apk_path_new" value="">
+      <input type="hidden" name="apk_size_bytes_new" id="apk_size_bytes_new" value="">
+      <input type="hidden" name="apk_hash_sha256_new" id="apk_hash_sha256_new" value="">
+      <input type="hidden" name="apk_hash_md5_new" id="apk_hash_md5_new" value="">
+      <?php endif; ?>
+
+      <!-- Upload drop zone -->
+      <div id="apk-drop-zone" style="border:2px dashed var(--border-c);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:.2s">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5" style="margin-bottom:6px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p style="font-size:12px;color:var(--muted);margin:0">اسحب ملف APK هنا أو <strong style="color:var(--accent,#0d6efd);cursor:pointer" onclick="document.getElementById('apk-file-input').click()">اختر ملفاً</strong></p>
+        <p style="font-size:11px;color:var(--muted);margin:4px 0 0">الحد الأقصى 500MB</p>
+        <input type="file" id="apk-file-input" accept=".apk,application/vnd.android.package-archive" style="display:none">
+      </div>
+
+      <!-- Upload progress -->
+      <div id="apk-upload-progress" style="display:none;margin-top:12px">
+        <div style="height:6px;background:var(--bg-light,#f0f0f0);border-radius:4px;overflow:hidden">
+          <div id="apk-progress-bar" style="height:100%;width:0;background:var(--accent,#0d6efd);transition:width .2s"></div>
+        </div>
+        <p id="apk-upload-status" style="font-size:12px;color:var(--muted);margin:6px 0 0;text-align:center">جاري الرفع...</p>
+      </div>
+
+      <!-- Extracted metadata (shown after successful upload) -->
+      <div id="apk-meta-box" style="display:none;margin-top:12px;background:var(--bg-light,#f8f9fa);border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+
+    <!-- External URL section -->
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">رابط التحميل الرئيسي</label>
-      <input class="form-input" type="text" name="download_url" value="<?= h($app['download_url']??'') ?>" placeholder="https://...">
+      <label class="form-label">رابط التحميل الخارجي (Google Play / CDN)</label>
+      <input class="form-input" type="text" name="download_url" value="<?= h($app['download_url']??'') ?>" placeholder="https://play.google.com/store/apps/details?id=...">
     </div>
     <div class="form-grid">
       <div class="form-group">
@@ -2544,6 +2700,145 @@ window.EXISTING_DATA = <?= json_encode([
     'features' => $feat, 'pros' => $pros, 'cons' => $cons,
     'install_steps' => $steps, 'faq' => $faqArr,
 ], JSON_UNESCAPED_UNICODE) ?>;
+</script>
+
+<script>
+/* ── APK Upload & Metadata Display ── */
+(function(){
+  const APP_ID   = <?= (int)($app['id'] ?? 0) ?>;
+  const APP_NAME = <?= json_encode($app['name'] ?? '') ?>;
+  const dropZone = document.getElementById('apk-drop-zone');
+  const fileInput = document.getElementById('apk-file-input');
+  const progress  = document.getElementById('apk-upload-progress');
+  const progBar   = document.getElementById('apk-progress-bar');
+  const status    = document.getElementById('apk-upload-status');
+  const metaBox   = document.getElementById('apk-meta-box');
+  const delBtn    = document.getElementById('btn-del-apk');
+  const hidPath   = document.getElementById('apk_path_new');
+  const hidSize   = document.getElementById('apk_size_bytes_new');
+  const hidSha    = document.getElementById('apk_hash_sha256_new');
+  const hidMd5    = document.getElementById('apk_hash_md5_new');
+
+  if (!dropZone) return;
+
+  // Drag-and-drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor='var(--accent,#0d6efd)'; });
+  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor=''; });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.style.borderColor='';
+    const f = e.dataTransfer.files[0];
+    if (f) uploadApk(f);
+  });
+  fileInput && fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) uploadApk(fileInput.files[0]);
+  });
+
+  // Delete APK
+  delBtn && delBtn.addEventListener('click', async () => {
+    if (!confirm('حذف ملف APK المُخزّن؟')) return;
+    const fd = new FormData();
+    fd.append('app_id', APP_ID);
+    const r = await fetch('admin.php?ajax=delete_apk', {method:'POST', body:fd});
+    const j = await r.json().catch(()=>({ok:false}));
+    if (j.ok) {
+      hidPath.value=''; hidSize.value=''; hidSha.value=''; hidMd5.value='';
+      delBtn.remove();
+      const info = document.getElementById('apk-info-box');
+      if (info) info.remove();
+    }
+  });
+
+  function uploadApk(file) {
+    if (!file.name.endsWith('.apk') && file.type !== 'application/vnd.android.package-archive') {
+      alert('يرجى اختيار ملف APK'); return;
+    }
+    const fd = new FormData();
+    fd.append('apk', file);
+    fd.append('app_id', APP_ID);
+    fd.append('app_name', APP_NAME || document.querySelector('[name="name"]')?.value || 'app');
+
+    progress.style.display = 'block';
+    progBar.style.width = '0%';
+    status.textContent = 'جاري الرفع...';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'admin.php?ajax=upload_apk');
+
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 90);
+        progBar.style.width = pct + '%';
+        status.textContent = `جاري الرفع... ${pct}%`;
+      }
+    };
+
+    xhr.onload = () => {
+      progBar.style.width = '100%';
+      let j;
+      try { j = JSON.parse(xhr.responseText); } catch(e) { j = {ok:false,error:'خطأ في الاستجابة'}; }
+
+      if (!j.ok) {
+        status.textContent = '❌ ' + (j.error || 'فشل الرفع');
+        status.style.color = 'var(--danger,#dc3545)';
+        return;
+      }
+
+      // Store in hidden fields for form submission
+      hidPath.value  = j.apk_path || '';
+      hidSize.value  = j.apk_size_bytes || '';
+      hidSha.value   = j.apk_hash_sha256 || '';
+      hidMd5.value   = j.apk_hash_md5 || '';
+
+      status.textContent = '✅ تم الرفع بنجاح';
+      status.style.color = 'var(--success,#198754)';
+
+      // Auto-fill version + package if empty
+      if (j.version && !document.querySelector('[name="version"]')?.value) {
+        document.querySelector('[name="version"]').value = j.version;
+      }
+      if (j.package_name && !document.querySelector('[name="package_name"]')?.value) {
+        document.querySelector('[name="package_name"]').value = j.package_name;
+      }
+      if (j.min_sdk && !document.querySelector('[name="android_version"]')?.value) {
+        document.querySelector('[name="android_version"]').value = j.min_sdk;
+      }
+      if (j.apk_size_bytes) {
+        const mb = (j.apk_size_bytes / 1048576).toFixed(1);
+        const sizeF = document.querySelector('[name="size_mb"]');
+        if (sizeF && !sizeF.value) sizeF.value = mb;
+      }
+
+      // Show metadata summary
+      metaBox.style.display = 'block';
+      const rows = [];
+      if (j.apk_size_bytes) rows.push(`<div><b>الحجم:</b> ${formatBytes(j.apk_size_bytes)}</div>`);
+      if (j.version)        rows.push(`<div><b>الإصدار:</b> ${esc(j.version)}</div>`);
+      if (j.package_name)   rows.push(`<div><b>Package:</b> <code>${esc(j.package_name)}</code></div>`);
+      if (j.min_sdk)        rows.push(`<div><b>Android الحد الأدنى:</b> ${esc(j.min_sdk)}</div>`);
+      if (j.apk_hash_sha256) rows.push(`<div style="grid-column:1/-1"><b>SHA-256:</b> <code style="font-size:10px;word-break:break-all;cursor:pointer" onclick="navigator.clipboard.writeText('${j.apk_hash_sha256}');this.style.color='green'">${j.apk_hash_sha256}</code></div>`);
+      if (j.apk_hash_md5)    rows.push(`<div><b>MD5:</b> <code style="cursor:pointer" onclick="navigator.clipboard.writeText('${j.apk_hash_md5}');this.style.color='green'">${j.apk_hash_md5}</code></div>`);
+      metaBox.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${rows.join('')}</div>`;
+
+      // Auto-select 'apk' source if nothing was selected
+      const srcAPK = document.querySelector('[name="download_source"][value="apk"]');
+      const srcCur = document.querySelector('[name="download_source"]:checked');
+      if (srcAPK && srcCur && srcCur.value === 'playstore' && !document.querySelector('[name="download_url"]')?.value) {
+        srcAPK.checked = true;
+      }
+    };
+
+    xhr.onerror = () => { status.textContent = '❌ فشل الاتصال'; status.style.color='var(--danger,#dc3545)'; };
+    xhr.send(fd);
+  }
+
+  function formatBytes(b) {
+    if (b>=1073741824) return (b/1073741824).toFixed(1)+' GB';
+    if (b>=1048576)    return (b/1048576).toFixed(1)+' MB';
+    if (b>=1024)       return Math.round(b/1024)+' KB';
+    return b+' B';
+  }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+})();
 </script>
 
 <?php

@@ -267,12 +267,22 @@ function ensure_schema(PDO $pdo): array {
             'vt_permalink'     => "VARCHAR(600) NULL AFTER vt_analysis_id",
             'link_verified'    => "TINYINT(1) NOT NULL DEFAULT 0 AFTER vt_permalink",
             'verified_at'      => "DATETIME NULL AFTER link_verified",
+            'apk_path'         => "VARCHAR(500) NULL",
+            'apk_size_bytes'   => "BIGINT UNSIGNED NULL",
+            'apk_hash_sha256'  => "CHAR(64) NULL",
+            'apk_hash_md5'     => "CHAR(32) NULL",
+            'apk_uploaded_at'  => "DATETIME NULL",
+            'download_source'  => "ENUM('playstore','apk','both') NOT NULL DEFAULT 'playstore'",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
         ],
         'comments' => [
             'ip' => "VARCHAR(45) NULL AFTER body",
+        ],
+        'app_versions' => [
+            'apk_path'        => "VARCHAR(500) NULL",
+            'apk_hash_sha256' => "CHAR(64) NULL",
         ],
     ];
     foreach ($wanted as $table => $cols) {
@@ -1353,6 +1363,282 @@ function process_screenshots(array $files, string $slug): array {
         }
     }
     return $result;
+}
+
+/* ═══════════════════════════════════════════════
+   APK hosting — metadata extraction + file serving
+   ═══════════════════════════════════════════════ */
+
+function android_min_sdk_name(string|int $sdk): string {
+    $map = [
+        1=>'1.0',2=>'1.1',3=>'1.5',4=>'1.6',5=>'2.0',6=>'2.0.1',7=>'2.1',
+        8=>'2.2',9=>'2.3',10=>'2.3.3',11=>'3.0',12=>'3.1',13=>'3.2',
+        14=>'4.0',15=>'4.0.3',16=>'4.1',17=>'4.2',18=>'4.3',19=>'4.4',
+        20=>'4.4W',21=>'5.0',22=>'5.1',23=>'6.0',24=>'7.0',25=>'7.1',
+        26=>'8.0',27=>'8.1',28=>'9.0',29=>'10',30=>'11',31=>'12',
+        32=>'12L',33=>'13',34=>'14',35=>'15',
+    ];
+    $n = (int)$sdk;
+    return ($map[$n] ?? (string)$sdk) . '+';
+}
+
+function format_apk_size(int $bytes): string {
+    if ($bytes >= 1073741824) return round($bytes / 1073741824, 1) . ' GB';
+    if ($bytes >= 1048576)    return round($bytes / 1048576, 1) . ' MB';
+    if ($bytes >= 1024)       return round($bytes / 1024) . ' KB';
+    return $bytes . ' B';
+}
+
+function parse_android_manifest_binary(string $raw): array {
+    $out = ['package'=>'', 'version_name'=>'', 'version_code'=>'', 'min_sdk'=>'', 'target_sdk'=>''];
+    if (strlen($raw) < 8) return $out;
+
+    $fileType = unpack('v', substr($raw, 0, 2))[1];
+    if ($fileType !== 0x0003) return $out; // must be RES_XML_TYPE
+
+    $pos = 8; // skip 8-byte file header
+
+    // Expect string pool chunk (type=0x0001)
+    if ($pos + 28 > strlen($raw)) return $out;
+    $spType = unpack('v', substr($raw, $pos, 2))[1];
+    if ($spType !== 0x0001) return $out;
+
+    $spHeaderSize = unpack('v', substr($raw, $pos+2, 2))[1];
+    $spChunkSize  = unpack('V', substr($raw, $pos+4, 4))[1];
+    $strCount     = unpack('V', substr($raw, $pos+8, 4))[1];
+    $flags        = unpack('V', substr($raw, $pos+16, 4))[1];
+    $stringsStart = unpack('V', substr($raw, $pos+20, 4))[1];
+
+    $isUtf8    = ($flags & 0x100) !== 0;
+    $offsetBase = $pos + $spHeaderSize;
+    $strBase    = $pos + $stringsStart;
+    $len        = strlen($raw);
+
+    $pool = [];
+    for ($i = 0; $i < $strCount; $i++) {
+        if ($offsetBase + $i*4 + 4 > $len) break;
+        $strOff = unpack('V', substr($raw, $offsetBase + $i*4, 4))[1];
+        $s = $strBase + $strOff;
+        if ($s >= $len) { $pool[] = ''; continue; }
+
+        if ($isUtf8) {
+            $b = ord($raw[$s++]);
+            if ($b & 0x80) { $b = (($b & 0x7f) << 8) | ord($raw[$s++]); }
+            $bl = ord($raw[$s++]);
+            if ($bl & 0x80) { $bl = (($bl & 0x7f) << 8) | ord($raw[$s++]); }
+            $pool[] = ($s + $bl <= $len) ? substr($raw, $s, $bl) : '';
+        } else {
+            if ($s + 2 > $len) { $pool[] = ''; continue; }
+            $cl = unpack('v', substr($raw, $s, 2))[1]; $s += 2;
+            if ($cl & 0x8000) {
+                if ($s + 2 > $len) { $pool[] = ''; continue; }
+                $cl = (($cl & 0x7fff) << 16) | unpack('v', substr($raw, $s, 2))[1]; $s += 2;
+            }
+            $bl = $cl * 2;
+            $pool[] = ($s + $bl <= $len)
+                ? mb_convert_encoding(substr($raw, $s, $bl), 'UTF-8', 'UTF-16LE')
+                : '';
+        }
+    }
+
+    $pos += $spChunkSize;
+
+    while ($pos + 8 <= $len) {
+        $chunkType = unpack('v', substr($raw, $pos, 2))[1];
+        $chunkSize = unpack('V', substr($raw, $pos+4, 4))[1];
+        if ($chunkSize < 8 || $pos + $chunkSize > $len) break;
+
+        if ($chunkType === 0x0102) { // RES_XML_START_ELEMENT_TYPE
+            // ResXMLTree_node (16B) + ResXMLTree_attrExt (20B) = 36B header
+            $nameRef   = unpack('V', substr($raw, $pos+20, 4))[1] & 0x00ffffff;
+            $attrStart = unpack('v', substr($raw, $pos+24, 2))[1]; // relative to pos+16
+            $attrSize  = unpack('v', substr($raw, $pos+26, 2))[1]; // usually 20
+            $attrCount = unpack('v', substr($raw, $pos+28, 2))[1];
+            $elemName  = $pool[$nameRef] ?? '';
+            $attrBase  = $pos + 16 + $attrStart;
+            $attrSize  = $attrSize ?: 20;
+
+            $attrs = [];
+            for ($a = 0; $a < $attrCount; $a++) {
+                $aOff = $attrBase + $a * $attrSize;
+                if ($aOff + $attrSize > $len) break;
+                $aName    = unpack('V', substr($raw, $aOff+4, 4))[1] & 0x00ffffff;
+                $aRaw     = unpack('V', substr($raw, $aOff+8, 4))[1];
+                $aType    = isset($raw[$aOff+15]) ? ord($raw[$aOff+15]) : 0;
+                $aDataRaw = substr($raw, $aOff+16, 4);
+                $aData    = strlen($aDataRaw) === 4 ? unpack('V', $aDataRaw)[1] : 0;
+
+                $attrName = $pool[$aName] ?? '';
+                if ($aRaw !== 0xffffffff && isset($pool[$aRaw]) && $pool[$aRaw] !== '') {
+                    $val = $pool[$aRaw];
+                } elseif ($aType === 0x03 && isset($pool[$aData])) {
+                    $val = $pool[$aData];
+                } elseif ($aType === 0x10 || $aType === 0x11) {
+                    $val = (string)sprintf('%u', $aData);
+                } elseif ($aType === 0x12) {
+                    $val = $aData ? 'true' : 'false';
+                } else {
+                    $val = '';
+                }
+                if ($attrName !== '') $attrs[$attrName] = $val;
+            }
+
+            if ($elemName === 'manifest') {
+                if (isset($attrs['package']))     $out['package']      = $attrs['package'];
+                if (isset($attrs['versionName'])) $out['version_name'] = $attrs['versionName'];
+                if (isset($attrs['versionCode'])) $out['version_code'] = $attrs['versionCode'];
+            } elseif ($elemName === 'uses-sdk') {
+                if (isset($attrs['minSdkVersion']))    $out['min_sdk']    = $attrs['minSdkVersion'];
+                if (isset($attrs['targetSdkVersion'])) $out['target_sdk'] = $attrs['targetSdkVersion'];
+            }
+        }
+        $pos += $chunkSize;
+    }
+    return $out;
+}
+
+function extract_apk_meta(string $apkPath): array {
+    $meta = [
+        'package_name' => '',
+        'version'      => '',
+        'version_code' => '',
+        'min_sdk'      => '',
+        'target_sdk'   => '',
+        'size_bytes'   => (int)filesize($apkPath),
+        'sha256'       => hash_file('sha256', $apkPath),
+        'md5'          => hash_file('md5',    $apkPath),
+    ];
+
+    // Try aapt / aapt2 (preferred — always available on Android build systems)
+    foreach (['aapt', 'aapt2', '/usr/bin/aapt', '/usr/local/bin/aapt', '/opt/android-sdk/build-tools/aapt'] as $bin) {
+        $lines = [];
+        @exec(escapeshellcmd($bin) . ' dump badging ' . escapeshellarg($apkPath) . ' 2>/dev/null', $lines, $rc);
+        if ($rc !== 0 || !$lines) continue;
+        foreach ($lines as $line) {
+            if (preg_match("/^package:.*?name='([^']+)'/",        $line, $m)) $meta['package_name'] = $m[1];
+            if (preg_match("/^package:.*?versionName='([^']+)'/", $line, $m)) $meta['version']      = $m[1];
+            if (preg_match("/^package:.*?versionCode='([^']+)'/", $line, $m)) $meta['version_code'] = $m[1];
+            if (preg_match("/^sdkVersion:'([^']+)'/",             $line, $m)) $meta['min_sdk']      = $m[1];
+            if (preg_match("/^targetSdkVersion:'([^']+)'/",       $line, $m)) $meta['target_sdk']   = $m[1];
+        }
+        if ($meta['package_name']) return $meta;
+    }
+
+    // Fallback: parse binary AndroidManifest.xml from the APK (which is a ZIP)
+    if (class_exists('ZipArchive')) {
+        $zip = new ZipArchive();
+        if ($zip->open($apkPath) === true) {
+            $raw = $zip->getFromName('AndroidManifest.xml');
+            $zip->close();
+            if ($raw) {
+                $parsed = parse_android_manifest_binary($raw);
+                if ($parsed['package'])      $meta['package_name'] = $parsed['package'];
+                if ($parsed['version_name']) $meta['version']      = $parsed['version_name'];
+                if ($parsed['version_code']) $meta['version_code'] = $parsed['version_code'];
+                if ($parsed['min_sdk'])      $meta['min_sdk']      = $parsed['min_sdk'];
+                if ($parsed['target_sdk'])   $meta['target_sdk']   = $parsed['target_sdk'];
+            }
+        }
+    }
+    return $meta;
+}
+
+function store_apk_file(array $uploadedFile, string $slug): array {
+    if ($uploadedFile['error'] !== UPLOAD_ERR_OK) {
+        return ['ok' => false, 'error' => 'خطأ في رفع الملف: ' . $uploadedFile['error']];
+    }
+    $tmp = $uploadedFile['tmp_name'];
+    if (!is_uploaded_file($tmp)) {
+        return ['ok' => false, 'error' => 'ملف غير صالح'];
+    }
+
+    // Verify APK magic: ZIP signature PK\x03\x04
+    $fh = fopen($tmp, 'rb');
+    $magic = fread($fh, 4);
+    fclose($fh);
+    if ($magic !== "PK\x03\x04") {
+        return ['ok' => false, 'error' => 'الملف ليس APK صالح (توقيع ZIP غير صحيح)'];
+    }
+
+    $dir = UPLOAD_PATH . '/apk';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+    $meta     = extract_apk_meta($tmp);
+    $version  = preg_replace('/[^a-zA-Z0-9._\-]/', '', $meta['version'] ?: '1.0');
+    $filename = $slug . '-v' . $version . '-' . substr($meta['sha256'], 0, 8) . '.apk';
+    $dest     = "$dir/$filename";
+
+    if (!move_uploaded_file($tmp, $dest)) {
+        return ['ok' => false, 'error' => 'فشل نقل الملف'];
+    }
+    chmod($dest, 0644);
+
+    return [
+        'ok'           => true,
+        'apk_path'     => 'uploads/apk/' . $filename,
+        'apk_size_bytes' => $meta['size_bytes'],
+        'apk_hash_sha256' => $meta['sha256'],
+        'apk_hash_md5'    => $meta['md5'],
+        'package_name' => $meta['package_name'],
+        'version'      => $meta['version'],
+        'version_code' => $meta['version_code'],
+        'min_sdk'      => $meta['min_sdk'] ? android_min_sdk_name($meta['min_sdk']) : '',
+        'target_sdk'   => $meta['target_sdk'] ? android_min_sdk_name($meta['target_sdk']) : '',
+    ];
+}
+
+function serve_apk_file(string $relPath, string $appName, string $version): never {
+    $abs = __DIR__ . '/' . ltrim($relPath, '/');
+    if (!file_exists($abs) || !is_file($abs)) {
+        http_response_code(404); exit;
+    }
+
+    $fileSize = filesize($abs);
+    $slug     = preg_replace('/[^a-zA-Z0-9._\-]/', '-', $appName);
+    $fname    = $slug . '-v' . $version . '.apk';
+
+    // Range request support for resumable downloads
+    $start  = 0;
+    $end    = $fileSize - 1;
+    $length = $fileSize;
+    $code   = 200;
+
+    if (!empty($_SERVER['HTTP_RANGE'])) {
+        if (preg_match('#bytes=(\d*)-(\d*)#', $_SERVER['HTTP_RANGE'], $m)) {
+            $start = $m[1] !== '' ? (int)$m[1] : 0;
+            $end   = $m[2] !== '' ? (int)$m[2] : $fileSize - 1;
+            if ($start > $end || $start < 0 || $end >= $fileSize) {
+                header('HTTP/1.1 416 Range Not Satisfiable');
+                header("Content-Range: bytes */$fileSize");
+                exit;
+            }
+            $length = $end - $start + 1;
+            $code   = 206;
+        }
+    }
+
+    http_response_code($code);
+    header('Accept-Ranges: bytes');
+    header('Content-Type: application/vnd.android.package-archive');
+    header('Content-Disposition: attachment; filename="' . $fname . '"');
+    header("Content-Length: $length");
+    if ($code === 206) header("Content-Range: bytes $start-$end/$fileSize");
+
+    // Stream in 64KB chunks — never loads the whole APK into memory
+    $fh = fopen($abs, 'rb');
+    if (!$fh) { http_response_code(500); exit; }
+    if ($start > 0) fseek($fh, $start);
+    $sent = 0;
+    while (!feof($fh) && $sent < $length) {
+        $chunk = fread($fh, min(65536, $length - $sent));
+        if ($chunk === false) break;
+        echo $chunk;
+        $sent += strlen($chunk);
+        if (ob_get_level()) ob_flush();
+        flush();
+    }
+    fclose($fh);
+    exit;
 }
 
 function time_ago(string $dt): string {

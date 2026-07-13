@@ -276,6 +276,9 @@ function wave(): string {
           <?php if ($app['version']): ?><span class="badge badge-purple" style="font-family:var(--f-mono)">v<?= h($app['version']) ?></span><?php endif; ?>
           <span class="badge badge-gold"><?= svgi('star') ?> <?= h($app['rating']) ?></span>
           <?php if ($app['license']): ?><span class="badge badge-cyan"><?= h($app['license']) ?></span><?php endif; ?>
+          <?php if (!empty($app['apk_path']) && in_array($app['download_source']??'playstore', ['apk','both'])): ?>
+          <span class="badge" style="background:rgba(25,135,84,.12);color:#198754;border:1px solid rgba(25,135,84,.25)">📦 APK مستضاف</span>
+          <?php endif; ?>
         </div>
 
         <div class="app-hero-actions">
@@ -318,10 +321,11 @@ function wave(): string {
         ['label'=>'الإصدار',       'val'=>$app['version'],                                               'class'=>'version', 'link'=>null],
         ['label'=>'إصدار بلاي',   'val'=>$playStoreVersion,                                              'class'=>'version', 'link'=>null],
         ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],                                        'class'=>'', 'link'=>null],
-        ['label'=>'الحجم',         'val'=>$app['size_mb'] ? $app['size_mb'].' MB' : null,               'class'=>'size', 'link'=>null],
+        ['label'=>'الحجم',         'val'=>(!empty($app['apk_size_bytes']) ? format_apk_size((int)$app['apk_size_bytes']) : ($app['size_mb'] ? $app['size_mb'].' MB' : null)), 'class'=>'size', 'link'=>null],
         ['label'=>'الترخيص',       'val'=>$app['license'],                                               'class'=>'', 'link'=>null],
         ['label'=>'اسم الحزمة',    'val'=>$pkgName ?: null,                                              'class'=>'', 'link'=>$pkgName ? 'https://play.google.com/store/apps/details?id='.rawurlencode($pkgName) : null, 'mono'=>true, 'external'=>true],
         ['label'=>'التحميلات',     'val'=>$app['downloads'] > 0 ? number_format($app['downloads']) : null,'class'=>'', 'link'=>null],
+        ['label'=>'آخر تحديث',    'val'=>!empty($app['apk_uploaded_at']) ? date('Y-m-d', strtotime($app['apk_uploaded_at'])) : null, 'class'=>'', 'link'=>null],
     ];
     foreach ($metas as $m): if (!$m['val']) continue; ?>
     <div class="meta-item reveal">
@@ -336,6 +340,50 @@ function wave(): string {
     </div>
     <?php endforeach; ?>
   </div>
+
+  <!-- APK Security Hash Section -->
+  <?php if (!empty($app['apk_hash_sha256']) && in_array($app['download_source']??'playstore', ['apk','both'])): ?>
+  <div class="section-box reveal" style="padding:16px 20px">
+    <details>
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px;user-select:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        التحقق من سلامة الملف (SHA-256 / MD5)
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:auto"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div style="margin-top:12px;font-size:12px;line-height:2">
+        <table style="width:100%;border-collapse:collapse">
+          <?php if ($app['apk_size_bytes']): ?>
+          <tr><td style="color:var(--muted);width:120px">الحجم الدقيق</td><td><strong><?= h(format_apk_size((int)$app['apk_size_bytes'])) ?></strong> (<?= number_format((int)$app['apk_size_bytes']) ?> بايت)</td></tr>
+          <?php endif; ?>
+          <tr>
+            <td style="color:var(--muted);vertical-align:top;padding-top:4px">SHA-256</td>
+            <td>
+              <code style="font-size:10px;word-break:break-all;background:var(--bg-code,#f4f4f5);padding:3px 6px;border-radius:5px;cursor:pointer;display:block;line-height:1.6"
+                    title="انقر للنسخ"
+                    onclick="navigator.clipboard.writeText(this.textContent.trim()).then(()=>{this.style.color='#198754';setTimeout(()=>this.style.color='',2000)})"><?= h($app['apk_hash_sha256']) ?></code>
+              <span style="font-size:10px;color:var(--muted)">انقر لنسخ البصمة الرقمية</span>
+            </td>
+          </tr>
+          <?php if ($app['apk_hash_md5']): ?>
+          <tr>
+            <td style="color:var(--muted)">MD5</td>
+            <td>
+              <code style="font-size:11px;background:var(--bg-code,#f4f4f5);padding:3px 8px;border-radius:5px;cursor:pointer"
+                    onclick="navigator.clipboard.writeText(this.textContent.trim()).then(()=>{this.style.color='#198754';setTimeout(()=>this.style.color='',2000)})"><?= h($app['apk_hash_md5']) ?></code>
+            </td>
+          </tr>
+          <?php endif; ?>
+          <?php if ($app['apk_uploaded_at']): ?>
+          <tr><td style="color:var(--muted)">تاريخ الرفع</td><td><?= h(date('Y-m-d', strtotime($app['apk_uploaded_at']))) ?></td></tr>
+          <?php endif; ?>
+        </table>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:11px">
+          ✅ ملف APK مستضاف مباشرةً على خوادم yassota — بإمكانك التحقق من البصمة الرقمية بأي أداة تحقق SHA-256 للتأكد من عدم التلاعب.
+        </p>
+      </div>
+    </details>
+  </div>
+  <?php endif; ?>
 
   <?= wave() ?>
 
