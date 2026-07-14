@@ -1532,6 +1532,121 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'delete_apk' && is_admin()) {
     exit;
 }
 
+/* ══════════════════════════════════════════════════════
+   AJAX: Test server connection (FTP / FTPS / SFTP / SSH)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_server_conn' && is_admin()) {
+    header('Content-Type: application/json');
+    $type = $_POST['conn_type'] ?? 'ftp';
+    $host = trim($_POST['host'] ?? '');
+    $port = (int)($_POST['port'] ?? (in_array($type, ['sftp','ssh']) ? 22 : 21));
+    $user = trim($_POST['username'] ?? '');
+    $pass = $_POST['password'] ?? '';
+    $path = trim($_POST['remote_path'] ?? '/') ?: '/';
+    if (!$host || !$user) { echo json_encode(['ok'=>false,'msg'=>'الرجاء إدخال المضيف واسم المستخدم']); exit; }
+    try {
+        if ($type === 'ftp') {
+            $conn = @ftp_connect($host, $port, 15);
+            if (!$conn) throw new RuntimeException("تعذّر الاتصال بـ FTP: {$host}:{$port}");
+            if (!@ftp_login($conn, $user, $pass)) { ftp_close($conn); throw new RuntimeException("بيانات الدخول غير صحيحة"); }
+            ftp_pasv($conn, true);
+            $pwd  = ftp_pwd($conn);
+            $list = array_slice(ftp_nlist($conn, $path) ?: [], 0, 10);
+            ftp_close($conn);
+            echo json_encode(['ok'=>true,'msg'=>"✓ تم الاتصال — المجلد الحالي: {$pwd}",'items'=>$list]);
+        } elseif ($type === 'ftps') {
+            if (!function_exists('ftp_ssl_connect')) throw new RuntimeException("FTPS غير مدعوم على هذا السيرفر (يحتاج OpenSSL + php-ftp)");
+            $conn = @ftp_ssl_connect($host, $port, 15);
+            if (!$conn) throw new RuntimeException("تعذّر الاتصال بـ FTPS: {$host}:{$port}");
+            if (!@ftp_login($conn, $user, $pass)) { ftp_close($conn); throw new RuntimeException("بيانات الدخول غير صحيحة"); }
+            ftp_pasv($conn, true);
+            $pwd  = ftp_pwd($conn);
+            $list = array_slice(ftp_nlist($conn, $path) ?: [], 0, 10);
+            ftp_close($conn);
+            echo json_encode(['ok'=>true,'msg'=>"✓ FTPS متصل — المجلد الحالي: {$pwd}",'items'=>$list]);
+        } elseif ($type === 'sftp' || $type === 'ssh') {
+            if (!function_exists('ssh2_connect')) throw new RuntimeException("مكتبة ssh2 PHP غير مثبّتة على هذا السيرفر. ثبّت php-ssh2 أو استخدم FTP بدلاً منها.");
+            $conn = @ssh2_connect($host, $port);
+            if (!$conn) throw new RuntimeException("تعذّر الاتصال SSH: {$host}:{$port}");
+            if (!@ssh2_auth_password($conn, $user, $pass)) throw new RuntimeException("بيانات الدخول SSH غير صحيحة");
+            $sftp     = ssh2_sftp($conn);
+            $realpath = ssh2_sftp_realpath($sftp, $path ?: '.');
+            echo json_encode(['ok'=>true,'msg'=>"✓ SFTP/SSH متصل — المسار: {$realpath}",'items'=>[]]);
+        } else {
+            echo json_encode(['ok'=>false,'msg'=>'نوع اتصال غير معروف']);
+        }
+    } catch (Throwable $e) {
+        echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Save server connection settings
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_server_conn' && is_admin()) {
+    header('Content-Type: application/json');
+    $stmt = $pdo->prepare("INSERT INTO settings (k,v) VALUES (?,?) ON DUPLICATE KEY UPDATE v=VALUES(v)");
+    foreach (['server_conn_type','server_conn_host','server_conn_port','server_conn_user','server_conn_pass','server_conn_path'] as $f) {
+        $stmt->execute([$f, trim($_POST[$f] ?? '')]);
+    }
+    echo json_encode(['ok'=>true,'msg'=>'تم حفظ بيانات الاتصال']);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: List remote directory (FTP / FTPS / SFTP)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'list_remote_dir' && is_admin()) {
+    header('Content-Type: application/json');
+    $type = $_POST['conn_type'] ?? 'ftp';
+    $host = trim($_POST['host'] ?? '');
+    $port = (int)($_POST['port'] ?? (in_array($type, ['sftp','ssh']) ? 22 : 21));
+    $user = trim($_POST['username'] ?? '');
+    $pass = $_POST['password'] ?? '';
+    $path = trim($_POST['path'] ?? '/') ?: '/';
+    try {
+        if ($type === 'ftp' || $type === 'ftps') {
+            $conn = ($type === 'ftps') ? @ftp_ssl_connect($host, $port, 15) : @ftp_connect($host, $port, 15);
+            if (!$conn) throw new RuntimeException("تعذّر الاتصال");
+            if (!@ftp_login($conn, $user, $pass)) { ftp_close($conn); throw new RuntimeException("بيانات الدخول غير صحيحة"); }
+            ftp_pasv($conn, true);
+            $raw   = ftp_rawlist($conn, $path) ?: [];
+            ftp_close($conn);
+            $items = [];
+            foreach ($raw as $line) {
+                $parts = preg_split('/\s+/', trim($line), 9);
+                if (count($parts) < 9) continue;
+                $name = $parts[8];
+                if ($name === '.' || $name === '..') continue;
+                $items[] = ['name'=>$name,'dir'=>str_starts_with($parts[0], 'd'),'size'=>(int)$parts[4]];
+            }
+            echo json_encode(['ok'=>true,'path'=>$path,'items'=>$items]);
+        } elseif ($type === 'sftp' || $type === 'ssh') {
+            if (!function_exists('ssh2_connect')) throw new RuntimeException("ssh2 غير مثبّتة");
+            $conn = @ssh2_connect($host, $port);
+            if (!$conn) throw new RuntimeException("تعذّر الاتصال SSH");
+            if (!@ssh2_auth_password($conn, $user, $pass)) throw new RuntimeException("بيانات الدخول SSH غير صحيحة");
+            $sftp  = ssh2_sftp($conn);
+            $dh    = opendir("ssh2.sftp://{$sftp}{$path}");
+            $items = [];
+            while (($entry = readdir($dh)) !== false) {
+                if ($entry === '.' || $entry === '..') continue;
+                $full    = "ssh2.sftp://{$sftp}{$path}/{$entry}";
+                $st      = @stat($full);
+                $items[] = ['name'=>$entry,'dir'=>is_dir($full),'size'=>(int)($st['size'] ?? 0)];
+            }
+            closedir($dh);
+            echo json_encode(['ok'=>true,'path'=>$path,'items'=>$items]);
+        } else {
+            echo json_encode(['ok'=>false,'msg'=>'نوع اتصال غير معروف']);
+        }
+    } catch (Throwable $e) {
+        echo json_encode(['ok'=>false,'msg'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 $page   = $_GET['page'] ?? 'dashboard';
 $msg    = '';
 $error  = '';
@@ -2000,6 +2115,7 @@ $navLinks = [
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
+    'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
 ];
 ?>
 <!DOCTYPE html>
@@ -4306,6 +4422,289 @@ elseif ($page === 'assistant'): ?>
     </button>
   </div>
 </div>
+
+<?php
+/* ─────────────── SERVER CONNECTION MANAGER ─────────────── */
+elseif ($page === 'deploy'):
+    $sc = [];
+    foreach (['server_conn_type','server_conn_host','server_conn_port','server_conn_user','server_conn_pass','server_conn_path'] as $k) {
+        $sc[$k] = get_cfg($pdo, $k);
+    }
+    $selType = $sc['server_conn_type'] ?: 'ftp';
+?>
+
+<div class="admin-header"><h1>مدير اتصال السيرفر</h1></div>
+
+<div class="panel">
+  <p style="color:var(--muted);font-size:13px;margin-bottom:20px">
+    اتصل بسيرفرك عبر FTP أو FTPS أو SFTP لاستعراض الملفات عن بُعد. البيانات المحفوظة لا تُرسل إلى أي طرف خارجي.
+  </p>
+
+  <!-- Connection type selector -->
+  <div style="margin-bottom:18px">
+    <label class="form-label" style="margin-bottom:8px;display:block">نوع الاتصال</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="conn-type-group">
+      <?php foreach(['ftp'=>'FTP','ftps'=>'FTPS (مشفّر)','sftp'=>'SFTP','ssh'=>'SSH'] as $val=>$lbl): ?>
+      <label class="conn-type-pill<?= $selType===$val?' conn-type-active':'' ?>" data-val="<?= $val ?>">
+        <input type="radio" name="conn_type" value="<?= $val ?>" <?= $selType===$val?'checked':'' ?> style="position:absolute;opacity:0;width:0;height:0">
+        <?= h($lbl) ?>
+      </label>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- Host + Port -->
+  <div style="display:grid;grid-template-columns:1fr 110px;gap:12px;margin-bottom:12px">
+    <div>
+      <label class="form-label">المضيف (Host / IP)</label>
+      <input class="form-input" id="sc-host" type="text" placeholder="ftp.example.com" value="<?= h($sc['server_conn_host']??'') ?>">
+    </div>
+    <div>
+      <label class="form-label">المنفذ</label>
+      <input class="form-input" id="sc-port" type="number" min="1" max="65535" placeholder="21" value="<?= h($sc['server_conn_port']??'') ?>">
+    </div>
+  </div>
+
+  <!-- Username + Password -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div>
+      <label class="form-label">اسم المستخدم</label>
+      <input class="form-input" id="sc-user" type="text" autocomplete="username" value="<?= h($sc['server_conn_user']??'') ?>">
+    </div>
+    <div>
+      <label class="form-label">كلمة المرور</label>
+      <div style="position:relative">
+        <input class="form-input" id="sc-pass" type="password" autocomplete="current-password" value="<?= h($sc['server_conn_pass']??'') ?>" style="padding-left:40px">
+        <button type="button" id="toggle-pass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:0" title="إظهار / إخفاء كلمة المرور">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Remote path -->
+  <div style="margin-bottom:20px">
+    <label class="form-label">المجلد الجذر على السيرفر</label>
+    <input class="form-input" id="sc-path" type="text" placeholder="/home/user/public_html" value="<?= h($sc['server_conn_path']??'/') ?>">
+  </div>
+
+  <!-- Action buttons -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button type="button" id="btn-test-conn" class="btn-ai">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      اختبار الاتصال
+    </button>
+    <button type="button" id="btn-save-conn" class="btn-edit" style="padding:10px 18px;font-size:14px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2zM17 21v-8H7v8M7 3v5h8"/></svg>
+      حفظ الإعدادات
+    </button>
+    <button type="button" id="btn-open-browser" class="btn-view" style="padding:10px 18px;font-size:14px;display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+      استعراض الملفات
+    </button>
+  </div>
+
+  <!-- Result -->
+  <div id="conn-result" style="display:none;margin-top:16px;padding:13px 16px;border-radius:8px;font-size:13px;line-height:1.6"></div>
+</div>
+
+<!-- Remote File Browser -->
+<div class="panel" id="file-browser-panel" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <h2 style="font-size:15px;font-weight:600;margin:0">استعراض الملفات البعيدة</h2>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;max-width:380px">
+      <input class="form-input" id="browser-path" type="text" value="/" style="font-family:var(--f-mono);font-size:12px;flex:1">
+      <button type="button" id="btn-browse" class="btn-ai" style="padding:9px 14px;white-space:nowrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
+        انتقال
+      </button>
+    </div>
+  </div>
+  <div id="file-list" style="border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:80px">
+    <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">اضغط "انتقال" لعرض محتوى المجلد</div>
+  </div>
+</div>
+
+<style>
+.conn-type-pill {
+  display:inline-flex;align-items:center;padding:8px 16px;border:1.5px solid var(--border);
+  border-radius:20px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;
+  color:var(--muted);user-select:none;
+}
+.conn-type-pill:hover { border-color:var(--primary);color:var(--primary); }
+.conn-type-active { border-color:var(--primary)!important;background:rgba(37,99,235,.09);color:var(--primary)!important;font-weight:600; }
+.fb-row {
+  display:flex;align-items:center;gap:10px;padding:9px 14px;
+  border-bottom:1px solid var(--border);transition:background .1s;cursor:default;
+}
+.fb-row:last-child { border-bottom:none; }
+.fb-row.fb-dir { cursor:pointer; }
+.fb-row.fb-dir:hover { background:var(--surface-alt); }
+.fb-row .fb-icon { font-size:15px;flex-shrink:0; }
+.fb-row .fb-name { flex:1;font-family:var(--f-mono);font-size:12px;word-break:break-all; }
+.fb-row .fb-size { color:var(--muted);font-size:11px;white-space:nowrap; }
+</style>
+
+<script>
+(function(){
+  var currentConnData = {};
+
+  // Pill selection
+  document.querySelectorAll('.conn-type-pill').forEach(function(pill){
+    pill.addEventListener('click', function(){
+      document.querySelectorAll('.conn-type-pill').forEach(function(p){ p.classList.remove('conn-type-active'); });
+      pill.classList.add('conn-type-active');
+      pill.querySelector('input').checked = true;
+      var defaultPorts = {ftp:'21',ftps:'21',sftp:'22',ssh:'22'};
+      var portEl = document.getElementById('sc-port');
+      if (!portEl.value || portEl.value === '21' || portEl.value === '22') {
+        portEl.value = defaultPorts[pill.dataset.val] || '21';
+      }
+    });
+  });
+
+  // Toggle password visibility
+  document.getElementById('toggle-pass').addEventListener('click', function(){
+    var inp = document.getElementById('sc-pass');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  function getConnData() {
+    var checked = document.querySelector('input[name="conn_type"]:checked');
+    return {
+      conn_type:   checked ? checked.value : 'ftp',
+      host:        document.getElementById('sc-host').value.trim(),
+      port:        document.getElementById('sc-port').value,
+      username:    document.getElementById('sc-user').value.trim(),
+      password:    document.getElementById('sc-pass').value,
+      remote_path: document.getElementById('sc-path').value.trim() || '/'
+    };
+  }
+
+  function setResult(msg, ok) {
+    var el = document.getElementById('conn-result');
+    el.style.display = 'block';
+    el.style.background = ok ? 'rgba(25,135,84,.1)' : 'rgba(220,38,38,.1)';
+    el.style.color = ok ? '#166534' : '#991b1b';
+    el.style.border = '1px solid ' + (ok ? 'rgba(25,135,84,.3)' : 'rgba(220,38,38,.3)');
+    el.textContent = msg;
+  }
+
+  // Test connection
+  document.getElementById('btn-test-conn').addEventListener('click', async function(){
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'جاري الاتصال...';
+    var data = getConnData();
+    currentConnData = data;
+    var fd = new FormData();
+    Object.entries(data).forEach(function(e){ fd.append(e[0], e[1]); });
+    try {
+      var r = await fetch('admin.php?ajax=test_server_conn', {method:'POST', body:fd});
+      var j = await r.json();
+      setResult(j.msg, j.ok);
+      if (j.ok) {
+        document.getElementById('btn-open-browser').style.display = 'inline-flex';
+        document.getElementById('browser-path').value = data.remote_path;
+      }
+    } catch(e) {
+      setResult('حدث خطأ في الطلب: ' + e.message, false);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> اختبار الاتصال';
+  });
+
+  // Save settings
+  document.getElementById('btn-save-conn').addEventListener('click', async function(){
+    var btn = this; btn.disabled = true;
+    var data = getConnData();
+    var fd = new FormData();
+    fd.append('server_conn_type',  data.conn_type);
+    fd.append('server_conn_host',  data.host);
+    fd.append('server_conn_port',  data.port);
+    fd.append('server_conn_user',  data.username);
+    fd.append('server_conn_pass',  data.password);
+    fd.append('server_conn_path',  data.remote_path);
+    try {
+      var r = await fetch('admin.php?ajax=save_server_conn', {method:'POST', body:fd});
+      var j = await r.json();
+      setResult(j.msg, j.ok);
+    } catch(e) { setResult('حدث خطأ', false); }
+    btn.disabled = false;
+  });
+
+  // Open browser panel
+  document.getElementById('btn-open-browser').addEventListener('click', function(){
+    var panel = document.getElementById('file-browser-panel');
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    if (panel.style.display !== 'none') browseDir(document.getElementById('browser-path').value || '/');
+  });
+
+  // Browse dir
+  async function browseDir(path) {
+    path = path || '/';
+    document.getElementById('browser-path').value = path;
+    var data = Object.assign({}, currentConnData.conn_type ? currentConnData : getConnData(), {path: path});
+    var fd = new FormData();
+    Object.entries(data).forEach(function(e){ fd.append(e[0], e[1]); });
+    fd.set('path', path);
+    var list = document.getElementById('file-list');
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">جاري التحميل...</div>';
+    try {
+      var r = await fetch('admin.php?ajax=list_remote_dir', {method:'POST', body:fd});
+      var j = await r.json();
+      if (!j.ok) { list.innerHTML = '<div style="padding:16px;color:#991b1b;font-size:13px">✗ ' + escH(j.msg||'خطأ') + '</div>'; return; }
+      renderFileList(j.items, path);
+    } catch(e) {
+      list.innerHTML = '<div style="padding:16px;color:#991b1b;font-size:13px">✗ حدث خطأ في الطلب</div>';
+    }
+  }
+
+  function renderFileList(items, currentPath) {
+    var list = document.getElementById('file-list');
+    var html = '';
+    // Parent dir link
+    var parts = currentPath.replace(/\/+$/, '').split('/');
+    if (parts.length > 1 || (parts.length === 1 && parts[0] !== '')) {
+      var parent = parts.slice(0, -1).join('/') || '/';
+      html += '<div class="fb-row fb-dir" data-path="' + escAttr(parent) + '"><span class="fb-icon">⬆️</span><span class="fb-name">.. رجوع</span><span class="fb-size"></span></div>';
+    }
+    if (!items.length) {
+      html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">المجلد فارغ</div>';
+    } else {
+      var sorted = items.slice().sort(function(a,b){ return (b.dir - a.dir) || a.name.localeCompare(b.name); });
+      sorted.forEach(function(item){
+        var icon = item.dir ? '📁' : '📄';
+        var itemPath = (currentPath.replace(/\/+$/, '') + '/' + item.name).replace(/\/\/+/g, '/');
+        var sizeStr = item.dir ? '' : fmtBytes(item.size);
+        var cls = 'fb-row' + (item.dir ? ' fb-dir' : '');
+        var attr = item.dir ? ' data-path="' + escAttr(itemPath) + '"' : '';
+        html += '<div class="' + cls + '"' + attr + '><span class="fb-icon">' + icon + '</span><span class="fb-name">' + escH(item.name) + '</span><span class="fb-size">' + sizeStr + '</span></div>';
+      });
+    }
+    list.innerHTML = html;
+    list.querySelectorAll('.fb-dir[data-path]').forEach(function(row){
+      row.addEventListener('click', function(){ browseDir(row.dataset.path); });
+    });
+  }
+
+  document.getElementById('btn-browse').addEventListener('click', function(){
+    browseDir(document.getElementById('browser-path').value || '/');
+  });
+  document.getElementById('browser-path').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') browseDir(e.target.value || '/');
+  });
+
+  function fmtBytes(b) {
+    if (!b) return '';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  }
+  function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+})();
+</script>
 
 <?php endif; ?>
 
