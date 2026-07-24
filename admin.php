@@ -234,8 +234,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'repair_encoding' && is_admin()) {
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'db_backup' && is_admin()) {
     header('Content-Type: application/sql; charset=utf-8');
-    header('Content-Disposition: attachment; filename="yassota-backup-' . date('Y-m-d-His') . '.sql"');
-    echo "-- yassota database backup — " . date('Y-m-d H:i:s') . "\n";
+    header('Content-Disposition: attachment; filename="Tenzil-backup-' . date('Y-m-d-His') . '.sql"');
+    echo "-- Tenzil database backup — " . date('Y-m-d H:i:s') . "\n";
     echo "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n";
     $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
     foreach ($tables as $table) {
@@ -543,7 +543,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'verify_link' && is_admin()) {
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
     header('Content-Type: application/json');
     $r = telegram_api($pdo, 'sendMessage', [
-        'text'       => '✅ اختبار ناجح من لوحة إدارة <b>yassota</b> — بوت تيليجرام يعمل بشكل صحيح!',
+        'text'       => '✅ اختبار ناجح من لوحة إدارة <b>Tenzil</b> — بوت تيليجرام يعمل بشكل صحيح!',
         'parse_mode' => 'HTML',
     ]);
     echo json_encode(['success' => $r['ok'], 'error' => $r['error'] ?? null], JSON_UNESCAPED_UNICODE);
@@ -769,7 +769,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
     $allowedSettingKeys = ['moneytag_zone','openrouter_model','openrouter_fallback','openrouter_auto_rotate','openrouter_image_model'];
 
     $prompt = <<<P
-أنت مساعد إدارة داخل لوحة تحكم متجر تطبيقات "yassota". لديك قدرة على تنفيذ إجراءات محدّدة فقط عبر إرجاع JSON — لا تنفّذ أي كود، ولا تكتب ملفات، فقط تختار إجراءً من القائمة المسموحة التالية:
+أنت مساعد إدارة داخل لوحة تحكم متجر تطبيقات "Tenzil". لديك قدرة على تنفيذ إجراءات محدّدة فقط عبر إرجاع JSON — لا تنفّذ أي كود، ولا تكتب ملفات، فقط تختار إجراءً من القائمة المسموحة التالية:
 
 - "chat": للرد على سؤال أو توضيح بدون أي تنفيذ. params: {}
 - "create_app_draft": ينشئ تطبيقاً جديداً كمسودة بمحتوى مولّد بالذكاء الاصطناعي (بدون رابط تحميل — يضيفه الأدمن لاحقاً). params: {"name": "اسم التطبيق"}
@@ -2076,7 +2076,7 @@ if ($page === 'login'): ?>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>تسجيل الدخول — yassota admin</title>
+  <title>تسجيل الدخول — Tenzil admin</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
@@ -2472,7 +2472,7 @@ $navLinks = [
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
+  <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — Tenzil</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
 </head>
@@ -3112,7 +3112,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 <div class="panel" style="margin-bottom:40px">
   <h2>التحقق من سلامة الرابط</h2>
   <p class="form-hint" style="margin-bottom:14px">
-    بعد التأكد يدوياً من أن رابط التحميل آمن وسليم، اضغط "تحقق الفريق" لإظهار شارة "رابط تم التحقق من سلامته بواسطة فريق yassota" على صفحة التطبيق وصفحة التحميل.
+    بعد التأكد يدوياً من أن رابط التحميل آمن وسليم، اضغط "تحقق الفريق" لإظهار شارة "رابط تم التحقق من سلامته بواسطة فريق Tenzil" على صفحة التطبيق وصفحة التحميل.
   </p>
   <div style="margin-bottom:12px" id="verify-status">
     <?php if ($app['link_verified']): ?>
@@ -4675,13 +4675,13 @@ elseif ($page === 'settings'): ?>
       </div>
       <div class="form-group">
         <label class="form-label">Channel ID أو اسم القناة</label>
-        <input class="form-input" type="text" name="telegram_channel_id" value="<?= h(get_cfg($pdo,'telegram_channel_id')) ?>" placeholder="@yassota_channel أو -100123456789" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <input class="form-input" type="text" name="telegram_channel_id" value="<?= h(get_cfg($pdo,'telegram_channel_id')) ?>" placeholder="@tenzilapp_channel أو -100123456789" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
         <div class="form-hint">مثال: @channelname أو رقم ID القناة الخاصة</div>
       </div>
     </div>
     <div class="form-group">
       <label class="form-label">رابط القناة (للزر "اشترك في القناة" على صفحات التحميل)</label>
-      <input class="form-input" type="url" name="telegram_channel_url" value="<?= h(get_cfg($pdo,'telegram_channel_url')) ?>" placeholder="https://t.me/yassota_channel" dir="ltr">
+      <input class="form-input" type="url" name="telegram_channel_url" value="<?= h(get_cfg($pdo,'telegram_channel_url')) ?>" placeholder="https://t.me/Tenzil_channel" dir="ltr">
       <div class="form-hint">إذا تُرك فارغاً لن يظهر زر الاشتراك على صفحات التحميل.</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:8px">

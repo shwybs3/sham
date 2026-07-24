@@ -9,9 +9,9 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
 <rss version="2.0">
   <channel>
-    <title>yassota — آخر التحديثات</title>
+    <title>Tenzil — آخر التحديثات</title>
     <link><?= h(url('')) ?></link>
-    <description>أحدث تحديثات التطبيقات والألعاب على منصة yassota</description>
+    <description>أحدث تحديثات التطبيقات والألعاب على منصة Tenzil</description>
     <language>ar</language>
     <atom:link xmlns:atom="http://www.w3.org/2005/Atom" href="<?= h(url('rss.php')) ?>" rel="self" type="application/rss+xml"/>
     <?php foreach ($apps as $a): ?>

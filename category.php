@@ -33,10 +33,10 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN cate
 $stmt->execute([$category['id']]);
 $apps = $stmt->fetchAll();
 
-$seoTitle = "أفضل تطبيقات وألعاب {$category['name']} لأندرويد — تحميل مجاني | yassota";
+$seoTitle = "أفضل تطبيقات وألعاب {$category['name']} لأندرويد — تحميل مجاني | Tenzil";
 $metaDesc = !empty($category['description'])
     ? mb_substr(trim(strip_tags($category['description'])), 0, 160)
-    : "تصفح وحمّل أفضل {$category['name']} لأندرويد مجاناً وبسرعة على yassota — تحديث مستمر وروابط تحميل مباشرة.";
+    : "تصفح وحمّل أفضل {$category['name']} لأندرويد مجاناً وبسرعة على Tenzil — تحديث مستمر وروابط تحميل مباشرة.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",

@@ -2,11 +2,11 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
-$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com');
-$siteHost     = parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com';
+$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'tenzil.app');
+$siteHost     = parse_url(SITE_URL, PHP_URL_HOST) ?: 'tenzil.app';
 $updated      = '1 يناير 2025';
-$seoTitle     = 'سياسة الخصوصية — yassota';
-$metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: ما نجمعه من بيانات، كيف نستخدمها، Google AdSense، ملفات تعريف الارتباط، حقوقك وفق GDPR.';
+$seoTitle     = 'سياسة الخصوصية — Tenzil';
+$metaDesc     = 'سياسة الخصوصية الكاملة لموقع Tenzil: ما نجمعه من بيانات، كيف نستخدمها، Google AdSense، ملفات تعريف الارتباط، حقوقك وفق GDPR.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -45,12 +45,12 @@ $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: 
       <strong style="color:var(--white)">تسري على:</strong> <?= h($siteHost) ?>
     </p>
 
-    <p>تحترم منصة yassota خصوصية زوارها احتراماً كاملاً. توضح هذه السياسة بشكل مفصّل ما نجمعه من بيانات أثناء زيارتك للموقع، كيف نستخدمها وحمايتها، ومن يشاركنا فيها. باستمرارك في استخدام الموقع، فإنك تقرّ بأنك اطلعت على هذه السياسة ووافقت على أحكامها.</p>
+    <p>تحترم منصة Tenzil خصوصية زوارها احتراماً كاملاً. توضح هذه السياسة بشكل مفصّل ما نجمعه من بيانات أثناء زيارتك للموقع، كيف نستخدمها وحمايتها، ومن يشاركنا فيها. باستمرارك في استخدام الموقع، فإنك تقرّ بأنك اطلعت على هذه السياسة ووافقت على أحكامها.</p>
 
     <!-- ── Section 1 ── -->
     <h2 style="color:var(--white);font-size:16px;font-weight:800;margin:24px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border-c)">١. من نحن وكيف نتواصل</h2>
     <p>
-      yassota هو الموقع الإلكتروني الذي تزوره (<strong style="color:var(--white)"><?= h($siteHost) ?></strong>)، وهو دليل تحريري مستقل متخصص في مراجعة تطبيقات وألعاب أندرويد. للتواصل بشأن الخصوصية:
+      Tenzil هو الموقع الإلكتروني الذي تزوره (<strong style="color:var(--white)"><?= h($siteHost) ?></strong>)، وهو دليل تحريري مستقل متخصص في مراجعة تطبيقات وألعاب أندرويد. للتواصل بشأن الخصوصية:
     </p>
     <ul style="margin:10px 0 0 0;padding-right:20px">
       <li>البريد الإلكتروني: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a></li>
@@ -101,10 +101,10 @@ $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: 
         </thead>
         <tbody>
           <?php foreach ([
-            ['ضروري','yassota','حفظ الجلسة وإعدادات الموافقة على الكوكيز','جلسة / 1 سنة'],
+            ['ضروري','Tenzil','حفظ الجلسة وإعدادات الموافقة على الكوكيز','جلسة / 1 سنة'],
             ['تحليلي','Google Analytics (إن فُعّل)','إحصاءات عدد الزوار والصفحات','حتى 2 سنة'],
             ['إعلاني','Google AdSense','عرض إعلانات مخصصة وقياس أدائها','حتى 13 شهراً'],
-            ['تفضيلات','yassota','حفظ إعداد الوضع المظلم / الفاتح','1 سنة'],
+            ['تفضيلات','Tenzil','حفظ إعداد الوضع المظلم / الفاتح','1 سنة'],
           ] as [$type,$src,$purpose,$dur]): ?>
           <tr style="border-bottom:1px solid var(--border-c)">
             <td style="padding:10px 12px;color:var(--white);font-weight:600"><?= h($type) ?></td>
@@ -122,7 +122,7 @@ $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: 
     <h2 style="color:var(--white);font-size:16px;font-weight:800;margin:24px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border-c)">٥. إعلانات Google AdSense</h2>
     <div style="background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.18);border-radius:10px;padding:16px 18px;margin-bottom:14px">
       <p style="margin:0;font-size:13px">
-        يستخدم موقع yassota شبكة <strong style="color:var(--white)">Google AdSense</strong> لعرض الإعلانات، وهي خدمة إعلانية تديرها شركة Google LLC (1600 Amphitheatre Parkway, Mountain View, CA 94043, USA).
+        يستخدم موقع Tenzil شبكة <strong style="color:var(--white)">Google AdSense</strong> لعرض الإعلانات، وهي خدمة إعلانية تديرها شركة Google LLC (1600 Amphitheatre Parkway, Mountain View, CA 94043, USA).
       </p>
     </div>
     <p>فيما يتعلق بـ Google AdSense:</p>
@@ -175,7 +175,7 @@ $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: 
     <!-- ── Section 8 ── -->
     <h2 style="color:var(--white);font-size:16px;font-weight:800;margin:24px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border-c)">٨. خصوصية الأطفال</h2>
     <p>
-      موقع yassota غير موجّه للأطفال دون سن 13 عاماً. لا نجمع بيانات شخصية من الأطفال عن قصد. إذا علمنا بجمع مثل هذه البيانات بدون موافقة ولي الأمر، سنحذفها فوراً.
+      موقع Tenzil غير موجّه للأطفال دون سن 13 عاماً. لا نجمع بيانات شخصية من الأطفال عن قصد. إذا علمنا بجمع مثل هذه البيانات بدون موافقة ولي الأمر، سنحذفها فوراً.
       <br>إذا اعتقدت أن طفلك قدّم بيانات شخصية لنا، تواصل معنا عبر: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a>
     </p>
 
