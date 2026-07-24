@@ -260,10 +260,22 @@ a { color: inherit; text-decoration: none; }
   .admin-table.responsive-cards td.td-thumb::before { content: none; }
 }
 
+/* Dashboard two-panel grid — collapses to one column on mobile */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 480px) {
   .admin-stats { grid-template-columns: 1fr 1fr; }
   .stat-num { font-size: 22px; }
   .btn-save { padding: 12px 22px; font-size: 14px; width: 100%; justify-content: center; }
+  .dashboard-grid { gap: 14px; }
 }
 
 /* ════ WYSIWYG EDITOR ════ */

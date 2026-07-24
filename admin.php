@@ -2544,17 +2544,17 @@ if ($page === 'dashboard'): ?>
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+<div class="dashboard-grid">
   <div class="panel">
     <h2>الأكثر زيارة</h2>
-    <table class="admin-table">
+    <table class="admin-table responsive-cards">
       <thead><tr><th>التطبيق</th><th>مشاهدات</th><th>تحميلات</th></tr></thead>
       <tbody>
         <?php foreach ($topApps as $a): ?>
         <tr>
-          <td><?= h($a['name']) ?></td>
-          <td style="font-family:var(--f-mono)"><?= number_format($a['views']) ?></td>
-          <td style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
+          <td data-label="التطبيق"><?= h($a['name']) ?></td>
+          <td data-label="مشاهدات" style="font-family:var(--f-mono)"><?= number_format($a['views']) ?></td>
+          <td data-label="تحميلات" style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
         </tr>
         <?php endforeach; ?>
         <?php if (!$topApps): ?><tr><td colspan="3" style="color:var(--muted)">لا توجد بيانات بعد</td></tr><?php endif; ?>
@@ -2563,14 +2563,14 @@ if ($page === 'dashboard'): ?>
   </div>
   <div class="panel">
     <h2>أحدث الإضافات</h2>
-    <table class="admin-table">
+    <table class="admin-table responsive-cards">
       <thead><tr><th>التطبيق</th><th>التصنيف</th><th>الحالة</th></tr></thead>
       <tbody>
         <?php foreach ($recentApps as $a): ?>
         <tr>
-          <td><?= h($a['name']) ?></td>
-          <td style="font-size:11px;color:var(--muted)"><?= h($a['cat'] ?? '—') ?></td>
-          <td><span class="status-badge status-<?= $a['status'] ?>"><?= $a['status'] === 'published' ? 'منشور' : 'مسودة' ?></span></td>
+          <td data-label="التطبيق"><?= h($a['name']) ?></td>
+          <td data-label="التصنيف" style="font-size:11px;color:var(--muted)"><?= h($a['cat'] ?? '—') ?></td>
+          <td data-label="الحالة"><span class="status-badge status-<?= $a['status'] ?>"><?= $a['status'] === 'published' ? 'منشور' : 'مسودة' ?></span></td>
         </tr>
         <?php endforeach; ?>
       </tbody>

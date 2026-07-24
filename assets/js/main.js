@@ -50,21 +50,31 @@ document.addEventListener('DOMContentLoaded', () => {
     reveals.forEach(el => el.classList.add('visible'));
   }
 
-  /* ── Sidebar Toggle (mobile) ── */
-  const navToggle = document.querySelector('.nav-toggle');
-  const sidebar = document.querySelector('.sidebar');
-  if (navToggle && sidebar) {
+  /* ── Mobile nav drawer (replaces old sidebar toggle) ── */
+  const navToggle = document.querySelector('#nav-toggle');
+  const mobileNavDrawer = document.querySelector('#mobile-nav-drawer');
+  if (navToggle && mobileNavDrawer) {
     navToggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      sidebar.classList.toggle('open');
+      const isOpen = mobileNavDrawer.classList.toggle('open');
+      navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      mobileNavDrawer.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
     });
     document.addEventListener('click', (e) => {
-      // .closest() (not strict e.target !== navToggle) — a click on the
-      // icon SVG/path inside the button has e.target set to that child
-      // element, not the button, which made this immediately re-close the
-      // sidebar the instant it opened.
-      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('.nav-toggle'))
-        sidebar.classList.remove('open');
+      if (mobileNavDrawer.classList.contains('open')
+          && !mobileNavDrawer.contains(e.target)
+          && !e.target.closest('#nav-toggle')) {
+        mobileNavDrawer.classList.remove('open');
+        navToggle.setAttribute('aria-expanded', 'false');
+        mobileNavDrawer.setAttribute('aria-hidden', 'true');
+      }
+    });
+    // Close drawer on nav link click (page navigates)
+    mobileNavDrawer.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        mobileNavDrawer.classList.remove('open');
+        navToggle.setAttribute('aria-expanded', 'false');
+      });
     });
   }
 

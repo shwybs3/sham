@@ -200,7 +200,12 @@ function wave(): string {
   ?></title>
   <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل {$app['name']} للأندرويد " . ($app['version'] ? "v{$app['version']} " : '') . "مجاناً بأمان وسرعة — " . ($app['short_description'] ?: "أحدث إصدار متاح على yassota.com")) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
-  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+  <?php
+    $descLen = mb_strlen(strip_tags($app['long_description'] ?? ''));
+    $hasContent = $descLen >= 150 || !empty($app['short_description']);
+    $robotsApp  = $hasContent ? 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1' : 'noindex,follow';
+  ?>
+  <meta name="robots" content="<?= $robotsApp ?>">
   <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
   <meta property="og:type" content="product">
   <meta property="og:title" content="<?= h($app['seo_title'] ?: $app['name']) ?>">

@@ -99,7 +99,7 @@ if (!empty($app['category_id'])) {
 <body>
 
 <header class="site-header">
-  <a href="<?= h(url('')) ?>" class="logo">yass<span>ota</span></a>
+  <a href="<?= h(url('')) ?>" class="logo">yass<span style="color:var(--purple)">ota</span></a>
   <nav class="header-nav">
     <a href="<?= h(url('')) ?>">الرئيسية</a>
     <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
@@ -163,9 +163,7 @@ if (!empty($app['category_id'])) {
   </div>
 
   <!-- ── Ad slot (top) ── -->
-  <?php $topAd = ad_slot(); if ($topAd): ?>
-  <div class="dlp-ad-zone"><?= $topAd ?></div>
-  <?php endif; ?>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- ── Countdown section ── -->
   <div class="dlp-countdown-card" id="dl-timer-section">
@@ -291,9 +289,7 @@ if (!empty($app['category_id'])) {
   <?php endif; ?>
 
   <!-- ── Mid AdSense ── -->
-  <?php $midAd = ad_slot(); if ($midAd): ?>
-  <div class="dlp-ad-zone"><?= $midAd ?></div>
-  <?php endif; ?>
+  <div class="ad-zone"><?= ad_slot() ?></div>
 
   <!-- ── Mirror links ── -->
   <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
@@ -439,7 +435,12 @@ function tick() {
     // Trigger download
     const a = document.createElement('a');
     a.href = DOWNLOAD_URL;
-    if (IS_LOCAL_APK) a.download = '';
+    if (IS_LOCAL_APK) {
+      a.download = '';
+    } else {
+      a.target = '_blank';
+      a.rel = 'noopener nofollow';
+    }
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
     // Show manual button after 2s

@@ -23,6 +23,7 @@ function partial_icon(string $name): string {
         'arrow-r'  => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
         'external' => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
         'article'  => '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>',
+        'mail'     => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
     ];
     return $icons[$name] ?? '';
 }
@@ -84,9 +85,21 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>">المدونة</a>
     <a href="<?= h(url('about')) ?>" class="<?= $activeNav === 'about' ? 'active' : '' ?>">من نحن</a>
     <button type="button" class="mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
-    <button class="nav-toggle" aria-label="القائمة"><?= partial_icon('menu') ?></button>
+    <button class="nav-toggle" id="nav-toggle" aria-label="القائمة" aria-expanded="false"><?= partial_icon('menu') ?></button>
   </nav>
 </header>
+
+<!-- Mobile nav drawer — opened by .nav-toggle -->
+<nav class="mobile-nav-drawer" id="mobile-nav-drawer" aria-hidden="true">
+  <a href="/" class="mobile-nav-link <?= $activeNav === 'home' ? 'active' : '' ?>"><?= partial_icon('home') ?> الرئيسية</a>
+  <a href="/?cat=apps" class="mobile-nav-link <?= $activeNav === 'apps' ? 'active' : '' ?>"><?= partial_icon('apps') ?> تطبيقات</a>
+  <a href="/?cat=games" class="mobile-nav-link <?= $activeNav === 'games' ? 'active' : '' ?>"><?= partial_icon('games') ?> ألعاب</a>
+  <a href="<?= h(url('top?by=downloads')) ?>" class="mobile-nav-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
+  <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
+  <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> المدونة</a>
+  <a href="<?= h(url('about')) ?>" class="mobile-nav-link"><?= partial_icon('info') ?> من نحن</a>
+  <a href="<?= h(url('contact')) ?>" class="mobile-nav-link"><?= partial_icon('mail') ?> تواصل معنا</a>
+</nav>
 <?php }
 
 /* ── Sidebar: category list + a few discovery links reused on every listing page ── */

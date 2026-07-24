@@ -122,12 +122,7 @@
   padding: 4px 10px;
 }
 
-/* ── Ad zone ── */
-.dlp-ad-zone {
-  text-align: center;
-  min-height: 60px;
-  display: flex; align-items: center; justify-content: center;
-}
+/* ── Ad zone — uses the global .ad-zone/.ad-filled mechanism from main.css ── */
 
 /* ── Countdown card ── */
 .dlp-countdown-card {
@@ -459,8 +454,20 @@
 
 /* ── Mobile ── */
 @media (max-width: 480px) {
+  .dlp-wrap { padding: 16px 12px 48px; gap: 12px; }
   .dlp-hero { flex-direction: column; text-align: center; }
   .dlp-app-meta { justify-content: center; }
   .dlp-related-grid { grid-template-columns: repeat(2, 1fr); }
   .dlp-countdown-card { padding: 24px 16px; }
+  .dlp-trust { gap: 8px; }
+  .dlp-trust-item { padding: 7px 12px; font-size: 11px; }
+}
+
+@media (max-width: 400px) {
+  /* Hide step labels — too cramped on narrow phones */
+  .dlp-step-label { display: none; }
+  .dlp-step-line { min-width: 20px; max-width: 40px; }
+  .dlp-steps { padding: 12px 0 6px; }
+  .dlp-related-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .dlp-meta-grid { grid-template-columns: repeat(2, 1fr); }
 }

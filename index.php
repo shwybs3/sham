@@ -90,8 +90,20 @@ $orgSchema = json_encode([
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($search ? "نتائج البحث: $search" : ($catSlug ? ucfirst($catSlug) . ' — yassota' : 'yassota — مراجعات وأدلة تطبيقات أندرويد')) ?></title>
   <meta name="description" content="<?= h($search ? "نتائج البحث عن: $search على yassota" : ($catSlug ? "تصفح وراجع أفضل تطبيقات $catSlug على منصة yassota العربية" : 'yassota — دليلك التحريري العربي المستقل لمراجعة واكتشاف أفضل تطبيقات وألعاب أندرويد. مراجعات احترافية، معلومات موثوقة، ومحتوى محدّث يومياً.')) ?>">
-  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
-  <link rel="canonical" href="<?= h(url('')) ?>">
+  <?php
+    if ($search) {
+        $idxRobots  = 'noindex,follow';
+        $idxCanon   = h(url(''));
+    } elseif ($catSlug) {
+        $idxRobots  = 'index,follow,max-snippet:-1,max-image-preview:large';
+        $idxCanon   = h(url('category/' . $catSlug));
+    } else {
+        $idxRobots  = 'index,follow,max-snippet:-1,max-image-preview:large';
+        $idxCanon   = h(url(''));
+    }
+  ?>
+  <meta name="robots" content="<?= $idxRobots ?>">
+  <link rel="canonical" href="<?= $idxCanon ?>">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="yassota">
   <meta property="og:title" content="yassota — دليل مراجعات تطبيقات أندرويد">

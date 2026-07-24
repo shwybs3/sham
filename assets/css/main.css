@@ -1041,6 +1041,37 @@ details.faq-item[open] .faq-chevron { transform: rotate(180deg); }
   .nav-toggle { display: flex; }
 }
 
+/* ════ MOBILE NAV DRAWER ════ */
+.mobile-nav-drawer {
+  display: none;
+  position: fixed;
+  top: 62px; /* matches sticky header height */
+  right: 0; left: 0;
+  z-index: 99;
+  flex-direction: column;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-c);
+  box-shadow: 0 8px 28px rgba(0,0,0,.08);
+  max-height: calc(100vh - 62px);
+  overflow-y: auto;
+}
+.mobile-nav-drawer.open { display: flex; }
+.mobile-nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px;
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-c);
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.mobile-nav-link:last-child { border-bottom: none; }
+.mobile-nav-link:hover,
+.mobile-nav-link.active { color: var(--cyan); background: rgba(8,145,178,.06); }
+.mobile-nav-link svg { flex-shrink: 0; color: var(--cyan); }
+/* Only show the drawer on mobile */
+@media (min-width: 901px) { .mobile-nav-drawer { display: none !important; } }
+
 /* ════ FAQ PAGE CATEGORY BADGE ════ */
 .faq-cat-badge {
   display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
@@ -1113,9 +1144,15 @@ details.faq-item[open] .faq-chevron { transform: rotate(180deg); }
   background: rgba(56,189,248,.14) !important;
   border-color: rgba(56,189,248,.4) !important;
 }
-/* mobile: search bar inherits dark bg */
+/* mobile: search bar + nav drawer inherit dark bg */
 @media (max-width: 900px) {
   .header-search { background: #0C1E36 !important; border-top: 1px solid rgba(8,145,178,.25) !important; }
+  .mobile-nav-drawer {
+    background: #0C1E36 !important;
+    border-bottom-color: rgba(8,145,178,.3) !important;
+  }
+  .mobile-nav-link { color: rgba(255,255,255,.8) !important; border-bottom-color: rgba(255,255,255,.07) !important; }
+  .mobile-nav-link:hover, .mobile-nav-link.active { color: #38BDF8 !important; background: rgba(56,189,248,.08) !important; }
 }
 /* search suggestions stay light (white card) */
 .search-suggestions { background: #fff !important; }
