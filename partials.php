@@ -36,7 +36,10 @@ function partial_wave(): string {
 /* ── Header (logo, search, top nav) ── */
 function render_site_header(string $search = '', string $activeNav = 'home'): void { ?>
 <header class="site-header">
-  <a href="/" class="logo">yass<span>ota</span></a>
+  <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:2px">
+    <span>yass<span>ota</span></span>
+    <span style="font-size:9px;font-weight:500;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;font-family:var(--f-body)">دليل تطبيقات أندرويد</span>
+  </a>
 
   <div class="header-search-wrap">
     <form action="/" method="get" class="header-search" id="header-search-form" autocomplete="off">
@@ -129,21 +132,68 @@ function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نت
 <?php }
 
 function render_site_footer(): void { ?>
-<footer class="site-footer">
-  <div class="footer-logo">yass<span style="color:var(--purple)">ota</span></div>
-  <nav style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:14px 0;font-size:12px">
-    <a href="<?= h(url('about')) ?>" style="color:var(--muted)">من نحن</a>
-    <a href="<?= h(url('contact')) ?>" style="color:var(--muted)">اتصل بنا</a>
-    <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--muted)">سياسة الخصوصية</a>
-    <a href="<?= h(url('terms')) ?>" style="color:var(--muted)">شروط الاستخدام</a>
-    <a href="<?= h(url('cookie-policy')) ?>" style="color:var(--muted)">سياسة الكوكيز</a>
-    <a href="<?= h(url('dmca')) ?>" style="color:var(--muted)">DMCA</a>
-    <a href="/top?by=downloads" style="color:var(--muted)">الأكثر تحميلاً</a>
-    <a href="/updates" style="color:var(--muted)">آخر التحديثات</a>
-    <a href="/blog" style="color:var(--muted)">المدونة</a>
-    <a href="/rss" style="color:var(--muted)">RSS</a>
-  </nav>
-  <p>&copy; <?= date('Y') ?> yassota — جميع الحقوق محفوظة</p>
+<footer class="site-footer" style="padding:0">
+  <div style="max-width:100%;padding:36px 32px 24px;border-top:1px solid var(--border-c)">
+
+    <!-- Brand + columns -->
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:32px;margin-bottom:28px">
+
+      <!-- Brand -->
+      <div>
+        <div class="footer-logo" style="margin-bottom:10px">yass<span style="color:var(--purple)">ota</span></div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.75;max-width:300px;margin:0 0 12px">
+          دليلك التحريري العربي المستقل لاكتشاف ومراجعة تطبيقات أندرويد — مراجعات دقيقة، معلومات موثوقة، ومحتوى محدّث باستمرار.
+        </p>
+        <p style="color:var(--muted);font-size:11px;line-height:1.65;padding-top:12px;border-top:1px solid var(--border-c);margin:0">
+          yassota موقع تحريري مستقل لمراجعة التطبيقات ولا ينتمي لأي متجر أو شركة تطبيقات.
+          بعض روابط التحميل توجّه إلى Google Play أو مصادر رسمية أخرى.
+          يحتوي الموقع على إعلانات من Google AdSense.
+        </p>
+      </div>
+
+      <!-- Col 1 -->
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">اكتشف</div>
+        <?php foreach ([
+            url('') => 'الرئيسية',
+            url('top?by=downloads') => 'الأكثر تحميلاً',
+            url('top?by=views')     => 'الأكثر زيارة',
+            url('updates')          => 'آخر التحديثات',
+            url('blog')             => 'المدونة',
+            url('rss')              => 'RSS',
+        ] as $href => $label): ?>
+        <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
+           onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'"><?= h($label) ?></a>
+        <?php endforeach; ?>
+      </div>
+
+      <!-- Col 2 -->
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">yassota</div>
+        <?php foreach ([
+            url('about')          => 'من نحن',
+            url('contact')        => 'اتصل بنا',
+            url('privacy-policy') => 'سياسة الخصوصية',
+            url('terms')          => 'شروط الاستخدام',
+            url('cookie-policy')  => 'سياسة الكوكيز',
+            url('dmca')           => 'DMCA',
+        ] as $href => $label): ?>
+        <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
+           onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'"><?= h($label) ?></a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <!-- Copyright bar -->
+    <div style="border-top:1px solid var(--border-c);padding-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+      <p style="font-size:11px;color:var(--muted);margin:0">
+        &copy; 2024–<?= date('Y') ?> yassota — جميع الحقوق محفوظة | دليل تحريري مستقل لتطبيقات أندرويد
+      </p>
+      <p style="font-size:11px;color:var(--muted);margin:0">
+        تحت إشراف تحريري — المحتوى يُحدَّث يومياً
+      </p>
+    </div>
+  </div>
 </footer>
 <?php
 render_cookie_banner();

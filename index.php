@@ -9,8 +9,6 @@ $offset  = ($page - 1) * $perPage;
 $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
 
-// Cache the rendered page for anonymous browsing (not search results — low
-// reuse, would just grow the cache directory for little benefit).
 $cacheable = $search === '';
 if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
@@ -31,32 +29,42 @@ $countStmt->execute($params);
 $totalApps  = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalApps / $perPage));
 
-$params2 = $params;
 $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
     FROM apps a LEFT JOIN categories c ON a.category_id=c.id
     $where ORDER BY a.created_at DESC LIMIT $perPage OFFSET $offset");
-$stmt->execute($params2);
+$stmt->execute($params);
 $apps = $stmt->fetchAll();
 
-// Featured: أحدث تطبيق منشور
-$featured = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.id DESC LIMIT 1")->fetch();
+// Featured: most downloaded published app
+$featured = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.downloads DESC LIMIT 1")->fetch();
+
+// Latest blog posts for homepage
+$latestPosts = [];
+if (!$search && !$catSlug) {
+    $latestPosts = $pdo->query("SELECT id,title,slug,type,excerpt,created_at FROM blog_posts WHERE status='published' ORDER BY created_at DESC LIMIT 3")->fetchAll();
+}
 
 $activeNav = $catSlug === 'games' ? 'games' : ($catSlug === 'apps' ? 'apps' : 'home');
-$siteName = 'yassota';
+$siteName  = 'yassota';
+$siteHost  = parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com';
 
 $websiteSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "WebSite",
     "name" => "yassota", "url" => url(''),
+    "description" => "دليل تحريري عربي مستقل لاكتشاف ومراجعة تطبيقات وألعاب أندرويد",
     "potentialAction" => [
         "@type" => "SearchAction",
         "target" => url('') . '?q={search_term_string}',
         "query-input" => "required name=search_term_string",
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
 $orgSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "Organization",
     "name" => "yassota", "url" => url(''),
     "logo" => url('favicon.svg'),
+    "description" => "دليل تحريري عربي مستقل لمراجعة تطبيقات أندرويد",
+    "contactPoint" => ["@type" => "ContactPoint", "contactType" => "customer support", "url" => url('contact')],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
@@ -66,15 +74,18 @@ $orgSchema = json_encode([
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($search ? "نتائج: $search" : ($catSlug ? ucfirst($catSlug) : 'تحميل أفضل التطبيقات')) ?> — yassota</title>
-  <meta name="description" content="حمّل أفضل تطبيقات وألعاب أندرويد مجاناً على yassota — سريع، آمن، مباشر">
+  <title><?= h($search ? "نتائج البحث: $search" : ($catSlug ? ucfirst($catSlug) . ' — yassota' : 'yassota — مراجعات وأدلة تطبيقات أندرويد')) ?></title>
+  <meta name="description" content="<?= h($search ? "نتائج البحث عن: $search على yassota" : ($catSlug ? "تصفح وراجع أفضل تطبيقات $catSlug على منصة yassota العربية" : 'yassota — دليلك التحريري العربي المستقل لمراجعة واكتشاف أفضل تطبيقات وألعاب أندرويد. مراجعات احترافية، معلومات موثوقة، ومحتوى محدّث يومياً.')) ?>">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
   <link rel="canonical" href="<?= h(url('')) ?>">
-  <meta property="og:title" content="yassota — تحميل التطبيقات">
-  <meta property="og:description" content="أفضل تطبيقات أندرويد مجاناً">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="yassota">
+  <meta property="og:title" content="yassota — دليل مراجعات تطبيقات أندرويد">
+  <meta property="og:description" content="دليلك التحريري العربي المستقل لاكتشاف ومراجعة أفضل تطبيقات وألعاب أندرويد — محتوى محدّث يومياً.">
   <?php if ($featured && $featured['icon_path']): ?><meta property="og:image" content="<?= h(url($featured['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="yassota — تحميل التطبيقات">
-  <meta name="twitter:description" content="أفضل تطبيقات أندرويد مجاناً">
+  <meta name="twitter:title" content="yassota — مراجعات تطبيقات أندرويد">
+  <meta name="twitter:description" content="دليلك التحريري العربي لاكتشاف ومراجعة أفضل تطبيقات أندرويد">
   <script type="application/ld+json"><?= $websiteSchema ?></script>
   <script type="application/ld+json"><?= $orgSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
@@ -97,16 +108,27 @@ $orgSchema = json_encode([
     <?= ad_slot() ?>
   </div>
 
-  <!-- Hero Banner -->
+  <!-- ── Hero Banner (homepage only) ── -->
   <?php if (!$search && !$catSlug): ?>
   <div class="hero-banner reveal">
-    <h1>أفضل التطبيقات<br>في مكان واحد</h1>
-    <p>حمّل أحدث تطبيقات وألعاب أندرويد مجاناً وبسرعة — بدون تسجيل، بدون مشكلات.</p>
+    <div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);margin-bottom:10px;text-transform:uppercase">
+      دليل تحريري مستقل — محتوى يومي
+    </div>
+    <h1>اكتشف وراجع أفضل<br>تطبيقات أندرويد</h1>
+    <p>مراجعات احترافية، مقارنات دقيقة، ومعلومات موثوقة لكل تطبيق — yassota دليلك العربي المستقل لاكتشاف عالم تطبيقات Android.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px">
+      <a href="#apps-grid" style="padding:10px 24px;border-radius:50px;background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;font-weight:700;font-size:13px;text-decoration:none">
+        استعرض التطبيقات
+      </a>
+      <a href="<?= h(url('blog')) ?>" style="padding:10px 24px;border-radius:50px;border:1.5px solid rgba(6,182,212,.4);color:var(--cyan);font-weight:600;font-size:13px;text-decoration:none">
+        اقرأ المراجعات
+      </a>
+    </div>
   </div>
   <?= partial_wave() ?>
   <?php endif; ?>
 
-  <!-- Category Chips -->
+  <!-- ── Category Chips ── -->
   <div class="cat-chips reveal">
     <div class="cat-chip <?= !$catSlug ? 'active' : '' ?>" data-cat="all"><?= partial_icon('apps') ?> الكل</div>
     <?php foreach ($categories as $cat): ?>
@@ -116,7 +138,7 @@ $orgSchema = json_encode([
     <?php endforeach; ?>
   </div>
 
-  <!-- Featured App -->
+  <!-- ── Featured App (editorial pick) ── -->
   <?php if ($featured && !$search && !$catSlug): ?>
   <a href="<?= h(app_url($featured['slug'])) ?>" class="featured-card reveal" data-hardnav="1">
     <?php if ($featured['icon_path']): ?>
@@ -125,19 +147,22 @@ $orgSchema = json_encode([
       <div class="featured-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec)"></div>
     <?php endif; ?>
     <div class="featured-info">
-      <div class="app-card-cat">مميز — <?= h($featured['cat_name'] ?? '') ?></div>
+      <div class="app-card-cat">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="1" style="vertical-align:-2px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        اختيار المحرر — <?= h($featured['cat_name'] ?? 'تطبيق') ?>
+      </div>
       <div class="featured-name"><?= h($featured['name']) ?></div>
-      <div class="featured-desc"><?= h(mb_strimwidth($featured['short_description'] ?? '', 0, 120, '...')) ?></div>
-      <span class="btn-outline"><?= partial_icon('download') ?> تحميل مجاني</span>
+      <div class="featured-desc"><?= h(mb_strimwidth($featured['short_description'] ?? '', 0, 130, '...')) ?></div>
+      <span class="btn-outline"><?= partial_icon('info') ?> اقرأ المراجعة الكاملة</span>
     </div>
   </a>
   <?= partial_wave() ?>
   <?php endif; ?>
 
-  <!-- Apps Grid -->
-  <div class="section-head reveal">
+  <!-- ── Apps Grid ── -->
+  <div class="section-head reveal" id="apps-grid">
     <span class="section-title">
-      <?= $search ? 'نتائج: ' . h($search) : ($catSlug ? h($categories[array_search($catSlug, array_column($categories,'slug'))]['name'] ?? 'التطبيقات') : 'أحدث التطبيقات') ?>
+      <?= $search ? 'نتائج البحث: ' . h($search) : ($catSlug ? h($categories[array_search($catSlug, array_column($categories,'slug'))]['name'] ?? 'التطبيقات') : 'أحدث التطبيقات') ?>
     </span>
     <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= number_format($totalApps) ?> تطبيق</span>
   </div>
@@ -151,35 +176,92 @@ $orgSchema = json_encode([
     <?= ad_slot() ?>
   </div>
 
-  <!-- About Section -->
+  <!-- ── Latest Blog Posts (homepage only) ── -->
+  <?php if ($latestPosts && !$search && !$catSlug): ?>
+  <?= partial_wave() ?>
+  <section style="margin-top:8px">
+    <div class="section-head reveal">
+      <span class="section-title">من مدونة yassota</span>
+      <a href="<?= h(url('blog')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none">عرض الكل <?= partial_icon('arrow-r') ?></a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px" class="reveal">
+      <?php foreach ($latestPosts as $post): ?>
+      <a href="<?= h(blog_post_url($post['slug'])) ?>" style="display:block;background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:20px;text-decoration:none;transition:border-color .2s,transform .2s"
+         onmouseover="this.style.borderColor='rgba(6,182,212,.4)';this.style.transform='translateY(-2px)'"
+         onmouseout="this.style.borderColor='var(--border-c)';this.style.transform=''">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin-bottom:8px">
+          <?= h(BLOG_TYPES[$post['type']] ?? 'مقالة') ?>
+        </div>
+        <div style="font-size:15px;font-weight:800;color:var(--white);line-height:1.4;margin-bottom:10px">
+          <?= h($post['title']) ?>
+        </div>
+        <?php if (!empty($post['excerpt'])): ?>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;margin:0 0 12px">
+          <?= h(mb_strimwidth($post['excerpt'], 0, 100, '...')) ?>
+        </p>
+        <?php endif; ?>
+        <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+          <?= partial_icon('clock') ?>
+          <?= date('d M Y', strtotime($post['created_at'])) ?>
+        </div>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ── Why yassota (editorial values) ── -->
+  <?php if (!$search && !$catSlug): ?>
+  <?= partial_wave() ?>
+  <section style="margin-top:8px">
+    <div class="section-head reveal"><span class="section-title">لماذا yassota؟</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px" class="reveal">
+      <?php foreach ([
+        ['icon'=>'✍️','title'=>'محتوى تحريري','desc'=>'كل مراجعة تطبيق تُكتب بعناية وتُدقَّق من فريق المحررين قبل النشر.'],
+        ['icon'=>'🔄','title'=>'تحديث يومي','desc'=>'نتابع الإصدارات الجديدة يومياً ونحدّث معلومات كل تطبيق فور صدور تحديث.'],
+        ['icon'=>'🔒','title'=>'روابط آمنة','desc'=>'نتحقق من كل رابط تحميل ونشير بوضوح لمصدره سواء Play Store أو مصدر رسمي آخر.'],
+        ['icon'=>'🌐','title'=>'محتوى عربي','desc'=>'المراجعات مكتوبة بالعربية خصيصاً للمستخدم العربي مع الأخذ بعين الاعتبار خصوصيات المنطقة.'],
+      ] as $v): ?>
+      <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:20px">
+        <div style="font-size:28px;margin-bottom:10px"><?= $v['icon'] ?></div>
+        <div style="font-weight:800;font-size:14px;color:var(--white);margin-bottom:6px"><?= $v['title'] ?></div>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;margin:0"><?= $v['desc'] ?></p>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ── Stats / About snippet ── -->
+  <?php if (!$search && !$catSlug): ?>
+  <?= partial_wave() ?>
   <section id="about" style="margin-top:12px">
-    <?= partial_wave() ?>
-    <div class="section-head reveal"><span class="section-title">من نحن</span></div>
+    <div class="section-head reveal"><span class="section-title">عن yassota</span></div>
     <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px" class="reveal">
       <div>
         <h2 style="font-family:var(--f-head);font-size:20px;font-weight:900;margin-bottom:12px;background:linear-gradient(135deg,var(--white),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">
-          yassota — منصتك العربية للتطبيقات
+          منصتك التحريرية العربية للتطبيقات
         </h2>
         <p style="color:var(--muted);font-size:14px;line-height:1.8">
-          yassota منصة عربية متخصصة في توفير أفضل تطبيقات وألعاب أندرويد. نسعى لتقديم محتوى موثوق وآمن ومجاني للمستخدم العربي، مع معلومات دقيقة عن كل تطبيق من إصدار ومطور وحجم.
+          yassota دليل تحريري مستقل متخصص في مراجعة وتقييم تطبيقات وألعاب أندرويد. نقدّم معلومات دقيقة ومحايدة تساعدك على اتخاذ قرار التحميل بثقة، مع تحديث يومي لمواكبة أحدث الإصدارات.
         </p>
-        <a href="<?= h(url('about')) ?>" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> اقرأ المزيد عن yassota</a>
+        <a href="<?= h(url('about')) ?>" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> تعرّف علينا أكثر</a>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <?php
-        $stats = [
-            ['num' => $totalApps, 'label' => 'تطبيق متاح'],
-            ['num' => count($categories), 'label' => 'تصنيف'],
-        ];
-        foreach ($stats as $s): ?>
-        <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px">
-          <span style="font-family:var(--f-mono);font-size:28px;font-weight:600;color:var(--cyan)"><?= number_format($s['num']) ?></span>
-          <span style="color:var(--muted);font-size:14px"><?= $s['label'] ?></span>
+        $totalCats = count($categories);
+        $totalBlog = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn();
+        foreach ([[$totalApps,'تطبيق مراجَع'],[$totalCats,'تصنيف'],[$totalBlog,'مقالة ومراجعة']] as [$num,$lbl]):
+        ?>
+        <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px">
+          <span style="font-family:var(--f-mono);font-size:26px;font-weight:700;color:var(--cyan)"><?= number_format($num) ?></span>
+          <span style="color:var(--muted);font-size:13px"><?= $lbl ?></span>
         </div>
         <?php endforeach; ?>
       </div>
     </div>
   </section>
+  <?php endif; ?>
 
 </main>
 </div>
