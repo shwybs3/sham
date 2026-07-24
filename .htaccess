@@ -98,13 +98,14 @@ ErrorDocument 404 /404.php
   # Static pages — clean URLs (no .php extension)
   RewriteRule ^about/?$ about.php [L]
   RewriteRule ^contact/?$ contact.php [L]
+  RewriteRule ^faq/?$ faq.php [L]
   RewriteRule ^privacy-policy/?$ privacy-policy.php [L]
   RewriteRule ^terms/?$ terms.php [L]
   RewriteRule ^cookie-policy/?$ cookie-policy.php [L]
   RewriteRule ^dmca/?$ dmca.php [L]
 
   # 301 redirects for old .php links to static pages
-  RewriteCond %{THE_REQUEST} \s/(about|contact|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
+  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
   RewriteRule ^(.+)\.php$ /$1 [R=301,L]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}

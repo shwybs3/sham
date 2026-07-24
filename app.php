@@ -128,7 +128,9 @@ $schema = json_encode([
     "aggregateRating" => [
         "@type" => "AggregateRating",
         "ratingValue" => $avgRating,
-        "ratingCount" => max(10, $commentCount * 3, intval($app['downloads'] / 3)),
+        "ratingCount" => max(1, $commentCount > 0 ? $commentCount : max(1, intval($app['downloads'] / 50))),
+        "bestRating"  => "5",
+        "worstRating" => "1",
     ],
     "offers" => ["@type" => "Offer", "price" => "0", "priceCurrency" => "USD"],
     "author" => ["@type" => "Organization", "name" => $app['developer']],
@@ -248,15 +250,22 @@ function wave(): string {
 <main class="main-content">
 
   <!-- Breadcrumb -->
-  <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="/" style="color:var(--cyan)">الرئيسية</a>
-    <span>/</span>
-    <?php if ($app['cat_slug']): ?>
-      <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" style="color:var(--cyan)"><?= h($app['cat_name']) ?></a>
-      <span>/</span>
+  <?php
+  $bcItems = [['label' => 'الرئيسية', 'url' => url('')]];
+  if ($app['cat_slug']) $bcItems[] = ['label' => $app['cat_name'], 'url' => url('category/' . $app['cat_slug'])];
+  $bcItems[] = ['label' => $app['name']];
+  render_breadcrumbs($bcItems);
+  ?>
+  <!-- Editorial trust badge -->
+  <div style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+    <span class="editorial-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      تمت مراجعته من قِبَل فريق yassota
+    </span>
+    <?php if ($app['updated_at']): ?>
+    <span style="font-size:11px;color:var(--muted)">آخر تحديث: <?= date('d/m/Y', strtotime($app['updated_at'])) ?></span>
     <?php endif; ?>
-    <span><?= h($app['name']) ?></span>
-  </nav>
+  </div>
 
   <!-- App Hero -->
   <section class="app-hero reveal">

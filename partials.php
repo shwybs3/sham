@@ -27,6 +27,34 @@ function partial_icon(string $name): string {
     return $icons[$name] ?? '';
 }
 
+/* ── Visual star rating ── */
+function render_stars(float $rating, int $count = 0): string {
+    $full = (int)$rating;
+    $half = ($rating - $full) >= 0.3 ? 1 : 0;
+    $empty = 5 - $full - $half;
+    $html = '<span class="star-row">';
+    for ($i = 0; $i < $full;  $i++) $html .= '<span class="star-v full">★</span>';
+    if ($half)                        $html .= '<span class="star-v half">★</span>';
+    for ($i = 0; $i < $empty; $i++) $html .= '<span class="star-v empty">☆</span>';
+    $html .= '</span><span class="star-score">' . number_format($rating, 1) . '</span>';
+    if ($count > 0) $html .= '<span class="star-count">(' . number_format($count) . ')</span>';
+    return $html;
+}
+
+/* ── Breadcrumb nav ── */
+function render_breadcrumbs(array $crumbs): void { ?>
+<nav class="breadcrumb" aria-label="مسار التنقل">
+  <?php foreach ($crumbs as $i => $c): ?>
+  <?php if ($i > 0): ?><svg class="bc-sep" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg><?php endif; ?>
+  <?php if ($i < count($crumbs) - 1 && isset($c['url'])): ?>
+    <a href="<?= h($c['url']) ?>"><?= h($c['label']) ?></a>
+  <?php else: ?>
+    <span class="bc-current"><?= h($c['label']) ?></span>
+  <?php endif; ?>
+  <?php endforeach; ?>
+</nav>
+<?php }
+
 function partial_wave(): string {
     return '<svg class="wave-divider" viewBox="0 0 1200 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M0,20 C150,40 350,0 600,20 C850,40 1050,0 1200,20" stroke="#2563eb" stroke-width="1.5" fill="none"/>
@@ -53,6 +81,8 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
     <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
     <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
+    <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>">المدونة</a>
+    <a href="<?= h(url('about')) ?>" class="<?= $activeNav === 'about' ? 'active' : '' ?>">من نحن</a>
     <button type="button" class="mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
     <button class="nav-toggle" aria-label="القائمة"><?= partial_icon('menu') ?></button>
   </nav>
@@ -88,6 +118,25 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     <a href="<?= h(blog_type_url($t)) ?>" class="sidebar-link"><?= partial_icon('article') ?> <?= h($label) ?></a>
     <?php endforeach; ?>
     <a href="<?= h(blog_type_url('code-page')) ?>" class="sidebar-link"><?= partial_icon('info') ?> صفحة المحتوى</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">yassota</div>
+    <a href="<?= h(url('about')) ?>" class="sidebar-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      من نحن
+    </a>
+    <a href="<?= h(url('faq')) ?>" class="sidebar-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
+      الأسئلة الشائعة
+    </a>
+    <a href="<?= h(url('contact')) ?>" class="sidebar-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      اتصل بنا
+    </a>
+    <a href="<?= h(url('privacy-policy')) ?>" class="sidebar-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      سياسة الخصوصية
+    </a>
   </div>
 </aside>
 <?php }
@@ -172,11 +221,12 @@ function render_site_footer(): void { ?>
         <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">yassota</div>
         <?php foreach ([
             url('about')          => 'من نحن',
+            url('faq')            => 'الأسئلة الشائعة',
             url('contact')        => 'اتصل بنا',
             url('privacy-policy') => 'سياسة الخصوصية',
             url('terms')          => 'شروط الاستخدام',
             url('cookie-policy')  => 'سياسة الكوكيز',
-            url('dmca')           => 'DMCA',
+            url('dmca')           => 'إشعار DMCA',
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
            onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'"><?= h($label) ?></a>

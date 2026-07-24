@@ -59,6 +59,20 @@ $websiteSchema = json_encode([
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+$faqSchemaHome = json_encode([
+    "@context" => "https://schema.org", "@type" => "FAQPage",
+    "mainEntity" => [
+        ["@type"=>"Question","name"=>"هل yassota موقع رسمي من Google Play؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"لا، yassota دليل تحريري مستقل ولا ينتمي لأي متجر تطبيقات. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل."]],
+        ["@type"=>"Question","name"=>"هل روابط التحميل على yassota آمنة؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"نعم، نتحقق من كل رابط قبل نشره ونعتمد بشكل أساسي على Google Play. الملفات APK المباشرة تُفحص بأدوات اكتشاف الفيروسات ونعرض نتيجة الفحص."]],
+        ["@type"=>"Question","name"=>"كيف أضيف تقييمي لتطبيق على yassota؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"افتح صفحة التطبيق وانتقل لقسم التعليقات في أسفل الصفحة، اختر عدد النجوم واكتب رأيك ثم أرسل. تخضع التعليقات لمراجعة قبل نشرها."]],
+        ["@type"=>"Question","name"=>"هل yassota مجاني؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"نعم، yassota مجاني تماماً للمستخدمين. يعتمد الموقع على الإعلانات لتغطية تكاليف التشغيل ولا توجد رسوم مخفية."]],
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
 $orgSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "Organization",
     "name" => "yassota", "url" => url(''),
@@ -88,6 +102,7 @@ $orgSchema = json_encode([
   <meta name="twitter:description" content="دليلك التحريري العربي لاكتشاف ومراجعة أفضل تطبيقات أندرويد">
   <script type="application/ld+json"><?= $websiteSchema ?></script>
   <script type="application/ld+json"><?= $orgSchema ?></script>
+  <?php if (!$search && !$catSlug): ?><script type="application/ld+json"><?= $faqSchemaHome ?></script><?php endif; ?>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
@@ -233,34 +248,86 @@ $orgSchema = json_encode([
   <?php endif; ?>
 
   <!-- ── Stats / About snippet ── -->
-  <?php if (!$search && !$catSlug): ?>
+  <?php if (!$search && !$catSlug):
+    $totalCats = count($categories);
+    $totalBlog = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn();
+  ?>
   <?= partial_wave() ?>
   <section id="about" style="margin-top:12px">
     <div class="section-head reveal"><span class="section-title">عن yassota</span></div>
-    <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px" class="reveal">
-      <div>
-        <h2 style="font-family:var(--f-head);font-size:20px;font-weight:900;margin-bottom:12px;background:linear-gradient(135deg,var(--white),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">
-          منصتك التحريرية العربية للتطبيقات
-        </h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.8">
-          yassota دليل تحريري مستقل متخصص في مراجعة وتقييم تطبيقات وألعاب أندرويد. نقدّم معلومات دقيقة ومحايدة تساعدك على اتخاذ قرار التحميل بثقة، مع تحديث يومي لمواكبة أحدث الإصدارات.
-        </p>
-        <a href="<?= h(url('about')) ?>" style="color:var(--cyan);font-size:13px;display:inline-block;margin-top:10px"><?= partial_icon('arrow-r') ?> تعرّف علينا أكثر</a>
+
+    <!-- Stats row -->
+    <div class="stats-row reveal">
+      <?php foreach ([
+          [$totalApps,  'تطبيق مراجَع',   '📱'],
+          [$totalCats,  'تصنيف',            '🗂️'],
+          [$totalBlog,  'مقالة ومراجعة',   '✍️'],
+          [date('Y') - 2023, 'سنوات خبرة', '⭐'],
+      ] as [$num, $lbl, $ic]): ?>
+      <div class="stat-cell reveal">
+        <span class="stat-cell-num"><?= $num > 0 ? number_format($num) : '1+' ?></span>
+        <div style="font-size:16px;margin-bottom:3px"><?= $ic ?></div>
+        <div class="stat-cell-label"><?= $lbl ?></div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <?php
-        $totalCats = count($categories);
-        $totalBlog = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn();
-        foreach ([[$totalApps,'تطبيق مراجَع'],[$totalCats,'تصنيف'],[$totalBlog,'مقالة ومراجعة']] as [$num,$lbl]):
-        ?>
-        <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px">
-          <span style="font-family:var(--f-mono);font-size:26px;font-weight:700;color:var(--cyan)"><?= number_format($num) ?></span>
-          <span style="color:var(--muted);font-size:13px"><?= $lbl ?></span>
+      <?php endforeach; ?>
+    </div>
+
+    <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:28px;margin-top:12px" class="reveal">
+      <h2 style="font-family:var(--f-head);font-size:18px;font-weight:900;margin-bottom:10px;background:linear-gradient(135deg,var(--white),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">
+        منصتك التحريرية العربية للتطبيقات
+      </h2>
+      <p style="color:var(--muted);font-size:14px;line-height:1.85;margin-bottom:16px">
+        yassota دليل تحريري مستقل متخصص في مراجعة وتقييم تطبيقات وألعاب أندرويد. نقدّم معلومات دقيقة ومحايدة تساعدك على اتخاذ قرار التحميل بثقة، مع تحديث يومي لمواكبة أحدث الإصدارات. كل تطبيق يمر بمراجعة تحريرية كاملة قبل نشره.
+      </p>
+      <!-- Trust badges -->
+      <div class="trust-row">
+        <?php foreach ([
+            ['✅ محتوى تحريري موثوق'],
+            ['🔒 روابط مفحوصة وآمنة'],
+            ['📅 تحديث يومي'],
+            ['🌐 محتوى عربي متخصص'],
+            ['⭐ تقييمات حقيقية'],
+        ] as [$t]): ?>
+        <div class="trust-item">
+          <span style="font-size:13px;color:var(--muted)"><?= $t ?></span>
         </div>
         <?php endforeach; ?>
       </div>
+      <a href="<?= h(url('about')) ?>" style="color:var(--cyan);font-size:13px;display:inline-flex;align-items:center;gap:5px;margin-top:4px">
+        <?= partial_icon('arrow-r') ?> تعرّف علينا أكثر
+      </a>
     </div>
   </section>
+
+  <!-- ── FAQ Section (FAQPage schema already built into dedicated /faq page) ── -->
+  <?= partial_wave() ?>
+  <section style="margin-top:8px">
+    <div class="section-head reveal">
+      <span class="section-title">أسئلة شائعة</span>
+      <a href="<?= h(url('faq')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none">كل الأسئلة <?= partial_icon('arrow-r') ?></a>
+    </div>
+    <div class="faq-list reveal">
+      <?php $homeFaqs = [
+        ['q' => 'هل yassota موقع رسمي من Google Play؟',
+         'a' => 'لا، yassota دليل تحريري مستقل ولا ينتمي لأي متجر. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل.'],
+        ['q' => 'هل روابط التحميل آمنة؟',
+         'a' => 'نعم، نتحقق من كل رابط قبل نشره ونعتمد بشكل أساسي على Google Play. الملفات APK المباشرة تُفحص بأدوات اكتشاف الفيروسات.'],
+        ['q' => 'كيف أضيف تقييمي لتطبيق؟',
+         'a' => 'افتح صفحة التطبيق وانتقل لقسم التعليقات في أسفل الصفحة، اختر النجوم واكتب رأيك. التعليقات تخضع لمراجعة قبل نشرها.'],
+        ['q' => 'كيف أقترح إضافة تطبيق جديد؟',
+         'a' => 'أرسل اقتراحك عبر صفحة "اتصل بنا" مع اسم التطبيق ورابط Google Play وسيراجعه فريقنا.'],
+      ]; foreach ($homeFaqs as $fi => $faq): ?>
+      <details class="faq-item" style="animation-delay:<?= $fi * 0.08 ?>s">
+        <summary class="faq-q">
+          <span><?= h($faq['q']) ?></span>
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <div class="faq-a"><?= h($faq['a']) ?></div>
+      </details>
+      <?php endforeach; ?>
+    </div>
+  </section>
+
   <?php endif; ?>
 
 </main>
