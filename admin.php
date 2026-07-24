@@ -98,6 +98,95 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Bulk-content regeneration for ONE existing app
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_regen_one' && is_admin()) {
+    header('Content-Type: application/json');
+    $appId = (int)($_GET['id'] ?? 0);
+    if (!$appId) { echo json_encode(['success'=>false,'error'=>'معرّف التطبيق مطلوب']); exit; }
+
+    $app = $pdo->prepare("SELECT id, name FROM apps WHERE id=?");
+    $app->execute([$appId]);
+    $app = $app->fetch(PDO::FETCH_ASSOC);
+    if (!$app) { echo json_encode(['success'=>false,'error'=>'التطبيق غير موجود']); exit; }
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) { echo json_encode(['success'=>false,'error'=>'لم يتم إضافة مفتاح OpenRouter بعد']); exit; }
+
+    $models = build_model_rotation($pdo);
+    $seoStandards = seo_prompt_standards();
+    $name = $app['name'];
+
+    $prompt = <<<P
+أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل، عدة فقرات تغطي: نظرة عامة، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات.
+
+أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
+{
+  "seo_title":"",
+  "meta_description":"",
+  "keywords":"",
+  "short_description":"جملة أو جملتين",
+  "long_description":"",
+  "whats_new":"آخر التحديثات",
+  "features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5"],
+  "pros":["إيجابية 1","إيجابية 2","إيجابية 3"],
+  "cons":["سلبية 1","سلبية 2"],
+  "install_steps":["خطوة 1","خطوة 2","خطوة 3","خطوة 4"],
+  "faq":[{"q":"سؤال شائع","a":"إجابة مفصلة"},{"q":"سؤال 2","a":"إجابة 2"},{"q":"سؤال 3","a":"إجابة 3"}]
+}
+P;
+
+    $result = openrouter_call_rotating($keys, $models, $prompt);
+    if (!$result['ok']) {
+        echo json_encode(['success'=>false,'error'=>openrouter_diagnose_trace($result['trace'])]);
+        exit;
+    }
+
+    $data = ai_extract_json($result['content']);
+    if (!$data) {
+        $strictPrompt = "أجب بـJSON فقط بدون أي نص قبله أو بعده، ولا Markdown. الطلب:\n\n" . $prompt;
+        $retry = openrouter_call_rotating($keys, array_slice($models,0,4), $strictPrompt);
+        $data = $retry['ok'] ? ai_extract_json($retry['content']) : null;
+    }
+
+    if (!$data) {
+        echo json_encode(['success'=>false,'error'=>'لم يُرجع الذكاء الاصطناعي JSON صالحاً']);
+        exit;
+    }
+
+    $fields = ['seo_title','meta_description','keywords','short_description','long_description','whats_new'];
+    $parts  = ['features','pros','cons','install_steps','faq'];
+
+    $setClauses = [];
+    $params     = [];
+    foreach ($fields as $f) {
+        if (!empty($data[$f])) {
+            $setClauses[] = "`$f`=?";
+            $params[]     = $data[$f];
+        }
+    }
+    foreach ($parts as $f) {
+        if (!empty($data[$f]) && is_array($data[$f])) {
+            $setClauses[] = "`$f`=?";
+            $params[]     = json_encode($data[$f], JSON_UNESCAPED_UNICODE);
+        }
+    }
+    $setClauses[] = "needs_update=0";
+
+    if ($setClauses) {
+        $params[] = $appId;
+        $pdo->prepare("UPDATE apps SET ".implode(',',$setClauses)." WHERE id=?")->execute($params);
+    }
+
+    echo json_encode(['success'=>true,'model'=>$result['model'],'name'=>$name]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Test connection / full diagnostics
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_connection' && is_admin()) {
@@ -2452,6 +2541,7 @@ $navLinks = [
     'add-app'   => ['label'=>'إضافة تطبيق',   'icon'=>'M12 5v14m-7-7h14'],
     'categories'=> ['label'=>'التصنيفات',     'icon'=>'M3 7h4v4H3V7zm0 6h4v4H3v-4zm6-6h12v4H9V7zm0 6h12v4H9v-4z'],
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
+    'bulk-content'  => ['label'=>'توليد محتوى للتطبيقات', 'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
     'file-import'   => ['label'=>'استيراد من ملف',            'icon'=>'M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
@@ -3390,6 +3480,165 @@ elseif ($page === 'bulk-generate'): ?>
   </div>
   <div id="bg-results" style="display:flex;flex-direction:column;gap:8px;margin-top:14px"></div>
 </div>
+
+<?php
+/* ─────────────── BULK CONTENT GENERATION ─────────────── */
+elseif ($page === 'bulk-content'):
+    /* Fetch apps that have incomplete content — short_description or long_description empty/very short */
+    $incompleteApps = $pdo->query(
+        "SELECT id, name, icon, status,
+                CHAR_LENGTH(COALESCE(long_description,'')) AS ld_len,
+                CHAR_LENGTH(COALESCE(short_description,'')) AS sd_len
+         FROM apps
+         WHERE CHAR_LENGTH(COALESCE(long_description,'')) < 300
+            OR CHAR_LENGTH(COALESCE(short_description,'')) < 20
+         ORDER BY status='published' DESC, name ASC
+         LIMIT 200"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $totalIncomplete = count($incompleteApps);
+?>
+<div class="admin-header">
+  <h1>توليد محتوى للتطبيقات</h1>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span class="admin-badge"><?= $totalIncomplete ?> تطبيق يحتاج محتوى</span>
+    <a href="admin.php?page=apps" class="btn-view" style="padding:8px 16px;font-size:13px">← جميع التطبيقات</a>
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    يعرض هذا القسم التطبيقات التي يقل وصفها القصير عن 20 حرفاً أو وصفها الطويل عن 300 حرف.
+    اضغط <strong style="color:var(--cyan)">توليد الكل</strong> لإعادة توليد المحتوى تلقائياً بالذكاء الاصطناعي لجميعها، أو <strong style="color:var(--cyan)">توليد</strong> لتطبيق واحد.
+    يتم الحفظ في قاعدة البيانات مباشرةً دون المساس بالروابط أو الأيقونات أو حالة النشر.
+  </p>
+</div>
+
+<?php if ($totalIncomplete === 0): ?>
+<div class="panel" style="text-align:center;padding:40px">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--success);margin-bottom:12px"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  <p style="color:var(--success);font-size:15px;font-weight:700">رائع! كل التطبيقات تحتوي على محتوى كافٍ</p>
+</div>
+<?php else: ?>
+
+<div class="panel" style="margin-bottom:14px">
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+    <button type="button" id="btn-bc-all" class="btn-save">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      توليد الكل (<?= $totalIncomplete ?>)
+    </button>
+    <button type="button" id="btn-bc-stop" class="btn-del" style="display:none;padding:10px 20px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+      إيقاف
+    </button>
+    <div style="flex:1;min-width:200px">
+      <div style="height:6px;background:var(--surface-3);border-radius:6px;overflow:hidden;display:none" id="bc-progress-bar-wrap">
+        <div id="bc-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--purple));transition:width .3s"></div>
+      </div>
+      <div id="bc-progress-status" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px" id="bc-list">
+<?php foreach ($incompleteApps as $a):
+    $iconSrc = !empty($a['icon']) ? h(url('uploads/icons/'.$a['icon'])) : '';
+?>
+<div class="bc-row" id="bc-row-<?= (int)$a['id'] ?>">
+  <?php if ($iconSrc): ?>
+    <img class="bc-row-icon" src="<?= $iconSrc ?>" alt="" loading="lazy">
+  <?php else: ?>
+    <div class="bc-row-icon" style="display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--muted)"><rect x="2" y="2" width="20" height="20" rx="5"/></svg>
+    </div>
+  <?php endif; ?>
+  <div class="bc-row-name">
+    <?= h($a['name']) ?>
+    <span style="font-size:11px;color:var(--muted);margin-right:6px"><?= $a['status']==='published'?'● منشور':'○ مسودة' ?></span>
+    <span style="font-size:11px;color:var(--muted)">(وصف قصير: <?= $a['sd_len'] ?>، وصف طويل: <?= $a['ld_len'] ?> حرف)</span>
+  </div>
+  <a href="admin.php?page=edit-app&id=<?= (int)$a['id'] ?>" class="btn-view" style="padding:5px 10px;font-size:11px">تعديل</a>
+  <button type="button" class="btn-ai btn-bc-one" data-id="<?= (int)$a['id'] ?>" style="padding:7px 14px;font-size:12px">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    توليد
+  </button>
+  <span class="bc-row-status" id="bc-status-<?= (int)$a['id'] ?>">—</span>
+</div>
+<?php endforeach; ?>
+</div>
+
+<script>
+(function(){
+  const rows = <?= json_encode(array_column($incompleteApps, 'id'), JSON_UNESCAPED_UNICODE) ?>;
+  let stopped = false;
+  let running = false;
+
+  function setRowState(id, cls, text){
+    const row = document.getElementById('bc-row-'+id);
+    const st  = document.getElementById('bc-status-'+id);
+    if (!row||!st) return;
+    row.className = 'bc-row ' + cls;
+    st.textContent = text;
+  }
+
+  async function regenOne(id){
+    setRowState(id,'bc-active','جارٍ التوليد…');
+    const r = await fetch('admin.php?ajax=bulk_regen_one&id='+id).then(r=>r.json()).catch(()=>({success:false,error:'خطأ في الشبكة'}));
+    if (r.success){
+      setRowState(id,'bc-done','✓ تم');
+    } else {
+      setRowState(id,'bc-error','✗ '+((r.error||'').substring(0,60)));
+    }
+    return r.success;
+  }
+
+  /* single-app buttons */
+  document.querySelectorAll('.btn-bc-one').forEach(btn=>{
+    btn.addEventListener('click', async function(){
+      if (running) return;
+      const id = parseInt(this.dataset.id,10);
+      this.disabled=true;
+      await regenOne(id);
+      this.disabled=false;
+    });
+  });
+
+  /* generate-all */
+  document.getElementById('btn-bc-all').addEventListener('click', async function(){
+    if (running) return;
+    running=true; stopped=false;
+    this.disabled=true;
+    document.getElementById('btn-bc-stop').style.display='';
+    const wrap = document.getElementById('bc-progress-bar-wrap');
+    const bar  = document.getElementById('bc-progress-bar');
+    const stat = document.getElementById('bc-progress-status');
+    wrap.style.display='';
+
+    let done=0, success=0, failed=0;
+    const total=rows.length;
+    for (const id of rows){
+      if (stopped) break;
+      bar.style.width = Math.round(done/total*100)+'%';
+      stat.textContent = `${done}/${total} — نجح: ${success}، فشل: ${failed}`;
+      const ok = await regenOne(id);
+      if(ok) success++; else failed++;
+      done++;
+      await new Promise(r=>setTimeout(r,600)); // brief pause to avoid throttle
+    }
+    bar.style.width='100%';
+    stat.textContent = stopped
+      ? `توقف — أُنجز ${done} من ${total}: نجح ${success}، فشل ${failed}`
+      : `اكتمل — ${total} تطبيق: نجح ${success}، فشل ${failed}`;
+    document.getElementById('btn-bc-stop').style.display='none';
+    this.disabled=false;
+    running=false;
+  });
+
+  document.getElementById('btn-bc-stop').addEventListener('click', function(){
+    stopped=true; this.style.display='none';
+  });
+})();
+</script>
+<?php endif; ?>
 
 <?php
 /* ─────────────── IMPORT PRESET 30 APPS ─────────────── */
