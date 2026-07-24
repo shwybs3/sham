@@ -273,6 +273,7 @@ function ensure_schema(PDO $pdo): array {
             'apk_hash_md5'     => "CHAR(32) NULL",
             'apk_uploaded_at'  => "DATETIME NULL",
             'download_source'  => "ENUM('playstore','apk','both') NOT NULL DEFAULT 'playstore'",
+            'badge'            => "ENUM('','new','updated','hot','choice') NOT NULL DEFAULT ''",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
@@ -317,6 +318,26 @@ ensure_schema($pdo);
 function cache_version(PDO $pdo): int {
     return (int)get_cfg($pdo, 'cache_version', '1');
 }
+function ping_search_engines(PDO $pdo, string $url): void {
+    try {
+        $sm  = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
+        $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true]]);
+        @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
+        @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
+        $key = get_cfg($pdo, 'indexnow_key', '');
+        if ($key && $url) {
+            $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+            $body = json_encode(['host' => $host, 'key' => $key, 'urlList' => [$url]]);
+            $ictx = stream_context_create(['http' => [
+                'method' => 'POST', 'timeout' => 4, 'ignore_errors' => true,
+                'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
+                'content' => $body,
+            ]]);
+            @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        }
+    } catch (Throwable $e) { /* silent — never block the response */ }
+}
+
 function bump_cache_version(PDO $pdo): void {
     set_cfg($pdo, 'cache_version', (string)(cache_version($pdo) + 1));
 }

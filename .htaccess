@@ -1,5 +1,6 @@
 Options -Indexes
 DirectoryIndex index.php
+ErrorDocument 404 /404.php
 
 # Allow large APK uploads (up to 500MB) — only applied if PHP runs under Apache mod_php
 <IfModule mod_php.c>
@@ -29,6 +30,7 @@ DirectoryIndex index.php
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
   RewriteRule ^robots\.txt$ robots.php [L]
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
 
   # Canonical homepage: redirect old /index.php links/bookmarks to the root
   RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]

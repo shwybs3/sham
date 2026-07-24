@@ -1687,7 +1687,8 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
     foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
               'google_site_verification','bing_site_verification','virustotal_api_key',
               'ai_provider',
-              'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
+              'telegram_bot_token','telegram_channel_id','telegram_channel_url',
+              'indexnow_key','download_countdown_secs','download_custom_ad_code'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
@@ -1930,6 +1931,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'cons'              => json_encode($cons, JSON_UNESCAPED_UNICODE),
         'install_steps'     => json_encode($installSteps, JSON_UNESCAPED_UNICODE),
         'faq'               => json_encode($faq, JSON_UNESCAPED_UNICODE),
+        'badge'             => in_array($_POST['badge'] ?? '', ['','new','updated','hot','choice'], true) ? ($_POST['badge'] ?? '') : '',
     ];
 
     if ($isEdit && $appId) {
@@ -1957,6 +1959,13 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             register_shutdown_function(function() use ($pdo, $notifyApp) {
                 if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
                 telegram_notify_new_app($pdo, $notifyApp);
+                ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
+            });
+        } elseif ($wasPublished && $requestedStatus === 'published' && !empty($d['slug'])) {
+            $pingSlug = $d['slug'];
+            register_shutdown_function(function() use ($pdo, $pingSlug) {
+                if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+                ping_search_engines($pdo, app_url($pingSlug));
             });
         }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated')); exit;
@@ -1973,6 +1982,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             register_shutdown_function(function() use ($pdo, $notifyApp) {
                 if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
                 telegram_notify_new_app($pdo, $notifyApp);
+                ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
             });
         }
         header('Location: admin.php?page=apps&msg=' . ($forcedDraft ? 'added_no_link' : 'added')); exit;
@@ -2725,6 +2735,17 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <input type="checkbox" name="needs_update" value="1" <?= !empty($app['needs_update'])?'checked':'' ?>>
       <span style="color:#fbbf24">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
     </label>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <label class="form-label" style="margin-bottom:8px">شارة التطبيق</label>
+      <select class="form-select" name="badge" style="max-width:300px">
+        <option value="" <?= ($app['badge']??'')===''?'selected':'' ?>>— بلا شارة (الافتراضي)</option>
+        <option value="new" <?= ($app['badge']??'')==='new'?'selected':'' ?>>🆕 جديد</option>
+        <option value="updated" <?= ($app['badge']??'')==='updated'?'selected':'' ?>>🔄 محدّث</option>
+        <option value="hot" <?= ($app['badge']??'')==='hot'?'selected':'' ?>>🔥 رائج</option>
+        <option value="choice" <?= ($app['badge']??'')==='choice'?'selected':'' ?>>⭐ اختيار المحرر</option>
+      </select>
+      <div class="form-hint">تُعرض كشارة ملوّنة على صفحة التطبيق. "جديد" يُضاف تلقائياً خلال 7 أيام من النشر.</div>
+    </div>
     <?php if ($isEdit): ?>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <input type="checkbox" name="save_as_new_version" value="1" checked>
@@ -4376,6 +4397,36 @@ elseif ($page === 'settings'): ?>
     <div class="form-group">
       <label class="form-label">VirusTotal API Key</label>
       <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>فهرسة سريعة بـ IndexNow <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      IndexNow يُخبر محركات البحث (Bing، Yandex، وغيرها) فورياً عند نشر أي تطبيق أو تحديثه بدلاً من انتظار الزحف التلقائي.
+      أنشئ مفتاحاً نصياً عشوائياً (20+ حرفاً) واكتبه هنا — الموقع يرسله تلقائياً في كل نشر.
+      اطّلع على الشرح الكامل من <a href="https://www.indexnow.org/documentation" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">indexnow.org</a>.
+    </p>
+    <div class="form-group">
+      <label class="form-label">مفتاح IndexNow (API Key)</label>
+      <input class="form-input" type="text" name="indexnow_key" value="<?= h(get_cfg($pdo,'indexnow_key')) ?>" placeholder="مثال: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">بعد الحفظ، تأكد من إنشاء ملف <code><?= h(get_cfg($pdo,'indexnow_key') ?: 'المفتاح') ?>.txt</code> في جذر الموقع يحتوي على المفتاح فقط (متطلب IndexNow لإثبات ملكية الموقع).</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>إعدادات صفحة التحميل</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">مدة العد التنازلي قبل التحميل (بالثواني)</label>
+        <input class="form-input" type="number" name="download_countdown_secs" value="<?= h(get_cfg($pdo,'download_countdown_secs','7')) ?>" min="3" max="30" style="max-width:120px">
+        <div class="form-hint">الافتراضي: 7 ثوانٍ. أقل = تجربة أفضل للمستخدم. أكثر = مشاهدة إعلانات أطول.</div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <label class="form-label">كود إعلانات مخصص على صفحة التحميل <span style="color:var(--muted);font-weight:400">(اختياري — PropellerAds / HilltopAds / PopAds)</span></label>
+      <textarea class="form-textarea" name="download_custom_ad_code" rows="5" dir="ltr" style="font-family:var(--f-mono);font-size:11px" placeholder="الصق كود JavaScript الخاص بشبكة الإعلانات هنا..."><?= h(get_cfg($pdo,'download_custom_ad_code')) ?></textarea>
+      <div class="form-hint">يُحقن مباشرةً في صفحة التحميل كـ &lt;script&gt; — مثالي لشبكات Popunder/Push كـ PropellerAds وHilltopAds. لا يؤثر على إعلانات AdSense في بقية الصفحات.</div>
     </div>
   </div>
 

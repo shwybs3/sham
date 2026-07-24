@@ -192,11 +192,15 @@ function wave(): string {
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($app['seo_title'] ?: $app['name']) ?></title>
-  <meta name="description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
+  <title><?php
+    if ($app['seo_title']) echo h($app['seo_title']);
+    else printf('%s للأندرويد%s مجاناً | yassota', h($app['name']), $app['version'] ? ' v'.h($app['version']) : '');
+  ?></title>
+  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل {$app['name']} للأندرويد " . ($app['version'] ? "v{$app['version']} " : '') . "مجاناً بأمان وسرعة — " . ($app['short_description'] ?: "أحدث إصدار متاح على yassota.com")) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
-  <meta property="og:type" content="website">
+  <meta property="og:type" content="product">
   <meta property="og:title" content="<?= h($app['seo_title'] ?: $app['name']) ?>">
   <meta property="og:description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
   <?php if ($app['icon_path']): ?><meta property="og:image" content="<?= h(url($app['icon_path'])) ?>"><?php endif; ?>
@@ -275,6 +279,13 @@ function wave(): string {
           <?php if ($app['cat_name']): ?><span class="badge badge-cyan"><?= h($app['cat_name']) ?></span><?php endif; ?>
           <?php if ($app['version']): ?><span class="badge badge-purple" style="font-family:var(--f-mono)">v<?= h($app['version']) ?></span><?php endif; ?>
           <span class="badge badge-gold"><?= svgi('star') ?> <?= h($app['rating']) ?></span>
+          <?php
+            $b = $app['badge'] ?? '';
+            if (!$b && !empty($app['created_at']) && strtotime($app['created_at']) > strtotime('-7 days')) $b = 'new';
+            $bmap = ['new'=>['🆕 جديد','#16a34a','rgba(22,163,74,.12)'],'updated'=>['🔄 محدّث','#2563eb','rgba(37,99,235,.1)'],'hot'=>['🔥 رائج','#dc2626','rgba(220,38,38,.1)'],'choice'=>['⭐ اختيار المحرر','#b45309','rgba(245,158,11,.1)']];
+            if (isset($bmap[$b])): [$bt,$bc,$bb] = $bmap[$b]; ?>
+          <span class="badge" style="background:<?= $bb ?>;color:<?= $bc ?>;font-weight:700"><?= $bt ?></span>
+          <?php endif; ?>
           <?php if ($app['license']): ?><span class="badge badge-cyan"><?= h($app['license']) ?></span><?php endif; ?>
           <?php if (!empty($app['apk_path']) && in_array($app['download_source']??'playstore', ['apk','both'])): ?>
           <span class="badge" style="background:rgba(25,135,84,.12);color:#198754;border:1px solid rgba(25,135,84,.25)">📦 APK مستضاف</span>

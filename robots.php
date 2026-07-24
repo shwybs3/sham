@@ -10,3 +10,4 @@ Disallow: /config.php
 Disallow: /uploads/.cache/
 
 Sitemap: <?= SITE_URL ?>/sitemap.php
+Sitemap: <?= SITE_URL ?>/sitemap.xml
