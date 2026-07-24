@@ -218,6 +218,19 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'page_events';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS security_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      event_type VARCHAR(60) NOT NULL,
+      severity ENUM('info','warning','critical') NOT NULL DEFAULT 'info',
+      ip VARCHAR(45) NULL,
+      detail TEXT NULL,
+      filename VARCHAR(300) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sev (severity),
+      INDEX idx_date (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'security_log';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -274,6 +287,8 @@ function ensure_schema(PDO $pdo): array {
             'apk_uploaded_at'  => "DATETIME NULL",
             'download_source'  => "ENUM('playstore','apk','both') NOT NULL DEFAULT 'playstore'",
             'badge'            => "ENUM('','new','updated','hot','choice') NOT NULL DEFAULT ''",
+            'last_indexed_at' => "DATETIME NULL",
+            'index_status'    => "ENUM('pending','indexed','error') NOT NULL DEFAULT 'pending'",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
@@ -318,12 +333,14 @@ ensure_schema($pdo);
 function cache_version(PDO $pdo): int {
     return (int)get_cfg($pdo, 'cache_version', '1');
 }
-function ping_search_engines(PDO $pdo, string $url): void {
+function ping_search_engines(PDO $pdo, string $url, ?int $appId = null): void {
+    $success = false;
     try {
         $sm  = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
-        $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true]]);
+        $ctx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
         @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
         @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
+        $success = true;
         $key = get_cfg($pdo, 'indexnow_key', '');
         if ($key && $url) {
             $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
@@ -335,7 +352,63 @@ function ping_search_engines(PDO $pdo, string $url): void {
             ]]);
             @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
         }
-    } catch (Throwable $e) { /* silent — never block the response */ }
+        // Update last_indexed_at on the app row if given
+        if ($appId) {
+            $pdo->prepare("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE id=?")
+                ->execute([$appId]);
+        }
+    } catch (Throwable $e) {
+        if ($appId) {
+            try { $pdo->prepare("UPDATE apps SET index_status='error' WHERE id=?")->execute([$appId]); }
+            catch (Throwable $e2) {}
+        }
+    }
+}
+
+/* ─── Security: deep file scanner ─── */
+function scan_file_for_threats(string $filepath, string $context = 'general'): array {
+    $threats = [];
+    $raw = @file_get_contents($filepath, false, null, 0, 3 * 1024 * 1024);
+    if ($raw === false) return ['unreadable file'];
+
+    // PHP opening tag in uploaded non-PHP files
+    if ($context !== 'php' && preg_match('/<\?php|\<\?=/i', $raw)) {
+        $threats[] = 'PHP code in uploaded file';
+    }
+    // Shell execution functions
+    foreach (['system(','exec(','passthru(','shell_exec(','popen(','proc_open(','pcntl_exec('] as $fn) {
+        if (stripos($raw, $fn) !== false) $threats[] = "Dangerous function: $fn";
+    }
+    // Obfuscated eval
+    if (preg_match('/eval\s*\(\s*(\$|\bbase64_decode|\bgzinflate|\bstr_rot13)/i', $raw))
+        $threats[] = 'Obfuscated eval() pattern';
+    // Large base64 blob (obfuscation)
+    if (preg_match('/base64_decode\s*\(["\'][A-Za-z0-9+\/]{200,}/', $raw))
+        $threats[] = 'Suspicious large base64 blob';
+    // Superglobal → dangerous function
+    if (preg_match('/\$_(GET|POST|REQUEST|COOKIE)\s*\[.{0,60}\]\s*[,\)]/s', $raw) &&
+        preg_match('/(system|exec|passthru|shell_exec|eval|include|require)\s*\(/i', $raw))
+        $threats[] = 'Superglobal → dangerous function pattern (webshell)';
+    // Null bytes
+    if (str_contains($raw, "\0")) $threats[] = 'Null byte in content';
+    // Known webshell fingerprints
+    foreach (['c99shell','r57shell','FilesMan','b374k','WSO Shell','@eval(','preg_replace.*\/e','assert\($_'] as $sig) {
+        if (preg_match('/' . preg_quote($sig, '/') . '/i', $raw)) $threats[] = "Webshell signature: $sig";
+    }
+    // Double extension in filename (file.php.jpg)
+    $fname = basename($filepath);
+    if (preg_match('/\.php\d*\.(jpg|jpeg|png|gif|webp|zip|rar)$/i', $fname))
+        $threats[] = 'Double extension filename';
+
+    return $threats;
+}
+
+function log_security_event(PDO $pdo, string $type, string $severity, string $detail, string $filename = ''): void {
+    try {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $pdo->prepare("INSERT INTO security_log (event_type,severity,ip,detail,filename) VALUES (?,?,?,?,?)")
+            ->execute([$type, $severity, $ip, mb_substr($detail, 0, 2000), mb_substr($filename, 0, 300)]);
+    } catch (Throwable $e) { /* non-critical */ }
 }
 
 function bump_cache_version(PDO $pdo): void {
@@ -1317,8 +1390,15 @@ function admin_ip_check(PDO $pdo): void {
     </div></body></html>');
 }
 
-function process_icon(array $file, string $slug): ?string {
+function process_icon(array $file, string $slug, PDO $pdo = null): ?string {
     if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > MAX_ICON_MB * 1048576) return null;
+    // Security scan before any processing
+    $threats = scan_file_for_threats($file['tmp_name'], 'image');
+    if ($threats && $pdo) {
+        log_security_event($pdo, 'upload_blocked', 'critical',
+            'Icon upload blocked: ' . implode('; ', $threats), $file['name'] ?? '');
+    }
+    if ($threats) return null; // Block malicious uploads
     $info = getimagesize($file['tmp_name']);
     if (!$info) return null;
     $src = match($info['mime']) {
@@ -1579,6 +1659,15 @@ function store_apk_file(array $uploadedFile, string $slug): array {
     fclose($fh);
     if ($magic !== "PK\x03\x04") {
         return ['ok' => false, 'error' => 'الملف ليس APK صالح (توقيع ZIP غير صحيح)'];
+    }
+
+    // Scan for embedded threats (malicious APKs can embed PHP shells)
+    global $pdo;
+    $threats = scan_file_for_threats($tmp, 'apk');
+    $criticalThreats = array_filter($threats, fn($t) => stripos($t, 'PHP code') !== false || stripos($t, 'webshell') !== false || stripos($t, 'eval') !== false);
+    if ($criticalThreats && isset($pdo)) {
+        log_security_event($pdo, 'apk_threat_detected', 'critical',
+            'APK threat: ' . implode('; ', $criticalThreats), basename($tmp));
     }
 
     $dir = UPLOAD_PATH . '/apk';

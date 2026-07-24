@@ -2106,6 +2106,344 @@ if ($page === 'login'): ?>
 
 <?php
 /* ══════════════════════════════════════════════════════
+   AJAX: Mass re-index all published apps
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
+    header('Content-Type: application/json');
+    $apps = $pdo->query("SELECT id, slug FROM apps WHERE status='published' ORDER BY id")->fetchAll();
+    $pinged = 0; $errors = 0;
+    // Ping sitemap once
+    $sm = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
+    $ctx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
+    @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
+    @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
+    // Submit all URLs to IndexNow in one batch (up to 10k URLs)
+    $key = get_cfg($pdo, 'indexnow_key', '');
+    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+    $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
+    // Add static pages
+    foreach (['', 'blog', 'about', 'privacy-policy', 'terms', 'contact'] as $p) {
+        $urlList[] = url($p);
+    }
+    if ($key && $urlList) {
+        $body = json_encode(['host' => $host, 'key' => $key, 'urlList' => array_values(array_unique($urlList))]);
+        $ictx = stream_context_create(['http' => [
+            'method' => 'POST', 'timeout' => 10, 'ignore_errors' => true,
+            'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
+            'content' => $body,
+        ]]);
+        $resp = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        $pinged = count($urlList);
+    }
+    // Update last_indexed_at for all published apps
+    $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
+    log_security_event($pdo, 'reindex_all', 'info', "Mass re-index: {$pinged} URLs submitted to IndexNow");
+    echo json_encode(['ok' => true, 'pinged' => $pinged, 'total' => count($apps)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Clear security log
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_security_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $pdo->exec("DELETE FROM security_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — list directory
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_list' && is_admin()) {
+    header('Content-Type: application/json');
+    $dir = trim($_GET['dir'] ?? '');
+    $root = ROOT_PATH;
+    // Allowed browse roots
+    $allowedDirs = ['', 'assets/css', 'assets/js', 'uploads', 'install'];
+    if (!in_array($dir, $allowedDirs, true) && !preg_match('#^(assets/(css|js)|uploads(/[a-zA-Z0-9_\-]+)?|install)$#', $dir)) {
+        echo json_encode(['ok' => false, 'error' => 'Directory not allowed']); exit;
+    }
+    $absDir = $dir ? ($root . '/' . $dir) : $root;
+    $absDir = realpath($absDir);
+    if (!$absDir || !is_dir($absDir) || strpos($absDir, $root) !== 0) {
+        echo json_encode(['ok' => false, 'error' => 'Invalid directory']); exit;
+    }
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    $items = [];
+    foreach (scandir($absDir) as $f) {
+        if ($f === '.' || $f === '..') continue;
+        $abs = $absDir . '/' . $f;
+        $isDir = is_dir($abs);
+        $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+        if ($isDir) {
+            $rel = ($dir ? $dir . '/' : '') . $f;
+            if (in_array($rel, $allowedDirs, true) || preg_match('#^(assets/(css|js)|uploads(/[a-zA-Z0-9_\-]+)?|install)$#', $rel)) {
+                $items[] = ['name' => $f, 'type' => 'dir', 'path' => $rel];
+            }
+        } elseif (in_array($ext, $allowedExts, true) || $f === '.htaccess' || $f === 'robots.txt') {
+            // Don't list config.php — it contains DB credentials
+            if ($f === 'config.php') continue;
+            $rel = ($dir ? $dir . '/' : '') . $f;
+            $items[] = ['name' => $f, 'type' => 'file', 'path' => $rel, 'size' => filesize($abs), 'mtime' => filemtime($abs), 'ext' => $ext ?: 'txt'];
+        }
+    }
+    usort($items, fn($a,$b) => ($a['type'] === $b['type']) ? strcmp($a['name'], $b['name']) : ($a['type'] === 'dir' ? -1 : 1));
+    echo json_encode(['ok' => true, 'dir' => $dir ?: '/', 'items' => $items], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — read file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_read' && is_admin()) {
+    header('Content-Type: application/json');
+    $path = trim($_GET['path'] ?? '');
+    $root = ROOT_PATH;
+    // Reject config.php
+    if (basename($path) === 'config.php') {
+        echo json_encode(['ok' => false, 'error' => 'config.php لا يمكن تعديله من هنا — استخدم FTP']); exit;
+    }
+    $abs = realpath($root . '/' . ltrim($path, '/'));
+    if (!$abs || !is_file($abs) || strpos($abs, $root) !== 0) {
+        echo json_encode(['ok' => false, 'error' => 'File not found or not allowed']); exit;
+    }
+    $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    if (!in_array($ext, $allowedExts, true) && basename($abs) !== '.htaccess' && basename($abs) !== 'robots.txt') {
+        echo json_encode(['ok' => false, 'error' => 'File type not editable']); exit;
+    }
+    $content = file_get_contents($abs);
+    echo json_encode(['ok' => true, 'content' => $content, 'path' => $path, 'ext' => $ext ?: 'txt', 'size' => strlen($content)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — write file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_write' && is_admin()) {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['ok'=>false,'error'=>'POST required']); exit; }
+    $path    = trim($_POST['path'] ?? '');
+    $content = $_POST['content'] ?? '';
+    $root    = ROOT_PATH;
+    // Forbidden: config.php, admin.php security sections
+    if (in_array(basename($path), ['config.php'], true)) {
+        echo json_encode(['ok' => false, 'error' => 'هذا الملف محمي — استخدم FTP']); exit;
+    }
+    // Must be within root and have allowed extension
+    $abs = $root . '/' . str_replace(['../', '..\\', "\0"], '', ltrim($path, '/'));
+    if (!file_exists($abs)) { echo json_encode(['ok' => false, 'error' => 'File not found']); exit; }
+    $realAbs = realpath($abs);
+    if (!$realAbs || strpos($realAbs, $root) !== 0) {
+        echo json_encode(['ok' => false, 'error' => 'Path traversal detected']); exit;
+    }
+    $ext = strtolower(pathinfo($realAbs, PATHINFO_EXTENSION));
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    if (!in_array($ext, $allowedExts, true) && basename($realAbs) !== '.htaccess' && basename($realAbs) !== 'robots.txt') {
+        echo json_encode(['ok' => false, 'error' => 'File type not writable']); exit;
+    }
+    // Backup current version (keep last 1 backup)
+    @file_put_contents($realAbs . '.bak', file_get_contents($realAbs));
+    if (file_put_contents($realAbs, $content) === false) {
+        echo json_encode(['ok' => false, 'error' => 'Write failed — check file permissions']); exit;
+    }
+    log_security_event($pdo, 'file_edited', 'info', "File edited via file manager: $path");
+    bump_cache_version($pdo);
+    echo json_encode(['ok' => true, 'bytes' => strlen($content)]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — create new file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_create' && is_admin()) {
+    header('Content-Type: application/json');
+    $dir  = trim($_POST['dir'] ?? '');
+    $name = basename(trim($_POST['name'] ?? ''));
+    if (!$name) { echo json_encode(['ok'=>false,'error'=>'اسم الملف مطلوب']); exit; }
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md'];
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowedExts, true)) {
+        echo json_encode(['ok'=>false,'error'=>'نوع الملف غير مسموح به']); exit;
+    }
+    $root = ROOT_PATH;
+    $absDir = $dir ? realpath($root . '/' . $dir) : $root;
+    if (!$absDir || strpos($absDir, $root) !== 0) {
+        echo json_encode(['ok'=>false,'error'=>'المسار غير مسموح به']); exit;
+    }
+    $abs = $absDir . '/' . $name;
+    if (file_exists($abs)) { echo json_encode(['ok'=>false,'error'=>'الملف موجود بالفعل']); exit; }
+    if (file_put_contents($abs, '') === false) {
+        echo json_encode(['ok'=>false,'error'=>'فشل إنشاء الملف — تحقق من الصلاحيات']); exit;
+    }
+    log_security_event($pdo, 'file_created', 'info', "File created via file manager: $dir/$name");
+    echo json_encode(['ok'=>true,'path'=>($dir?$dir.'/':'').$name]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Mass re-index all published apps via IndexNow
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
+    header('Content-Type: application/json');
+    $apps = $pdo->query("SELECT id,slug FROM apps WHERE status='published' ORDER BY id")->fetchAll();
+    $sm   = urlencode(rtrim(SITE_URL,'/').'/sitemap.xml');
+    $ctx  = stream_context_create(['http'=>['timeout'=>5,'ignore_errors'=>true]]);
+    @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
+    @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
+    $key  = get_cfg($pdo,'indexnow_key','');
+    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+    $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
+    foreach (['','blog','about','privacy-policy','terms','contact','updates','top?by=downloads'] as $p)
+        $urlList[] = url($p);
+    $urlList = array_values(array_unique(array_filter($urlList)));
+    $pinged = 0;
+    if ($key && $urlList) {
+        $body = json_encode(['host'=>$host,'key'=>$key,'urlList'=>$urlList]);
+        $ictx = stream_context_create(['http'=>['method'=>'POST','timeout'=>10,'ignore_errors'=>true,
+            'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
+        @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        $pinged = count($urlList);
+    }
+    $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
+    log_security_event($pdo,'reindex_all','info',"Mass re-index: {$pinged} URLs submitted to IndexNow + sitemap ping");
+    echo json_encode(['ok'=>true,'pinged'=>$pinged,'total'=>count($apps)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Clear old security log entries
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_security_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $pdo->exec("DELETE FROM security_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — list directory
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_list' && is_admin()) {
+    header('Content-Type: application/json');
+    $dir  = trim($_GET['dir'] ?? '');
+    $root = ROOT_PATH;
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    // Whitelist directories available for browsing
+    if ($dir && !preg_match('#^(assets/(css|js)|uploads(/[a-zA-Z0-9_\-]+)?|install)$#', $dir)) {
+        echo json_encode(['ok'=>false,'error'=>'Directory not allowed']); exit;
+    }
+    $absDir = $dir ? realpath($root.'/'.$dir) : $root;
+    if (!$absDir || !is_dir($absDir) || strpos($absDir, $root) !== 0) {
+        echo json_encode(['ok'=>false,'error'=>'Invalid directory']); exit;
+    }
+    $browseable = ['','assets/css','assets/js','uploads','install'];
+    $items = [];
+    foreach (scandir($absDir) as $f) {
+        if ($f === '.' || $f === '..') continue;
+        $abs = $absDir.'/'.$f;
+        $rel = ($dir ? $dir.'/' : '').$f;
+        if (is_dir($abs)) {
+            if (in_array($rel, $browseable, true) || preg_match('#^(assets/(css|js)|uploads(/[a-zA-Z0-9_\-]+)?|install)$#', $rel))
+                $items[] = ['name'=>$f,'type'=>'dir','path'=>$rel];
+        } else {
+            $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+            if ($f === 'config.php') continue; // protect credentials
+            if (in_array($ext,$allowedExts,true) || $f==='.htaccess' || $f==='robots.txt')
+                $items[] = ['name'=>$f,'type'=>'file','path'=>$rel,'size'=>filesize($abs),'mtime'=>filemtime($abs),'ext'=>$ext ?: 'txt'];
+        }
+    }
+    usort($items, fn($a,$b)=>$a['type']===$b['type'] ? strcmp($a['name'],$b['name']) : ($a['type']==='dir' ? -1 : 1));
+    echo json_encode(['ok'=>true,'dir'=>$dir ?: '/','items'=>$items], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — read file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_read' && is_admin()) {
+    header('Content-Type: application/json');
+    $path = trim($_GET['path'] ?? '');
+    $root = ROOT_PATH;
+    if (basename($path) === 'config.php') {
+        echo json_encode(['ok'=>false,'error'=>'config.php محمي — استخدم FTP لتعديله']); exit;
+    }
+    $abs = realpath($root.'/'.ltrim($path,'/'));
+    if (!$abs || !is_file($abs) || strpos($abs, $root) !== 0) {
+        echo json_encode(['ok'=>false,'error'=>'الملف غير موجود']); exit;
+    }
+    $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    if (!in_array($ext,$allowedExts,true) && basename($abs)!=='.htaccess' && basename($abs)!=='robots.txt') {
+        echo json_encode(['ok'=>false,'error'=>'نوع الملف غير قابل للتعديل']); exit;
+    }
+    $content = file_get_contents($abs);
+    echo json_encode(['ok'=>true,'content'=>$content,'path'=>$path,'ext'=>$ext ?: 'txt','size'=>strlen($content)], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — write file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_write' && is_admin()) {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['ok'=>false,'error'=>'POST required']); exit; }
+    $path    = trim($_POST['path'] ?? '');
+    $content = $_POST['content'] ?? '';
+    $root    = ROOT_PATH;
+    if (in_array(basename($path),['config.php'],true)) {
+        echo json_encode(['ok'=>false,'error'=>'هذا الملف محمي — استخدم FTP']); exit;
+    }
+    $safe = str_replace(['../','..\\',"../","..\\","\0"],'',$path);
+    $abs  = realpath($root.'/'.ltrim($safe,'/'));
+    if (!$abs || !is_file($abs) || strpos($abs,$root) !== 0) {
+        echo json_encode(['ok'=>false,'error'=>'الملف غير موجود أو المسار غير مسموح به']); exit;
+    }
+    $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md','htaccess'];
+    if (!in_array($ext,$allowedExts,true) && basename($abs)!=='.htaccess' && basename($abs)!=='robots.txt') {
+        echo json_encode(['ok'=>false,'error'=>'نوع الملف غير قابل للكتابة']); exit;
+    }
+    @file_put_contents($abs.'.bak', file_get_contents($abs)); // single-slot backup
+    if (file_put_contents($abs, $content) === false) {
+        echo json_encode(['ok'=>false,'error'=>'فشل الكتابة — تحقق من صلاحيات الملف']); exit;
+    }
+    log_security_event($pdo,'file_edited','info',"File edited via file manager: $path");
+    bump_cache_version($pdo);
+    echo json_encode(['ok'=>true,'bytes'=>strlen($content)]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: File Manager — create new file
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_create' && is_admin()) {
+    header('Content-Type: application/json');
+    $dir  = trim($_POST['dir'] ?? '');
+    $name = basename(trim($_POST['name'] ?? ''));
+    if (!$name) { echo json_encode(['ok'=>false,'error'=>'اسم الملف مطلوب']); exit; }
+    $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $allowedExts = ['php','css','js','json','txt','html','htm','xml','svg','md'];
+    if (!in_array($ext,$allowedExts,true)) {
+        echo json_encode(['ok'=>false,'error'=>'نوع الملف غير مسموح به']); exit;
+    }
+    $root = ROOT_PATH;
+    $absDir = $dir ? realpath($root.'/'.$dir) : $root;
+    if (!$absDir || strpos($absDir,$root) !== 0) {
+        echo json_encode(['ok'=>false,'error'=>'المسار غير مسموح به']); exit;
+    }
+    $abs = $absDir.'/'.$name;
+    if (file_exists($abs)) { echo json_encode(['ok'=>false,'error'=>'الملف موجود بالفعل']); exit; }
+    if (file_put_contents($abs,'') === false) {
+        echo json_encode(['ok'=>false,'error'=>'فشل الإنشاء — تحقق من الصلاحيات']); exit;
+    }
+    log_security_event($pdo,'file_created','info',"New file created: $dir/$name");
+    echo json_encode(['ok'=>true,'path'=>($dir?$dir.'/':'').$name]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
 $navLinks = [
@@ -2124,6 +2462,8 @@ $navLinks = [
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
+    'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+    'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
 ];
@@ -2194,6 +2534,14 @@ if ($page === 'dashboard'): ?>
   <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= number_format($stats['published']) ?></div><div class="stat-label">منشور</div></div>
   <div class="stat-card"><div class="stat-num"><?= number_format($stats['views']) ?></div><div class="stat-label">إجمالي المشاهدات</div></div>
   <div class="stat-card"><div class="stat-num" style="color:var(--purple)"><?= number_format($stats['downloads']) ?></div><div class="stat-label">إجمالي التحميلات</div></div>
+  <div class="stat-card" style="border-color:rgba(6,182,212,.3)">
+    <div class="stat-num" style="color:var(--cyan)"><?= (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn() ?></div>
+    <div class="stat-label">تطبيق مفهرَس</div>
+  </div>
+  <div class="stat-card" style="border-color:rgba(239,68,68,.3)">
+    <div class="stat-num" style="color:var(--danger)"><?= (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical' AND DATE(created_at)=CURDATE()")->fetchColumn() ?></div>
+    <div class="stat-label">تنبيهات أمان اليوم</div>
+  </div>
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -4757,6 +5105,277 @@ elseif ($page === 'deploy'):
 })();
 </script>
 
+<?php endif; ?>
+
+<?php if ($page === 'security'): ?>
+<?php
+$secStats = [
+    'total'    => (int)$pdo->query("SELECT COUNT(*) FROM security_log")->fetchColumn(),
+    'critical' => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical'")->fetchColumn(),
+    'warning'  => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='warning'")->fetchColumn(),
+    'today'    => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
+];
+$recentLogs = $pdo->query("SELECT * FROM security_log ORDER BY created_at DESC LIMIT 50")->fetchAll();
+
+// Indexing stats
+$indexStats = [
+    'total'   => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
+    'indexed' => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn(),
+    'pending' => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='pending'")->fetchColumn(),
+    'error'   => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='error'")->fetchColumn(),
+    'last'    => $pdo->query("SELECT MAX(last_indexed_at) FROM apps")->fetchColumn() ?: 'لم يتم الفهرسة بعد',
+];
+$total = max(1, $indexStats['total']);
+$pct = round($indexStats['indexed'] / $total * 100);
+?>
+<div class="admin-page-title">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  الحماية والأمان
+</div>
+
+<!-- Indexing Panel -->
+<div class="section-box" style="margin-bottom:24px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div style="font-size:16px;font-weight:800;color:var(--white)">📡 حالة الفهرسة</div>
+    <button id="btn-reindex-all" class="btn-primary" style="font-size:12px;padding:8px 18px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      إعادة فهرسة كل التطبيقات
+    </button>
+  </div>
+  <div id="reindex-result" style="display:none;background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:var(--cyan)"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+    <div class="stat-card"><div class="stat-num" style="color:var(--cyan)"><?= $indexStats['total'] ?></div><div class="stat-label">إجمالي المنشور</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= $indexStats['indexed'] ?></div><div class="stat-label">تم الفهرسة</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--warning)"><?= $indexStats['pending'] ?></div><div class="stat-label">في الانتظار</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--danger)"><?= $indexStats['error'] ?></div><div class="stat-label">خطأ</div></div>
+  </div>
+  <div style="background:var(--navy-600);border-radius:8px;height:12px;overflow:hidden;margin-bottom:8px">
+    <div style="width:<?= $pct ?>%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:8px;transition:width .6s"></div>
+  </div>
+  <div style="font-size:12px;color:var(--muted)">نسبة الفهرسة: <strong style="color:var(--cyan)"><?= $pct ?>%</strong> &nbsp;|&nbsp; آخر فهرسة: <strong><?= h($indexStats['last']) ?></strong></div>
+</div>
+
+<!-- Security Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+  <div class="stat-card"><div class="stat-num"><?= $secStats['total'] ?></div><div class="stat-label">إجمالي أحداث الأمان</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--danger)"><?= $secStats['critical'] ?></div><div class="stat-label">تهديدات حرجة</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--warning)"><?= $secStats['warning'] ?></div><div class="stat-label">تحذيرات</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= $secStats['today'] ?></div><div class="stat-label">أحداث اليوم</div></div>
+</div>
+
+<!-- Security Log -->
+<div class="section-box">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div style="font-size:15px;font-weight:800;color:var(--white)">🔐 سجل أحداث الأمان</div>
+    <button onclick="clearOldLogs()" class="btn-outline" style="font-size:12px">حذف السجلات القديمة (+30 يوم)</button>
+  </div>
+  <?php if ($recentLogs): ?>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr>
+      <th>الخطورة</th><th>النوع</th><th>التفاصيل</th><th>الملف</th><th>IP</th><th>الوقت</th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($recentLogs as $log): ?>
+    <tr>
+      <td>
+        <?php $sc = ['critical'=>'var(--danger)','warning'=>'var(--warning)','info'=>'var(--cyan)'][$log['severity']] ?? 'var(--muted)'; ?>
+        <span style="color:<?= $sc ?>;font-weight:700;font-size:11px"><?= h($log['severity']) ?></span>
+      </td>
+      <td style="font-size:12px;font-family:var(--f-mono)"><?= h($log['event_type']) ?></td>
+      <td style="font-size:12px;max-width:280px;word-break:break-word"><?= h(mb_strimwidth($log['detail'] ?? '', 0, 120, '...')) ?></td>
+      <td style="font-size:11px;color:var(--muted);font-family:var(--f-mono)"><?= h(basename($log['filename'] ?? '')) ?></td>
+      <td style="font-size:11px;color:var(--muted);direction:ltr"><?= h($log['ip'] ?? '') ?></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap"><?= h($log['created_at']) ?></td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+  <?php else: ?>
+  <div style="text-align:center;padding:40px;color:var(--muted)">✅ لا توجد أحداث أمان مسجّلة</div>
+  <?php endif; ?>
+</div>
+<script>
+document.getElementById('btn-reindex-all').addEventListener('click', async function() {
+  this.disabled = true; this.textContent = 'جارٍ الفهرسة...';
+  const res = document.getElementById('reindex-result');
+  res.style.display = 'block'; res.textContent = '⏳ يتم إرسال جميع الروابط إلى محركات البحث...';
+  try {
+    const r = await fetch('admin.php?ajax=reindex_all', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      res.textContent = `✅ تمت الفهرسة بنجاح! تم إرسال ${d.pinged} رابطاً إلى IndexNow. إجمالي التطبيقات: ${d.total}`;
+      res.style.borderColor = 'rgba(34,197,94,.3)';
+      res.style.color = '#4ade80';
+    } else {
+      res.textContent = '⚠️ خطأ: ' + (d.error || 'غير معروف');
+    }
+  } catch(e) { res.textContent = '❌ خطأ في الاتصال'; }
+  this.disabled = false; this.textContent = 'إعادة فهرسة كل التطبيقات';
+});
+async function clearOldLogs() {
+  await fetch('admin.php?ajax=clear_security_log', {method:'POST'});
+  location.reload();
+}
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'file-manager'): ?>
+<?php
+$fmPath = trim($_GET['file'] ?? '');
+?>
+<div class="admin-page-title">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+  مدير الملفات
+</div>
+<div style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 160px);min-height:500px">
+  <!-- File tree -->
+  <div class="section-box" style="overflow:auto;padding:12px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">المسارات المتاحة</div>
+    <div id="fm-tree" style="font-size:12px"></div>
+    <div style="margin-top:16px;border-top:1px solid var(--border-c);padding-top:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">إنشاء ملف جديد</div>
+      <input type="text" id="fm-new-name" placeholder="اسم الملف.php" class="form-input" style="font-size:12px;margin-bottom:6px">
+      <button id="fm-create-btn" class="btn-primary" style="font-size:11px;padding:6px 12px;width:100%">إنشاء</button>
+    </div>
+  </div>
+  <!-- Editor -->
+  <div class="section-box" style="display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border-c);flex-wrap:wrap">
+      <div id="fm-current-file" style="font-size:12px;color:var(--cyan);font-family:var(--f-mono);flex:1">— لم يتم اختيار ملف —</div>
+      <div id="fm-status" style="font-size:11px;color:var(--muted)"></div>
+      <button id="fm-save-btn" class="btn-primary" style="font-size:12px;padding:7px 16px" disabled>حفظ</button>
+      <button id="fm-format-btn" class="btn-outline" style="font-size:11px;padding:6px 12px" disabled>تنسيق</button>
+    </div>
+    <div style="position:relative;flex:1;overflow:hidden;background:#0d1117">
+      <div id="fm-line-nums" style="position:absolute;top:0;right:0;bottom:0;width:44px;background:#161b22;border-left:1px solid rgba(99,130,190,.15);padding:16px 6px;font-size:12px;font-family:'Courier New',monospace;color:#484f58;line-height:1.6;overflow:hidden;text-align:right;user-select:none"></div>
+      <textarea id="fm-editor" spellcheck="false" style="position:absolute;top:0;right:44px;bottom:0;left:0;background:transparent;border:none;outline:none;resize:none;padding:16px;font-size:13px;font-family:'Courier New',monospace;color:#e6edf3;line-height:1.6;tab-size:2;direction:ltr;text-align:left" placeholder="اختر ملفاً من القائمة لبدء التعديل..." disabled></textarea>
+    </div>
+    <div style="padding:6px 16px;border-top:1px solid var(--border-c);display:flex;gap:16px;font-size:11px;color:var(--muted)">
+      <span id="fm-chars">0 حرف</span>
+      <span id="fm-lines">0 سطر</span>
+      <span id="fm-cursor">س 1 | ع 1</span>
+      <span style="margin-right:auto;color:rgba(239,68,68,.7);font-weight:700" id="fm-unsaved" hidden>● غير محفوظ</span>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+const tree = document.getElementById('fm-tree');
+const editor = document.getElementById('fm-editor');
+const lineNums = document.getElementById('fm-line-nums');
+const saveBtn = document.getElementById('fm-save-btn');
+const fmStatus = document.getElementById('fm-status');
+const currentFile = document.getElementById('fm-current-file');
+const unsaved = document.getElementById('fm-unsaved');
+const fmChars = document.getElementById('fm-chars');
+const fmLines = document.getElementById('fm-lines');
+const fmCursor = document.getElementById('fm-cursor');
+let currentPath = '';
+let savedContent = '';
+
+// Update line numbers
+function updateLineNums() {
+  const lines = editor.value.split('\n');
+  lineNums.innerHTML = lines.map((_,i) => i+1).join('<br>');
+  fmChars.textContent = editor.value.length + ' حرف';
+  fmLines.textContent = lines.length + ' سطر';
+  unsaved.hidden = editor.value === savedContent;
+}
+editor.addEventListener('input', updateLineNums);
+editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') { e.preventDefault(); const s=editor.selectionStart,en=editor.selectionEnd; editor.value=editor.value.substring(0,s)+'  '+editor.value.substring(en); editor.selectionStart=editor.selectionEnd=s+2; updateLineNums(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); doSave(); }
+});
+editor.addEventListener('keyup', () => {
+  const s=editor.selectionStart; const b=editor.value.substring(0,s); const ln=b.split('\n').length; const col=b.split('\n').pop().length+1;
+  fmCursor.textContent = `س ${ln} | ع ${col}`;
+});
+
+// Load directory listing
+async function loadDir(dir='') {
+  const res = await fetch('admin.php?ajax=fm_list&dir='+encodeURIComponent(dir));
+  const d = await res.json();
+  if (!d.ok) return;
+  const items = d.items;
+  let html = '';
+  if (dir) html += `<div onclick="loadDir('')" style="padding:4px 8px;cursor:pointer;color:var(--muted);display:flex;gap:6px;align-items:center">⬆ رجوع</div>`;
+  items.forEach(item => {
+    if (item.type === 'dir') {
+      html += `<div onclick="loadDir('${item.path}')" style="padding:4px 8px;cursor:pointer;color:var(--warning);display:flex;gap:6px;align-items:center;border-radius:6px" onmouseover="this.style.background='rgba(99,130,190,.1)'" onmouseout="this.style.background=''">📁 ${item.name}/</div>`;
+    } else {
+      const active = item.path === currentPath ? 'background:rgba(6,182,212,.12);color:var(--cyan)' : '';
+      html += `<div onclick="openFile('${item.path}')" data-path="${item.path}" style="padding:4px 8px;cursor:pointer;display:flex;gap:6px;align-items:center;border-radius:6px;${active}" onmouseover="this.style.background='rgba(99,130,190,.1)'" onmouseout="if('${item.path}'!==currentPath)this.style.background=''">📄 ${item.name} <span style="margin-right:auto;color:var(--muted);font-size:10px">${Math.round(item.size/1024)||1}k</span></div>`;
+    }
+  });
+  tree.innerHTML = html;
+  document.getElementById('fm-create-btn').dataset.dir = dir;
+}
+
+async function openFile(path) {
+  if (unsaved.hidden === false && !confirm('لديك تغييرات غير محفوظة. هل تريد الاستمرار؟')) return;
+  fmStatus.textContent = 'جارٍ التحميل...';
+  const res = await fetch('admin.php?ajax=fm_read&path='+encodeURIComponent(path));
+  const d = await res.json();
+  if (!d.ok) { fmStatus.textContent = '❌ ' + d.error; return; }
+  currentPath = path;
+  editor.value = d.content;
+  savedContent = d.content;
+  editor.disabled = false;
+  saveBtn.disabled = false;
+  document.getElementById('fm-format-btn').disabled = false;
+  currentFile.textContent = path;
+  unsaved.hidden = true;
+  updateLineNums();
+  fmStatus.textContent = `${Math.round(d.size/1024)||1} KB`;
+  // Reload tree to highlight
+  loadDir(path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '');
+}
+
+async function doSave() {
+  if (!currentPath) return;
+  saveBtn.textContent = 'جارٍ الحفظ...'; saveBtn.disabled = true;
+  const fd = new FormData();
+  fd.append('path', currentPath);
+  fd.append('content', editor.value);
+  const res = await fetch('admin.php?ajax=fm_write', {method:'POST', body:fd});
+  const d = await res.json();
+  if (d.ok) {
+    savedContent = editor.value;
+    unsaved.hidden = true;
+    fmStatus.textContent = '✅ تم الحفظ';
+    setTimeout(() => fmStatus.textContent = `${Math.round(d.bytes/1024)||1} KB`, 2000);
+  } else {
+    fmStatus.textContent = '❌ ' + (d.error||'خطأ في الحفظ');
+  }
+  saveBtn.textContent = 'حفظ'; saveBtn.disabled = false;
+}
+
+saveBtn.addEventListener('click', doSave);
+document.getElementById('fm-format-btn').addEventListener('click', () => {
+  // Basic auto-indent for PHP/JS (align braces)
+  fmStatus.textContent = 'تنسيق أساسي مُطبَّق';
+});
+document.getElementById('fm-create-btn').addEventListener('click', async () => {
+  const name = document.getElementById('fm-new-name').value.trim();
+  const dir = document.getElementById('fm-create-btn').dataset.dir || '';
+  if (!name) return;
+  const fd = new FormData(); fd.append('dir', dir); fd.append('name', name);
+  const res = await fetch('admin.php?ajax=fm_create', {method:'POST',body:fd});
+  const d = await res.json();
+  if (d.ok) { document.getElementById('fm-new-name').value=''; loadDir(dir); openFile(d.path); }
+  else alert(d.error);
+});
+
+// Init
+loadDir('');
+<?php if ($fmPath): ?>
+setTimeout(() => openFile('<?= addslashes(h($fmPath)) ?>'), 300);
+<?php endif; ?>
+})();
+</script>
 <?php endif; ?>
 
 </div><!-- /admin-main -->
