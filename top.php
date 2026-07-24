@@ -18,8 +18,8 @@ $stmt->execute();
 $apps = $stmt->fetchAll();
 
 $title    = $by === 'views' ? 'الأكثر زيارة' : 'الأكثر تحميلاً';
-$seoTitle = "أكثر التطبيقات والألعاب {$title} لأندرويد | Apkzilo";
-$metaDesc = "قائمة محدّثة بأكثر التطبيقات والألعاب {$title} على Apkzilo — حمّلها مجاناً الآن.";
+$seoTitle = "أكثر التطبيقات والألعاب {$title} لأندرويد | yassota";
+$metaDesc = "قائمة محدّثة بأكثر التطبيقات والألعاب {$title} على yassota — حمّلها مجاناً الآن.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
@@ -54,8 +54,7 @@ $breadcrumbSchema = json_encode([
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 

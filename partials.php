@@ -65,7 +65,7 @@ function partial_wave(): string {
 function render_site_header(string $search = '', string $activeNav = 'home'): void { ?>
 <header class="site-header">
   <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:2px">
-    <span>APK<span style="color:var(--purple)">zilo</span></span>
+    <span>yas<span style="color:var(--purple)">sota</span></span>
     <span style="font-size:9px;font-weight:500;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;font-family:var(--f-body)">دليل تطبيقات أندرويد</span>
   </a>
 
@@ -138,7 +138,7 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     <a href="<?= h(blog_type_url('code-page')) ?>" class="sidebar-link"><?= partial_icon('info') ?> صفحة المحتوى</a>
   </div>
   <div class="sidebar-section">
-    <div class="sidebar-title">Apkzilo</div>
+    <div class="sidebar-title">yassota</div>
     <a href="<?= h(url('about')) ?>" class="sidebar-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
       من نحن
@@ -207,12 +207,12 @@ function render_site_footer(): void { ?>
 
       <!-- Brand -->
       <div>
-        <div class="footer-logo" style="margin-bottom:10px">APK<span style="color:var(--purple)">zilo</span></div>
+        <div class="footer-logo" style="margin-bottom:10px">yas<span style="color:var(--purple)">sota</span></div>
         <p style="color:var(--muted);font-size:13px;line-height:1.75;max-width:300px;margin:0 0 12px">
           دليلك التحريري العربي المستقل لاكتشاف ومراجعة تطبيقات أندرويد — مراجعات دقيقة، معلومات موثوقة، ومحتوى محدّث باستمرار.
         </p>
         <p style="color:var(--muted);font-size:11px;line-height:1.65;padding-top:12px;border-top:1px solid var(--border-c);margin:0">
-          Apkzilo موقع تحريري مستقل لمراجعة التطبيقات ولا ينتمي لأي متجر أو شركة تطبيقات.
+          yassota موقع تحريري مستقل لمراجعة التطبيقات ولا ينتمي لأي متجر أو شركة تطبيقات.
           بعض روابط التحميل توجّه إلى Google Play أو مصادر رسمية أخرى.
           يحتوي الموقع على إعلانات من Google AdSense.
         </p>
@@ -236,7 +236,7 @@ function render_site_footer(): void { ?>
 
       <!-- Col 2 -->
       <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">Apkzilo</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">yassota</div>
         <?php foreach ([
             url('about')          => 'من نحن',
             url('faq')            => 'الأسئلة الشائعة',
@@ -255,7 +255,7 @@ function render_site_footer(): void { ?>
     <!-- Copyright bar -->
     <div style="border-top:1px solid var(--border-c);padding-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <p style="font-size:11px;color:var(--muted);margin:0">
-        &copy; 2024–<?= date('Y') ?> Apkzilo — جميع الحقوق محفوظة | دليل تحريري مستقل لتطبيقات أندرويد
+        &copy; 2024–<?= date('Y') ?> yassota — جميع الحقوق محفوظة | دليل تحريري مستقل لتطبيقات أندرويد
       </p>
       <p style="font-size:11px;color:var(--muted);margin:0">
         تحت إشراف تحريري — المحتوى يُحدَّث يومياً
@@ -278,7 +278,7 @@ function render_cookie_banner(string $policyUrl = ''): void {
   </div>
   <div class="cc-text">
     <strong>الخصوصية وشروط الاستخدام</strong>
-    <p>باستخدام Apkzilo فإنك توافق على <a href="<?= h(url('cookie-policy')) ?>">سياسة ملفات تعريف الارتباط</a>،
+    <p>باستخدام yassota فإنك توافق على <a href="<?= h(url('cookie-policy')) ?>">سياسة ملفات تعريف الارتباط</a>،
       <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>،
       و<a href="<?= h(url('terms')) ?>">شروط الاستخدام</a>.
       نستخدم Cookies لتحسين التجربة وعرض إعلانات مناسبة.

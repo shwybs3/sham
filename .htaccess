@@ -19,15 +19,16 @@ ErrorDocument 404 /404.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Force HTTPS — required for AdSense and for the cookie-consent /
-  # localStorage behavior to be trustworthy. IMPORTANT: only keep this
-  # enabled once your hosting actually has a valid SSL certificate active
-  # (most cPanel hosts auto-provision one via AutoSSL/Let's Encrypt) — if
-  # SSL isn't active yet, this causes a redirect loop. Comment out the two
-  # lines below if that happens, until SSL is confirmed working.
+  # Force HTTPS — required for AdSense. Handles both direct SSL and
+  # reverse-proxy setups (X-Forwarded-Proto). If you see a redirect loop,
+  # your host has not yet activated an SSL certificate — comment these
+  # two lines out until AutoSSL/Let's Encrypt is confirmed active.
   RewriteCond %{HTTPS} off
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # ads.txt must always be reachable by Google (never block it)
+  RewriteRule ^ads\.txt$ - [L]
 
   RewriteRule ^robots\.txt$ robots.php [L]
   RewriteRule ^sitemap\.xml$ sitemap.php [L]

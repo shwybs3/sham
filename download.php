@@ -87,7 +87,7 @@ if (!empty($app['category_id'])) {
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>تحميل <?= h($app['name']) ?><?= $displayVersion ? ' v'.h($displayVersion) : '' ?> للأندرويد — Apkzilo</title>
+  <title>تحميل <?= h($app['name']) ?><?= $displayVersion ? ' v'.h($displayVersion) : '' ?> للأندرويد — yassota</title>
   <meta name="robots" content="noindex,follow">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
@@ -156,7 +156,7 @@ if (!empty($app['category_id'])) {
       <?php if ($app['link_verified']): ?>
       <div class="dlp-verified">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        رابط تم التحقق منه بواسطة فريق Apkzilo
+        رابط تم التحقق منه بواسطة فريق yassota
       </div>
       <?php endif; ?>
     </div>
@@ -213,7 +213,7 @@ if (!empty($app['category_id'])) {
     <div class="dlp-no-link">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
       <strong>رابط التحميل غير متوفر حالياً</strong>
-      <p>سيقوم فريق Apkzilo بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.</p>
+      <p>سيقوم فريق yassota بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.</p>
     </div>
 
     <?php endif; ?>
@@ -335,7 +335,7 @@ if (!empty($app['category_id'])) {
         <code class="dlp-hash-code" onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.dataset.copied='1';setTimeout(()=>delete this.dataset.copied,1500)})"><?= h($app['apk_hash_md5']) ?></code>
       </div>
       <?php endif; ?>
-      <p style="margin:10px 0 0;color:var(--muted);font-size:11px">ملف APK مُستضاف مباشرةً على خوادم Apkzilo — تم التحقق من سلامته.</p>
+      <p style="margin:10px 0 0;color:var(--muted);font-size:11px">ملف APK مُستضاف مباشرةً على خوادم yassota — تم التحقق من سلامته.</p>
     </div>
   </details>
   <?php endif; ?>
@@ -362,7 +362,7 @@ if (!empty($app['category_id'])) {
   <?php if ($tgUrl): ?>
   <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="dlp-tg-btn">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-    اشترك في قناة Apkzilo على تيليجرام
+    اشترك في قناة yassota على تيليجرام
   </a>
   <?php endif; ?>
 

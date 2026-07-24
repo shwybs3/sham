@@ -24,8 +24,8 @@ $stmt->execute($params);
 $posts = $stmt->fetchAll();
 
 $title    = $type !== '' ? blog_type_label($type) : 'المدونة';
-$seoTitle = "{$title} — Apkzilo";
-$metaDesc = $type !== '' ? "مقالات وشروحات في قسم {$title} على Apkzilo." : "مقالات وشروحات وأخبار ومقارنات تطبيقات وألعاب أندرويد على Apkzilo.";
+$seoTitle = "{$title} — yassota";
+$metaDesc = $type !== '' ? "مقالات وشروحات في قسم {$title} على yassota." : "مقالات وشروحات وأخبار ومقارنات تطبيقات وألعاب أندرويد على yassota.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
@@ -58,8 +58,7 @@ $breadcrumbSchema = json_encode([
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 

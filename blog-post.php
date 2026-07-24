@@ -59,8 +59,8 @@ $articleSchema = json_encode(array_filter([
     "image" => $post['cover_image'] ? url($post['cover_image']) : null,
     "datePublished" => date('c', strtotime($post['created_at'])),
     "dateModified" => date('c', strtotime($post['updated_at'])),
-    "author" => ["@type" => "Organization", "name" => "Apkzilo"],
-    "publisher" => ["@type" => "Organization", "name" => "Apkzilo"],
+    "author" => ["@type" => "Organization", "name" => "yassota"],
+    "publisher" => ["@type" => "Organization", "name" => "yassota"],
     "mainEntityOfPage" => blog_post_url($post['slug']),
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
@@ -90,8 +90,7 @@ $articleSchema = json_encode(array_filter([
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 

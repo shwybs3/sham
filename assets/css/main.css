@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════
-   APKZILO — main.css  |  Slate-Grey / Teal theme
+   YASSOTA — main.css  |  Slate-Grey / Teal theme
    ════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@300;400;500&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -1084,7 +1084,7 @@ details.faq-item[open] .faq-chevron { transform: rotate(180deg); }
 }
 
 /* ═══════════════════════════════════════════════════
-   APKZILO — Brand Overrides
+   YASSOTA — Brand Overrides
    Dark navy header + orange download CTA + slate hero
    Completely distinct from any previous theme
    ═══════════════════════════════════════════════════ */

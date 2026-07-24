@@ -5,10 +5,10 @@ require_once __DIR__ . '/partials.php';
 $totalApps  = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
 $totalCats  = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
 $totalBlog  = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn();
-$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'apkzilo.com');
+$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com');
 
-$seoTitle = 'من نحن — Apkzilo دليل تحريري مستقل لتطبيقات أندرويد';
-$metaDesc = 'تعرّف على Apkzilo: دليل تحريري عربي مستقل لمراجعة تطبيقات وألعاب أندرويد. رسالتنا، معايير المراجعة، وكيف نختار التطبيقات ونحدّث محتوانا يومياً.';
+$seoTitle = 'من نحن — yassota دليل تحريري مستقل لتطبيقات أندرويد';
+$metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستقل لمراجعة تطبيقات وألعاب أندرويد. رسالتنا، معايير المراجعة، وكيف نختار التطبيقات ونحدّث محتوانا يومياً.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -32,8 +32,7 @@ $metaDesc = 'تعرّف على Apkzilo: دليل تحريري عربي مستق�
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 
@@ -51,7 +50,7 @@ $metaDesc = 'تعرّف على Apkzilo: دليل تحريري عربي مستق�
       دليلك التحريري العربي المستقل لعالم تطبيقات Android
     </h1>
     <p style="color:var(--muted);font-size:14px;line-height:1.85;margin:0">
-      Apkzilo منصة تحريرية مستقلة تأسّست عام 2024 بهدف واحد: تمكين المستخدم العربي من اتخاذ قرارات مدروسة وواثقة عند اختيار تطبيقات هاتفه. نؤمن أن لكل مستخدم الحق في الحصول على معلومات دقيقة وصادقة — لا إعلانات مقنّعة، لا توصيات مدفوعة، لا مبالغات تسويقية.
+      yassota منصة تحريرية مستقلة تأسّست عام 2024 بهدف واحد: تمكين المستخدم العربي من اتخاذ قرارات مدروسة وواثقة عند اختيار تطبيقات هاتفه. نؤمن أن لكل مستخدم الحق في الحصول على معلومات دقيقة وصادقة — لا إعلانات مقنّعة، لا توصيات مدفوعة، لا مبالغات تسويقية.
     </p>
   </div>
 
@@ -112,7 +111,7 @@ $metaDesc = 'تعرّف على Apkzilo: دليل تحريري عربي مستق�
 
     <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">الاستقلالية التحريرية</h2>
     <p>
-      Apkzilo ليس تابعاً لأي شركة تطبيقات أو متجر رقمي.
+      yassota ليس تابعاً لأي شركة تطبيقات أو متجر رقمي.
       نموذج العمل يعتمد على الإعلانات (Google AdSense) وهو ما يُتيح لنا تقديم المحتوى مجاناً للقرّاء.
       <strong style="color:var(--white)">الإعلانات لا تؤثر على تقييماتنا أو اختياراتنا التحريرية بأي شكل.</strong>
       أي تطبيق يُعرض في أقسام "اختيار المحرر" أو "المميّز" هو اختيار تحريري بحت.
@@ -120,7 +119,7 @@ $metaDesc = 'تعرّف على Apkzilo: دليل تحريري عربي مستق�
 
     <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">الفريق</h2>
     <p>
-      خلف Apkzilo فريق صغير من المهتمين بعالم تطبيقات أندرويد والتكنولوجيا العربية، يديرون الموقع بشغف حقيقي لخدمة المستخدم العربي.
+      خلف yassota فريق صغير من المهتمين بعالم تطبيقات أندرويد والتكنولوجيا العربية، يديرون الموقع بشغف حقيقي لخدمة المستخدم العربي.
       نرحّب دائماً باقتراحاتكم وتقاريركم عن أي تطبيق أو رابط تحميل يستحق الإضافة، أو أي خطأ يحتاج تصحيحاً.
     </p>
 

@@ -3,8 +3,8 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . parse_url(SITE_URL, PHP_URL_HOST);
-$seoTitle = 'سياسة ملفات تعريف الارتباط — Apkzilo';
-$metaDesc = 'كيف يستخدم موقع Apkzilo ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
+$seoTitle = 'سياسة ملفات تعريف الارتباط — yassota';
+$metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -24,8 +24,7 @@ $metaDesc = 'كيف يستخدم موقع Apkzilo ملفات تعريف الار
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">

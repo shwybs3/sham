@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$seoTitle = 'اتصل بنا — Apkzilo';
-$metaDesc = 'تواصل مع فريق Apkzilo لأي استفسار أو اقتراح أو بلاغ.';
+$seoTitle = 'اتصل بنا — yassota';
+$metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقتراح أو بلاغ.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -49,8 +49,7 @@ $metaDesc = 'تواصل مع فريق Apkzilo لأي استفسار أو اقت�
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
