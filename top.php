@@ -18,8 +18,8 @@ $stmt->execute();
 $apps = $stmt->fetchAll();
 
 $title    = $by === 'views' ? 'الأكثر زيارة' : 'الأكثر تحميلاً';
-$seoTitle = "أكثر التطبيقات والألعاب {$title} لأندرويد | Tenzil";
-$metaDesc = "قائمة محدّثة بأكثر التطبيقات والألعاب {$title} على Tenzil — حمّلها مجاناً الآن.";
+$seoTitle = "أكثر التطبيقات والألعاب {$title} لأندرويد | Apkzilo";
+$metaDesc = "قائمة محدّثة بأكثر التطبيقات والألعاب {$title} على Apkzilo — حمّلها مجاناً الآن.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",

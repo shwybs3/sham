@@ -18,7 +18,7 @@ try {
   <meta charset="UTF-8">
   <?php if (function_exists('head_extras')): ?><?= head_extras($pdo) ?><?php endif; ?>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>الصفحة غير موجودة — Tenzil</title>
+  <title>الصفحة غير موجودة — Apkzilo</title>
   <meta name="robots" content="noindex,nofollow">
   <?php if (function_exists('asset_url')): ?>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">

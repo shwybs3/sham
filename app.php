@@ -196,9 +196,9 @@ function wave(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?php
     if ($app['seo_title']) echo h($app['seo_title']);
-    else printf('%s للأندرويد%s مجاناً | Tenzil', h($app['name']), $app['version'] ? ' v'.h($app['version']) : '');
+    else printf('%s للأندرويد%s مجاناً | Apkzilo', h($app['name']), $app['version'] ? ' v'.h($app['version']) : '');
   ?></title>
-  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل {$app['name']} للأندرويد " . ($app['version'] ? "v{$app['version']} " : '') . "مجاناً بأمان وسرعة — " . ($app['short_description'] ?: "أحدث إصدار متاح على tenzil.app")) ?>">
+  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل {$app['name']} للأندرويد " . ($app['version'] ? "v{$app['version']} " : '') . "مجاناً بأمان وسرعة — " . ($app['short_description'] ?: "أحدث إصدار متاح على apkzilo.com")) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
@@ -260,7 +260,7 @@ function wave(): string {
   <div style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">
     <span class="editorial-badge">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-      تمت مراجعته من قِبَل فريق Tenzil
+      تمت مراجعته من قِبَل فريق Apkzilo
     </span>
     <?php if ($app['updated_at']): ?>
     <span style="font-size:11px;color:var(--muted)">آخر تحديث: <?= date('d/m/Y', strtotime($app['updated_at'])) ?></span>
@@ -398,7 +398,7 @@ function wave(): string {
           <?php endif; ?>
         </table>
         <p style="margin:8px 0 0;color:var(--muted);font-size:11px">
-          ✅ ملف APK مستضاف مباشرةً على خوادم Tenzil — بإمكانك التحقق من البصمة الرقمية بأي أداة تحقق SHA-256 للتأكد من عدم التلاعب.
+          ✅ ملف APK مستضاف مباشرةً على خوادم Apkzilo — بإمكانك التحقق من البصمة الرقمية بأي أداة تحقق SHA-256 للتأكد من عدم التلاعب.
         </p>
       </div>
     </details>
@@ -596,7 +596,7 @@ function wave(): string {
     <?php if ($tgUrl): ?>
     <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-      اشترك في قناة Tenzil على تيليجرام
+      اشترك في قناة Apkzilo على تيليجرام
     </a>
     <?php endif; ?>
   </div>

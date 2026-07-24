@@ -44,8 +44,8 @@ $articleSchema = json_encode([
     "headline" => $article['title'],
     "description" => $metaDesc,
     "datePublished" => date('c', strtotime($article['created_at'])),
-    "author" => ["@type" => "Organization", "name" => "Tenzil"],
-    "publisher" => ["@type" => "Organization", "name" => "Tenzil"],
+    "author" => ["@type" => "Organization", "name" => "Apkzilo"],
+    "publisher" => ["@type" => "Organization", "name" => "Apkzilo"],
     "mainEntityOfPage" => article_url($article['slug']),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>

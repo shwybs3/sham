@@ -10,7 +10,7 @@ define('DB_USER', 'your_db_user');
 define('DB_PASS', 'your_db_password');
 
 define('SITE_URL',    'https://example.com');   // بدون / في النهاية
-define('SITE_NAME',   'Tenzil');
+define('SITE_NAME',   'Apkzilo');
 define('APP_SECRET',  'change-me-to-random-string-xyz789');
 
 define('MAX_ICON_MB',  5);
@@ -559,7 +559,7 @@ function openrouter_call(string $key, string $model, string $prompt, int $timeou
         CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
         CURLOPT_HTTPHEADER => [
             'Authorization: Bearer ' . $key, 'Content-Type: application/json',
-            'HTTP-Referer: ' . SITE_URL, 'X-Title: Tenzil',
+            'HTTP-Referer: ' . SITE_URL, 'X-Title: Apkzilo',
         ],
         CURLOPT_POSTFIELDS => json_encode($body),
     ]);
@@ -664,7 +664,7 @@ function ai_generate_image_raw(string $key, string $model, string $prompt, int $
         CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
         CURLOPT_HTTPHEADER => [
             'Authorization: Bearer ' . $key, 'Content-Type: application/json',
-            'HTTP-Referer: ' . SITE_URL, 'X-Title: Tenzil',
+            'HTTP-Referer: ' . SITE_URL, 'X-Title: Apkzilo',
         ],
         CURLOPT_POSTFIELDS => json_encode([
             'model' => $model,
@@ -993,7 +993,7 @@ function telegram_notify_new_app(PDO $pdo, array $app): void {
     // Build caption instantly from stored data — never call the AI API here
     // because this function runs synchronously during the save request and an
     // AI call would block the admin browser for 15-30 seconds.
-    $lines = ["🆕 <b>{$name}</b> متاح الآن على Tenzil!"];
+    $lines = ["🆕 <b>{$name}</b> متاح الآن على Apkzilo!"];
     if ($shortDesc) $lines[] = "\n{$shortDesc}";
     if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
     $meta = array_filter([
@@ -1138,7 +1138,7 @@ function unique_slug(PDO $pdo, string $base, int $excludeId = 0): string {
     return $slug;
 }
 
-// Pretty-URL helpers: tenzil.app/{slug} and tenzil.app/{slug}/download
+// Pretty-URL helpers: apkzilo.com/{slug} and apkzilo.com/{slug}/download
 function app_url(string $slug): string { return url(rawurlencode($slug)); }
 function download_url(string $slug, int $mirror = 1): string {
     return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
@@ -1820,7 +1820,7 @@ function notify_admin(PDO $pdo, string $subject, string $body): void {
     if (get_cfg($pdo, 'admin_email_notifications', '0') !== '1') return;
     $to = trim(get_cfg($pdo, 'contact_email'));
     if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) return;
-    $headers = "From: Tenzil <no-reply@" . parse_url(SITE_URL, PHP_URL_HOST) . ">\r\n"
+    $headers = "From: Apkzilo <no-reply@" . parse_url(SITE_URL, PHP_URL_HOST) . ">\r\n"
         . "Content-Type: text/plain; charset=UTF-8";
     @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
 }
@@ -1832,14 +1832,14 @@ function head_extras(PDO $pdo): string {
         . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
-        . '<link rel="alternate" type="application/rss+xml" title="Tenzil — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
+        . '<link rel="alternate" type="application/rss+xml" title="Apkzilo — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
         . '<meta name="theme-color" content="#2563eb">' . "\n  "
         . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
         . '<meta name="language" content="ar">' . "\n  "
         . '<meta property="og:locale" content="ar_AR">' . "\n  "
-        . '<meta property="og:site_name" content="Tenzil">' . "\n  "
-        . '<meta name="twitter:site" content="@tenzilapp">' . "\n  "
-        . '<meta name="author" content="Tenzil">' . "\n  "
+        . '<meta property="og:site_name" content="Apkzilo">' . "\n  "
+        . '<meta name="twitter:site" content="@apkzilo">' . "\n  "
+        . '<meta name="author" content="Apkzilo">' . "\n  "
         . '<link rel="alternate" hreflang="ar" href="' . h(SITE_URL) . '">' . "\n  "
         . search_console_meta($pdo);
 }

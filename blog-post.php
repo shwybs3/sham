@@ -59,8 +59,8 @@ $articleSchema = json_encode(array_filter([
     "image" => $post['cover_image'] ? url($post['cover_image']) : null,
     "datePublished" => date('c', strtotime($post['created_at'])),
     "dateModified" => date('c', strtotime($post['updated_at'])),
-    "author" => ["@type" => "Organization", "name" => "Tenzil"],
-    "publisher" => ["@type" => "Organization", "name" => "Tenzil"],
+    "author" => ["@type" => "Organization", "name" => "Apkzilo"],
+    "publisher" => ["@type" => "Organization", "name" => "Apkzilo"],
     "mainEntityOfPage" => blog_post_url($post['slug']),
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>

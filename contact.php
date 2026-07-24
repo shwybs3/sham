@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$seoTitle = 'اتصل بنا — Tenzil';
-$metaDesc = 'تواصل مع فريق Tenzil لأي استفسار أو اقتراح أو بلاغ.';
+$seoTitle = 'اتصل بنا — Apkzilo';
+$metaDesc = 'تواصل مع فريق Apkzilo لأي استفسار أو اقتراح أو بلاغ.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">

@@ -3,8 +3,8 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . parse_url(SITE_URL, PHP_URL_HOST);
-$seoTitle = 'سياسة ملفات تعريف الارتباط — Tenzil';
-$metaDesc = 'كيف يستخدم موقع Tenzil ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
+$seoTitle = 'سياسة ملفات تعريف الارتباط — Apkzilo';
+$metaDesc = 'كيف يستخدم موقع Apkzilo ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">

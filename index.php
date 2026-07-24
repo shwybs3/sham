@@ -45,12 +45,12 @@ if (!$search && !$catSlug) {
 }
 
 $activeNav = $catSlug === 'games' ? 'games' : ($catSlug === 'apps' ? 'apps' : 'home');
-$siteName  = 'Tenzil';
-$siteHost  = parse_url(SITE_URL, PHP_URL_HOST) ?: 'tenzil.app';
+$siteName  = 'Apkzilo';
+$siteHost  = parse_url(SITE_URL, PHP_URL_HOST) ?: 'apkzilo.com';
 
 $websiteSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "WebSite",
-    "name" => "Tenzil", "url" => url(''),
+    "name" => "Apkzilo", "url" => url(''),
     "description" => "دليل تحريري عربي مستقل لاكتشاف ومراجعة تطبيقات وألعاب أندرويد",
     "potentialAction" => [
         "@type" => "SearchAction",
@@ -62,20 +62,20 @@ $websiteSchema = json_encode([
 $faqSchemaHome = json_encode([
     "@context" => "https://schema.org", "@type" => "FAQPage",
     "mainEntity" => [
-        ["@type"=>"Question","name"=>"هل Tenzil موقع رسمي من Google Play؟",
-         "acceptedAnswer"=>["@type"=>"Answer","text"=>"لا، Tenzil دليل تحريري مستقل ولا ينتمي لأي متجر تطبيقات. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل."]],
-        ["@type"=>"Question","name"=>"هل روابط التحميل على Tenzil آمنة؟",
+        ["@type"=>"Question","name"=>"هل Apkzilo موقع رسمي من Google Play؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"لا، Apkzilo دليل تحريري مستقل ولا ينتمي لأي متجر تطبيقات. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل."]],
+        ["@type"=>"Question","name"=>"هل روابط التحميل على Apkzilo آمنة؟",
          "acceptedAnswer"=>["@type"=>"Answer","text"=>"نعم، نتحقق من كل رابط قبل نشره ونعتمد بشكل أساسي على Google Play. الملفات APK المباشرة تُفحص بأدوات اكتشاف الفيروسات ونعرض نتيجة الفحص."]],
-        ["@type"=>"Question","name"=>"كيف أضيف تقييمي لتطبيق على Tenzil؟",
+        ["@type"=>"Question","name"=>"كيف أضيف تقييمي لتطبيق على Apkzilo؟",
          "acceptedAnswer"=>["@type"=>"Answer","text"=>"افتح صفحة التطبيق وانتقل لقسم التعليقات في أسفل الصفحة، اختر عدد النجوم واكتب رأيك ثم أرسل. تخضع التعليقات لمراجعة قبل نشرها."]],
-        ["@type"=>"Question","name"=>"هل Tenzil مجاني؟",
-         "acceptedAnswer"=>["@type"=>"Answer","text"=>"نعم، Tenzil مجاني تماماً للمستخدمين. يعتمد الموقع على الإعلانات لتغطية تكاليف التشغيل ولا توجد رسوم مخفية."]],
+        ["@type"=>"Question","name"=>"هل Apkzilo مجاني؟",
+         "acceptedAnswer"=>["@type"=>"Answer","text"=>"نعم، Apkzilo مجاني تماماً للمستخدمين. يعتمد الموقع على الإعلانات لتغطية تكاليف التشغيل ولا توجد رسوم مخفية."]],
     ],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 $orgSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "Organization",
-    "name" => "Tenzil", "url" => url(''),
+    "name" => "Apkzilo", "url" => url(''),
     "logo" => url('favicon.svg'),
     "description" => "دليل تحريري عربي مستقل لمراجعة تطبيقات أندرويد",
     "contactPoint" => ["@type" => "ContactPoint", "contactType" => "customer support", "url" => url('contact')],
@@ -88,17 +88,17 @@ $orgSchema = json_encode([
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($search ? "نتائج البحث: $search" : ($catSlug ? ucfirst($catSlug) . ' — Tenzil' : 'Tenzil — مراجعات وأدلة تطبيقات أندرويد')) ?></title>
-  <meta name="description" content="<?= h($search ? "نتائج البحث عن: $search على Tenzil" : ($catSlug ? "تصفح وراجع أفضل تطبيقات $catSlug على منصة Tenzil العربية" : 'Tenzil — دليلك التحريري العربي المستقل لمراجعة واكتشاف أفضل تطبيقات وألعاب أندرويد. مراجعات احترافية، معلومات موثوقة، ومحتوى محدّث يومياً.')) ?>">
+  <title><?= h($search ? "نتائج البحث: $search" : ($catSlug ? ucfirst($catSlug) . ' — Apkzilo' : 'Apkzilo — مراجعات وأدلة تطبيقات أندرويد')) ?></title>
+  <meta name="description" content="<?= h($search ? "نتائج البحث عن: $search على Apkzilo" : ($catSlug ? "تصفح وراجع أفضل تطبيقات $catSlug على منصة Apkzilo العربية" : 'Apkzilo — دليلك التحريري العربي المستقل لمراجعة واكتشاف أفضل تطبيقات وألعاب أندرويد. مراجعات احترافية، معلومات موثوقة، ومحتوى محدّث يومياً.')) ?>">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
   <link rel="canonical" href="<?= h(url('')) ?>">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Tenzil">
-  <meta property="og:title" content="Tenzil — دليل مراجعات تطبيقات أندرويد">
+  <meta property="og:site_name" content="Apkzilo">
+  <meta property="og:title" content="Apkzilo — دليل مراجعات تطبيقات أندرويد">
   <meta property="og:description" content="دليلك التحريري العربي المستقل لاكتشاف ومراجعة أفضل تطبيقات وألعاب أندرويد — محتوى محدّث يومياً.">
   <?php if ($featured && $featured['icon_path']): ?><meta property="og:image" content="<?= h(url($featured['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Tenzil — مراجعات تطبيقات أندرويد">
+  <meta name="twitter:title" content="Apkzilo — مراجعات تطبيقات أندرويد">
   <meta name="twitter:description" content="دليلك التحريري العربي لاكتشاف ومراجعة أفضل تطبيقات أندرويد">
   <script type="application/ld+json"><?= $websiteSchema ?></script>
   <script type="application/ld+json"><?= $orgSchema ?></script>
@@ -130,7 +130,7 @@ $orgSchema = json_encode([
       دليل تحريري مستقل — محتوى يومي
     </div>
     <h1>اكتشف وراجع أفضل<br>تطبيقات أندرويد</h1>
-    <p>مراجعات احترافية، مقارنات دقيقة، ومعلومات موثوقة لكل تطبيق — Tenzil دليلك العربي المستقل لاكتشاف عالم تطبيقات Android.</p>
+    <p>مراجعات احترافية، مقارنات دقيقة، ومعلومات موثوقة لكل تطبيق — Apkzilo دليلك العربي المستقل لاكتشاف عالم تطبيقات Android.</p>
     <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px">
       <a href="#apps-grid" style="padding:10px 24px;border-radius:50px;background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;font-weight:700;font-size:13px;text-decoration:none">
         استعرض التطبيقات
@@ -196,7 +196,7 @@ $orgSchema = json_encode([
   <?= partial_wave() ?>
   <section style="margin-top:8px">
     <div class="section-head reveal">
-      <span class="section-title">من مدونة Tenzil</span>
+      <span class="section-title">من مدونة Apkzilo</span>
       <a href="<?= h(url('blog')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none">عرض الكل <?= partial_icon('arrow-r') ?></a>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px" class="reveal">
@@ -225,11 +225,11 @@ $orgSchema = json_encode([
   </section>
   <?php endif; ?>
 
-  <!-- ── Why Tenzil (editorial values) ── -->
+  <!-- ── Why Apkzilo (editorial values) ── -->
   <?php if (!$search && !$catSlug): ?>
   <?= partial_wave() ?>
   <section style="margin-top:8px">
-    <div class="section-head reveal"><span class="section-title">لماذا Tenzil؟</span></div>
+    <div class="section-head reveal"><span class="section-title">لماذا Apkzilo؟</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px" class="reveal">
       <?php foreach ([
         ['icon'=>'✍️','title'=>'محتوى تحريري','desc'=>'كل مراجعة تطبيق تُكتب بعناية وتُدقَّق من فريق المحررين قبل النشر.'],
@@ -254,7 +254,7 @@ $orgSchema = json_encode([
   ?>
   <?= partial_wave() ?>
   <section id="about" style="margin-top:12px">
-    <div class="section-head reveal"><span class="section-title">عن Tenzil</span></div>
+    <div class="section-head reveal"><span class="section-title">عن Apkzilo</span></div>
 
     <!-- Stats row -->
     <div class="stats-row reveal">
@@ -277,7 +277,7 @@ $orgSchema = json_encode([
         منصتك التحريرية العربية للتطبيقات
       </h2>
       <p style="color:var(--muted);font-size:14px;line-height:1.85;margin-bottom:16px">
-        Tenzil دليل تحريري مستقل متخصص في مراجعة وتقييم تطبيقات وألعاب أندرويد. نقدّم معلومات دقيقة ومحايدة تساعدك على اتخاذ قرار التحميل بثقة، مع تحديث يومي لمواكبة أحدث الإصدارات. كل تطبيق يمر بمراجعة تحريرية كاملة قبل نشره.
+        Apkzilo دليل تحريري مستقل متخصص في مراجعة وتقييم تطبيقات وألعاب أندرويد. نقدّم معلومات دقيقة ومحايدة تساعدك على اتخاذ قرار التحميل بثقة، مع تحديث يومي لمواكبة أحدث الإصدارات. كل تطبيق يمر بمراجعة تحريرية كاملة قبل نشره.
       </p>
       <!-- Trust badges -->
       <div class="trust-row">
@@ -308,8 +308,8 @@ $orgSchema = json_encode([
     </div>
     <div class="faq-list reveal">
       <?php $homeFaqs = [
-        ['q' => 'هل Tenzil موقع رسمي من Google Play؟',
-         'a' => 'لا، Tenzil دليل تحريري مستقل ولا ينتمي لأي متجر. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل.'],
+        ['q' => 'هل Apkzilo موقع رسمي من Google Play؟',
+         'a' => 'لا، Apkzilo دليل تحريري مستقل ولا ينتمي لأي متجر. نراجع التطبيقات بموضوعية ونضع روابط Google Play الرسمية للتحميل.'],
         ['q' => 'هل روابط التحميل آمنة؟',
          'a' => 'نعم، نتحقق من كل رابط قبل نشره ونعتمد بشكل أساسي على Google Play. الملفات APK المباشرة تُفحص بأدوات اكتشاف الفيروسات.'],
         ['q' => 'كيف أضيف تقييمي لتطبيق؟',

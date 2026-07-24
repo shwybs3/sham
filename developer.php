@@ -29,8 +29,8 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN cate
 $stmt->execute([$dev]);
 $apps = $stmt->fetchAll();
 
-$seoTitle = "تطبيقات وألعاب {$dev} — كل إصدارات {$dev} لأندرويد | Tenzil";
-$metaDesc = "تصفح كل تطبيقات وألعاب المطور {$dev} المتاحة للتحميل المجاني على Tenzil.";
+$seoTitle = "تطبيقات وألعاب {$dev} — كل إصدارات {$dev} لأندرويد | Apkzilo";
+$metaDesc = "تصفح كل تطبيقات وألعاب المطور {$dev} المتاحة للتحميل المجاني على Apkzilo.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",

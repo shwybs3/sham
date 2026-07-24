@@ -20,8 +20,8 @@ $stmt->execute();
 $apps = $stmt->fetchAll();
 
 $title    = $today ? 'آخر التحديثات اليوم' : 'آخر التحديثات';
-$seoTitle = "{$title} — تطبيقات وألعاب أندرويد محدّثة | Tenzil";
-$metaDesc = "تابع أحدث تحديثات التطبيقات والألعاب على Tenzil أولاً بأول.";
+$seoTitle = "{$title} — تطبيقات وألعاب أندرويد محدّثة | Apkzilo";
+$metaDesc = "تابع أحدث تحديثات التطبيقات والألعاب على Apkzilo أولاً بأول.";
 
 $breadcrumbSchema = json_encode([
     "@context" => "https://schema.org", "@type" => "BreadcrumbList",
