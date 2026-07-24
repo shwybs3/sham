@@ -110,10 +110,9 @@ $orgSchema = json_encode([
 <body>
 
 <?php render_site_header($search, $activeNav); ?>
+<?php render_category_tabs_bar($pdo, $catSlug); ?>
 
-<div class="page-wrap">
-
-<?php render_site_sidebar($pdo, $catSlug); ?>
+<div class="page-wrap fw">
 
 <!-- ══ MAIN ══ -->
 <main class="main-content">
@@ -142,16 +141,6 @@ $orgSchema = json_encode([
   </div>
   <?= partial_wave() ?>
   <?php endif; ?>
-
-  <!-- ── Category Chips ── -->
-  <div class="cat-chips reveal">
-    <div class="cat-chip <?= !$catSlug ? 'active' : '' ?>" data-cat="all"><?= partial_icon('apps') ?> الكل</div>
-    <?php foreach ($categories as $cat): ?>
-    <div class="cat-chip <?= $catSlug === $cat['slug'] ? 'active' : '' ?>" data-cat="<?= h($cat['slug']) ?>">
-      <?= partial_icon($cat['slug'] === 'games' ? 'games' : 'apps') ?> <?= h($cat['name']) ?>
-    </div>
-    <?php endforeach; ?>
-  </div>
 
   <!-- ── Featured App (editorial pick) ── -->
   <?php if ($featured && !$search && !$catSlug): ?>

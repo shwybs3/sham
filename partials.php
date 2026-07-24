@@ -90,6 +90,24 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 <?php }
 
 /* ── Sidebar: category list + a few discovery links reused on every listing page ── */
+function render_category_tabs_bar(PDO $pdo, string $activeCat = ''): void {
+    $cats = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
+    ?><div class="cat-tabs-bar">
+      <a href="/" class="cat-tab <?= !$activeCat ? 'active' : '' ?>"><?= partial_icon('home') ?> الكل</a>
+      <?php foreach ($cats as $c): ?>
+      <a href="/?cat=<?= h($c['slug']) ?>" class="cat-tab <?= $activeCat === $c['slug'] ? 'active' : '' ?>">
+        <?= partial_icon($c['slug'] === 'games' ? 'games' : 'apps') ?> <?= h($c['name']) ?>
+      </a>
+      <?php endforeach; ?>
+      <a href="<?= h(url('top?by=downloads')) ?>" class="cat-tab" style="color:#F97316">
+        <?= partial_icon('trending') ?> الأكثر تحميلاً
+      </a>
+      <a href="<?= h(url('updates')) ?>" class="cat-tab">
+        <?= partial_icon('clock') ?> آخر التحديثات
+      </a>
+    </div><?php
+}
+
 function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
     ?>

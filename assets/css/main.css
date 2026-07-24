@@ -1258,3 +1258,74 @@ a:hover .blog-card-title { color: #0891B2 !important; }
 
 /* ── Contact message unread ── */
 .msg-unread { border-right-color: #0891B2 !important; }
+
+/* ═══════════════════════════════════════════════
+   FULL-WIDTH LAYOUT — no sidebar, content stretches
+   the full container width with a horizontal sticky
+   category-tabs bar replacing the sidebar nav.
+   ═══════════════════════════════════════════════ */
+.page-wrap.fw {
+  grid-template-columns: 1fr;
+  max-width: 1440px;
+}
+.page-wrap.fw .sidebar { display: none !important; }
+.page-wrap.fw .main-content { min-width: 0; }
+
+/* Category tabs bar */
+.cat-tabs-bar {
+  position: sticky;
+  top: 62px;
+  z-index: 80;
+  background: rgba(238,242,247,.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 2px solid rgba(8,145,178,.13);
+  padding: 0 20px;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: 0 2px 10px rgba(12,30,54,.07);
+  margin: 0 -20px;
+}
+.cat-tabs-bar::-webkit-scrollbar { display: none; }
+.cat-tab {
+  flex-shrink: 0;
+  padding: 13px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color .18s, border-color .18s, background .18s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 0;
+}
+.cat-tab:hover { color: var(--cyan); background: rgba(8,145,178,.05); }
+.cat-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); background: rgba(8,145,178,.06); }
+
+/* Wider grid in full-width mode */
+.page-wrap.fw .apps-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+@media (min-width: 900px) {
+  .page-wrap.fw .apps-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 1200px) {
+  .page-wrap.fw .apps-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (min-width: 1440px) {
+  .page-wrap.fw .apps-grid { grid-template-columns: repeat(7, 1fr); }
+}
+
+/* Dark mode for tabs bar */
+@media (prefers-color-scheme: dark) {
+  .cat-tabs-bar { background: rgba(15,23,42,.93); border-bottom-color: rgba(8,145,178,.18); }
+}
+:root[data-theme="dark"] .cat-tabs-bar { background: rgba(15,23,42,.93) !important; border-bottom-color: rgba(8,145,178,.18) !important; }
+:root[data-theme="light"] .cat-tabs-bar { background: rgba(238,242,247,.96) !important; }
