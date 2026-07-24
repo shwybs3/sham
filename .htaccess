@@ -104,9 +104,10 @@ ErrorDocument 404 /404.php
   RewriteRule ^terms/?$ terms.php [L]
   RewriteRule ^cookie-policy/?$ cookie-policy.php [L]
   RewriteRule ^dmca/?$ dmca.php [L]
+  RewriteRule ^disclosure/?$ disclosure.php [L]
 
   # 301 redirects for old .php links to static pages
-  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
+  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca|disclosure)\.php[\s?] [NC]
   RewriteRule ^(.+)\.php$ /$1 [R=301,L]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}

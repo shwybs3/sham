@@ -1953,7 +1953,24 @@ function notify_admin(PDO $pdo, string $subject, string $body): void {
 
 function head_extras(PDO $pdo): string {
     $host = parse_url(SITE_URL, PHP_URL_HOST) ?: 'example.com';
-    return '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
+    // Google Consent Mode v2 — must fire BEFORE the AdSense/GA script.
+    // Default: deny until the user explicitly accepts via the cookie banner.
+    // The banner JS calls gtag('consent','update',{...}) on accept/decline.
+    $consentMode = '<script>
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag("consent","default",{
+  "ad_storage":"denied",
+  "ad_user_data":"denied",
+  "ad_personalization":"denied",
+  "analytics_storage":"denied",
+  "wait_for_update":500
+});
+gtag("set","ads_data_redaction",true);
+gtag("set","url_passthrough",true);
+</script>';
+    return $consentMode . "\n  "
+        . '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
         . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
         . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
@@ -1972,9 +1989,14 @@ function head_extras(PDO $pdo): string {
 
 function ad_slot(): string {
     // The parent .ad-zone starts hidden (display:none, no reserved space)
-    // — main.js watches this <ins> for AdSense's own data-ad-status
-    // attribute and only reveals the parent when the slot actually filled
-    // with an ad. An unfilled slot (the normal state pre-approval, or any
-    // time Google has nothing to serve) stays fully collapsed.
-    return '<ins class="adsbygoogle" style="display:block;width:100%" data-ad-client="ca-pub-5506877998492189" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
+    // — main.js reveals it only when AdSense sets data-ad-status="filled".
+    // Slot ID is read from the admin settings (adsense_ad_slot_id).
+    global $pdo;
+    $slotId   = ($pdo instanceof PDO) ? trim(get_cfg($pdo, 'adsense_ad_slot_id', '')) : '';
+    $slotAttr = $slotId ? ' data-ad-slot="' . h($slotId) . '"' : '';
+    return '<ins class="adsbygoogle" style="display:block;width:100%"'
+        . ' data-ad-client="ca-pub-5506877998492189"'
+        . $slotAttr
+        . ' data-ad-format="auto" data-full-width-responsive="true"></ins>'
+        . '<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
 }

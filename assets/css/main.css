@@ -662,9 +662,20 @@ details.faq-item[open] .faq-chevron { transform: rotate(180deg); }
 
 /* ═══ AD ZONE ═══
    Hidden by default — main.js reveals it only when AdSense
-   confirms data-ad-status="filled". Unfilled state takes zero space. */
-.ad-zone { display: none; margin: 20px 0; border-radius: var(--radius); overflow: hidden; text-align: center; }
+   confirms data-ad-status="filled". Unfilled state takes zero space.
+   Label "إعلان" is required by AdSense policy for publisher transparency. */
+.ad-zone { display: none; margin: 20px 0; text-align: center; }
 .ad-zone.ad-filled { display: block; }
+.ad-zone.ad-filled::before {
+  content: 'إعلان';
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  text-align: center;
+}
 .adsense-notice { font-size: 10px; color: var(--muted); text-align: center; padding: 4px; letter-spacing: .5px; }
 
 /* ═══ BLOG STYLES ═══ */

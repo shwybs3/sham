@@ -257,6 +257,7 @@ function render_site_footer(): void { ?>
             url('privacy-policy') => 'سياسة الخصوصية',
             url('terms')          => 'شروط الاستخدام',
             url('cookie-policy')  => 'سياسة الكوكيز',
+            url('disclosure')     => 'الإفصاح الإعلاني',
             url('dmca')           => 'إشعار DMCA',
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
@@ -280,28 +281,112 @@ function render_site_footer(): void { ?>
 render_cookie_banner();
 }
 
-/* ── Combined cookie + terms consent banner — shown once, remembered in localStorage.
-   Covers AdSense EU-consent and the site's general T&C acceptance notice. ── */
-function render_cookie_banner(string $policyUrl = ''): void {
-    if (!$policyUrl) $policyUrl = url('cookie-policy');
-    ?>
-<div id="cookie-consent" class="cookie-consent cookie-consent-v2" hidden>
-  <div class="cc-icon-wrap">
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+/* ── GDPR-compliant cookie + Consent Mode v2 banner.
+   Shown once on first visit; stored in localStorage for 365 days.
+   "Accept All"  → grants full AdSense/Analytics consent (gtag update).
+   "Essential Only" → denies ad/analytics storage (Consent Mode compliant).
+   Both buttons dismiss the banner — the user is never locked out. ── */
+function render_cookie_banner(): void { ?>
+<style>
+.cookie-banner{
+  position:fixed;bottom:0;right:0;left:0;z-index:9990;
+  background:rgba(7,13,26,.97);
+  border-top:1px solid rgba(6,182,212,.25);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  padding:18px 24px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:14px;
+  font-family:'Cairo',sans-serif;direction:rtl;
+  transform:translateY(100%);
+  transition:transform .35s cubic-bezier(.4,0,.2,1);
+}
+.cookie-banner.cb-show{transform:translateY(0);}
+.cb-text{flex:1;min-width:240px;font-size:13px;line-height:1.75;color:#94a3b8;}
+.cb-text strong{color:#e2e8f0;display:block;margin-bottom:4px;font-size:14px;}
+.cb-text a{color:#06b6d4;}
+.cb-btns{display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;}
+.cb-accept{
+  padding:10px 22px;border-radius:50px;font-size:13px;font-weight:700;
+  background:linear-gradient(135deg,#06b6d4,#3b82f6);
+  color:#fff;border:none;cursor:pointer;font-family:'Cairo',sans-serif;
+  transition:.2s;white-space:nowrap;
+}
+.cb-accept:hover{opacity:.88;}
+.cb-reject{
+  padding:10px 18px;border-radius:50px;font-size:13px;font-weight:600;
+  background:transparent;border:1px solid rgba(255,255,255,.15);
+  color:#94a3b8;cursor:pointer;font-family:'Cairo',sans-serif;
+  transition:.2s;white-space:nowrap;
+}
+.cb-reject:hover{border-color:rgba(255,255,255,.3);color:#e2e8f0;}
+</style>
+
+<div id="cookie-banner" class="cookie-banner" role="dialog" aria-label="إشعار الخصوصية" hidden>
+  <div class="cb-text">
+    <strong>نستخدم ملفات تعريف الارتباط (Cookies)</strong>
+    يستخدم yassota cookies ضرورية للتشغيل، وبموافقتك: إعلانات Google AdSense مخصصة وإحصاءات الزيارات.
+    راجع <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>
+    و<a href="<?= h(url('cookie-policy')) ?>">سياسة الكوكيز</a>.
   </div>
-  <div class="cc-text">
-    <strong>الخصوصية وشروط الاستخدام</strong>
-    <p>باستخدام yassota فإنك توافق على <a href="<?= h(url('cookie-policy')) ?>">سياسة ملفات تعريف الارتباط</a>،
-      <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>،
-      و<a href="<?= h(url('terms')) ?>">شروط الاستخدام</a>.
-      نستخدم Cookies لتحسين التجربة وعرض إعلانات مناسبة.
-    </p>
+  <div class="cb-btns">
+    <button type="button" class="cb-accept" id="cb-accept-all">قبول الكل</button>
+    <button type="button" class="cb-reject" id="cb-reject-all">الضروري فقط</button>
   </div>
-  <button type="button" id="cookie-consent-accept" class="cc-accept-btn">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-    موافق وأواصل
-  </button>
 </div>
+
+<script>
+(function(){
+  var STORAGE_KEY = 'yassota_consent_v2';
+  var stored = localStorage.getItem(STORAGE_KEY);
+  var banner = document.getElementById('cookie-banner');
+  if (!banner) return;
+
+  function grantConsent(full){
+    if (typeof gtag === 'function') {
+      if (full) {
+        gtag('consent','update',{
+          ad_storage:'granted',
+          ad_user_data:'granted',
+          ad_personalization:'granted',
+          analytics_storage:'granted'
+        });
+      } else {
+        gtag('consent','update',{
+          ad_storage:'denied',
+          ad_user_data:'denied',
+          ad_personalization:'denied',
+          analytics_storage:'denied'
+        });
+      }
+    }
+  }
+
+  if (stored) {
+    grantConsent(stored === 'all');
+    return;
+  }
+
+  // show after brief delay so it doesn't flash on first paint
+  setTimeout(function(){
+    banner.removeAttribute('hidden');
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ banner.classList.add('cb-show'); });
+    });
+  }, 900);
+
+  function dismiss(choice){
+    banner.classList.remove('cb-show');
+    setTimeout(function(){ banner.setAttribute('hidden',''); }, 380);
+    localStorage.setItem(STORAGE_KEY, choice);
+    var expiry = new Date();
+    expiry.setFullYear(expiry.getFullYear() + 1);
+    document.cookie = STORAGE_KEY + '=' + choice + '; expires=' + expiry.toUTCString() + '; path=/; SameSite=Lax';
+    grantConsent(choice === 'all');
+  }
+
+  document.getElementById('cb-accept-all').addEventListener('click', function(){ dismiss('all'); });
+  document.getElementById('cb-reject-all').addEventListener('click', function(){ dismiss('essential'); });
+})();
+</script>
 <?php }
 
 /* ── Pagination, identical shape on every listing page ── */

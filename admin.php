@@ -4943,20 +4943,44 @@ elseif ($page === 'settings'): ?>
   </div>
 
   <div class="panel">
-    <h2>إعدادات الإعلانات</h2>
-    <div class="form-hint" style="line-height:1.9">
-      يستخدم الموقع الآن Google AdSense فقط (ca-pub-5506877998492189) في كل صفحاته. تمت إزالة شبكة MoneyTag
-      (كانت تعمل بنظام النوافذ المنبثقة/popunder) لأن هذا النوع من الإعلانات يخالف صراحةً سياسات ناشري Google
-      ويقلل فرص قبول الموقع في AdSense — إعادة إضافتها لاحقاً غير مستحسنة قبل أو بعد الموافقة.
+    <h2>إعدادات AdSense</h2>
+    <p class="form-hint" style="margin-bottom:16px;line-height:1.9">
+      معرّف الناشر <strong style="color:var(--cyan)">ca-pub-5506877998492189</strong> مُثبَّت في الكود.
+      أضف هنا معرّف وحدة الإعلان (Ad Unit Slot ID) الذي تحصل عليه من لوحة AdSense عند إنشاء وحدة إعلانية جديدة
+      (الإعلانات → حسب وحدة الإعلانات → إنشاء وحدة إعلانية). بدون هذا الرقم تُعرض الإعلانات عبر Auto Ads فقط.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Ad Slot ID (معرّف الوحدة الإعلانية)</label>
+      <input class="form-input" type="text" name="adsense_ad_slot_id"
+             value="<?= h(get_cfg($pdo,'adsense_ad_slot_id')) ?>"
+             placeholder="مثال: 1234567890" dir="ltr" style="font-family:var(--f-mono)">
+      <div class="form-hint">
+        الرقم الظاهر في كود الوحدة الإعلانية بعد <code>data-ad-slot="..."</code>.
+        احتفظ بالحقل فارغاً إذا كنت تعتمد على Auto Ads فقط.
+      </div>
+    </div>
+    <div class="form-hint" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-c);line-height:1.9">
+      تمت إزالة شبكة النوافذ المنبثقة (MoneyTag/PopAds) لأنها تخالف سياسات ناشري Google وتقلل فرص القبول في AdSense.
+      يمكن إضافة كود مخصص لشبكات أخرى في خانة "صفحة التحميل" أسفل هذه الصفحة.
     </div>
   </div>
 
   <div class="panel">
-    <h2>معلومات التواصل</h2>
+    <h2>معلومات التواصل والسياسات</h2>
     <div class="form-group">
       <label class="form-label">البريد الإلكتروني للتواصل / DMCA</label>
       <input class="form-input" type="email" name="contact_email" value="<?= h(get_cfg($pdo,'contact_email')) ?>" placeholder="contact@yourdomain.com">
       <div class="form-hint">يظهر في صفحات اتصل بنا، سياسة الخصوصية، وDMCA.</div>
+    </div>
+    <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <label class="form-label">تاريخ آخر تحديث لصفحة سياسة الخصوصية</label>
+      <input class="form-input" type="text" name="privacy_updated_date" value="<?= h(get_cfg($pdo,'privacy_updated_date','1 يناير 2025')) ?>" placeholder="مثال: 1 يوليو 2025">
+      <div class="form-hint">يظهر في أعلى صفحة سياسة الخصوصية — حدّثه في كل مرة تُعدّل فيها السياسة.</div>
+    </div>
+    <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <label class="form-label">تاريخ آخر تحديث لصفحة شروط الاستخدام</label>
+      <input class="form-input" type="text" name="terms_updated_date" value="<?= h(get_cfg($pdo,'terms_updated_date','1 يناير 2025')) ?>" placeholder="مثال: 1 يوليو 2025">
+      <div class="form-hint">يظهر في أعلى صفحة شروط الاستخدام.</div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <input type="checkbox" name="admin_email_notifications" value="1" <?= get_cfg($pdo,'admin_email_notifications')==='1'?'checked':'' ?>>

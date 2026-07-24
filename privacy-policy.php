@@ -4,7 +4,7 @@ require_once __DIR__ . '/partials.php';
 
 $contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com');
 $siteHost     = parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com';
-$updated      = '1 يناير 2025';
+$updated      = get_cfg($pdo, 'privacy_updated_date', '1 يناير 2025');
 $seoTitle     = 'سياسة الخصوصية — yassota';
 $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: ما نجمعه من بيانات، كيف نستخدمها، Google AdSense، ملفات تعريف الارتباط، حقوقك وفق GDPR.';
 ?>
