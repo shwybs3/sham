@@ -5378,6 +5378,269 @@ setTimeout(() => openFile('<?= addslashes(h($fmPath)) ?>'), 300);
 </script>
 <?php endif; ?>
 
+<?php if ($page === 'security'): ?>
+<?php
+$secStats = [
+    'total'    => (int)$pdo->query("SELECT COUNT(*) FROM security_log")->fetchColumn(),
+    'critical' => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical'")->fetchColumn(),
+    'warning'  => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='warning'")->fetchColumn(),
+    'today'    => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
+];
+$recentLogs = $pdo->query("SELECT * FROM security_log ORDER BY created_at DESC LIMIT 60")->fetchAll();
+$indexStats = [
+    'total'   => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
+    'indexed' => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn(),
+    'pending' => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='pending'")->fetchColumn(),
+    'error'   => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='error'")->fetchColumn(),
+    'last'    => $pdo->query("SELECT MAX(last_indexed_at) FROM apps WHERE status='published'")->fetchColumn() ?: 'لم تتم الفهرسة بعد',
+];
+$pct = $indexStats['total'] > 0 ? round($indexStats['indexed'] / $indexStats['total'] * 100) : 0;
+?>
+<div class="admin-page-title">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  الحماية والأمان
+</div>
+
+<div class="section-box" style="margin-bottom:24px;border-color:rgba(6,182,212,.2)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:15px;font-weight:800;color:var(--white);margin-bottom:4px">📡 حالة الفهرسة في محركات البحث</div>
+      <div style="font-size:12px;color:var(--muted)">يُعرض معدل الفهرسة بناءً على آخر إرسال لـ IndexNow</div>
+    </div>
+    <button id="btn-reindex-all" class="btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      إعادة فهرسة كل التطبيقات
+    </button>
+  </div>
+  <div id="reindex-msg" style="display:none;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2);color:var(--cyan)"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px">
+    <div class="stat-card"><div class="stat-num" style="color:var(--cyan)"><?= h($indexStats['total']) ?></div><div class="stat-label">منشور</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= h($indexStats['indexed']) ?></div><div class="stat-label">مفهرَس</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--warning)"><?= h($indexStats['pending']) ?></div><div class="stat-label">في الانتظار</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--danger)"><?= h($indexStats['error']) ?></div><div class="stat-label">خطأ</div></div>
+  </div>
+  <div style="background:var(--navy-600);border-radius:50px;height:10px;overflow:hidden;margin-bottom:8px">
+    <div style="height:100%;width:<?= $pct ?>%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:50px;transition:width .8s ease"></div>
+  </div>
+  <div style="font-size:12px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+    <span>نسبة الفهرسة: <strong style="color:var(--cyan)"><?= $pct ?>%</strong></span>
+    <span>آخر فهرسة: <strong style="color:var(--white)"><?= h($indexStats['last']) ?></strong></span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px">
+  <div class="stat-card" style="border-color:rgba(239,68,68,.25)"><div class="stat-num" style="color:var(--danger)"><?= $secStats['critical'] ?></div><div class="stat-label">تهديدات حرجة</div></div>
+  <div class="stat-card" style="border-color:rgba(245,158,11,.25)"><div class="stat-num" style="color:var(--warning)"><?= $secStats['warning'] ?></div><div class="stat-label">تحذيرات</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= $secStats['today'] ?></div><div class="stat-label">أحداث اليوم</div></div>
+  <div class="stat-card"><div class="stat-num"><?= $secStats['total'] ?></div><div class="stat-label">إجمالي السجل</div></div>
+</div>
+
+<div class="section-box">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div style="font-size:15px;font-weight:800;color:var(--white)">🔐 سجل أحداث الأمان</div>
+    <button onclick="clearOldLogs()" class="btn-outline" style="font-size:12px">حذف السجلات القديمة (> 30 يوم)</button>
+  </div>
+  <?php if ($recentLogs): ?>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr>
+      <th>الخطورة</th><th>النوع</th><th>التفاصيل</th><th>الملف</th><th>IP</th><th>التوقيت</th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($recentLogs as $ev):
+      $sc = ['critical'=>'var(--danger)','warning'=>'var(--warning)','info'=>'var(--cyan)'][$ev['severity']] ?? 'var(--muted)';
+    ?>
+    <tr>
+      <td><span style="color:<?= $sc ?>;font-weight:700;font-size:11px;text-transform:uppercase"><?= h($ev['severity']) ?></span></td>
+      <td style="font-size:11px;font-family:var(--f-mono)"><?= h($ev['event_type']) ?></td>
+      <td style="font-size:12px;max-width:300px;word-break:break-word"><?= h(mb_strimwidth($ev['detail'] ?? '', 0, 150, '…')) ?></td>
+      <td style="font-size:11px;color:var(--muted);font-family:var(--f-mono)"><?= h(basename($ev['filename'] ?? '')) ?></td>
+      <td style="font-size:11px;color:var(--muted);direction:ltr;text-align:left"><?= h($ev['ip'] ?? '') ?></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap"><?= h($ev['created_at']) ?></td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+  <?php else: ?>
+  <div style="text-align:center;padding:48px;color:var(--muted)">✅ لا توجد أحداث أمان مسجّلة</div>
+  <?php endif; ?>
+</div>
+<script>
+document.getElementById('btn-reindex-all').addEventListener('click', async function(){
+  const btn = this, msg = document.getElementById('reindex-msg');
+  btn.disabled = true; btn.textContent = '⏳ جارٍ الإرسال...';
+  msg.style.display = 'block'; msg.textContent = 'يتم إرسال جميع الروابط إلى Google وBing وIndexNow…';
+  try {
+    const r = await fetch('admin.php?ajax=reindex_all', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      msg.textContent = `✅ تمت الفهرسة! تم إرسال ${d.pinged} رابطاً إلى IndexNow + sitemap ping لـ Google وBing.`;
+      msg.style.background='rgba(34,197,94,.07)'; msg.style.borderColor='rgba(34,197,94,.3)'; msg.style.color='#4ade80';
+      setTimeout(()=>location.reload(), 2500);
+    } else {
+      msg.textContent = '⚠️ ' + (d.error || 'خطأ غير معروف');
+      msg.style.background='rgba(239,68,68,.07)'; msg.style.borderColor='rgba(239,68,68,.3)'; msg.style.color='var(--danger)';
+    }
+  } catch(e){ msg.textContent = '❌ خطأ في الاتصال — تحقق من IndexNow key في الإعدادات.'; }
+  btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> إعادة فهرسة كل التطبيقات';
+});
+async function clearOldLogs(){
+  if (!confirm('حذف السجلات الأقدم من 30 يوماً؟')) return;
+  await fetch('admin.php?ajax=clear_security_log',{method:'POST'});
+  location.reload();
+}
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'file-manager'): ?>
+<div class="admin-page-title">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+  مدير الملفات
+</div>
+<div style="display:grid;grid-template-columns:250px 1fr;gap:14px;height:calc(100vh - 172px);min-height:480px">
+
+  <!-- File tree -->
+  <div class="section-box" style="overflow:auto;padding:14px;display:flex;flex-direction:column;gap:0">
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-c)">الملفات</div>
+    <div id="fm-tree" style="font-size:12px;flex:1;overflow-y:auto"></div>
+    <div style="margin-top:12px;border-top:1px solid var(--border-c);padding-top:12px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">ملف جديد</div>
+      <input type="text" id="fm-new-name" placeholder="example.php" class="form-input" style="font-size:12px;margin-bottom:6px;direction:ltr">
+      <button id="fm-create-btn" class="btn-primary" style="font-size:11px;padding:7px 12px;width:100%">إنشاء ملف</button>
+    </div>
+  </div>
+
+  <!-- Editor pane -->
+  <div class="section-box" style="display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <!-- toolbar -->
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border-c);flex-shrink:0;background:var(--navy-700)">
+      <code id="fm-current-file" style="font-size:11px;color:var(--cyan);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">— اختر ملفاً —</code>
+      <span id="fm-status" style="font-size:11px;color:var(--muted)"></span>
+      <button id="fm-save-btn" class="btn-primary" style="font-size:11px;padding:6px 14px" disabled>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+        حفظ
+      </button>
+    </div>
+    <!-- editor area -->
+    <div style="position:relative;flex:1;overflow:hidden;background:#0d1117;font-family:'Courier New',monospace">
+      <div id="fm-line-nums" style="position:absolute;top:0;right:0;width:42px;bottom:0;padding:14px 6px;font-size:12px;line-height:1.65;color:#484f58;background:#161b22;border-left:1px solid rgba(99,130,190,.12);text-align:right;overflow:hidden;pointer-events:none;user-select:none;z-index:1"></div>
+      <textarea id="fm-editor" spellcheck="false" dir="ltr"
+        style="position:absolute;top:0;right:42px;left:0;bottom:0;padding:14px 14px 14px 14px;font-size:12.5px;line-height:1.65;font-family:'Courier New',monospace;color:#e6edf3;background:transparent;border:none;outline:none;resize:none;tab-size:2;white-space:pre"
+        placeholder="اختر ملفاً من القائمة لبدء التعديل" disabled></textarea>
+    </div>
+    <!-- status bar -->
+    <div style="display:flex;gap:16px;align-items:center;padding:5px 14px;border-top:1px solid var(--border-c);background:var(--navy-700);flex-shrink:0">
+      <span id="fm-chars" style="font-size:10px;color:var(--muted)">0 حرف</span>
+      <span id="fm-lines" style="font-size:10px;color:var(--muted)">0 سطر</span>
+      <span id="fm-cursor" style="font-size:10px;color:var(--muted)">س1:ع1</span>
+      <span id="fm-unsaved" style="font-size:10px;color:#ef4444;font-weight:700;margin-right:auto" hidden>● غير محفوظ</span>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const tree=document.getElementById('fm-tree'),
+        editor=document.getElementById('fm-editor'),
+        lineNums=document.getElementById('fm-line-nums'),
+        saveBtn=document.getElementById('fm-save-btn'),
+        fmStatus=document.getElementById('fm-status'),
+        curFile=document.getElementById('fm-current-file'),
+        unsaved=document.getElementById('fm-unsaved');
+  let currentPath='', savedContent='', currentDir='';
+
+  function updateUI(){
+    const lines=editor.value.split('\n');
+    lineNums.innerHTML=lines.map((_,i)=>`<div>${i+1}</div>`).join('');
+    lineNums.scrollTop=editor.scrollTop;
+    document.getElementById('fm-chars').textContent=editor.value.length+' حرف';
+    document.getElementById('fm-lines').textContent=lines.length+' سطر';
+    unsaved.hidden=editor.value===savedContent;
+  }
+  editor.addEventListener('input',updateUI);
+  editor.addEventListener('scroll',()=>{ lineNums.scrollTop=editor.scrollTop; });
+  editor.addEventListener('keydown',e=>{
+    if(e.key==='Tab'){e.preventDefault();const s=editor.selectionStart,en=editor.selectionEnd;editor.value=editor.value.substring(0,s)+'  '+editor.value.substring(en);editor.selectionStart=editor.selectionEnd=s+2;updateUI();}
+    if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();doSave();}
+  });
+  editor.addEventListener('keyup',()=>{
+    const s=editor.selectionStart,b=editor.value.substring(0,s);
+    document.getElementById('fm-cursor').textContent=`س${b.split('\n').length}:ع${b.split('\n').pop().length+1}`;
+  });
+
+  async function loadDir(dir=''){
+    currentDir=dir;
+    const res=await fetch('admin.php?ajax=fm_list&dir='+encodeURIComponent(dir));
+    const d=await res.json();
+    if(!d.ok){tree.innerHTML='<div style="color:var(--danger);padding:8px">'+d.error+'</div>';return;}
+    let html='';
+    if(dir) html+=`<div onclick="loadDir('')" style="padding:5px 8px;cursor:pointer;color:var(--muted);border-radius:6px;display:flex;align-items:center;gap:6px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">⬆️ رجوع</div>`;
+    d.items.forEach(item=>{
+      if(item.type==='dir'){
+        html+=`<div onclick="loadDir('${item.path}')" style="padding:5px 8px;cursor:pointer;color:var(--warning);border-radius:6px;display:flex;align-items:center;gap:6px" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background=''">📁 ${item.name}/</div>`;
+      } else {
+        const active=item.path===currentPath?'background:rgba(6,182,212,.12);color:var(--cyan)':'';
+        html+=`<div onclick="openFile('${item.path}')" style="padding:5px 8px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:5px;${active}" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="${item.path===currentPath?'':''}">`
+          +`<span style="color:var(--muted);font-size:10px">📄</span> ${item.name}`
+          +`<span style="margin-right:auto;color:var(--muted);font-size:10px">${Math.max(1,Math.round(item.size/1024))}k</span></div>`;
+      }
+    });
+    if(!d.items.length) html+='<div style="padding:12px;color:var(--muted);font-size:11px">لا توجد ملفات</div>';
+    tree.innerHTML=html;
+    document.getElementById('fm-create-btn').dataset.dir=dir;
+  }
+
+  async function openFile(path){
+    if(!unsaved.hidden&&!confirm('لديك تغييرات غير محفوظة. استمرار؟')) return;
+    fmStatus.textContent='⏳ تحميل...';
+    const res=await fetch('admin.php?ajax=fm_read&path='+encodeURIComponent(path));
+    const d=await res.json();
+    if(!d.ok){fmStatus.textContent='❌ '+d.error;return;}
+    currentPath=path;
+    editor.value=d.content; savedContent=d.content;
+    editor.disabled=false; saveBtn.disabled=false;
+    curFile.textContent=path;
+    unsaved.hidden=true;
+    updateUI();
+    fmStatus.textContent=`${Math.max(1,Math.round(d.size/1024))} KB | ${d.ext}`;
+    // reload tree to reflect active file
+    const dir=path.includes('/')?path.substring(0,path.lastIndexOf('/')):'';
+    loadDir(dir);
+  }
+
+  async function doSave(){
+    if(!currentPath) return;
+    saveBtn.disabled=true; saveBtn.textContent='⏳ حفظ...';
+    const fd=new FormData(); fd.append('path',currentPath); fd.append('content',editor.value);
+    const res=await fetch('admin.php?ajax=fm_write',{method:'POST',body:fd});
+    const d=await res.json();
+    if(d.ok){
+      savedContent=editor.value; unsaved.hidden=true;
+      fmStatus.textContent='✅ تم الحفظ';
+      setTimeout(()=>fmStatus.textContent=`${Math.max(1,Math.round(d.bytes/1024))} KB`,2000);
+    } else {
+      fmStatus.textContent='❌ '+(d.error||'خطأ في الحفظ');
+    }
+    saveBtn.disabled=false; saveBtn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg> حفظ';
+  }
+
+  saveBtn.addEventListener('click',doSave);
+  document.getElementById('fm-create-btn').addEventListener('click',async()=>{
+    const name=document.getElementById('fm-new-name').value.trim();
+    const dir=document.getElementById('fm-create-btn').dataset.dir||'';
+    if(!name) return;
+    const fd=new FormData(); fd.append('dir',dir); fd.append('name',name);
+    const res=await fetch('admin.php?ajax=fm_create',{method:'POST',body:fd});
+    const d=await res.json();
+    if(d.ok){document.getElementById('fm-new-name').value='';openFile(d.path);}
+    else alert(d.error);
+  });
+
+  loadDir('');
+})();
+</script>
+<?php endif; ?>
+
 </div><!-- /admin-main -->
 </div><!-- /admin-wrap -->
 
