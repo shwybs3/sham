@@ -2,8 +2,13 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+evil_check_ban($pdo);
+waf_check($pdo);
+
 $slug    = trim($_GET['slug'] ?? '');
-$reqLang = preg_replace('/[^a-z]/', '', strtolower(trim($_GET['lang'] ?? '')));
+// Language: ?lang=XX param takes priority; otherwise auto-detect from subdomain
+$subdomainLang = detect_lang_from_subdomain();
+$reqLang = preg_replace('/[^a-z]/', '', strtolower(trim($_GET['lang'] ?? $subdomainLang ?? '')));
 if (!$slug) { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug

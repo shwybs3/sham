@@ -4,6 +4,7 @@ require_once __DIR__ . '/partials.php';
 
 // Block banned IPs before any work (admin IP is auto-exempt inside evil_check_ban)
 evil_check_ban($pdo);
+waf_check($pdo);
 
 // ── CAPTCHA verify AJAX ─────────────────────────────────────────────────────
 if (!empty($_GET['ajax']) && $_GET['ajax'] === 'verify_captcha') {

@@ -7226,6 +7226,7 @@ $bruteEnabled  = get_cfg($pdo,'evil_brute_enabled','1') === '1';
 $banEnabled    = get_cfg($pdo,'evil_ban_enabled','1') === '1';
 $rateEnabled   = get_cfg($pdo,'evil_ratelimit_enabled','1') === '1';
 $logEnabled    = get_cfg($pdo,'evil_log_enabled','1') === '1';
+$wafEnabled    = get_cfg($pdo,'evil_waf_enabled','1') === '1';
 
 $sevColors = ['info'=>'#64748b','warning'=>'#f59e0b','critical'=>'#ef4444'];
 ?>
@@ -7295,6 +7296,7 @@ $sevColors = ['info'=>'#64748b','warning'=>'#f59e0b','critical'=>'#ef4444'];
 <div class="evil-toggles">
   <?php
   $protections = [
+    ['key'=>'evil_waf_enabled','label'=>'جدار الحماية WAF','sub'=>'يصدّ SQLi و XSS و Path Traversal تلقائياً','val'=>$wafEnabled],
     ['key'=>'evil_brute_enabled','label'=>'الحماية من تخمين كلمة المرور','sub'=>'قفل تلقائي بعد 2 محاولة خاطئة','val'=>$bruteEnabled],
     ['key'=>'evil_ban_enabled','label'=>'حظر IPs المشبوهة','sub'=>'حظر تصاعدي: 10 دق → 30 دق → دائم','val'=>$banEnabled],
     ['key'=>'evil_ratelimit_enabled','label'=>'تحديد معدل الطلبات','sub'=>'حماية من الإغراق وDDoS','val'=>$rateEnabled],
@@ -8130,5 +8132,82 @@ async function clearOldLogs(){
 </div><!-- /admin-wrap -->
 
 <script src="<?= h(asset_url('assets/js/admin.js')) ?>"></script>
+<script>
+/* ═══ Auto-save: persist add/edit-app form to localStorage ═══
+   Saves every text/select input on change. On page load, if saved
+   draft exists for this form (keyed by page + app-id), shows a
+   restore banner. Cleared on successful form submit.            */
+(function(){
+  var formId = (function(){
+    var p = new URLSearchParams(window.location.search);
+    var pg = p.get('page') || '';
+    if (pg !== 'add-app' && pg !== 'edit-app') return null;
+    return 'yas_draft_' + pg + (pg === 'edit-app' ? '_' + (p.get('id') || '0') : '');
+  })();
+  if (!formId) return;
+
+  var form = document.querySelector('form[method="post"]');
+  if (!form) return;
+
+  // Fields to track (text, textarea, select — skip file inputs and hidden CSRF)
+  function getFormData() {
+    var data = {};
+    form.querySelectorAll('input:not([type=file]):not([name=_csrf]):not([type=hidden]), textarea, select').forEach(function(el){
+      if (!el.name) return;
+      data[el.name] = el.value;
+    });
+    return data;
+  }
+  function setFormData(data) {
+    Object.keys(data).forEach(function(name){
+      var el = form.querySelector('[name="' + CSS.escape(name) + '"]');
+      if (el && el.type !== 'file') {
+        el.value = data[name];
+        el.dispatchEvent(new Event('input', {bubbles:true}));
+      }
+    });
+  }
+
+  // Save on any input change (debounced 1s)
+  var saveTimer;
+  form.addEventListener('input', function(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 1000); });
+  form.addEventListener('change', function(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 1000); });
+  function save() {
+    try { localStorage.setItem(formId, JSON.stringify({ts: Date.now(), data: getFormData()})); } catch(e){}
+  }
+
+  // Clear draft on submit
+  form.addEventListener('submit', function(){
+    try { localStorage.removeItem(formId); } catch(e){}
+  });
+
+  // On load: check for saved draft
+  try {
+    var stored = localStorage.getItem(formId);
+    if (!stored) return;
+    var obj = JSON.parse(stored);
+    if (!obj || !obj.data) return;
+    var age = Math.round((Date.now() - (obj.ts||0)) / 60000);
+    if (age > 1440) { localStorage.removeItem(formId); return; } // expire after 24h
+
+    // Show restore banner
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9990;background:#1e3a5f;color:#e0f0ff;border-radius:12px;padding:14px 18px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:360px;font-size:13px;direction:rtl';
+    banner.innerHTML = '<b>📝 مسودة محفوظة</b> منذ ' + (age < 1 ? 'أقل من دقيقة' : age + ' دقيقة') + '<br><small style="opacity:.75">لديك بيانات غير محفوظة في هذا النموذج</small><div style="margin-top:10px;display:flex;gap:8px">'
+      + '<button id="yd-restore" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px">استعادة</button>'
+      + '<button id="yd-discard" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px">تجاهل</button>'
+      + '</div>';
+    document.body.appendChild(banner);
+    document.getElementById('yd-restore').onclick = function(){
+      setFormData(obj.data);
+      banner.remove();
+    };
+    document.getElementById('yd-discard').onclick = function(){
+      localStorage.removeItem(formId);
+      banner.remove();
+    };
+  } catch(e){}
+})();
+</script>
 </body>
 </html>

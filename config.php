@@ -678,6 +678,101 @@ function scan_file_for_threats(string $filepath, string $context = 'general'): a
     return $threats;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   WAF — PHP-level Web Application Firewall.
+   Runs on every public page load. Blocks obvious SQLi, XSS, path
+   traversal, and null-byte injection before any other PHP runs.
+   Admin IP is always exempt. Toggle via evil_waf_enabled setting.
+   ═══════════════════════════════════════════════════════════════════ */
+function waf_check(PDO $pdo): void {
+    if (evil_is_admin_ip()) return;
+    if (get_cfg($pdo, 'evil_waf_enabled', '1') !== '1') return;
+
+    $ip  = $_SERVER['REMOTE_ADDR'] ?? '';
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+
+    // Collect all input values to check
+    $inputs = array_merge(
+        array_values($_GET  ?? []),
+        array_values($_POST ?? []),
+        array_values($_COOKIE ?? []),
+        [$uri, $_SERVER['HTTP_USER_AGENT'] ?? '', $_SERVER['HTTP_REFERER'] ?? '']
+    );
+    $rawInput = implode(' ', array_map('strval', $inputs));
+
+    // Null byte injection
+    if (str_contains($rawInput, "\0")) {
+        waf_block($pdo, $ip, 'null_byte', 'Null byte injection attempt');
+    }
+
+    // Path traversal
+    if (preg_match('#(\.\./|\.\.\\\\|%2e%2e%2f|%2e%2e/)#i', $rawInput)) {
+        waf_block($pdo, $ip, 'path_traversal', 'Path traversal attempt: ' . substr($rawInput, 0, 200));
+    }
+
+    // SQL injection patterns (common keywords/operators that indicate SQLi)
+    $sqliPatterns = [
+        '/\bunion\b.*\bselect\b/i',
+        '/\bselect\b.*\bfrom\b/i',
+        '/\bdrop\b.*\btable\b/i',
+        "/['\"].*\bor\b.*['\"]?[=<>]/i",
+        '/--\s*$|;\s*--/m',
+        '/\bexec\s*\(/i',
+        '/\bxp_cmdshell\b/i',
+        '/\binformation_schema\b/i',
+        '/\bload_file\s*\(/i',
+        '/\boutfile\b/i',
+    ];
+    foreach ($sqliPatterns as $pat) {
+        if (preg_match($pat, $rawInput)) {
+            waf_block($pdo, $ip, 'sqli', "SQLi pattern detected: $pat — " . substr($rawInput, 0, 200));
+        }
+    }
+
+    // XSS patterns
+    $xssPatterns = [
+        '/<script[^>]*>/i',
+        '/javascript\s*:/i',
+        '/on(?:load|error|click|mouse\w+|focus|blur|key\w+|submit|change|drag\w*|scroll)\s*=/i',
+        '/\beval\s*\(/i',
+        '/expression\s*\(/i',
+        '/vbscript\s*:/i',
+    ];
+    foreach ($xssPatterns as $pat) {
+        if (preg_match($pat, $rawInput)) {
+            waf_block($pdo, $ip, 'xss', "XSS pattern detected — " . substr($rawInput, 0, 200));
+        }
+    }
+
+    // PHP/code injection via request params
+    if (preg_match('/<\?php|<\?=/i', $rawInput)) {
+        waf_block($pdo, $ip, 'code_injection', 'PHP tag in request');
+    }
+
+    // Shell command injection
+    if (preg_match('/[;|&`]\s*(ls|cat|wget|curl|chmod|rm|id|whoami|pwd|nc|bash|sh)\b/i', $rawInput)) {
+        waf_block($pdo, $ip, 'cmd_injection', 'Command injection attempt');
+    }
+}
+
+function waf_block(PDO $pdo, string $ip, string $type, string $detail): never {
+    log_security_event($pdo, 'waf_block_' . $type, 'critical', $detail . " from $ip");
+    // Auto-ban repeat offenders (3rd WAF block = temp ban)
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM security_log WHERE ip=? AND event_type LIKE 'waf_block_%' AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+        $stmt->execute([$ip]);
+        if ((int)$stmt->fetchColumn() >= 2) {
+            evil_ban_ip($pdo, $ip, 'waf_repeat_offender');
+        }
+    } catch (Throwable $e) {}
+    http_response_code(403);
+    die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>مرفوض</title>
+    <style>body{margin:0;font-family:Tahoma,sans-serif;background:#0f172a;color:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+    .b{max-width:380px;padding:32px;border:1px solid rgba(239,68,68,.3);border-radius:16px}</style></head>
+    <body><div class="b"><h1 style="color:#ef4444;font-size:20px">🛡️ طلب مرفوض</h1>
+    <p style="color:#94a3b8;font-size:14px">تم رصد نمط مشبوه في طلبك.</p></div></body></html>');
+}
+
 function log_security_event(PDO $pdo, string $type, string $severity, string $detail, string $filename = ''): void {
     try {
         $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -1895,6 +1990,38 @@ function clean_utf8(?string $s): string {
 function clean_utf8_deep($v) {
     if (is_array($v)) return array_map('clean_utf8_deep', $v);
     return is_string($v) ? clean_utf8($v) : $v;
+}
+
+/* ═══════════════════════════════════════════════
+   Subdomain language detection.
+   Works when the host runs under a wildcard DNS
+   (*.yassota.com → same docroot). Returns the
+   2-letter lang code from the subdomain, or null
+   if on the main domain or an unknown subdomain.
+   ═══════════════════════════════════════════════ */
+function detect_lang_from_subdomain(): ?string {
+    static $cached = false;
+    if ($cached !== false) return $cached;
+    $host    = strtolower($_SERVER['HTTP_HOST'] ?? '');
+    $mainHost = strtolower(parse_url(SITE_URL, PHP_URL_HOST) ?: '');
+    if ($host === $mainHost || $host === '') { $cached = null; return null; }
+    // e.g. en.yassota.com — strip port first
+    $host = preg_replace('/:\d+$/', '', $host);
+    $parts = explode('.', $host);
+    if (count($parts) < 3) { $cached = null; return null; }
+    $sub  = $parts[0];
+    // Validate: must be a 2-letter language code we know about
+    $valid = ['en','ru','fr','de','es','tr','id','pt','ur','hi','zh','ja','ko','it','nl','fa','bn','th','vi'];
+    $cached = in_array($sub, $valid, true) ? $sub : null;
+    return $cached;
+}
+
+/* Returns the URL for a given language subdomain.
+   e.g. lang_subdomain_url('en') → https://en.yassota.com */
+function lang_subdomain_url(string $lang, string $path = ''): string {
+    $mainHost = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+    $scheme   = parse_url(SITE_URL, PHP_URL_SCHEME) ?: 'https';
+    return $scheme . '://' . $lang . '.' . $mainHost . '/' . ltrim($path, '/');
 }
 
 function url(string $path = ''): string { return SITE_URL . '/' . ltrim($path, '/'); }

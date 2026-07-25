@@ -2,6 +2,9 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+evil_check_ban($pdo);
+waf_check($pdo);
+
 /* ── Data ── */
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -9,14 +12,22 @@ $offset  = ($page - 1) * $perPage;
 $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
 
-$cacheable = $search === '';
+$cacheable = ($search === '' && !detect_lang_from_subdomain());
 if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
 
+// Subdomain language: on en.yassota.com show only English translations
+$subdomainLang = detect_lang_from_subdomain();
 // Only show original (non-translated) apps on homepage — translations are separate pages
-$where  = "WHERE a.status='published' AND (a.parent_id IS NULL OR a.parent_id = 0)";
-$params = [];
+// Exception: language subdomains show translated versions
+if ($subdomainLang) {
+    $where  = "WHERE a.status='published' AND a.lang_code=? AND a.parent_id IS NOT NULL";
+    $params = [$subdomainLang];
+} else {
+    $where  = "WHERE a.status='published' AND (a.parent_id IS NULL OR a.parent_id = 0)";
+    $params = [];
+}
 if ($catSlug && $catSlug !== 'all') {
     $where .= " AND c.slug = ?"; $params[] = $catSlug;
 }
