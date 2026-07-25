@@ -4567,7 +4567,7 @@ elseif ($page === 'article-gen'):
             body:JSON.stringify({app_id:parseInt(appId),html:fullHtml})});
           const sd=await sr.json();
           if(sd.success){
-            rowSt.innerHTML=`✓ مقال محفوظ (${sd.updated?'تحديث':'جديد'}) — <a href="${sd.view_url}" target="_blank" style="color:var(--accent)">معاينة</a> | <a href="admin.php?page=blog&edit=${sd.id}" style="color:var(--accent)">تعديل</a>`;
+            rowSt.innerHTML=`✓ مقال محفوظ (${sd.updated?'تحديث':'جديد'}) — <a href="${sd.view_url}" target="_blank" style="color:var(--accent)">معاينة</a> | <a href="admin.php?page=blog-edit&id=${sd.id}" style="color:var(--accent)">تعديل</a>`;
             rowBar.style.background='linear-gradient(90deg,#16a34a,#15803d)';
             const lbl=document.getElementById('ag-app-'+appId);
             if(lbl)lbl.style.borderColor='#16a34a';
@@ -4626,7 +4626,7 @@ elseif ($page === 'stats'):
 ?>
 <div class="admin-header"><h1>إحصائيات الموقع</h1></div>
 
-<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--navy-900);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
+<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--text);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
   ℹ️ هذه إحصائيات <strong>حقيقية</strong> يجمعها الموقع نفسه (مشاهدات وتحميلات وعمليات بحث فعلية من الزوار) — وليست بيانات Google Search Console.
   للحصول على بيانات جوجل الفعلية (الظهور في نتائج البحث، الكلمات المفتاحية، معدل النقر) يجب ربط حساب Google Search Console الخاص بك مباشرة عبر
   <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a> — وهذا يتطلب حسابك الشخصي ولا يمكن أتمتته من هنا.
