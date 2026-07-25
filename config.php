@@ -300,8 +300,10 @@ function ensure_schema(PDO $pdo): array {
             'apk_uploaded_at'  => "DATETIME NULL",
             'download_source'  => "ENUM('playstore','apk','both') NOT NULL DEFAULT 'playstore'",
             'badge'            => "ENUM('','new','updated','hot','choice') NOT NULL DEFAULT ''",
-            'last_indexed_at' => "DATETIME NULL",
-            'index_status'    => "ENUM('pending','indexed','error') NOT NULL DEFAULT 'pending'",
+            'last_indexed_at'  => "DATETIME NULL",
+            'index_status'     => "ENUM('pending','indexed','error') NOT NULL DEFAULT 'pending'",
+            'permissions'      => "TEXT NULL",
+            'certificate_sha256' => "VARCHAR(120) NULL",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",

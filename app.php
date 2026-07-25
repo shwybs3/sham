@@ -447,6 +447,82 @@ function wave(): string {
   </div>
   <?php endif; ?>
 
+  <!-- App Permissions Section -->
+  <?php
+  $permRaw = $app['permissions'] ?? '';
+  $permList = [];
+  if ($permRaw) {
+      $decoded = json_decode($permRaw, true);
+      if (is_array($decoded)) $permList = $decoded;
+      elseif (is_string($permRaw)) $permList = array_filter(array_map('trim', explode(',', $permRaw)));
+  }
+  $permLabels = [
+      'INTERNET'                         => ['الإنترنت',             '🌐', 'يتصل بالإنترنت'],
+      'ACCESS_NETWORK_STATE'             => ['حالة الشبكة',          '📶', 'يفحص حالة اتصال الشبكة'],
+      'ACCESS_WIFI_STATE'                => ['Wi-Fi',                '📡', 'يفحص اتصال Wi-Fi'],
+      'CAMERA'                           => ['الكاميرا',             '📷', 'يصل للكاميرا'],
+      'RECORD_AUDIO'                     => ['الميكروفون',           '🎤', 'يسجّل الصوت'],
+      'READ_EXTERNAL_STORAGE'            => ['قراءة الملفات',        '📂', 'يقرأ ملفات التخزين الخارجي'],
+      'WRITE_EXTERNAL_STORAGE'           => ['كتابة الملفات',        '💾', 'يكتب على التخزين الخارجي'],
+      'READ_CONTACTS'                    => ['جهات الاتصال',         '👤', 'يصل لجهات الاتصال'],
+      'WRITE_CONTACTS'                   => ['تعديل جهات الاتصال',  '✏️', 'يُعدّل جهات الاتصال'],
+      'ACCESS_FINE_LOCATION'             => ['الموقع الدقيق',        '📍', 'يصل للموقع الجغرافي الدقيق (GPS)'],
+      'ACCESS_COARSE_LOCATION'           => ['الموقع التقريبي',      '🗺️', 'يصل للموقع الجغرافي التقريبي'],
+      'READ_CALL_LOG'                    => ['سجل المكالمات',        '📞', 'يقرأ سجل المكالمات'],
+      'CALL_PHONE'                       => ['إجراء مكالمات',        '📲', 'يُجري مكالمات هاتفية'],
+      'SEND_SMS'                         => ['إرسال SMS',            '💬', 'يُرسل رسائل نصية'],
+      'READ_SMS'                         => ['قراءة SMS',            '📩', 'يقرأ الرسائل النصية'],
+      'RECEIVE_BOOT_COMPLETED'           => ['التشغيل التلقائي',     '🔁', 'يعمل تلقائياً عند إقلاع الجهاز'],
+      'VIBRATE'                          => ['الاهتزاز',             '📳', 'يُشغّل اهتزاز الجهاز'],
+      'FLASHLIGHT'                       => ['المصباح',              '🔦', 'يتحكم في كشاف الإضاءة'],
+      'USE_BIOMETRIC'                    => ['بصمة / تعرف وجه',     '🔐', 'يستخدم المصادقة البيومترية'],
+      'USE_FINGERPRINT'                  => ['بصمة الإصبع',         '👆', 'يستخدم قارئ البصمة'],
+      'BLUETOOTH'                        => ['Bluetooth',            '🔵', 'يتصل بأجهزة Bluetooth'],
+      'NFC'                              => ['NFC',                  '📳', 'يستخدم دفع / قراءة NFC'],
+      'GET_ACCOUNTS'                     => ['الحسابات',             '🔑', 'يصل للحسابات المسجّلة على الجهاز'],
+      'READ_MEDIA_IMAGES'                => ['الصور',                '🖼️', 'يقرأ صور المعرض'],
+      'READ_MEDIA_VIDEO'                 => ['الفيديوهات',           '🎬', 'يقرأ ملفات الفيديو'],
+      'READ_MEDIA_AUDIO'                 => ['الصوتيات',             '🎵', 'يقرأ ملفات الصوت'],
+      'SCHEDULE_EXACT_ALARM'             => ['المنبهات الدقيقة',     '⏰', 'يُجدول تنبيهات في وقت محدد'],
+      'POST_NOTIFICATIONS'               => ['الإشعارات',            '🔔', 'يُرسل إشعارات للجهاز'],
+      'FOREGROUND_SERVICE'               => ['خدمة مستمرة',         '⚙️', 'يعمل في الخلفية بشكل مستمر'],
+      'REQUEST_INSTALL_PACKAGES'         => ['تثبيت تطبيقات',       '📦', 'يمكنه تثبيت تطبيقات أخرى'],
+      'SYSTEM_ALERT_WINDOW'              => ['نافذة فوق التطبيقات', '🪟', 'يعرض نوافذ فوق التطبيقات الأخرى'],
+      'MANAGE_EXTERNAL_STORAGE'          => ['إدارة كامل التخزين',  '🗂️', 'وصول كامل لكل الملفات (مدير ملفات)'],
+      'CHANGE_WIFI_STATE'                => ['تغيير Wi-Fi',         '🔄', 'يتصل أو يقطع اتصال Wi-Fi'],
+      'CHANGE_NETWORK_STATE'             => ['تغيير الشبكة',        '🔄', 'يُعدّل إعدادات الشبكة'],
+      'WAKE_LOCK'                        => ['إبقاء الشاشة نشطة',   '🌙', 'يمنع إطفاء الشاشة تلقائياً'],
+  ];
+  if ($permList): ?>
+  <div class="section-box reveal" style="padding:16px 20px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span style="font-size:13px;font-weight:700">الصلاحيات المطلوبة</span>
+      <span style="font-size:11px;color:var(--muted);margin-right:auto"><?= count($permList) ?> صلاحية</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <?php foreach ($permList as $perm):
+        $key = strtoupper(str_replace('android.permission.', '', trim($perm)));
+        $info = $permLabels[$key] ?? [str_replace(['android.permission.','.'], ['', ' '], $perm), '🔹', ''];
+        $dangerClass = in_array($key, ['CAMERA','RECORD_AUDIO','ACCESS_FINE_LOCATION','READ_CONTACTS','READ_SMS','SEND_SMS','CALL_PHONE','READ_CALL_LOG','GET_ACCOUNTS','REQUEST_INSTALL_PACKAGES','MANAGE_EXTERNAL_STORAGE','SYSTEM_ALERT_WINDOW'], true);
+      ?>
+      <div title="<?= h($info[2] ?: $info[0]) ?>" style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:default;
+        background:<?= $dangerClass ? 'rgba(239,68,68,.07)' : 'rgba(6,182,212,.06)' ?>;
+        border:1px solid <?= $dangerClass ? 'rgba(239,68,68,.2)' : 'rgba(6,182,212,.15)' ?>;
+        color:<?= $dangerClass ? 'var(--danger)' : 'var(--muted)' ?>">
+        <span><?= $info[1] ?></span>
+        <span><?= h($info[0]) ?></span>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if (count(array_filter($permList, fn($p) => in_array(strtoupper(str_replace('android.permission.','',$p)),['CAMERA','RECORD_AUDIO','ACCESS_FINE_LOCATION','READ_CONTACTS','READ_SMS','SEND_SMS','CALL_PHONE','REQUEST_INSTALL_PACKAGES','MANAGE_EXTERNAL_STORAGE'],true)))): ?>
+    <p style="font-size:11px;color:var(--muted);margin-top:10px">
+      <span style="color:var(--danger)">●</span> صلاحيات باللون الأحمر قد تكون حساسة — تأكد من فهم سبب حاجة التطبيق لها قبل المنح.
+    </p>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
+
   <?= wave() ?>
 
   <!-- Screenshots -->
