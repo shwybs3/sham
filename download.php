@@ -104,11 +104,18 @@ if (!empty($app['category_id'])) {
     $catName = $r->fetchColumn() ?: '';
 }
 
-// Detect if CAPTCHA is needed for this visitor
-$captchaType     = captcha_should_challenge($pdo); // 'none'|'turnstile'|'v2'|'v3'
+// Detect if CAPTCHA is needed for suspicious visitors (full-page overlay)
+$captchaType      = captcha_should_challenge($pdo); // 'none'|'turnstile'|'v2'|'v3'
 $turnstileSiteKey = trim(get_cfg($pdo, 'turnstile_site_key'));
 $v3SiteKey        = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
 $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
+
+// Download button CAPTCHA — ALWAYS required when any key is configured,
+// regardless of visitor risk level. Prefers Turnstile → v2 → v3.
+$dlCaptchaType = 'none';
+if ($turnstileSiteKey)      $dlCaptchaType = 'turnstile';
+elseif ($v2SiteKey)         $dlCaptchaType = 'v2';
+elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -125,11 +132,11 @@ $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
   <script><?= $customAdCode ?></script>
   <?php endif; ?>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
-  <?php if ($captchaType === 'turnstile' && $turnstileSiteKey): ?>
+  <?php if ($captchaType === 'turnstile' || $dlCaptchaType === 'turnstile'): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-  <?php elseif ($captchaType === 'v3' && $v3SiteKey): ?>
+  <?php elseif ($captchaType === 'v3' || $dlCaptchaType === 'v3'): ?>
   <script src="https://www.google.com/recaptcha/api.js?render=<?= h($v3SiteKey) ?>" async defer></script>
-  <?php elseif ($captchaType === 'v2' && $v2SiteKey): ?>
+  <?php elseif ($captchaType === 'v2' || $dlCaptchaType === 'v2'): ?>
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <?php endif; ?>
 </head>
@@ -306,9 +313,42 @@ $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
       <div class="dlp-progress-fill" id="dl-progress"></div>
     </div>
 
-    <!-- Download button (hidden until ready) -->
+    <!-- Inline CAPTCHA (shown when timer hits 0, required before download) -->
+    <?php if ($dlCaptchaType !== 'none'): ?>
+    <div id="dl-captcha-wrap" style="display:none;margin:18px 0 10px;text-align:center">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        حل التحقق أدناه لبدء التحميل
+      </p>
+      <?php if ($dlCaptchaType === 'turnstile'): ?>
+      <div style="display:flex;justify-content:center">
+        <div class="cf-turnstile"
+             data-sitekey="<?= h($turnstileSiteKey) ?>"
+             data-callback="onDlCaptchaSolved"
+             data-theme="light"
+             data-size="normal"></div>
+      </div>
+      <?php elseif ($dlCaptchaType === 'v2'): ?>
+      <div style="display:flex;justify-content:center">
+        <div class="g-recaptcha"
+             data-sitekey="<?= h($v2SiteKey) ?>"
+             data-callback="onDlCaptchaSolved"></div>
+      </div>
+      <?php elseif ($dlCaptchaType === 'v3'): ?>
+      <button id="dl-captcha-v3-btn"
+              onclick="runDlV3Captcha()"
+              style="background:var(--accent,#2563eb);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        تحقق وابدأ التحميل
+      </button>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Download button (hidden until timer + CAPTCHA both done) -->
     <?php $manualUrl = $hasLocalApk ? h(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : h($url); ?>
-    <a id="btn-manual" href="<?= $manualUrl ?>" class="dlp-btn-download hidden" <?= $hasLocalApk ? 'download' : '' ?> data-hardnav="1">
+    <a id="btn-manual" href="<?= $manualUrl ?>" class="dlp-btn-download hidden" <?= $hasLocalApk ? 'download' : '' ?> data-hardnav="1"
+       aria-disabled="true" style="pointer-events:none;opacity:.45">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
         <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
@@ -567,22 +607,98 @@ $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
 <?php render_cookie_banner(); ?>
 
 <script>
-const DOWNLOAD_URL = <?= $hasLocalApk ? json_encode(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : json_encode($url) ?>;
-const HAS_LINK     = <?= $hasLink ? 'true' : 'false' ?>;
-const IS_LOCAL_APK = <?= $hasLocalApk ? 'true' : 'false' ?>;
-const TOTAL        = <?= $countdownSecs ?>;
-const CIRC         = 326.73;
+const DOWNLOAD_URL    = <?= $hasLocalApk ? json_encode(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : json_encode($url) ?>;
+const HAS_LINK        = <?= $hasLink ? 'true' : 'false' ?>;
+const IS_LOCAL_APK    = <?= $hasLocalApk ? 'true' : 'false' ?>;
+const TOTAL           = <?= $countdownSecs ?>;
+const CIRC            = 326.73;
+const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>; // 'none'|'turnstile'|'v2'|'v3'
+<?php if ($dlCaptchaType === 'v3'): ?>
+const DL_V3_SITE_KEY  = <?= json_encode($v3SiteKey) ?>;
+<?php endif; ?>
 
-let remaining = TOTAL;
+let remaining          = TOTAL;
+let dlTimerDone        = false;   // timer reached zero
+let dlCaptchaSolved    = (DL_CAPTCHA_TYPE === 'none'); // no captcha = auto-solved
 
-const countEl    = document.getElementById('dl-count');
-const statusText = document.getElementById('dl-status-text');
-const progressEl = document.getElementById('dl-progress');
-const ringProg   = document.getElementById('ring-prog');
-const btnManual  = document.getElementById('btn-manual');
-const manualLbl  = document.getElementById('manual-label');
-const step2      = document.getElementById('step2');
-const step3      = document.getElementById('step3');
+const countEl       = document.getElementById('dl-count');
+const statusText    = document.getElementById('dl-status-text');
+const progressEl    = document.getElementById('dl-progress');
+const ringProg      = document.getElementById('ring-prog');
+const btnManual     = document.getElementById('btn-manual');
+const manualLbl     = document.getElementById('manual-label');
+const captchaWrap   = document.getElementById('dl-captcha-wrap');
+const step2         = document.getElementById('step2');
+const step3         = document.getElementById('step3');
+const dlCaptchaVerifyUrl = location.pathname + '?ajax=verify_captcha';
+
+// Called after both timer AND captcha are ready
+function triggerDownload() {
+  if (!dlTimerDone || !dlCaptchaSolved) return;
+
+  if (statusText) statusText.innerHTML = '<strong style="color:var(--success)">✓ جاهز للتحميل!</strong>';
+
+  // Auto-fire the download
+  const a = document.createElement('a');
+  a.href = DOWNLOAD_URL;
+  if (IS_LOCAL_APK) {
+    a.download = '';
+  } else {
+    a.target = '_blank';
+    a.rel = 'noopener nofollow';
+  }
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+  // Enable and reveal manual button
+  setTimeout(function() {
+    if (btnManual) {
+      btnManual.classList.remove('hidden');
+      btnManual.style.pointerEvents = '';
+      btnManual.style.opacity = '';
+      btnManual.removeAttribute('aria-disabled');
+      btnManual.scrollIntoView({behavior:'smooth', block:'center'});
+    }
+    if (manualLbl) manualLbl.style.display = 'block';
+  }, 1800);
+}
+
+// Server-verify a captcha token, then resolve
+function verifyDlCaptcha(token, type) {
+  fetch(dlCaptchaVerifyUrl, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'token=' + encodeURIComponent(token) + '&type=' + encodeURIComponent(type)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) {
+      dlCaptchaSolved = true;
+      if (captchaWrap) captchaWrap.style.display = 'none';
+      triggerDownload();
+    } else {
+      // Reset widget so user can retry
+      if (typeof turnstile !== 'undefined') turnstile.reset();
+      if (typeof grecaptcha !== 'undefined' && type === 'v2') grecaptcha.reset();
+    }
+  })
+  .catch(function(){ dlCaptchaSolved = true; triggerDownload(); }); // network fail — allow through
+}
+
+// Turnstile callback
+window.onDlCaptchaSolved = function(token) { verifyDlCaptcha(token, 'turnstile'); };
+// reCAPTCHA v2 callback
+window.onDlCaptchaSolvedV2 = function(token) { verifyDlCaptcha(token, 'v2'); };
+<?php if ($dlCaptchaType === 'v3'): ?>
+window.runDlV3Captcha = function() {
+  var btn = document.getElementById('dl-captcha-v3-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التحقق…'; }
+  grecaptcha.ready(function(){
+    grecaptcha.execute(DL_V3_SITE_KEY, {action:'download'}).then(function(token){
+      verifyDlCaptcha(token, 'v3');
+    });
+  });
+};
+<?php endif; ?>
 
 function tick() {
   remaining--;
@@ -592,36 +708,37 @@ function tick() {
   if (ringProg) ringProg.style.strokeDashoffset = CIRC * (1 - pct);
 
   if (remaining <= 0) {
-    // Step 3 active
+    dlTimerDone = true;
+
     if (step2) { step2.classList.remove('active'); step2.classList.add('done'); step2.querySelector('.dlp-step-dot').textContent = '✓'; }
     if (step3) { step3.classList.add('active'); }
-
-    if (statusText) statusText.innerHTML = '<strong style="color:var(--success)">✓ جاهز للتحميل!</strong>';
     if (countEl) { countEl.textContent = '✓'; countEl.style.fontSize = '28px'; }
 
-    // Trigger download
-    const a = document.createElement('a');
-    a.href = DOWNLOAD_URL;
-    if (IS_LOCAL_APK) {
-      a.download = '';
+    if (!dlCaptchaSolved) {
+      // Show CAPTCHA — user must solve before download fires
+      if (captchaWrap) captchaWrap.style.display = 'block';
+      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
+      <?php if ($dlCaptchaType === 'v3'): ?>
+      // v3 is invisible — auto-run without showing any widget
+      if (captchaWrap) captchaWrap.style.display = 'none';
+      if (typeof grecaptcha !== 'undefined') {
+        window.runDlV3Captcha();
+      } else {
+        setTimeout(function(){ if (typeof grecaptcha !== 'undefined') window.runDlV3Captcha(); }, 1500);
+      }
+      <?php endif; ?>
+      // Also show the (still-disabled) button so user sees it exists
+      if (btnManual) { btnManual.classList.remove('hidden'); }
     } else {
-      a.target = '_blank';
-      a.rel = 'noopener nofollow';
+      // No captcha required — download immediately
+      triggerDownload();
     }
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-    // Show manual button after 2s
-    setTimeout(() => {
-      if (btnManual)  { btnManual.classList.remove('hidden'); btnManual.scrollIntoView({behavior:'smooth', block:'center'}); }
-      if (manualLbl)  manualLbl.style.display = 'block';
-    }, 2000);
   }
 }
 
 if (HAS_LINK && countEl) {
-  // kick off immediately
   if (ringProg) ringProg.style.strokeDashoffset = CIRC;
-  const timer = setInterval(() => {
+  const timer = setInterval(function() {
     if (remaining <= 0) { clearInterval(timer); return; }
     tick();
   }, 1000);
