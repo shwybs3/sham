@@ -1768,6 +1768,9 @@ if ($page !== 'login') require_admin();
 
 // ─── Save settings ───
 if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    // Capture old IndexNow key before overwriting
+    $oldIndexNowKey = get_cfg($pdo, 'indexnow_key', '');
+
     // Multi-key inputs — combine array into newline-separated string
     $multiKeys = array_filter(array_map('trim', $_POST['openrouter_key_multi'] ?? []));
     $mergedKey = implode("\n", $multiKeys) ?: trim($_POST['openrouter_key'] ?? '');
@@ -1794,6 +1797,21 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
     } else {
         set_cfg($pdo, 'admin_ip_allowlist', '');
     }
+
+    // Auto-manage IndexNow key file — create new, delete old on key change
+    $newIndexNowKey = get_cfg($pdo, 'indexnow_key', '');
+    if ($newIndexNowKey && preg_match('/^[a-zA-Z0-9\-_]{6,128}$/', $newIndexNowKey)) {
+        $keyFile = __DIR__ . '/' . $newIndexNowKey . '.txt';
+        if (!file_exists($keyFile)) {
+            file_put_contents($keyFile, $newIndexNowKey);
+        }
+        // Remove old key file if the key was changed
+        if ($oldIndexNowKey && $oldIndexNowKey !== $newIndexNowKey) {
+            $oldFile = __DIR__ . '/' . $oldIndexNowKey . '.txt';
+            if (file_exists($oldFile)) @unlink($oldFile);
+        }
+    }
+
     $msg = 'تم حفظ الإعدادات';
 }
 
