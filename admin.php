@@ -5321,7 +5321,36 @@ elseif ($page === 'database'):
 
 <?php
 /* ─────────────── SETTINGS ─────────────── */
-elseif ($page === 'settings'): ?>
+elseif ($page === 'settings'):
+/* Helper: expandable tip block */
+$tip = function(string $teaser, string $full): string {
+    return '<div class="setting-detail"><div class="detail-short">' . $teaser . '</div>'
+         . '<button type="button" class="detail-toggle" onclick="toggleSettingDetail(this)">▼ عرض المزيد</button>'
+         . '<div class="detail-full">' . $full . '</div></div>';
+};
+?>
+
+<style>
+.setting-detail{margin-top:9px;border:1px solid rgba(6,182,212,.18);border-radius:9px;background:rgba(6,182,212,.03);padding:11px 14px;font-size:12px;color:var(--muted);line-height:1.85}
+.setting-detail .detail-short{color:var(--muted)}
+.setting-detail .detail-full{display:none;margin-top:10px;border-top:1px solid rgba(6,182,212,.12);padding-top:10px;color:var(--muted)}
+.setting-detail.is-open .detail-short{display:none}
+.setting-detail.is-open .detail-full{display:block}
+.detail-toggle{margin-top:7px;background:none;border:none;color:var(--cyan);font-size:11px;cursor:pointer;padding:0;font-family:inherit;display:block}
+.detail-toggle:hover{text-decoration:underline}
+.detail-steps{margin:10px 0 4px;padding-right:0;list-style:none;display:flex;flex-direction:column;gap:7px;counter-reset:dstep}
+.detail-steps li{counter-increment:dstep;display:flex;align-items:flex-start;gap:9px}
+.detail-steps li::before{content:counter(dstep);display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:50%;background:rgba(6,182,212,.18);color:var(--cyan);font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+.detail-note{margin-top:10px;padding:8px 11px;background:rgba(6,182,212,.07);border-radius:7px;font-size:11px;border-right:3px solid rgba(6,182,212,.4)}
+.detail-note strong{color:var(--cyan)}
+</style>
+<script>
+function toggleSettingDetail(btn){
+  var el=btn.closest('.setting-detail');
+  var open=el.classList.toggle('is-open');
+  btn.textContent=open?'▲ عرض أقل':'▼ عرض المزيد';
+}
+</script>
 
 <div class="admin-header"><h1>الإعدادات</h1></div>
 
@@ -5380,6 +5409,18 @@ elseif ($page === 'settings'): ?>
         أضف مفتاحاً أو أكثر — سيتم التبديل بينها تلقائياً. احصل على مفتاح مجاني من
         <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a>
       </div>
+      <?= $tip(
+        'OpenRouter يمنحك وصولاً لمئات نماذج الذكاء الاصطناعي المجانية والمدفوعة بمفتاح واحد. التسجيل مجاني تماماً ولا يتطلب بطاقة ائتمان.',
+        '<ol class="detail-steps">
+          <li>افتح <a href="https://openrouter.ai" target="_blank" style="color:var(--cyan)">openrouter.ai</a> واضغط <strong>Sign Up</strong> (يمكنك الدخول بحساب Google أو GitHub)</li>
+          <li>بعد تسجيل الدخول انتقل مباشرةً إلى <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--cyan)">openrouter.ai/keys</a></li>
+          <li>اضغط <strong>Create Key</strong> — سمّه أي اسم تريد (مثلاً "yassota") واتركه بدون قيود مبلغ (unlimited)</li>
+          <li>انسخ المفتاح الذي يبدأ بـ <code>sk-or-v1-...</code> والصقه في الحقل أعلاه</li>
+          <li>لرفع الحد المجاني: أضف مفاتيح من حسابات مختلفة — الموقع يُبدّل بينها تلقائياً</li>
+        </ol>
+        <div class="detail-note"><strong>الحد المجاني:</strong> نماذج مثل Llama 3.3 70B تُتيح ملايين التوكنات يومياً — تكفي لتوليد محتوى 200+ تطبيق يومياً. إذا نفد الحد تبدّل المنظومة تلقائياً للنموذج الاحتياطي.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>نصيحة:</strong> النماذج المُنهية بـ <code>:free</code> (مثل <code>meta-llama/llama-3.3-70b-instruct:free</code>) مجانية تماماً. اختر "openrouter/free" إذا أردت الموقع يختار أفضل نموذج مجاني متاح تلقائياً في كل مرة.</div>'
+      ) ?>
       <input type="hidden" name="openrouter_key" id="openrouter-key-hidden">
     </div>
     <div class="form-grid">
@@ -5437,6 +5478,16 @@ elseif ($page === 'settings'): ?>
         استخدم بدلاً منه زر "استيراد من Google Play" الذي يجلب الأيقونة الحقيقية للتطبيق (وهو الخيار الموصى به).
         اطّلع على قائمة الموديلات المتاحة من <a href="https://openrouter.ai/models?modality=text-%3Eimage" target="_blank" style="color:var(--cyan)">openrouter.ai/models</a>.
       </div>
+      <?= $tip(
+        'نماذج توليد الصور بالذكاء الاصطناعي تُنتج أيقونات فريدة عند عدم توفر أيقونة حقيقية من Google Play. الخيار الموصى به هو استيراد الأيقونة مباشرةً من Play Store.',
+        '<p style="margin-bottom:8px">للعثور على نماذج توليد الصور المتاحة على OpenRouter:</p>
+        <ol class="detail-steps">
+          <li>افتح <a href="https://openrouter.ai/models?modality=text-%3Eimage" target="_blank" style="color:var(--cyan)">openrouter.ai/models (فلتر: Image Output)</a></li>
+          <li>ابحث عن نماذج تدعم إنتاج الصور — مثال: <code>google/gemini-2.5-flash-image-preview</code></li>
+          <li>انسخ معرّف النموذج (model ID) والصقه في الحقل أعلاه</li>
+        </ol>
+        <div class="detail-note"><strong>تنبيه مهم:</strong> معظم نماذج توليد الصور المجانية على OpenRouter غير مستقرة أو محدودة جداً. يُنصح بترك هذا الحقل فارغاً واستخدام زر "استيراد من Google Play" الذي يجلب الأيقونة الأصلية عالية الجودة مباشرةً.</div>'
+      ) ?>
     </div>
   </div>
 
@@ -5458,11 +5509,32 @@ elseif ($page === 'settings'): ?>
         <label class="form-label">Bot Token</label>
         <input class="form-input" type="text" name="telegram_bot_token" value="<?= h(get_cfg($pdo,'telegram_bot_token')) ?>" placeholder="123456789:AAF..." dir="ltr" style="font-family:var(--f-mono);font-size:12px">
         <div class="form-hint">الحصول عليه من @BotFather → /newbot</div>
+        <?= $tip(
+          'توكن البوت هو مفتاح سري يُعرّف بوتك لتيليجرام. احصل عليه من @BotFather في 3 خطوات سريعة — لا تحتاج إنشاء حساب خارجي.',
+          '<ol class="detail-steps">
+            <li>افتح تيليجرام وابحث عن <a href="https://t.me/BotFather" target="_blank" style="color:#2AABEE">@BotFather</a> وابدأ محادثة معه</li>
+            <li>أرسل الأمر <code>/newbot</code> ثم اتبع التعليمات: أدخل اسم البوت (مثل "yassota Bot") ثم اسم المستخدم (يجب أن ينتهي بـ bot، مثل "yassota_app_bot")</li>
+            <li>سيُرسل @BotFather توكناً بالشكل <code>123456789:AAF...</code> — انسخه والصقه في الحقل أعلاه</li>
+            <li>أضف البوت مشرفاً في قناتك: افتح القناة ← إدارة القناة ← المشرفون ← إضافة مشرف ← ابحث عن اسم بوتك</li>
+          </ol>
+          <div class="detail-note"><strong>مهم:</strong> احتفظ بالتوكن سرياً تماماً — من يملكه يتحكم في بوتك. إذا سُرب المفتاح أصدر واحداً جديداً فوراً من @BotFather عبر <code>/revoke</code>.</div>'
+        ) ?>
       </div>
       <div class="form-group">
         <label class="form-label">Channel ID أو اسم القناة</label>
         <input class="form-input" type="text" name="telegram_channel_id" value="<?= h(get_cfg($pdo,'telegram_channel_id')) ?>" placeholder="@yassota_channel أو -100123456789" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
         <div class="form-hint">مثال: @channelname أو رقم ID القناة الخاصة</div>
+        <?= $tip(
+          'القنوات العامة: استخدم @اسم_القناة مباشرةً. القنوات الخاصة: تحتاج رقم ID السالب (مثال: -1001234567890) للحصول عليه.',
+          '<p style="margin-bottom:8px"><strong style="color:var(--white)">للقنوات العامة:</strong> استخدم مباشرةً <code>@channelname</code> (اسم قناتك على تيليجرام)</p>
+          <p style="margin-bottom:8px"><strong style="color:var(--white)">للقنوات الخاصة — للحصول على Channel ID:</strong></p>
+          <ol class="detail-steps">
+            <li>أضف بوت <a href="https://t.me/userinfobot" target="_blank" style="color:#2AABEE">@userinfobot</a> أو <a href="https://t.me/raw_data_bot" target="_blank" style="color:#2AABEE">@raw_data_bot</a> إلى قناتك كمشرف</li>
+            <li>أرسل أي رسالة في القناة وسيردّ البوت بمعلومات القناة بما فيها Chat ID</li>
+            <li>الـ ID يبدأ بـ <code>-100</code> متبوعاً بأرقام (مثال: <code>-1001234567890</code>)</li>
+          </ol>
+          <div class="detail-note"><strong>بديل سريع:</strong> حوّل قناتك إلى عامة مؤقتاً لمعرفة اسمها، ثم استخدم <code>@اسم_القناة</code> حتى في حال إعادتها خاصة — هذا الشكل يعمل مع البوت طالما هو مشرف.</div>'
+        ) ?>
       </div>
     </div>
     <div class="form-group">
@@ -5495,6 +5567,18 @@ elseif ($page === 'settings'): ?>
         الرقم الظاهر في كود الوحدة الإعلانية بعد <code>data-ad-slot="..."</code>.
         احتفظ بالحقل فارغاً إذا كنت تعتمد على Auto Ads فقط.
       </div>
+      <?= $tip(
+        'Slot ID هو رقم وحدتك الإعلانية في Google AdSense. تحتاجه لوضع إعلانات في أماكن محددة بدلاً من الاعتماد على Auto Ads وحدها.',
+        '<ol class="detail-steps">
+          <li>افتح <a href="https://adsense.google.com" target="_blank" style="color:var(--cyan)">adsense.google.com</a> وسجّل دخولك بحساب Google المرتبط</li>
+          <li>اذهب إلى <strong>الإعلانات ← حسب وحدة الإعلانات ← إنشاء وحدة إعلانية جديدة</strong></li>
+          <li>اختر نوع الوحدة (إعلان عرض مناسب، أو إعلان داخل المحتوى) وسمّها</li>
+          <li>بعد الإنشاء ستجد كوداً يحتوي على <code>data-ad-slot="XXXXXXXXXX"</code> — الرقم هو Slot ID الذي تحتاجه</li>
+          <li>انسخ هذا الرقم (10 أرقام عادةً) والصقه في الحقل أعلاه</li>
+        </ol>
+        <div class="detail-note"><strong>معرّف الناشر (Publisher ID):</strong> هو <code>ca-pub-5506877998492189</code> — مُثبَّت تلقائياً في كود الموقع، لا تحتاج إضافته هنا. الذي تحتاجه هنا هو Slot ID الوحدة الإعلانية فقط.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>Auto Ads مقابل Manual Slots:</strong> Auto Ads تضع الإعلانات أينما تراها Google مناسبة. Manual Slot ID يُتيح التحكم الكامل في مكان الإعلان ومظهره — مُنصح به لتحسين العائد.</div>'
+      ) ?>
     </div>
     <div class="form-hint" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-c);line-height:1.9">
       تمت إزالة شبكة النوافذ المنبثقة (MoneyTag/PopAds) لأنها تخالف سياسات ناشري Google وتقلل فرص القبول في AdSense.
@@ -5540,6 +5624,18 @@ elseif ($page === 'settings'): ?>
              value="<?= h(get_cfg($pdo,'ga4_measurement_id')) ?>"
              placeholder="G-XXXXXXXXXX" dir="ltr" style="font-family:var(--f-mono)">
       <div class="form-hint">اتركه فارغاً لتعطيل التتبع. لا تضع رمز GTM هنا — هذا الحقل لـ Measurement ID فقط.</div>
+      <?= $tip(
+        'Google Analytics 4 (GA4) يتتبع زوار موقعك وسلوكهم. معرّف القياس G-XXXXXXXXXX مطلوب للحصول عليه وإثبات وجود حركة حقيقية لـ AdSense.',
+        '<ol class="detail-steps">
+          <li>افتح <a href="https://analytics.google.com" target="_blank" style="color:var(--cyan)">analytics.google.com</a> وسجّل بحسابك</li>
+          <li>إذا لم يكن لديك حساب اضغط <strong>ابدأ القياس</strong> وأنشئ حساباً جديداً</li>
+          <li>أنشئ <strong>موقع (Property)</strong> جديداً — اختر GA4 (وليس Universal Analytics)</li>
+          <li>أضف <strong>تدفق البيانات (Data Stream)</strong> ← اختر "الويب" ← أدخل عنوان موقعك</li>
+          <li>ستجد <strong>Measurement ID</strong> بالشكل <code>G-XXXXXXXXXX</code> — انسخه والصقه في الحقل أعلاه</li>
+        </ol>
+        <div class="detail-note"><strong>لماذا GA4؟</strong> Google تطلبه لقبول AdSense كإثبات على وجود حركة زوار حقيقية وليست مشتراة. يُنصح بإضافته قبل التقديم على AdSense بأسبوعين على الأقل لتراكم بيانات كافية.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>مجاني تماماً:</strong> Google Analytics مجاني بلا قيود لمواقع بحجم أقل من 10 مليون حدث شهرياً.</div>'
+      ) ?>
     </div>
     <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <label class="form-label">صورة OG الافتراضية للموقع (Open Graph Default Image)</label>
@@ -5566,10 +5662,33 @@ elseif ($page === 'settings'): ?>
       <div class="form-group">
         <label class="form-label">Google Search Console verification code</label>
         <input class="form-input" type="text" name="google_site_verification" value="<?= h(get_cfg($pdo,'google_site_verification')) ?>" placeholder="مثال: AbCdEfGhIjKlMnOpQrStUvWxYz">
+        <?= $tip(
+          'Google Search Console يُمكّنك من مراقبة ظهور موقعك في نتائج البحث، إرسال Sitemap، وإصلاح أخطاء الفهرسة. التحقق خطوة أولى لا غنى عنها.',
+          '<ol class="detail-steps">
+            <li>افتح <a href="https://search.google.com/search-console" target="_blank" style="color:var(--cyan)">search.google.com/search-console</a> وسجّل بحساب Google</li>
+            <li>اضغط <strong>إضافة موقع (Add Property)</strong> ← أدخل عنوان موقعك الكامل (مع https://)</li>
+            <li>اختر طريقة التحقق: <strong>HTML Tag</strong> أو <strong>وسم HTML</strong></li>
+            <li>انسخ القيمة داخل الكود — ما بين علامتي اقتباس بعد <code>content="</code> — وهي نص من 20-40 حرفاً</li>
+            <li>الصق هذه القيمة فقط (بدون الكود كاملاً) في الحقل أعلاه ثم احفظ الإعدادات</li>
+            <li>عد لـ Search Console واضغط <strong>التحقق</strong> — سيتأكد الموقع من وجود الكود ويمنحك الوصول</li>
+          </ol>
+          <div class="detail-note"><strong>بعد التحقق:</strong> أرسل خريطة الموقع على الرابط <code>' . rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/sitemap.php</code> من قسم Sitemap في Search Console. هذا يُسرّع فهرسة جميع التطبيقات.</div>'
+        ) ?>
       </div>
       <div class="form-group">
         <label class="form-label">Bing Webmaster verification code</label>
         <input class="form-input" type="text" name="bing_site_verification" value="<?= h(get_cfg($pdo,'bing_site_verification')) ?>" placeholder="مثال: 1234567890ABCDEF">
+        <?= $tip(
+          'Bing Webmaster Tools يُسرّع ظهور موقعك في Bing وDuckDuckGo والمحركات التي تستخدم Bing — تمثّل مجتمعةً نحو 10% من عمليات البحث العالمية.',
+          '<ol class="detail-steps">
+            <li>افتح <a href="https://www.bing.com/webmasters" target="_blank" style="color:var(--cyan)">bing.com/webmasters</a> وسجّل بحساب Microsoft</li>
+            <li>اضغط <strong>Add a Site</strong> وأدخل عنوان موقعك</li>
+            <li>اختر طريقة التحقق <strong>Meta Tag</strong> أو <strong>XML File</strong></li>
+            <li>انسخ القيمة الموجودة في <code>content="..."</code> فقط (رقم من 16-32 حرفاً)</li>
+            <li>الصق هذه القيمة في الحقل أعلاه واحفظ ← ثم عد لـ Bing واضغط Verify</li>
+          </ol>
+          <div class="detail-note"><strong>مزايا إضافية:</strong> بعد التحقق، يمكنك استخدام Bing Webmaster لإرسال URLs مباشرةً وبشكل أسرع من IndexNow، ومراقبة أخطاء الزحف.</div>'
+        ) ?>
       </div>
     </div>
   </div>
@@ -5583,6 +5702,17 @@ elseif ($page === 'settings'): ?>
     <div class="form-group">
       <label class="form-label">VirusTotal API Key</label>
       <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
+      <?= $tip(
+        'VirusTotal API المجاني يُتيح فحص روابط APK بأكثر من 70 محرك مضادات فيروسات وإظهار شارة الأمان في صفحة التحميل لزيادة ثقة الزوار.',
+        '<ol class="detail-steps">
+          <li>افتح <a href="https://www.virustotal.com/gui/join-us" target="_blank" style="color:var(--cyan)">virustotal.com/gui/join-us</a> وأنشئ حساباً مجانياً</li>
+          <li>أكّد بريدك الإلكتروني ثم سجّل الدخول</li>
+          <li>اذهب لـ <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" style="color:var(--cyan)">صفحة API Key الشخصية</a></li>
+          <li>ستجد مفتاحك مباشرةً (64 حرفاً من الأرقام والحروف) — انسخه والصقه في الحقل أعلاه</li>
+        </ol>
+        <div class="detail-note"><strong>حدود الخطة المجانية:</strong> 4 فحوصات في الدقيقة، 500 فحص في اليوم. يكفي لمئات التطبيقات يومياً نظراً لأن نتائج الفحص تُخزّن مؤقتاً ولا تُعاد إلا عند التغيير.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>كيف تعمل الشارة؟</strong> عند نشر تطبيق جديد، الموقع يُرسل رابط التحميل لـ VirusTotal للفحص. بعد اكتمال الفحص تظهر شارة خضراء "تم الفحص: نظيف" في صفحة التحميل — وهذا يزيد ثقة الزوار بشكل ملحوظ.</div>'
+      ) ?>
     </div>
   </div>
 
@@ -5602,6 +5732,19 @@ elseif ($page === 'settings'): ?>
         اقرأ الشرح الكامل بـ <a href="https://www.indexnow.org/documentation" target="_blank" style="color:var(--cyan)">indexnow.org/documentation</a>
         | <a href="https://www.bing.com/indexnow" target="_blank" style="color:var(--cyan)">Bing IndexNow</a>.
       </div>
+      <?= $tip(
+        'IndexNow يُخبر Bing وYandex وغيرها فورياً عند نشر أي تطبيق بدل انتظار زحف العناكب. لا تحتاج حساباً خارجياً — تصنع المفتاح بنفسك.',
+        '<p style="margin-bottom:9px"><strong style="color:var(--white)">كيف يعمل IndexNow؟</strong><br>بدلاً من انتظار Google/Bing لاكتشاف محتواك الجديد (قد يأخذ أياماً أو أسابيع)، IndexNow يُرسل إشعاراً فورياً لمحركات البحث قائلاً "هذه الصفحة تغيّرت — افحصها الآن". النتيجة: فهرسة أسرع بكثير.</p>
+        <p style="margin-bottom:8px"><strong style="color:var(--white)">كيف تُنشئ المفتاح؟</strong></p>
+        <ol class="detail-steps">
+          <li>اصنع مفتاحاً عشوائياً: أي نص من 20-128 حرفاً من الأحرف الإنجليزية والأرقام والشرطة. مثال: <code>yassota2025key-abc123def456</code></li>
+          <li>الصق المفتاح في الحقل أعلاه واحفظ — الموقع سيُنشئ ملف <code>.txt</code> في جذر الموقع باسم المفتاح تلقائياً</li>
+          <li>تحقق أن الملف موجود على: <code>' . rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/[مفتاحك].txt</code></li>
+          <li>فعّل "الإرسال التلقائي" — من هذه اللحظة كل تطبيق تنشره سيُرسل إشعاراً فورياً</li>
+        </ol>
+        <div class="detail-note"><strong>محركات تدعم IndexNow:</strong> Bing، Yandex، Naver، Seznam، Yep — وعبر Bing تصل الإشعارات لـ DuckDuckGo أيضاً. Google لا تدعم IndexNow بشكل رسمي لكنها تتلقى الإشعارات من خلال شركائها.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>مجاني تماماً:</strong> بلا حسابات خارجية، بلا حدود استخدام، بلا رسوم. فقط مفتاح نصي تضعه بنفسك.</div>'
+      ) ?>
     </div>
     <div class="form-group" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-c)">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -5619,12 +5762,50 @@ elseif ($page === 'settings'): ?>
         <label class="form-label">مدة العد التنازلي قبل التحميل (بالثواني)</label>
         <input class="form-input" type="number" name="download_countdown_secs" value="<?= h(get_cfg($pdo,'download_countdown_secs','7')) ?>" min="3" max="30" style="max-width:120px">
         <div class="form-hint">الافتراضي: 7 ثوانٍ. أقل = تجربة أفضل للمستخدم. أكثر = مشاهدة إعلانات أطول.</div>
+        <?= $tip(
+          'مدة العد التنازلي تؤثر مباشرةً على معدل الارتداد وعائد الإعلانات. القيمة المثلى تحقق التوازن بين تجربة المستخدم وعائد الإعلانات.',
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+            <div style="padding:8px;border:1px solid rgba(6,182,212,.2);border-radius:7px;text-align:center">
+              <div style="font-size:16px;font-weight:700;color:var(--cyan)">3-5</div>
+              <div style="font-size:10px;margin-top:4px">تجربة ممتازة<br>عائد منخفض</div>
+            </div>
+            <div style="padding:8px;border:1px solid rgba(6,182,212,.4);border-radius:7px;text-align:center;background:rgba(6,182,212,.05)">
+              <div style="font-size:16px;font-weight:700;color:var(--cyan)">7</div>
+              <div style="font-size:10px;margin-top:4px">توازن مثالي<br>موصى به ✓</div>
+            </div>
+            <div style="padding:8px;border:1px solid rgba(6,182,212,.2);border-radius:7px;text-align:center">
+              <div style="font-size:16px;font-weight:700;color:var(--cyan)">10-15</div>
+              <div style="font-size:10px;margin-top:4px">عائد أعلى<br>إحباط أكثر</div>
+            </div>
+          </div>
+          <div class="detail-note"><strong>تأثير على AdSense:</strong> فترة أطول = مزيد من مشاهدات الإعلانات = عائد RPM أعلى. لكن الفترات الطويلة جداً (15+ ثانية) تزيد معدل الارتداد وقد تضرّ تجربة المستخدم وترتيبك في محركات البحث.</div>'
+        ) ?>
       </div>
     </div>
     <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <label class="form-label">كود إعلانات مخصص على صفحة التحميل <span style="color:var(--muted);font-weight:400">(اختياري — PropellerAds / HilltopAds / PopAds)</span></label>
       <textarea class="form-textarea" name="download_custom_ad_code" rows="5" dir="ltr" style="font-family:var(--f-mono);font-size:11px" placeholder="الصق كود JavaScript الخاص بشبكة الإعلانات هنا..."><?= h(get_cfg($pdo,'download_custom_ad_code')) ?></textarea>
       <div class="form-hint">يُحقن مباشرةً في صفحة التحميل كـ &lt;script&gt; — مثالي لشبكات Popunder/Push كـ PropellerAds وHilltopAds. لا يؤثر على إعلانات AdSense في بقية الصفحات.</div>
+      <?= $tip(
+        'شبكات الإعلانات البديلة تعمل جنباً لجنب مع AdSense على صفحات التحميل. الأنسب: PropellerAds وHilltopAds لعائد pop/push — أعلى RPM من AdSense في هذه الصفحات.',
+        '<p style="margin-bottom:9px"><strong style="color:var(--white)">شبكات موصى بها لصفحات التحميل:</strong></p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+          <div style="padding:9px 11px;border:1px solid rgba(6,182,212,.15);border-radius:7px">
+            <div style="font-weight:600;color:var(--white);font-size:12px">PropellerAds</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">الأكثر شهرةً — Pop/Push/Interstitial. عائد مرتفع للمواقع العربية. <a href="https://propellerads.com" target="_blank" style="color:var(--cyan)">propellerads.com</a></div>
+          </div>
+          <div style="padding:9px 11px;border:1px solid rgba(6,182,212,.15);border-radius:7px">
+            <div style="font-weight:600;color:var(--white);font-size:12px">HilltopAds</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Pop-under عالي الجودة مع دفع تلقائي. <a href="https://hilltopads.com" target="_blank" style="color:var(--cyan)">hilltopads.com</a></div>
+          </div>
+          <div style="padding:9px 11px;border:1px solid rgba(6,182,212,.15);border-radius:7px">
+            <div style="font-weight:600;color:var(--white);font-size:12px">Adsterra</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Social Bar + Pop-under. عتبة دفع منخفضة ($5). <a href="https://adsterra.com" target="_blank" style="color:var(--cyan)">adsterra.com</a></div>
+          </div>
+        </div>
+        <div class="detail-note"><strong>كيف تحصل على الكود؟</strong> سجّل في الشبكة ← أضف موقعك ← أنشئ إعلاناً ← انسخ كود JavaScript والصقه هنا. الكود يُضاف تلقائياً كـ &lt;script&gt; في صفحة التحميل فقط، بلا تأثير على باقي الموقع.</div>
+        <div class="detail-note" style="margin-top:8px"><strong>تحذير AdSense:</strong> هذا الحقل مخصص لصفحة التحميل فقط. لا تضع أكواد Pop-under في بقية صفحات الموقع إذا كنت تستخدم AdSense — Google قد تُعلّق حسابك.</div>'
+      ) ?>
     </div>
   </div>
 
