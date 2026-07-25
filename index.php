@@ -109,7 +109,7 @@ $orgSchema = json_encode([
   <meta property="og:site_name" content="yassota">
   <meta property="og:title" content="yassota — دليل مراجعات تطبيقات أندرويد">
   <meta property="og:description" content="دليلك التحريري العربي المستقل لاكتشاف ومراجعة أفضل تطبيقات وألعاب أندرويد — محتوى محدّث يومياً.">
-  <?php if ($featured && $featured['icon_path']): ?><meta property="og:image" content="<?= h(url($featured['icon_path'])) ?>"><?php endif; ?>
+  <?php if ($featured && $featured['icon_path']): ?><meta property="og:image" content="<?= h(media_url($featured['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="yassota — مراجعات تطبيقات أندرويد">
   <meta name="twitter:description" content="دليلك التحريري العربي لاكتشاف ومراجعة أفضل تطبيقات أندرويد">
@@ -144,7 +144,7 @@ $orgSchema = json_encode([
       <a href="<?= h(app_url($fa['slug'])) ?>" class="fc-slide<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" data-hardnav="1">
         <div class="fc-icon-wrap">
           <?php if ($fa['icon_path']): ?>
-            <img src="<?= h(url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" class="fc-icon" loading="lazy">
+            <img src="<?= h(media_url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" class="fc-icon" loading="lazy">
           <?php else: ?>
             <div class="fc-icon fc-icon-blank"><?= partial_icon('smartphone', 32) ?></div>
           <?php endif; ?>
@@ -166,7 +166,7 @@ $orgSchema = json_encode([
         <?php foreach ($featuredApps as $fi => $fa): ?>
         <button class="fc-thumb<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" aria-label="<?= h($fa['name']) ?>">
           <?php if ($fa['icon_path']): ?>
-            <img src="<?= h(url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" loading="lazy">
+            <img src="<?= h(media_url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" loading="lazy">
           <?php else: ?>
             <div class="fc-thumb-blank"></div>
           <?php endif; ?>

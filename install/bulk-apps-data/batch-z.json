@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "بول ماستر",
+      "name_en": "Pool Master",
+      "developer": "Pool Master",
+      "category_slug": "games",
+      "package_name": "com.poolmaster.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيلر رولر",
+      "name_en": "Roller Ball",
+      "developer": "Roller Ball",
+      "category_slug": "games",
+      "package_name": "com.rollerball.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رن سافارغلو",
+      "name_en": "Run Safari",
+      "developer": "Run Safari",
+      "category_slug": "games",
+      "package_name": "com.runsafari.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيا رايس",
+      "name_en": "Sea Race 3D",
+      "developer": "Sea Race",
+      "category_slug": "games",
+      "package_name": "com.searace3d.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كريزي رايسنغ",
+      "name_en": "Crazy Racing",
+      "developer": "Crazy Racing",
+      "category_slug": "games",
+      "package_name": "com.crazyracing.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كاردز آند كاستلز",
+      "name_en": "Cards & Castles",
+      "developer": "Cards and Castles",
+      "category_slug": "games",
+      "package_name": "com.cardsandcastles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ورلد أوف تانكس",
+      "name_en": "World of Tanks",
+      "developer": "Wargaming",
+      "category_slug": "games",
+      "package_name": "net.wargaming.wot.mobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووار رويلز",
+      "name_en": "War Robots",
+      "developer": "MY.GAMES",
+      "category_slug": "games",
+      "package_name": "com.pixonic.wwr",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جي سي يو",
+      "name_en": "Guns of Boom",
+      "developer": "MY.GAMES",
+      "category_slug": "games",
+      "package_name": "com.goodgame.gunsofboom",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مودرن كومبات 5",
+      "name_en": "Modern Combat 5",
+      "developer": "Gameloft",
+      "category_slug": "games",
+      "package_name": "com.gameloft.android.ANMP.GloftM5HM",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أسفالت 9",
+      "name_en": "Asphalt 9",
+      "developer": "Gameloft",
+      "category_slug": "games",
+      "package_name": "com.gameloft.android.ANMP.GloftA9HM",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "درايف هيد",
+      "name_en": "Drive Head",
+      "developer": "SkyNet",
+      "category_slug": "games",
+      "package_name": "com.skynet.drivehead",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريسينغ رايفل",
+      "name_en": "Racing Rivals",
+      "developer": "Cie Games",
+      "category_slug": "games",
+      "package_name": "com.ciegames.racingriv",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبيد ريسينغ 3",
+      "name_en": "Speed Racing 3",
+      "developer": "Speed Racing",
+      "category_slug": "games",
+      "package_name": "com.speedracing3.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كارتو بول",
+      "name_en": "Kart Battle",
+      "developer": "Kart Battle",
+      "category_slug": "games",
+      "package_name": "com.kartbattle.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ساريل رايسينغ",
+      "name_en": "F1 Mobile",
+      "developer": "EA Sports",
+      "category_slug": "games",
+      "package_name": "com.ea.games.f1mobile_row",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "موتو رايدر",
+      "name_en": "Moto Rider",
+      "developer": "Moto Rider",
+      "category_slug": "games",
+      "package_name": "com.motorider.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بايك راش",
+      "name_en": "Bike Rush",
+      "developer": "Bike Rush",
+      "category_slug": "games",
+      "package_name": "com.bikerush.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ناشيونال ريسينغ",
+      "name_en": "National Racing",
+      "developer": "National Racing",
+      "category_slug": "games",
+      "package_name": "com.nationalracing.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فليت كوماندر",
+      "name_en": "Fleet Commander",
+      "developer": "Fleet Commander",
+      "category_slug": "games",
+      "package_name": "com.fleetcommander.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستار كراشر",
+      "name_en": "Star Crusher",
+      "developer": "Star Crusher",
+      "category_slug": "games",
+      "package_name": "com.starcrusher.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "غالاكسي أتاك",
+      "name_en": "Galaxy Attack",
+      "developer": "Alien Squad",
+      "category_slug": "games",
+      "package_name": "com.galacticshooter",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبيس إنفيدرز",
+      "name_en": "Space Invaders",
+      "developer": "Taito Corporation",
+      "category_slug": "games",
+      "package_name": "jp.co.taito.si",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أستيرويدز",
+      "name_en": "Asteroids",
+      "developer": "Atari",
+      "category_slug": "games",
+      "package_name": "com.atari.asteroids",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "دفندر",
+      "name_en": "Defender",
+      "developer": "Defender",
+      "category_slug": "games",
+      "package_name": "com.defenderclassic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تينس برو",
+      "name_en": "Tennis Pro",
+      "developer": "Tennis Pro",
+      "category_slug": "games",
+      "package_name": "com.tennispro.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بادمينتن ليغ",
+      "name_en": "Badminton League",
+      "developer": "Red Deer",
+      "category_slug": "games",
+      "package_name": "com.reddeergames.badmintonleague",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باسكيتبول بوينتس",
+      "name_en": "Basketball Points",
+      "developer": "Basketball",
+      "category_slug": "games",
+      "package_name": "com.basketball.points",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيفا ستريت",
+      "name_en": "EA SPORTS",
+      "developer": "EA Sports",
+      "category_slug": "games",
+      "package_name": "com.ea.gp.fifastreet",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إن بي أيه",
+      "name_en": "NBA Live",
+      "developer": "EA Sports",
+      "category_slug": "games",
+      "package_name": "com.ea.nbamobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماد سكيلز",
+      "name_en": "Mad Skills BMX",
+      "developer": "Turborilla",
+      "category_slug": "games",
+      "package_name": "com.turborilla.madskillsbmx",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هوكي",
+      "name_en": "Hockey Stars",
+      "developer": "Miniclip",
+      "category_slug": "games",
+      "package_name": "com.miniclip.hockeystars",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوكسينغ ستار",
+      "name_en": "Boxing Star",
+      "developer": "LINE Games",
+      "category_slug": "games",
+      "package_name": "com.linegames.bs",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كيك بوكسر",
+      "name_en": "Kickboxer",
+      "developer": "Kickboxer",
+      "category_slug": "games",
+      "package_name": "com.kickboxer.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "روستر تيث",
+      "name_en": "Rooster Teeth",
+      "developer": "Rooster Teeth",
+      "category_slug": "games",
+      "package_name": "com.roosterteeth.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باتل رويال",
+      "name_en": "Battle Royale",
+      "developer": "Battle Royale",
+      "category_slug": "games",
+      "package_name": "com.battleroyale.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أريناز",
+      "name_en": "Arenas",
+      "developer": "Arenas",
+      "category_slug": "games",
+      "package_name": "com.arenas.battle",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيلد أوف غلوري",
+      "name_en": "Field of Glory",
+      "developer": "Slitherine",
+      "category_slug": "games",
+      "package_name": "com.slitherine.fog",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيج أوف كاستلز",
+      "name_en": "Siege of Castles",
+      "developer": "Siege",
+      "category_slug": "games",
+      "package_name": "com.siegeofcastles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رولبلوك",
+      "name_en": "Rollblock",
+      "developer": "Rollblock",
+      "category_slug": "games",
+      "package_name": "com.rollblock.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ترايف",
+      "name_en": "Thrive",
+      "developer": "Thrive",
+      "category_slug": "games",
+      "package_name": "com.thrivegames.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيرو لغ",
+      "name_en": "Hero League",
+      "developer": "Hero League",
+      "category_slug": "games",
+      "package_name": "com.heroleague.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "داون أوف هيروز",
+      "name_en": "Dawn of Heroes",
+      "developer": "Dawn",
+      "category_slug": "games",
+      "package_name": "com.dawnofheroes.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أرماجيدون",
+      "name_en": "Armageddon",
+      "developer": "Armageddon",
+      "category_slug": "games",
+      "package_name": "com.armageddon.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إمبريوم",
+      "name_en": "Imperium",
+      "developer": "Imperium",
+      "category_slug": "games",
+      "package_name": "com.imperium.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لسيغيل دي غالاكسي",
+      "name_en": "Galaxy of Legends",
+      "developer": "Galaxy",
+      "category_slug": "games",
+      "package_name": "com.galaxyoflegends.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيرا غينيسيس",
+      "name_en": "Terra Genesis",
+      "developer": "Terra Genesis",
+      "category_slug": "games",
+      "package_name": "com.terragenesis.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "غريديسكيب",
+      "name_en": "Gridscape",
+      "developer": "Gridscape",
+      "category_slug": "games",
+      "package_name": "com.gridscape.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيرفيفور آي أو",
+      "name_en": "Survivor.io",
+      "developer": "Habby",
+      "category_slug": "games",
+      "package_name": "com.dxx.firenow",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أرشر هيرو",
+      "name_en": "Archer Hero",
+      "developer": "Archer Hero",
+      "category_slug": "games",
+      "package_name": "com.archerhero.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

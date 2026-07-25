@@ -1,0 +1,44 @@
+{
+  "apps": [
+    {
+      "name": "لوفلي بلانيت",
+      "name_en": "Lonely Planet",
+      "developer": "Lonely Planet",
+      "category_slug": "travel",
+      "package_name": "com.lonelyplanet.guides",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "موندومي",
+      "name_en": "Mundo",
+      "developer": "Mundo",
+      "category_slug": "travel",
+      "package_name": "com.mundo.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أجودز",
+      "name_en": "Agoda",
+      "developer": "Agoda Company",
+      "category_slug": "travel",
+      "package_name": "com.agoda.mobile.consumer",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تراب دوت مي",
+      "name_en": "Trip.com",
+      "developer": "Trip.com Group",
+      "category_slug": "travel",
+      "package_name": "ctrip.english",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

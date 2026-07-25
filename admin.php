@@ -1275,6 +1275,48 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
     $cons         = array_values(array_filter($data['cons'] ?? []));
     $installSteps = array_values(array_filter($data['install_steps'] ?? []));
     $faq          = array_is_list($data['faq'] ?? []) ? $data['faq'] : [];
+    $shortDesc    = trim($data['short_description'] ?? '');
+    $longDesc     = trim($data['long_description'] ?? '');
+    $seoTitle     = trim($data['seo_title'] ?? '');
+    $metaDesc     = trim($data['meta_description'] ?? '');
+    $keywords     = trim($data['keywords'] ?? '');
+    $whatsNew     = trim($data['whats_new'] ?? '');
+
+    // For compact catalog entries (no pre-written content), generate via AI
+    if (!$shortDesc) {
+        $aiPrompt = "أنت كاتب محتوى عربي متخصص في تطبيقات الأندرويد. اكتب محتوى كاملاً لتطبيق يسمى \"$targetName\" (المطور: " . ($data['developer']??'') . ") بالعربية الفصحى المبسطة.
+
+أعطِني رداً بصيغة JSON فقط بالمفاتيح التالية:
+- short_description: جملتين إلى ثلاث جمل تصف التطبيق بشكل جذاب (50-80 كلمة)
+- long_description: وصف تفصيلي احترافي للتطبيق (500-800 كلمة) يشرح الميزات والفوائد وكيفية الاستخدام، مناسب لمحركات البحث
+- features: مصفوفة من 6 ميزات رئيسية (كل ميزة: 5-8 كلمات)
+- pros: مصفوفة من 4 مزايا
+- cons: مصفوفة من 2 عيوب
+- install_steps: مصفوفة من 4 خطوات تثبيت
+- faq: مصفوفة من 3 أسئلة وأجوبة [{\"q\":\"...\",\"a\":\"...\"}]
+- whats_new: جملة عن آخر تحديثات التطبيق
+- seo_title: عنوان SEO (55-65 حرف) يحتوي على اسم التطبيق وكلمة تحميل
+- meta_description: وصف ميتا (150-160 حرف)
+- keywords: قائمة كلمات مفتاحية مفصولة بفاصلة (15-20 كلمة)";
+
+        $aiRaw = ai_text($pdo, $aiPrompt, 1500, 45);
+        if ($aiRaw) {
+            $aiData = ai_extract_json($aiRaw);
+            if ($aiData) {
+                $shortDesc = $aiData['short_description'] ?? $shortDesc;
+                $longDesc  = $aiData['long_description']  ?? $longDesc;
+                if (!empty($aiData['features']))     $features     = array_values((array)$aiData['features']);
+                if (!empty($aiData['pros']))          $pros         = array_values((array)$aiData['pros']);
+                if (!empty($aiData['cons']))          $cons         = array_values((array)$aiData['cons']);
+                if (!empty($aiData['install_steps'])) $installSteps = array_values((array)$aiData['install_steps']);
+                if (!empty($aiData['faq']))           $faq          = array_values((array)$aiData['faq']);
+                $whatsNew  = $aiData['whats_new']     ?? $whatsNew;
+                $seoTitle  = $aiData['seo_title']     ?? $seoTitle;
+                $metaDesc  = $aiData['meta_description'] ?? $metaDesc;
+                $keywords  = $aiData['keywords']      ?? $keywords;
+            }
+        }
+    }
 
     try {
         $pdo->prepare("INSERT INTO apps
@@ -1286,18 +1328,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
             ->execute([
                 $targetName,$slug,$catId,
                 trim($data['developer'] ?? ''),
-                trim($data['license'] ?? 'Free'),
+                trim($data['license'] ?? 'مجاني'),
                 trim($data['version'] ?? ''),
                 trim($data['android_version'] ?? ''),
                 trim($data['size_mb'] ?? ''),
                 $iconPath,
                 $screenshots ? json_encode($screenshots, JSON_UNESCAPED_UNICODE) : null,
-                trim($data['short_description'] ?? ''),trim($data['long_description'] ?? ''),
+                $shortDesc,$longDesc,
                 json_encode($features,JSON_UNESCAPED_UNICODE),json_encode($pros,JSON_UNESCAPED_UNICODE),
                 json_encode($cons,JSON_UNESCAPED_UNICODE),json_encode($installSteps,JSON_UNESCAPED_UNICODE),
-                json_encode($faq,JSON_UNESCAPED_UNICODE),trim($data['whats_new'] ?? ''),
+                json_encode($faq,JSON_UNESCAPED_UNICODE),$whatsNew,
                 $playstoreUrl ?: null,$packageName ?: null,4.5,
-                trim($data['seo_title'] ?? ''),trim($data['meta_description'] ?? ''),trim($data['keywords'] ?? ''),
+                $seoTitle,$metaDesc,$keywords,
             ]);
         $newId = (int)$pdo->lastInsertId();
         echo json_encode(['success'=>true,'id'=>$newId,'name'=>$targetName,
@@ -3108,7 +3150,7 @@ elseif ($page === 'apps'):
   <tr>
     <td class="td-thumb">
       <?php if ($a['icon_path']): ?>
-        <img src="<?= h($a['icon_path']) ?>" class="app-thumb" alt="">
+        <img src="<?= h(media_url($a['icon_path'])) ?>" class="app-thumb" alt="">
       <?php else: ?>
         <div class="app-thumb-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="3"/></svg></div>
       <?php endif; ?>
@@ -4036,7 +4078,7 @@ elseif ($page === 'bulk-content'):
 
 <div style="display:flex;flex-direction:column;gap:10px" id="bc-list">
 <?php foreach ($incompleteApps as $a):
-    $iconSrc = !empty($a['icon']) ? h(url('uploads/icons/'.$a['icon'])) : '';
+    $iconSrc = !empty($a['icon_path']) ? h(media_url($a['icon_path'])) : '';
 ?>
 <div class="bc-row" id="bc-row-<?= (int)$a['id'] ?>">
   <?php if ($iconSrc): ?>

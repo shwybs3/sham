@@ -62,7 +62,7 @@ $articleSchema = json_encode([
   <meta property="og:type" content="article">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">
-  <?php if ($article['icon_path']): ?><meta property="og:image" content="<?= h(url($article['icon_path'])) ?>"><?php endif; ?>
+  <?php if ($article['icon_path']): ?><meta property="og:image" content="<?= h(media_url($article['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <script type="application/ld+json"><?= $articleSchema ?></script>

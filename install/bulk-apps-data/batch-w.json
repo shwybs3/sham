@@ -1,0 +1,314 @@
+{
+  "apps": [
+    {
+      "name": "فايمو",
+      "name_en": "VIMEO",
+      "developer": "Vimeo",
+      "category_slug": "photo",
+      "package_name": "com.vimeo.networking",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بومرانج",
+      "name_en": "Boomerang",
+      "developer": "Meta Platforms",
+      "category_slug": "photo",
+      "package_name": "com.instagram.boomerang",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لايف ليبس",
+      "name_en": "Livelife",
+      "developer": "Livelife",
+      "category_slug": "photo",
+      "package_name": "com.livelife.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فاستكام",
+      "name_en": "FastCam",
+      "developer": "FastCam",
+      "category_slug": "photo",
+      "package_name": "com.fastcam.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ألترناتيف كام",
+      "name_en": "AltCam",
+      "developer": "AltCam",
+      "category_slug": "photo",
+      "package_name": "com.altcam.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيكس لاب",
+      "name_en": "PixLab",
+      "developer": "PixLab",
+      "category_slug": "photo",
+      "package_name": "com.pixlab.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زيلتور",
+      "name_en": "Ziltor",
+      "developer": "Ziltor",
+      "category_slug": "photo",
+      "package_name": "com.ziltor.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جيف ميكر",
+      "name_en": "GIF Maker",
+      "developer": "GIF Maker",
+      "category_slug": "photo",
+      "package_name": "com.gifmaker.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "موفي ماكر",
+      "name_en": "Movie Maker",
+      "developer": "Movie Maker",
+      "category_slug": "photo",
+      "package_name": "com.moviemaker.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تايم لابس",
+      "name_en": "Time Lapse",
+      "developer": "Time Lapse",
+      "category_slug": "photo",
+      "package_name": "com.timelapse.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سلو موشن",
+      "name_en": "Slow Motion",
+      "developer": "Slow Motion",
+      "category_slug": "photo",
+      "package_name": "com.slowmotion.video.editor",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "شازام",
+      "name_en": "Shazam",
+      "developer": "Apple Inc",
+      "category_slug": "music",
+      "package_name": "com.shazam.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميوزيك ريكوغنايزر",
+      "name_en": "Music Recognition",
+      "developer": "Music",
+      "category_slug": "music",
+      "package_name": "com.musicrecognition.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ساوندهاوند",
+      "name_en": "SoundHound",
+      "developer": "SoundHound Inc",
+      "category_slug": "music",
+      "package_name": "com.melodis.midomiMusicIdentifier.freemium",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيونس",
+      "name_en": "Tuness",
+      "developer": "Tuness",
+      "category_slug": "music",
+      "package_name": "com.tuness.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيزي تيونر",
+      "name_en": "Easy Tuner",
+      "developer": "Easy Tuner",
+      "category_slug": "music",
+      "package_name": "com.easytuner.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيونر",
+      "name_en": "Guitar Tuner",
+      "developer": "GuitarTuna",
+      "category_slug": "music",
+      "package_name": "com.ovelin.guitartuna",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماتروناوم",
+      "name_en": "Metronome",
+      "developer": "Metronome",
+      "category_slug": "music",
+      "package_name": "com.metronomebeats.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيانو",
+      "name_en": "Piano",
+      "developer": "Piano",
+      "category_slug": "music",
+      "package_name": "com.piano.tiles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيانو تايلز",
+      "name_en": "Piano Tiles 2",
+      "developer": "Cheetah Mobile",
+      "category_slug": "music",
+      "package_name": "com.hu60.pianotiles2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "غيتار هيرو",
+      "name_en": "Guitar Hero",
+      "developer": "Activision",
+      "category_slug": "music",
+      "package_name": "com.activision.guitarheroclive",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "درامز",
+      "name_en": "Drums",
+      "developer": "Drums",
+      "category_slug": "music",
+      "package_name": "com.drums.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيت ميكر",
+      "name_en": "BeatMaker",
+      "developer": "BeatMaker",
+      "category_slug": "music",
+      "package_name": "com.beatmaker.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريكورد يو",
+      "name_en": "Record You",
+      "developer": "Record You",
+      "category_slug": "music",
+      "package_name": "com.recordyou.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فويس ريكورد",
+      "name_en": "Voice Record",
+      "developer": "Voice Record",
+      "category_slug": "music",
+      "package_name": "com.voicerecord.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ساوند ريكورد",
+      "name_en": "Sound Record",
+      "developer": "Sound Record",
+      "category_slug": "music",
+      "package_name": "com.soundrecord.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميوزيك فلاي",
+      "name_en": "Music Fly",
+      "developer": "Music Fly",
+      "category_slug": "music",
+      "package_name": "com.musicfly.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "غانا",
+      "name_en": "Gaana",
+      "developer": "Gaana.com",
+      "category_slug": "music",
+      "package_name": "com.gaana",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جيواان",
+      "name_en": "Jiosaavn",
+      "developer": "Reliance Industries",
+      "category_slug": "music",
+      "package_name": "com.jio.media.jiobeats",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يووبي",
+      "name_en": "YOVO",
+      "developer": "YOVO",
+      "category_slug": "music",
+      "package_name": "com.yovo.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيكويزر",
+      "name_en": "Equalizer",
+      "developer": "Equalizer",
+      "category_slug": "music",
+      "package_name": "com.equalizer.fxsound",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

@@ -231,7 +231,7 @@ function render_app_card(array $app): void { ?>
 <div class="app-card reveal">
   <a href="<?= h(app_url($app['slug'])) ?>" data-hardnav="1">
     <?php if (!empty($app['icon_path'])): ?>
-      <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="app-card-icon" loading="lazy">
+      <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="app-card-icon" loading="lazy">
     <?php else: ?>
       <div class="app-card-icon-placeholder">
         <?= partial_icon('apps') ?>

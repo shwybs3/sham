@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "واتساب",
+      "name_en": "WhatsApp",
+      "developer": "WhatsApp LLC",
+      "category_slug": "social",
+      "package_name": "com.whatsapp",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيليجرام",
+      "name_en": "Telegram",
+      "developer": "Telegram FZ-LLC",
+      "category_slug": "social",
+      "package_name": "org.telegram.messenger",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إنستغرام",
+      "name_en": "Instagram",
+      "developer": "Meta Platforms",
+      "category_slug": "social",
+      "package_name": "com.instagram.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيسبوك",
+      "name_en": "Facebook",
+      "developer": "Meta Platforms",
+      "category_slug": "social",
+      "package_name": "com.facebook.katana",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماسنجر",
+      "name_en": "Messenger",
+      "developer": "Meta Platforms",
+      "category_slug": "social",
+      "package_name": "com.facebook.orca",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سناب شات",
+      "name_en": "Snapchat",
+      "developer": "Snap Inc",
+      "category_slug": "social",
+      "package_name": "com.snapchat.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيك توك",
+      "name_en": "TikTok",
+      "developer": "TikTok Pte Ltd",
+      "category_slug": "social",
+      "package_name": "com.zhiliaoapp.musically",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تويتر X",
+      "name_en": "X (Twitter)",
+      "developer": "X Corp",
+      "category_slug": "social",
+      "package_name": "com.twitter.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ثريدز",
+      "name_en": "Threads",
+      "developer": "Meta Platforms",
+      "category_slug": "social",
+      "package_name": "com.instagram.barcelona",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ديسكورد",
+      "name_en": "Discord",
+      "developer": "Discord Inc",
+      "category_slug": "social",
+      "package_name": "com.discord",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لينكدإن",
+      "name_en": "LinkedIn",
+      "developer": "LinkedIn Corporation",
+      "category_slug": "social",
+      "package_name": "com.linkedin.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بينترست",
+      "name_en": "Pinterest",
+      "developer": "Pinterest Inc",
+      "category_slug": "social",
+      "package_name": "com.pinterest",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريديت",
+      "name_en": "Reddit",
+      "developer": "Reddit Inc",
+      "category_slug": "social",
+      "package_name": "com.reddit.frontpage",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تامبلر",
+      "name_en": "Tumblr",
+      "developer": "Automattic",
+      "category_slug": "social",
+      "package_name": "com.tumblr",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كيك",
+      "name_en": "Kik",
+      "developer": "MediaLab",
+      "category_slug": "social",
+      "package_name": "kik.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فايبر",
+      "name_en": "Viber",
+      "developer": "Rakuten Group",
+      "category_slug": "social",
+      "package_name": "com.viber.voip",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لاين",
+      "name_en": "LINE",
+      "developer": "LINE Corporation",
+      "category_slug": "social",
+      "package_name": "jp.naver.line.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيليجرام X",
+      "name_en": "Telegram X",
+      "developer": "Telegram FZ-LLC",
+      "category_slug": "social",
+      "package_name": "org.thunderdog.challegram",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيجنال",
+      "name_en": "Signal",
+      "developer": "Signal Foundation",
+      "category_slug": "social",
+      "package_name": "org.thoughtcrime.securesms",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واير",
+      "name_en": "Wire",
+      "developer": "Wire Swiss GmbH",
+      "category_slug": "social",
+      "package_name": "com.wire",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تويتش",
+      "name_en": "Twitch",
+      "developer": "Twitch Interactive",
+      "category_slug": "social",
+      "package_name": "tv.twitch.android.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كلوب هاوس",
+      "name_en": "Clubhouse",
+      "developer": "Alpha Exploration",
+      "category_slug": "social",
+      "package_name": "com.clubhouse.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زوم",
+      "name_en": "Zoom",
+      "developer": "Zoom Video Communications",
+      "category_slug": "social",
+      "package_name": "us.zoom.videomeetings",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل ميت",
+      "name_en": "Google Meet",
+      "developer": "Google LLC",
+      "category_slug": "social",
+      "package_name": "com.google.android.apps.meetings",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت تيمز",
+      "name_en": "Microsoft Teams",
+      "developer": "Microsoft Corporation",
+      "category_slug": "social",
+      "package_name": "com.microsoft.teams",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سكايب",
+      "name_en": "Skype",
+      "developer": "Microsoft Corporation",
+      "category_slug": "social",
+      "package_name": "com.skype.raider",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووي",
+      "name_en": "WeChat",
+      "developer": "Tencent",
+      "category_slug": "social",
+      "package_name": "com.tencent.mm",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيمو",
+      "name_en": "BeReal",
+      "developer": "BeReal",
+      "category_slug": "social",
+      "package_name": "com.bereal.ft",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماست",
+      "name_en": "Mastodon",
+      "developer": "Mastodon gGmbH",
+      "category_slug": "social",
+      "package_name": "org.joinmastodon.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بلو",
+      "name_en": "Bluesky",
+      "developer": "Bluesky PBLLC",
+      "category_slug": "social",
+      "package_name": "xyz.blueskyweb.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واتساب بزنس",
+      "name_en": "WhatsApp Business",
+      "developer": "WhatsApp LLC",
+      "category_slug": "social",
+      "package_name": "com.whatsapp.w4b",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت تيمز للمنزل",
+      "name_en": "Teams for Home",
+      "developer": "Microsoft Corporation",
+      "category_slug": "social",
+      "package_name": "com.microsoft.teams.personal",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيس تايم",
+      "name_en": "FaceTime",
+      "developer": "Apple Inc",
+      "category_slug": "social",
+      "package_name": "com.apple.facetime",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل تشات",
+      "name_en": "Google Chat",
+      "developer": "Google LLC",
+      "category_slug": "social",
+      "package_name": "com.google.android.apps.dynamite",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جي ميسيج",
+      "name_en": "Google Messages",
+      "developer": "Google LLC",
+      "category_slug": "social",
+      "package_name": "com.google.android.apps.messaging",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيليغرام للأعمال",
+      "name_en": "Telegram Business",
+      "developer": "Telegram FZ-LLC",
+      "category_slug": "social",
+      "package_name": "org.telegram.messenger",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يوتيوب",
+      "name_en": "YouTube",
+      "developer": "Google LLC",
+      "category_slug": "apps",
+      "package_name": "com.google.android.youtube",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "شاهد",
+      "name_en": "Shahid",
+      "developer": "MBC Group",
+      "category_slug": "apps",
+      "package_name": "com.mbc.shahid",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "وي سي",
+      "name_en": "VVVVID",
+      "developer": "VVVVID",
+      "category_slug": "apps",
+      "package_name": "com.vvvvid.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نتفليكس",
+      "name_en": "Netflix",
+      "developer": "Netflix Inc",
+      "category_slug": "apps",
+      "package_name": "com.netflix.mediaclient",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أمازون برايم فيديو",
+      "name_en": "Amazon Prime Video",
+      "developer": "Amazon Mobile LLC",
+      "category_slug": "apps",
+      "package_name": "com.amazon.avod.thirdpartyclient",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ديزني بلس",
+      "name_en": "Disney+",
+      "developer": "Disney",
+      "category_slug": "apps",
+      "package_name": "com.disney.disneyplus",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هوم سيريز",
+      "name_en": "Hulu",
+      "developer": "Hulu LLC",
+      "category_slug": "apps",
+      "package_name": "com.hulu.plus",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أبل تي في بلس",
+      "name_en": "Apple TV+",
+      "developer": "Apple Inc",
+      "category_slug": "apps",
+      "package_name": "com.apple.atve.androidtv.appletv",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يوتيوب كيدز",
+      "name_en": "YouTube Kids",
+      "developer": "Google LLC",
+      "category_slug": "apps",
+      "package_name": "com.google.android.apps.youtube.kids",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يوتيوب ميوزيك",
+      "name_en": "YouTube Music",
+      "developer": "Google LLC",
+      "category_slug": "apps",
+      "package_name": "com.google.android.apps.youtube.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبوتيفاي",
+      "name_en": "Spotify",
+      "developer": "Spotify AB",
+      "category_slug": "apps",
+      "package_name": "com.spotify.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ديزر",
+      "name_en": "Deezer",
+      "developer": "Deezer SA",
+      "category_slug": "apps",
+      "package_name": "deezer.android.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ساوند كلاود",
+      "name_en": "SoundCloud",
+      "developer": "SoundCloud",
+      "category_slug": "apps",
+      "package_name": "com.soundcloud.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أنغامي",
+      "name_en": "Anghami",
+      "developer": "Anghami",
+      "category_slug": "apps",
+      "package_name": "com.anghami",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

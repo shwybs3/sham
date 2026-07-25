@@ -45,7 +45,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <priority>0.9</priority>
     <?php if (!empty($a['icon_path'])): ?>
     <image:image>
-      <image:loc><?= h(url($a['icon_path'])) ?></image:loc>
+      <image:loc><?= h(media_url($a['icon_path'])) ?></image:loc>
       <image:title><?= h($a['name']) ?></image:title>
     </image:image>
     <?php endif; ?>

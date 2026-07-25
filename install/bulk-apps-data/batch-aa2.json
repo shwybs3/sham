@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "بي ريل",
+      "name_en": "BeReal",
+      "developer": "BeReal",
+      "category_slug": "social",
+      "package_name": "com.bereal.ft",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليفي",
+      "name_en": "Livi",
+      "developer": "Livi",
+      "category_slug": "social",
+      "package_name": "com.livi.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تاب",
+      "name_en": "Tab",
+      "developer": "Tab",
+      "category_slug": "social",
+      "package_name": "com.tab.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هوب",
+      "name_en": "Hopp",
+      "developer": "Hopp",
+      "category_slug": "social",
+      "package_name": "com.hopp.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زابير",
+      "name_en": "Zapier",
+      "developer": "Zapier",
+      "category_slug": "productivity",
+      "package_name": "com.zapier.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايك",
+      "name_en": "Make",
+      "developer": "Make (Integromat)",
+      "category_slug": "productivity",
+      "package_name": "com.integromat.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيفتت",
+      "name_en": "IFTTT",
+      "developer": "IFTTT",
+      "category_slug": "productivity",
+      "package_name": "com.ifttt.ifttt",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووركفلوو",
+      "name_en": "Workflowy",
+      "developer": "WorkFlowy",
+      "category_slug": "productivity",
+      "package_name": "com.workflowy.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "روم",
+      "name_en": "Rome",
+      "developer": "Rome",
+      "category_slug": "productivity",
+      "package_name": "com.rome.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوبسيديان",
+      "name_en": "Obsidian",
+      "developer": "Obsidian",
+      "category_slug": "productivity",
+      "package_name": "md.obsidian",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لوجسيك",
+      "name_en": "Logseq",
+      "developer": "Logseq",
+      "category_slug": "productivity",
+      "package_name": "com.logseq.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "روام",
+      "name_en": "Roam",
+      "developer": "Conaw",
+      "category_slug": "productivity",
+      "package_name": "com.roamresearch.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نيل",
+      "name_en": "Nil",
+      "developer": "Nil",
+      "category_slug": "productivity",
+      "package_name": "com.nil.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تايني كارد",
+      "name_en": "Tinycards",
+      "developer": "Duolingo",
+      "category_slug": "productivity",
+      "package_name": "com.duolingo.tinycards",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريمينبر ذا ميلك",
+      "name_en": "Remember The Milk",
+      "developer": "Remember The Milk",
+      "category_slug": "productivity",
+      "package_name": "com.rememberthemilk.MilkMobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "وان ثينغ",
+      "name_en": "ONE Thing",
+      "developer": "ONE Thing",
+      "category_slug": "productivity",
+      "package_name": "com.onething.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي موريرز",
+      "name_en": "MyMoments",
+      "developer": "MyMoments",
+      "category_slug": "productivity",
+      "package_name": "com.mymoments.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كافيه ناب",
+      "name_en": "Coffee Nap",
+      "developer": "Coffee Nap",
+      "category_slug": "productivity",
+      "package_name": "com.coffeenap.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سياراتي",
+      "name_en": "My Car",
+      "developer": "My Car",
+      "category_slug": "tools",
+      "package_name": "com.mycar.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "طيارات",
+      "name_en": "Flights",
+      "developer": "Flights",
+      "category_slug": "travel",
+      "package_name": "com.flights.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رومبل ستارس",
+      "name_en": "Rumble Stars",
+      "developer": "Frogmind",
+      "category_slug": "games",
+      "package_name": "com.frogmind.rumblestars",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "براول ستارز",
+      "name_en": "Brawl Stars",
+      "developer": "Supercell",
+      "category_slug": "games",
+      "package_name": "com.supercell.brawlstars",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيروز ستريك",
+      "name_en": "Heroes Strike",
+      "developer": "IDLE GAME",
+      "category_slug": "games",
+      "package_name": "com.mbit.strike",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سرفايفرز آيو",
+      "name_en": "Survivors.io",
+      "developer": "Habby",
+      "category_slug": "games",
+      "package_name": "com.dxx.firenow",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أبيكس ليجندز",
+      "name_en": "Apex Legends Mobile",
+      "developer": "Electronic Arts",
+      "category_slug": "games",
+      "package_name": "com.ea.gp.apexlegendsmobilefps",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فالورانت",
+      "name_en": "Valorant",
+      "developer": "Riot Games",
+      "category_slug": "games",
+      "package_name": "com.riotgames.league.valorant",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "داوت",
+      "name_en": "Doubts",
+      "developer": "Doubts",
+      "category_slug": "games",
+      "package_name": "com.doubts.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "وورد لنك",
+      "name_en": "Word Link",
+      "developer": "Worzzle Games",
+      "category_slug": "games",
+      "package_name": "com.byril.wordlink",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووردسكيبس",
+      "name_en": "Wordscapes",
+      "developer": "PeopleFun",
+      "category_slug": "games",
+      "package_name": "com.peoplefun.wordcross",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "وورد كوك",
+      "name_en": "Word Cook",
+      "developer": "Word Cook",
+      "category_slug": "games",
+      "package_name": "com.wordcook.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كروسورد كينغ",
+      "name_en": "Crossword King",
+      "developer": "Crossword King",
+      "category_slug": "games",
+      "package_name": "com.crosswordking.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "الكلمة المتقاطعة",
+      "name_en": "Crossword",
+      "developer": "Crossword",
+      "category_slug": "games",
+      "package_name": "com.crossword.arabic",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بازل كراش",
+      "name_en": "Puzzle Crash",
+      "developer": "Puzzle Crash",
+      "category_slug": "games",
+      "package_name": "com.puzzlecrash.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جيغسو",
+      "name_en": "Jigsaw",
+      "developer": "Jigsaw Puzzle",
+      "category_slug": "games",
+      "package_name": "com.jigsawpuzzles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ناين ليترز",
+      "name_en": "9 Letters",
+      "developer": "9 Letters",
+      "category_slug": "games",
+      "package_name": "com.nineletters.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ألغاز عربية",
+      "name_en": "Arabic Puzzles",
+      "developer": "Arabic Puzzles",
+      "category_slug": "games",
+      "package_name": "com.arabicpuzzles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ألغاز رياضية",
+      "name_en": "Math Puzzles",
+      "developer": "Math Puzzles",
+      "category_slug": "games",
+      "package_name": "com.mathpuzzles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تافتا",
+      "name_en": "Tafta",
+      "developer": "Tafta",
+      "category_slug": "games",
+      "package_name": "com.tafta.games",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زوما",
+      "name_en": "Zuma",
+      "developer": "Zuma",
+      "category_slug": "games",
+      "package_name": "com.popcap.zuma",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باتل بلوكس",
+      "name_en": "Battle Blocks",
+      "developer": "Battle Blocks",
+      "category_slug": "games",
+      "package_name": "com.battleblocks.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليس أوف ماجيك",
+      "name_en": "Lies of Magic",
+      "developer": "Lies of Magic",
+      "category_slug": "games",
+      "package_name": "com.liesofmagic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تريبل ماتش",
+      "name_en": "Triple Match",
+      "developer": "Triple Match",
+      "category_slug": "games",
+      "package_name": "com.triplematch.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يمن كوينتر",
+      "name_en": "Yemen Counter",
+      "developer": "Yemen Counter",
+      "category_slug": "games",
+      "package_name": "com.yemencounter.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "قهوة وأصحاب",
+      "name_en": "Qahwa and Friends",
+      "developer": "Qahwa",
+      "category_slug": "games",
+      "package_name": "com.qahwa.friends.game",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أعداء وأصحاب",
+      "name_en": "Friends and Foes",
+      "developer": "Friends and Foes",
+      "category_slug": "games",
+      "package_name": "com.friendsandfoes.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لعبة تنس",
+      "name_en": "Tennis Game",
+      "developer": "Tennis Game",
+      "category_slug": "games",
+      "package_name": "com.tennisgame.arabic",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كرة القدم العربية",
+      "name_en": "Arabic Football",
+      "developer": "Arabic Football",
+      "category_slug": "games",
+      "package_name": "com.arabicfootball.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ملعب المشاهير",
+      "name_en": "Celebrity Field",
+      "developer": "Celebrity Field",
+      "category_slug": "games",
+      "package_name": "com.celebrityfield.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بطل المنطقة",
+      "name_en": "Area Hero",
+      "developer": "Area Hero",
+      "category_slug": "games",
+      "package_name": "com.areahero.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيف المدينة",
+      "name_en": "City Sword",
+      "developer": "City Sword",
+      "category_slug": "games",
+      "package_name": "com.citysword.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "إيريزر",
+      "name_en": "Eraser",
+      "developer": "Photo Eraser",
+      "category_slug": "design",
+      "package_name": "com.photo.eraser.background",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باك دروب",
+      "name_en": "Backdrop",
+      "developer": "Backdrop",
+      "category_slug": "design",
+      "package_name": "com.backdrop.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريموف بج",
+      "name_en": "Remove.bg",
+      "developer": "remove.bg",
+      "category_slug": "design",
+      "package_name": "ai.remove.bg",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فوتو روم",
+      "name_en": "PhotoRoom",
+      "developer": "PhotoRoom",
+      "category_slug": "design",
+      "package_name": "com.photoroom.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لينزا",
+      "name_en": "Lensa",
+      "developer": "Prisma Labs",
+      "category_slug": "design",
+      "package_name": "com.lensaai.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميدجيرني",
+      "name_en": "Midjourney",
+      "developer": "Midjourney Inc",
+      "category_slug": "design",
+      "package_name": "com.midjourney.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فايبر",
+      "name_en": "Viber",
+      "developer": "Rakuten",
+      "category_slug": "design",
+      "package_name": "com.viber.voip",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيكسل آرت",
+      "name_en": "Pixel Art",
+      "developer": "Pixel Art Apps",
+      "category_slug": "design",
+      "package_name": "com.pixelart.drawing.paint.color",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مانغا ستوديو",
+      "name_en": "Manga Studio",
+      "developer": "Smith Micro",
+      "category_slug": "design",
+      "package_name": "com.mangastudio.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كليب ستوديو",
+      "name_en": "Clip Studio Paint",
+      "developer": "Celsys Inc",
+      "category_slug": "design",
+      "package_name": "jp.co.celsys.clip.manga.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بروكريت",
+      "name_en": "Procreate",
+      "developer": "Savage Interactive",
+      "category_slug": "design",
+      "package_name": "com.procreate.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيبرفيوز",
+      "name_en": "Paperface",
+      "developer": "Paperface",
+      "category_slug": "design",
+      "package_name": "com.paperface.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ديكستر",
+      "name_en": "Desygner",
+      "developer": "Desygner",
+      "category_slug": "design",
+      "package_name": "com.desygner.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيسبوك ديزاينر",
+      "name_en": "Creator Studio",
+      "developer": "Meta Platforms",
+      "category_slug": "design",
+      "package_name": "com.facebook.creatorstudio",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستيكر ميكر",
+      "name_en": "Sticker Maker",
+      "developer": "Sticker Maker",
+      "category_slug": "design",
+      "package_name": "com.stickermake",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أنيمياكا",
+      "name_en": "Animaker",
+      "developer": "Animaker Inc",
+      "category_slug": "design",
+      "package_name": "com.animaker.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووتر ريمايندر",
+      "name_en": "Water Reminder",
+      "developer": "Water Reminder Apps",
+      "category_slug": "health",
+      "package_name": "com.waterreminder.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستيبس كاونتر",
+      "name_en": "Steps Counter",
+      "developer": "Steps Counter",
+      "category_slug": "health",
+      "package_name": "com.stepscounter.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيدومتر",
+      "name_en": "Pedometer",
+      "developer": "Pedometer",
+      "category_slug": "health",
+      "package_name": "com.pedometer.running",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فات سيكريت",
+      "name_en": "FatSecret",
+      "developer": "FatSecret",
+      "category_slug": "health",
+      "package_name": "com.fatsecret.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نيوتريشن فاكتس",
+      "name_en": "Nutrition Facts",
+      "developer": "Cronometer",
+      "category_slug": "health",
+      "package_name": "com.cronometer.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كرونومتر",
+      "name_en": "Cronometer",
+      "developer": "Cronometer",
+      "category_slug": "health",
+      "package_name": "com.cronometer.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كارب مانجر",
+      "name_en": "Carb Manager",
+      "developer": "Wombat Apps",
+      "category_slug": "health",
+      "package_name": "com.wombat.carbmanager",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماكرو داياتري",
+      "name_en": "Macro Diary",
+      "developer": "Macro",
+      "category_slug": "health",
+      "package_name": "com.macrodiary.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيت مينو",
+      "name_en": "FitMenu",
+      "developer": "FitMenu",
+      "category_slug": "health",
+      "package_name": "com.fitmenu.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيكتد",
+      "name_en": "Pictured",
+      "developer": "Pictured",
+      "category_slug": "health",
+      "package_name": "com.pictured.health",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميدليف",
+      "name_en": "Medlify",
+      "developer": "Medlify",
+      "category_slug": "health",
+      "package_name": "com.medlify.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميد ريمايندر",
+      "name_en": "Med Reminder",
+      "developer": "Med Reminder",
+      "category_slug": "health",
+      "package_name": "com.medreminder.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيلز",
+      "name_en": "Pills",
+      "developer": "Pills Reminder",
+      "category_slug": "health",
+      "package_name": "com.pillsreminder.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زنو",
+      "name_en": "Zeno",
+      "developer": "Zeno",
+      "category_slug": "health",
+      "package_name": "com.zeno.health",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيوتي كاونتر",
+      "name_en": "Beauty Counter",
+      "developer": "Beauty Counter",
+      "category_slug": "health",
+      "package_name": "com.beautycounter.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيموشن ترايكر",
+      "name_en": "Emotion Tracker",
+      "developer": "Emotion Tracker",
+      "category_slug": "health",
+      "package_name": "com.emotiontracker.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "موود تريكر",
+      "name_en": "Mood Tracker",
+      "developer": "Mood Tracker",
+      "category_slug": "health",
+      "package_name": "com.moodtracker.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "داي ون",
+      "name_en": "Daylio",
+      "developer": "Habitica",
+      "category_slug": "health",
+      "package_name": "net.daylio.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واي مود",
+      "name_en": "Why Mood",
+      "developer": "Why Mood",
+      "category_slug": "health",
+      "package_name": "com.whymood.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ساند سليبر",
+      "name_en": "Sound Sleeper",
+      "developer": "Sound Sleeper",
+      "category_slug": "health",
+      "package_name": "com.soundsleeper.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مانيلاين",
+      "name_en": "MoneyLine",
+      "developer": "MoneyLine",
+      "category_slug": "finance",
+      "package_name": "com.moneyline.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت ماني",
+      "name_en": "Money Manager",
+      "developer": "Realbyte",
+      "category_slug": "finance",
+      "package_name": "com.realbyte.moneymanager",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مودجيت",
+      "name_en": "Monefy",
+      "developer": "Monefy",
+      "category_slug": "finance",
+      "package_name": "com.monefy.app.lite",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووليت",
+      "name_en": "Wallet",
+      "developer": "BudgetBakers",
+      "category_slug": "finance",
+      "package_name": "com.droid.bakers.money",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبيتر",
+      "name_en": "Splittr",
+      "developer": "Splittr",
+      "category_slug": "finance",
+      "package_name": "com.splittr.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبليتوايز",
+      "name_en": "Splitwise",
+      "developer": "Splitwise Inc",
+      "category_slug": "finance",
+      "package_name": "com.Splitwise.SplitwiseMobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ترييفي",
+      "name_en": "Tricount",
+      "developer": "Tricount",
+      "category_slug": "finance",
+      "package_name": "com.tribab.tricount",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ألو باي",
+      "name_en": "Alo Pay",
+      "developer": "Alo Pay",
+      "category_slug": "finance",
+      "package_name": "com.alopay.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فلوس",
+      "name_en": "Flos",
+      "developer": "Flos",
+      "category_slug": "finance",
+      "package_name": "com.flos.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كوبون",
+      "name_en": "Coupon",
+      "developer": "Coupon Apps",
+      "category_slug": "finance",
+      "package_name": "com.coupon.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريبيتز",
+      "name_en": "Rebates",
+      "developer": "Rebates",
+      "category_slug": "finance",
+      "package_name": "com.rebates.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كاش باك",
+      "name_en": "Cashback",
+      "developer": "Cashback",
+      "category_slug": "finance",
+      "package_name": "com.cashback.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيرو",
+      "name_en": "Hero",
+      "developer": "Hero",
+      "category_slug": "finance",
+      "package_name": "com.heropay.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باي فورورد",
+      "name_en": "PayForward",
+      "developer": "PayForward",
+      "category_slug": "finance",
+      "package_name": "com.payforward.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

@@ -1,0 +1,404 @@
+{
+  "apps": [
+    {
+      "name": "بيكساباي",
+      "name_en": "Pixabay",
+      "developer": "Pixabay GmbH",
+      "category_slug": "photo",
+      "package_name": "com.pixabay.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أونسبلاش",
+      "name_en": "Unsplash",
+      "developer": "Unsplash Inc",
+      "category_slug": "photo",
+      "package_name": "com.unsplash.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيكتشر",
+      "name_en": "Pictrure",
+      "developer": "Pictrure",
+      "category_slug": "photo",
+      "package_name": "com.pictrure.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فرايم",
+      "name_en": "Framy",
+      "developer": "Framy",
+      "category_slug": "photo",
+      "package_name": "com.framy.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فريم إيت",
+      "name_en": "Frame It",
+      "developer": "Frame It",
+      "category_slug": "photo",
+      "package_name": "com.frameit.photo",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيكسليت",
+      "name_en": "Pixelite",
+      "developer": "Pixelite",
+      "category_slug": "photo",
+      "package_name": "com.pixelite.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رو كاميرا",
+      "name_en": "Raw Camera",
+      "developer": "Raw Camera",
+      "category_slug": "photo",
+      "package_name": "com.rawcamera.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نايت كاميرا",
+      "name_en": "Night Camera",
+      "developer": "Night Camera",
+      "category_slug": "photo",
+      "package_name": "com.nightcamera.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بورتريت كاميرا",
+      "name_en": "Portrait Camera",
+      "developer": "Portrait Camera",
+      "category_slug": "photo",
+      "package_name": "com.portraitcamera.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مورفيك",
+      "name_en": "Morphic",
+      "developer": "Morphic",
+      "category_slug": "photo",
+      "package_name": "com.morphic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريكوفري كوتش",
+      "name_en": "Recovery Coach",
+      "developer": "Recovery Coach",
+      "category_slug": "health",
+      "package_name": "com.recoverycoach.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيت بودي",
+      "name_en": "FitBody",
+      "developer": "FitBody",
+      "category_slug": "health",
+      "package_name": "com.fitbody.workout",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باودي ووت",
+      "name_en": "Body Weight",
+      "developer": "Body Weight",
+      "category_slug": "health",
+      "package_name": "com.bodyweight.workout",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووت بلان",
+      "name_en": "Workout Plan",
+      "developer": "Workout Plan",
+      "category_slug": "health",
+      "package_name": "com.workoutplan.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جيم ترنر",
+      "name_en": "Gym Trainer",
+      "developer": "Gym Trainer",
+      "category_slug": "health",
+      "package_name": "com.gymtrainer.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يوغا لايف",
+      "name_en": "Yoga Life",
+      "developer": "Yoga Life",
+      "category_slug": "health",
+      "package_name": "com.yogalife.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مديتيشن تايم",
+      "name_en": "Meditation Time",
+      "developer": "Meditation Time",
+      "category_slug": "health",
+      "package_name": "com.meditationtime.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايند فولنس",
+      "name_en": "Mindfulness",
+      "developer": "Mindfulness",
+      "category_slug": "health",
+      "package_name": "com.mindfulness.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيلدي نوم",
+      "name_en": "Noom",
+      "developer": "Noom Inc",
+      "category_slug": "health",
+      "package_name": "com.wsl.noom",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ووت سنس",
+      "name_en": "WotSense",
+      "developer": "WotSense",
+      "category_slug": "health",
+      "package_name": "com.wotsense.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فات بيرنر",
+      "name_en": "Fat Burner",
+      "developer": "Fat Burner",
+      "category_slug": "health",
+      "package_name": "com.fatburner.workouts",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستريتش",
+      "name_en": "Stretch",
+      "developer": "Stretch",
+      "category_slug": "health",
+      "package_name": "com.stretch.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رن مستر",
+      "name_en": "Run Master",
+      "developer": "Run Master",
+      "category_slug": "health",
+      "package_name": "com.runmaster.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سايكلنغ",
+      "name_en": "Cycling App",
+      "developer": "Cycling",
+      "category_slug": "health",
+      "package_name": "com.cycling.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سويمنغ",
+      "name_en": "Swimming",
+      "developer": "Swimming",
+      "category_slug": "health",
+      "package_name": "com.swimming.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليغو",
+      "name_en": "Lego",
+      "developer": "The LEGO Group",
+      "category_slug": "education",
+      "package_name": "com.lego.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ديزني لرن",
+      "name_en": "Disney Learn",
+      "developer": "Disney",
+      "category_slug": "education",
+      "package_name": "com.disney.learn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نيك جونيور",
+      "name_en": "Nick Jr",
+      "developer": "Nickelodeon",
+      "category_slug": "education",
+      "package_name": "com.viacom18.nickjr",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيسمي ستريت",
+      "name_en": "Sesame Street",
+      "developer": "Sesame Workshop",
+      "category_slug": "education",
+      "package_name": "air.com.sesameworkshop.sesame",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "براي نير",
+      "name_en": "PBSKids",
+      "developer": "PBS",
+      "category_slug": "education",
+      "package_name": "com.pbskids.go",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستيتس أوف مايند",
+      "name_en": "States of Mind",
+      "developer": "States of Mind",
+      "category_slug": "education",
+      "package_name": "com.statesofmind.education",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "رياضيات للأطفال",
+      "name_en": "Kids Math",
+      "developer": "Kids Math",
+      "category_slug": "education",
+      "package_name": "com.kidsmath.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أبجد",
+      "name_en": "Abajd",
+      "developer": "Abajd",
+      "category_slug": "education",
+      "package_name": "com.abajd.arabic",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "علمني",
+      "name_en": "Allemni",
+      "developer": "Allemni",
+      "category_slug": "education",
+      "package_name": "com.allemni.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "درسك",
+      "name_en": "Darsk",
+      "developer": "Darsk",
+      "category_slug": "education",
+      "package_name": "com.darsk.education",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميكاني",
+      "name_en": "Makani",
+      "developer": "Makani",
+      "category_slug": "education",
+      "package_name": "com.makani.education",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نون أكاديمي",
+      "name_en": "Noon Academy",
+      "developer": "Noon Academy",
+      "category_slug": "education",
+      "package_name": "com.noonacademy.student",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيديو",
+      "name_en": "Edeo",
+      "developer": "Edeo",
+      "category_slug": "education",
+      "package_name": "com.edeo.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أستاذ",
+      "name_en": "Ostaz",
+      "developer": "Ostaz",
+      "category_slug": "education",
+      "package_name": "com.ostaz.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تعلم أون لاين",
+      "name_en": "Learn Online",
+      "developer": "Learn Online",
+      "category_slug": "education",
+      "package_name": "com.learnonline.arabic",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "يوزا",
+      "name_en": "Yousician",
+      "developer": "Yousician Ltd",
+      "category_slug": "apps",
+      "package_name": "com.yousician.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل كروم",
+      "name_en": "Google Chrome",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.android.chrome",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فايرفوكس",
+      "name_en": "Firefox",
+      "developer": "Mozilla",
+      "category_slug": "tools",
+      "package_name": "org.mozilla.firefox",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوبرا ميني",
+      "name_en": "Opera Mini",
+      "developer": "Opera Software",
+      "category_slug": "tools",
+      "package_name": "com.opera.mini.native",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "برايف براوزر",
+      "name_en": "Brave Browser",
+      "developer": "Brave Software",
+      "category_slug": "tools",
+      "package_name": "com.brave.browser",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يوسي براوزر",
+      "name_en": "UC Browser",
+      "developer": "UCWeb",
+      "category_slug": "tools",
+      "package_name": "com.UCMobile.intl",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ترو كولر",
+      "name_en": "Truecaller",
+      "developer": "Truecaller",
+      "category_slug": "tools",
+      "package_name": "com.truecaller",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل ترانسليت",
+      "name_en": "Google Translate",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.apps.translate",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل مابس",
+      "name_en": "Google Maps",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.apps.maps",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ويز",
+      "name_en": "Waze",
+      "developer": "Waze Inc",
+      "category_slug": "tools",
+      "package_name": "com.waze",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كيبورد جوجل",
+      "name_en": "Gboard",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.inputmethod.latin",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سويفت كي",
+      "name_en": "SwiftKey",
+      "developer": "Microsoft Corporation",
+      "category_slug": "tools",
+      "package_name": "com.touchtype.swiftkey",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "قاموس ميرام ويبستر",
+      "name_en": "Dictionary",
+      "developer": "Merriam-Webster",
+      "category_slug": "tools",
+      "package_name": "com.merriamwebster",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "قاموس عربي إنجليزي",
+      "name_en": "Arabic Dictionary",
+      "developer": "Dictionary.com",
+      "category_slug": "tools",
+      "package_name": "com.dictionary",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يو ديكشنري",
+      "name_en": "U-Dictionary",
+      "developer": "YoudaoDict",
+      "category_slug": "tools",
+      "package_name": "com.youdao.hindict",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ترجم",
+      "name_en": "Translate",
+      "developer": "Microsoft Corporation",
+      "category_slug": "tools",
+      "package_name": "com.microsoft.translator",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نورد VPN",
+      "name_en": "NordVPN",
+      "developer": "Nord Security",
+      "category_slug": "tools",
+      "package_name": "com.nordvpn.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إكسبريس VPN",
+      "name_en": "ExpressVPN",
+      "developer": "ExpressVPN",
+      "category_slug": "tools",
+      "package_name": "com.expressvpn.vpn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سايبر غوست",
+      "name_en": "CyberGhost VPN",
+      "developer": "CyberGhost",
+      "category_slug": "tools",
+      "package_name": "de.cyberghostsa.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بروتون VPN",
+      "name_en": "ProtonVPN",
+      "developer": "Proton AG",
+      "category_slug": "tools",
+      "package_name": "ch.protonvpn.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تانل بير",
+      "name_en": "TunnelBear",
+      "developer": "McAfee",
+      "category_slug": "tools",
+      "package_name": "com.tunnelbear.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماكافي سيكيوريتي",
+      "name_en": "McAfee Security",
+      "developer": "McAfee",
+      "category_slug": "tools",
+      "package_name": "com.wsandroid.suite",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أفاست",
+      "name_en": "Avast",
+      "developer": "Avast Software",
+      "category_slug": "tools",
+      "package_name": "com.avast.android.mobilesecurity",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيسيت موبايل",
+      "name_en": "ESET Mobile",
+      "developer": "ESET",
+      "category_slug": "tools",
+      "package_name": "com.eset.ems2.gu",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيتديفندر",
+      "name_en": "Bitdefender",
+      "developer": "Bitdefender",
+      "category_slug": "tools",
+      "package_name": "com.bitdefender.security",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نورتون",
+      "name_en": "Norton",
+      "developer": "NortonLifeLock",
+      "category_slug": "tools",
+      "package_name": "com.symantec.mobilesecurity",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ملف المدير",
+      "name_en": "File Manager",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.filemanager",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إس إكسبلورر",
+      "name_en": "ES Explorer",
+      "developer": "ES Global",
+      "category_slug": "tools",
+      "package_name": "com.estrongs.android.pop",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إكس-بلور",
+      "name_en": "X-plore",
+      "developer": "Lonely Cat Games",
+      "category_slug": "tools",
+      "package_name": "com.lonelycatgames.Xplore",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميكساليسيا",
+      "name_en": "Files by Google",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.apps.nbu.files",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستور إنلارجر",
+      "name_en": "Store Enlarger",
+      "developer": "Storage Analyzer",
+      "category_slug": "tools",
+      "package_name": "com.codeswire.android.storagecleaner",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كلين ماستر",
+      "name_en": "Clean Master",
+      "developer": "Cheetah Mobile",
+      "category_slug": "tools",
+      "package_name": "com.cleanmaster.mguard",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كاسبيرسكي",
+      "name_en": "Kaspersky",
+      "developer": "Kaspersky Lab",
+      "category_slug": "tools",
+      "package_name": "com.kms.free",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أندرويد بي",
+      "name_en": "Android PAY",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.apps.walletnfcrel",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل باي",
+      "name_en": "Google Pay",
+      "developer": "Google LLC",
+      "category_slug": "tools",
+      "package_name": "com.google.android.apps.walletnfcrel",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ترانسليتور",
+      "name_en": "DeepL Translate",
+      "developer": "DeepL SE",
+      "category_slug": "tools",
+      "package_name": "com.deepl.mobiletranslator",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميكروسوفت لانج",
+      "name_en": "Microsoft Launcher",
+      "developer": "Microsoft Corporation",
+      "category_slug": "tools",
+      "package_name": "com.microsoft.launcher",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نوفا لانشر",
+      "name_en": "Nova Launcher",
+      "developer": "TeslaCoil Software",
+      "category_slug": "tools",
+      "package_name": "com.teslacoilsw.launcher",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أيبس لانشر",
+      "name_en": "APEX Launcher",
+      "developer": "APEX Studio",
+      "category_slug": "tools",
+      "package_name": "com.anddoes.launcher",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لانشر سامسونج",
+      "name_en": "One UI Home",
+      "developer": "Samsung",
+      "category_slug": "tools",
+      "package_name": "com.sec.android.app.launcher",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيمو",
+      "name_en": "IMO",
+      "developer": "imo.im",
+      "category_slug": "tools",
+      "package_name": "com.imo.android.imoim",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماب ماي رن",
+      "name_en": "MapMyRun",
+      "developer": "Under Armour",
+      "category_slug": "tools",
+      "package_name": "com.mapmyrun.android2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سوبر VPN",
+      "name_en": "SuperVPN",
+      "developer": "SuperSoftTech",
+      "category_slug": "tools",
+      "package_name": "com.qingfan.svpn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيربو VPN",
+      "name_en": "Turbo VPN",
+      "developer": "Innovative Connecting",
+      "category_slug": "tools",
+      "package_name": "free.vpn.unblock.proxy.turbovpn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوبن VPN",
+      "name_en": "OpenVPN",
+      "developer": "OpenVPN Inc",
+      "category_slug": "tools",
+      "package_name": "net.openvpn.openvpn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ويندسكريب",
+      "name_en": "Windscribe",
+      "developer": "Windscribe Limited",
+      "category_slug": "tools",
+      "package_name": "com.windscribe.vpn.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هايد دوت مي",
+      "name_en": "hide.me VPN",
+      "developer": "hide.me",
+      "category_slug": "tools",
+      "package_name": "hideme.me.vpn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بريفاكسي",
+      "name_en": "Privacy Cleaner",
+      "developer": "Privacy Cleaner",
+      "category_slug": "tools",
+      "package_name": "com.ipm.android.cleaner",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واي فاي أناليزر",
+      "name_en": "WiFi Analyzer",
+      "developer": "farproc",
+      "category_slug": "tools",
+      "package_name": "com.farproc.wifi.analyzer",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نت سبيد",
+      "name_en": "Net Speed",
+      "developer": "Network Speed",
+      "category_slug": "tools",
+      "package_name": "com.anand.networkspeed",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "إيه بي سي نيوز",
+      "name_en": "ABC News",
+      "developer": "ABC News",
+      "category_slug": "news",
+      "package_name": "com.abc.abcnews",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سي بي إس نيوز",
+      "name_en": "CBS News",
+      "developer": "ViacomCBS",
+      "category_slug": "news",
+      "package_name": "com.cbsnews.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إن بي سي نيوز",
+      "name_en": "NBC News",
+      "developer": "NBCUniversal",
+      "category_slug": "news",
+      "package_name": "com.nbcnews.android.nbc",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تايم",
+      "name_en": "Time Magazine",
+      "developer": "Time USA LLC",
+      "category_slug": "news",
+      "package_name": "com.time.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فوربس",
+      "name_en": "Forbes",
+      "developer": "Forbes Media",
+      "category_slug": "news",
+      "package_name": "com.forbes.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيكونوميست",
+      "name_en": "The Economist",
+      "developer": "The Economist",
+      "category_slug": "news",
+      "package_name": "com.economist.tga",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ناشيونال ريفيو",
+      "name_en": "National Review",
+      "developer": "NR Publishing",
+      "category_slug": "news",
+      "package_name": "com.nationalreview.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ذا هيل",
+      "name_en": "The Hill",
+      "developer": "Capital Hill Publishing",
+      "category_slug": "news",
+      "package_name": "com.thehill.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوليتيكو",
+      "name_en": "Politico",
+      "developer": "Politico LLC",
+      "category_slug": "news",
+      "package_name": "com.politico.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أكسيوس",
+      "name_en": "Axios",
+      "developer": "Axios Media",
+      "category_slug": "news",
+      "package_name": "com.axios.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ذا أتلانتيك",
+      "name_en": "The Atlantic",
+      "developer": "The Atlantic Monthly Group",
+      "category_slug": "news",
+      "package_name": "com.theatlantic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واير",
+      "name_en": "The Wire",
+      "developer": "The Wire",
+      "category_slug": "news",
+      "package_name": "com.thewire.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميديم",
+      "name_en": "Medium",
+      "developer": "A Medium Corporation",
+      "category_slug": "news",
+      "package_name": "com.medium.reader",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سابستاك",
+      "name_en": "Substack",
+      "developer": "Substack Inc",
+      "category_slug": "news",
+      "package_name": "com.substack.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوكيت",
+      "name_en": "Pocket",
+      "developer": "Mozilla",
+      "category_slug": "news",
+      "package_name": "com.ideashower.readitlater.pro",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هير ويز",
+      "name_en": "HERE Maps",
+      "developer": "HERE Europe",
+      "category_slug": "travel",
+      "package_name": "com.here.app.maps",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماب كواست",
+      "name_en": "MapQuest",
+      "developer": "MapQuest",
+      "category_slug": "travel",
+      "package_name": "com.mapquest.android.activitymapper",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوبي يو بي",
+      "name_en": "OBD2",
+      "developer": "OBD2",
+      "category_slug": "travel",
+      "package_name": "com.ev.evdash",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميلز",
+      "name_en": "Miles",
+      "developer": "Miles",
+      "category_slug": "travel",
+      "package_name": "com.miles.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "موف إيت",
+      "name_en": "MoveIt",
+      "developer": "MoveIt",
+      "category_slug": "travel",
+      "package_name": "com.moveit.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باس بي",
+      "name_en": "PassBee",
+      "developer": "PassBee",
+      "category_slug": "travel",
+      "package_name": "com.passbee.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زيبكار",
+      "name_en": "Zipcar",
+      "developer": "Zipcar Inc",
+      "category_slug": "travel",
+      "package_name": "com.zipcar.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيرد",
+      "name_en": "Bird",
+      "developer": "Bird Rides",
+      "category_slug": "travel",
+      "package_name": "co.bird.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لايم",
+      "name_en": "Lime",
+      "developer": "Lime",
+      "category_slug": "travel",
+      "package_name": "com.limebike",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبين",
+      "name_en": "Spin",
+      "developer": "Spin",
+      "category_slug": "travel",
+      "package_name": "pm.spin.vespro",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيتي بايك",
+      "name_en": "Citi Bike",
+      "developer": "NYC Bike Share",
+      "category_slug": "travel",
+      "package_name": "com.bikeshare.citibike",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليفت",
+      "name_en": "Lyft",
+      "developer": "Lyft Inc",
+      "category_slug": "travel",
+      "package_name": "me.lyft.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيا",
+      "name_en": "Via",
+      "developer": "Via Transportation",
+      "category_slug": "travel",
+      "package_name": "com.via.ridesharing",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تارف",
+      "name_en": "Tarif",
+      "developer": "Tarif",
+      "category_slug": "travel",
+      "package_name": "com.tarif.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هوب",
+      "name_en": "Hop",
+      "developer": "Hop",
+      "category_slug": "travel",
+      "package_name": "com.hop.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بودكاست أبل",
+      "name_en": "Apple Podcasts",
+      "developer": "Apple Inc",
+      "category_slug": "music",
+      "package_name": "com.apple.podcasts",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبوتيفاي بودكاستس",
+      "name_en": "Spotify Podcasts",
+      "developer": "Spotify AB",
+      "category_slug": "music",
+      "package_name": "com.spotify.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بودبين",
+      "name_en": "Podbean",
+      "developer": "Podbean Tech",
+      "category_slug": "music",
+      "package_name": "com.podbean.app.podcast",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أنكر",
+      "name_en": "Anchor",
+      "developer": "Spotify AB",
+      "category_slug": "music",
+      "package_name": "com.anchor.android.podcasts",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوفركاست",
+      "name_en": "Overcast",
+      "developer": "Marco Arment",
+      "category_slug": "music",
+      "package_name": "fm.overcast",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوكيت كاستس",
+      "name_en": "Pocket Casts",
+      "developer": "Automattic",
+      "category_slug": "music",
+      "package_name": "au.com.shiftyjelly.pocketcasts",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريديو تيلينت",
+      "name_en": "Radio Talent",
+      "developer": "Radio Talent",
+      "category_slug": "music",
+      "package_name": "com.radiotelnet.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيوناين",
+      "name_en": "TuneIn",
+      "developer": "TuneIn Radio",
+      "category_slug": "music",
+      "package_name": "tunein.player",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إي هارت ريديو",
+      "name_en": "iHeartRadio",
+      "developer": "iHeartMedia",
+      "category_slug": "music",
+      "package_name": "com.clearchannel.iheartradio.controller",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باندورا",
+      "name_en": "Pandora",
+      "developer": "SiriusXM",
+      "category_slug": "music",
+      "package_name": "com.pandora.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تايدال",
+      "name_en": "Tidal",
+      "developer": "TIDAL Music",
+      "category_slug": "music",
+      "package_name": "com.aspiro.tidal",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كلود",
+      "name_en": "Qobuz",
+      "developer": "Qobuz",
+      "category_slug": "music",
+      "package_name": "com.qobuz.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أمازون ميوزيك",
+      "name_en": "Amazon Music",
+      "developer": "Amazon Mobile LLC",
+      "category_slug": "music",
+      "package_name": "com.amazon.mp3",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ياندكس ميوزيك",
+      "name_en": "Yandex Music",
+      "developer": "Yandex LLC",
+      "category_slug": "music",
+      "package_name": "ru.yandex.music",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لست إف إم",
+      "name_en": "Last.fm",
+      "developer": "Last.fm",
+      "category_slug": "music",
+      "package_name": "fm.last.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميوزيك مانجر",
+      "name_en": "Music Manager",
+      "developer": "Music",
+      "category_slug": "music",
+      "package_name": "com.music.manager",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميوزكس",
+      "name_en": "Musicx",
+      "developer": "Musicx",
+      "category_slug": "music",
+      "package_name": "com.musicx.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريدجيو",
+      "name_en": "Redigio",
+      "developer": "Redigio",
+      "category_slug": "music",
+      "package_name": "com.redigio.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مكسيمم ميوزيك",
+      "name_en": "Maximum Music",
+      "developer": "Maximum Music",
+      "category_slug": "music",
+      "package_name": "com.maximummusic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميوزيك كلاود",
+      "name_en": "Music Cloud",
+      "developer": "Music Cloud",
+      "category_slug": "music",
+      "package_name": "com.musiccloud.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

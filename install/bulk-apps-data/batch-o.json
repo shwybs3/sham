@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "كلوكيفي",
+      "name_en": "Clockify",
+      "developer": "CAKE.com",
+      "category_slug": "productivity",
+      "package_name": "me.clockify.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل تقويم",
+      "name_en": "Google Calendar",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.calendar",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت أوتلوك",
+      "name_en": "Microsoft Outlook",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.office.outlook",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جيميل",
+      "name_en": "Gmail",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.gm",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بروتون ميل",
+      "name_en": "Proton Mail",
+      "developer": "Proton AG",
+      "category_slug": "productivity",
+      "package_name": "ch.protonmail.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ياهو ميل",
+      "name_en": "Yahoo Mail",
+      "developer": "Yahoo Inc",
+      "category_slug": "productivity",
+      "package_name": "com.yahoo.mobile.client.android.mail",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سبارك",
+      "name_en": "Spark Mail",
+      "developer": "Readdle Inc",
+      "category_slug": "productivity",
+      "package_name": "com.readdle.spark",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هاي ميل",
+      "name_en": "Hey Mail",
+      "developer": "Basecamp",
+      "category_slug": "productivity",
+      "package_name": "world.hey.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيرميل",
+      "name_en": "AirMail",
+      "developer": "Bloop S.R.L.",
+      "category_slug": "productivity",
+      "package_name": "it.bloop.airmail2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أمازون شوبينج",
+      "name_en": "Amazon Shopping",
+      "developer": "Amazon Mobile LLC",
+      "category_slug": "shopping",
+      "package_name": "com.amazon.mShop.android.shopping",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "علي إكسبريس",
+      "name_en": "AliExpress",
+      "developer": "Alibaba Mobile",
+      "category_slug": "shopping",
+      "package_name": "com.alibaba.aliexpresshd",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "شيين",
+      "name_en": "SHEIN",
+      "developer": "ROADGET BUSINESS",
+      "category_slug": "shopping",
+      "package_name": "com.zzkko",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيمو",
+      "name_en": "Temu",
+      "developer": "Temu",
+      "category_slug": "shopping",
+      "package_name": "com.einnovation.temu",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تالابات",
+      "name_en": "Talabat",
+      "developer": "Talabat",
+      "category_slug": "shopping",
+      "package_name": "com.talabat",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كريم",
+      "name_en": "Careem",
+      "developer": "Careem",
+      "category_slug": "shopping",
+      "package_name": "com.careem.acma",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نمشي",
+      "name_en": "Namshi",
+      "developer": "Namshi",
+      "category_slug": "shopping",
+      "package_name": "com.namshi.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أمازون",
+      "name_en": "Amazon",
+      "developer": "Amazon Mobile LLC",
+      "category_slug": "shopping",
+      "package_name": "com.amazon.mShop.android.shopping",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جميل",
+      "name_en": "Jameel",
+      "developer": "Jameel",
+      "category_slug": "shopping",
+      "package_name": "com.jameel.jmeel",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "عطلة",
+      "name_en": "Cleartrip",
+      "developer": "Cleartrip",
+      "category_slug": "shopping",
+      "package_name": "com.cleartrip.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سوق دوت كوم",
+      "name_en": "Souq.com",
+      "developer": "Souq.com",
+      "category_slug": "shopping",
+      "package_name": "com.souq.android.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيتي ماكس",
+      "name_en": "CityMax",
+      "developer": "CityMax",
+      "category_slug": "shopping",
+      "package_name": "com.citymax.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باي دي",
+      "name_en": "PayD",
+      "developer": "PayD",
+      "category_slug": "shopping",
+      "package_name": "com.payd.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نون",
+      "name_en": "Noon",
+      "developer": "Noon",
+      "category_slug": "shopping",
+      "package_name": "com.noon.buyerapp",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مكتبة",
+      "name_en": "Bookstore",
+      "developer": "Books",
+      "category_slug": "shopping",
+      "package_name": "com.books.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ألو موبايل",
+      "name_en": "Alo Mobile",
+      "developer": "Alo Mobile",
+      "category_slug": "shopping",
+      "package_name": "com.alomobile.shop",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "علي بابا",
+      "name_en": "Alibaba",
+      "developer": "Alibaba Group",
+      "category_slug": "shopping",
+      "package_name": "com.alibaba.wireless",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لازادا",
+      "name_en": "Lazada",
+      "developer": "Lazada",
+      "category_slug": "shopping",
+      "package_name": "com.lazada.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "شوبي",
+      "name_en": "Shopee",
+      "developer": "Shopee",
+      "category_slug": "shopping",
+      "package_name": "com.shopee.sg",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إبي",
+      "name_en": "eBay",
+      "developer": "eBay Inc",
+      "category_slug": "shopping",
+      "package_name": "com.ebay.mobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "غالي",
+      "name_en": "Ghali",
+      "developer": "Ghali",
+      "category_slug": "shopping",
+      "package_name": "com.ghaliapp.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "دليفرو",
+      "name_en": "Deliveroo",
+      "developer": "Deliveroo",
+      "category_slug": "shopping",
+      "package_name": "com.deliveroo.orderapp",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إنسبكلو",
+      "name_en": "Instashop",
+      "developer": "InstaShop",
+      "category_slug": "shopping",
+      "package_name": "com.instashop.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أوبر إيتس",
+      "name_en": "Uber Eats",
+      "developer": "Uber Technologies",
+      "category_slug": "shopping",
+      "package_name": "com.ubercab.eats",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هنجري هاوس",
+      "name_en": "HungerStation",
+      "developer": "HungerStation",
+      "category_slug": "shopping",
+      "package_name": "com.hungerstation.android.web",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كايان",
+      "name_en": "Klayar",
+      "developer": "Klayar",
+      "category_slug": "shopping",
+      "package_name": "com.klayar.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بلوك",
+      "name_en": "Block",
+      "developer": "Block Inc",
+      "category_slug": "shopping",
+      "package_name": "com.squareup.cash",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واي باي",
+      "name_en": "iPay",
+      "developer": "iPay",
+      "category_slug": "shopping",
+      "package_name": "com.ipay.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فودي",
+      "name_en": "Foodics",
+      "developer": "Foodics",
+      "category_slug": "shopping",
+      "package_name": "com.foodics.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيكيا",
+      "name_en": "IKEA",
+      "developer": "Inter IKEA Systems",
+      "category_slug": "shopping",
+      "package_name": "com.ikea.kompis.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زالاندو",
+      "name_en": "Zalando",
+      "developer": "Zalando",
+      "category_slug": "shopping",
+      "package_name": "de.zalando.mobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إتش أند إم",
+      "name_en": "H&M",
+      "developer": "H & M Hennes & Mauritz",
+      "category_slug": "shopping",
+      "package_name": "com.hm.goe",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زارا",
+      "name_en": "Zara",
+      "developer": "Inditex",
+      "category_slug": "shopping",
+      "package_name": "com.inditex.zara",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أديداس",
+      "name_en": "Adidas",
+      "developer": "Adidas",
+      "category_slug": "shopping",
+      "package_name": "com.adidas.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نايكي",
+      "name_en": "Nike",
+      "developer": "Nike Inc",
+      "category_slug": "shopping",
+      "package_name": "com.nike.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي فيتنس بال",
+      "name_en": "MyFitnessPal",
+      "developer": "Under Armour",
+      "category_slug": "health",
+      "package_name": "com.myfitnesspal.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستافا",
+      "name_en": "Strava",
+      "developer": "Strava",
+      "category_slug": "health",
+      "package_name": "com.strava",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نايكي ران كلوب",
+      "name_en": "Nike Run Club",
+      "developer": "Nike Inc",
+      "category_slug": "health",
+      "package_name": "com.nike.plusgps",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أديداس ران",
+      "name_en": "adidas Running",
+      "developer": "Runtastic GmbH",
+      "category_slug": "health",
+      "package_name": "com.runtastic.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيتبيت",
+      "name_en": "Fitbit",
+      "developer": "Fitbit Inc",
+      "category_slug": "health",
+      "package_name": "com.fitbit.FitbitMobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيلث ميت",
+      "name_en": "Health Mate",
+      "developer": "Withings",
+      "category_slug": "health",
+      "package_name": "com.withings.wiscale2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

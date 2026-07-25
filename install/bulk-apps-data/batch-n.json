@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "كريكيت",
+      "name_en": "Cricket",
+      "developer": "EA Sports",
+      "category_slug": "games",
+      "package_name": "com.ea.games.cricket22_row",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فيفا موبايل",
+      "name_en": "EA Sports FC Mobile",
+      "developer": "EA Sports",
+      "category_slug": "games",
+      "package_name": "com.ea.gp.fifamobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي توم",
+      "name_en": "My Talking Tom",
+      "developer": "Outfit7",
+      "category_slug": "games",
+      "package_name": "com.outfit7.mytalkingtom",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي توم 2",
+      "name_en": "My Talking Tom 2",
+      "developer": "Outfit7",
+      "category_slug": "games",
+      "package_name": "com.outfit7.mytalkingtom2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي توم فريندز",
+      "name_en": "My Talking Tom Friends",
+      "developer": "Outfit7",
+      "category_slug": "games",
+      "package_name": "com.outfit7.mytalkingfriends",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماي توم كات",
+      "name_en": "Talking Tom Cat",
+      "developer": "Outfit7",
+      "category_slug": "games",
+      "package_name": "com.outfit7.talkingtomcat",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "دريم ليغ سوكر",
+      "name_en": "Dream League Soccer",
+      "developer": "First Touch Games",
+      "category_slug": "games",
+      "package_name": "com.firsttouchgames.dls7",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيس موبايل",
+      "name_en": "eFootball",
+      "developer": "Konami",
+      "category_slug": "games",
+      "package_name": "jp.konami.pesam",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تاون شيب",
+      "name_en": "Township",
+      "developer": "Playrix",
+      "category_slug": "games",
+      "package_name": "com.playrix.township",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هاي ديز",
+      "name_en": "Hay Day",
+      "developer": "Supercell",
+      "category_slug": "games",
+      "package_name": "com.supercell.hayday",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فارم فيل 2",
+      "name_en": "FarmVille 2",
+      "developer": "Zynga",
+      "category_slug": "games",
+      "package_name": "com.zynga.farmville2ra",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ستيت أوف سارفايفال",
+      "name_en": "State of Survival",
+      "developer": "KingsGroup Holdings",
+      "category_slug": "games",
+      "package_name": "com.kingsgroup.sos",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليستس أوف كينغدمز",
+      "name_en": "Rise of Kingdoms",
+      "developer": "Lilith Games",
+      "category_slug": "games",
+      "package_name": "com.lilithgame.roc.gp",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أرت أوف وار",
+      "name_en": "Art of War",
+      "developer": "Fanatee",
+      "category_slug": "games",
+      "package_name": "air.com.fanatee.games",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريلمز أوف وارلردز",
+      "name_en": "COK Realms",
+      "developer": "IGG.COM",
+      "category_slug": "games",
+      "package_name": "com.igg.android.thronekingdom",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كلاش أوف أمبايرز",
+      "name_en": "Clash of Empires",
+      "developer": "Game-Labs",
+      "category_slug": "games",
+      "package_name": "com.gamelabs.clash.of.empires",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أيدل هيروز",
+      "name_en": "Idle Heroes",
+      "developer": "DHGAMES",
+      "category_slug": "games",
+      "package_name": "com.droidhang.ad",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أيدل أنجلز",
+      "name_en": "Idle Angels",
+      "developer": "Longtu Korea",
+      "category_slug": "games",
+      "package_name": "com.zhuzhao.idle.angels.gplay",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بازل والرز",
+      "name_en": "Puzzles & Survival",
+      "developer": "37Games",
+      "category_slug": "games",
+      "package_name": "com.ice.apps.ps.na",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل درايف",
+      "name_en": "Google Drive",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.apps.docs",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل دوكس",
+      "name_en": "Google Docs",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.apps.docs.editors.docs",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل شيتس",
+      "name_en": "Google Sheets",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.apps.docs.editors.sheets",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل سلايدز",
+      "name_en": "Google Slides",
+      "developer": "Google LLC",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.apps.docs.editors.slides",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "WPS Office",
+      "name_en": "WPS Office",
+      "developer": "WPS Software",
+      "category_slug": "productivity",
+      "package_name": "cn.wps.moffice_eng",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أدوبي أكروبات ريدر",
+      "name_en": "Adobe Acrobat",
+      "developer": "Adobe Inc",
+      "category_slug": "productivity",
+      "package_name": "com.adobe.reader",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت وورد",
+      "name_en": "Microsoft Word",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.office.word",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت إكسيل",
+      "name_en": "Microsoft Excel",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.office.excel",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت باوربوينت",
+      "name_en": "Microsoft PowerPoint",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.office.powerpoint",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ون درايف",
+      "name_en": "OneDrive",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.skydrive",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "نوتيون",
+      "name_en": "Notion",
+      "developer": "Notion Labs",
+      "category_slug": "productivity",
+      "package_name": "notion.id",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إيفرنوت",
+      "name_en": "Evernote",
+      "developer": "Evernote Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.evernote",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميكروسوفت تو دو",
+      "name_en": "Microsoft To Do",
+      "developer": "Microsoft Corporation",
+      "category_slug": "productivity",
+      "package_name": "com.microsoft.todos",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "توداست",
+      "name_en": "Todoist",
+      "developer": "Doist Inc",
+      "category_slug": "productivity",
+      "package_name": "com.todoist.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أني دو",
+      "name_en": "Any.do",
+      "developer": "Any.do",
+      "category_slug": "productivity",
+      "package_name": "com.anydo",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تيكتيك",
+      "name_en": "TickTick",
+      "developer": "Appest Inc",
+      "category_slug": "productivity",
+      "package_name": "com.ticktick.task",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أسانا",
+      "name_en": "Asana",
+      "developer": "Asana Inc",
+      "category_slug": "productivity",
+      "package_name": "com.asana.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تريلو",
+      "name_en": "Trello",
+      "developer": "Atlassian",
+      "category_slug": "productivity",
+      "package_name": "com.trello",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سلاك",
+      "name_en": "Slack",
+      "developer": "Slack Technologies",
+      "category_slug": "productivity",
+      "package_name": "com.Slack",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "دوولينجو",
+      "name_en": "Duolingo",
+      "developer": "Duolingo Inc",
+      "category_slug": "productivity",
+      "package_name": "com.duolingo",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بابيل",
+      "name_en": "Babbel",
+      "developer": "Babbel",
+      "category_slug": "productivity",
+      "package_name": "com.babbel.mobile.android.en",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوسو",
+      "name_en": "Busuu",
+      "developer": "Busuu Ltd",
+      "category_slug": "productivity",
+      "package_name": "com.busuu.android.enc",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كورسيرا",
+      "name_en": "Coursera",
+      "developer": "Coursera",
+      "category_slug": "productivity",
+      "package_name": "org.coursera.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أودمي",
+      "name_en": "Udemy",
+      "developer": "Udemy Inc",
+      "category_slug": "productivity",
+      "package_name": "com.udemy.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "خان أكاديمي",
+      "name_en": "Khan Academy",
+      "developer": "Khan Academy",
+      "category_slug": "productivity",
+      "package_name": "org.khanacademy.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أنكي درويد",
+      "name_en": "AnkiDroid",
+      "developer": "Nicolas Raoul",
+      "category_slug": "productivity",
+      "package_name": "com.ichi2.anki",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "قرآن كريم",
+      "name_en": "Quran",
+      "developer": "Quran.com",
+      "category_slug": "productivity",
+      "package_name": "com.quran.labs.androidquran",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مسلم برو",
+      "name_en": "Muslim Pro",
+      "developer": "Bitsmedia",
+      "category_slug": "productivity",
+      "package_name": "com.bitsmedia.android.muslimpro",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أذكاري",
+      "name_en": "Azkar",
+      "developer": "Azkar",
+      "category_slug": "productivity",
+      "package_name": "com.hbisoft.hb",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تايم تيوتور",
+      "name_en": "Time Doctor",
+      "developer": "Time Doctor",
+      "category_slug": "productivity",
+      "package_name": "com.timedoctor.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "تاغر",
+      "name_en": "Toggl",
+      "developer": "Toggl OÜ",
+      "category_slug": "productivity",
+      "package_name": "com.toggl.timer",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

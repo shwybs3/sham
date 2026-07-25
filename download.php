@@ -130,7 +130,7 @@ if (!empty($app['category_id'])) {
   <div class="dlp-hero">
     <div class="dlp-hero-icon">
       <?php if ($app['icon_path']): ?>
-        <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dlp-icon-img">
+        <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dlp-icon-img">
       <?php else: ?>
         <div class="dlp-icon-placeholder">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5">
@@ -424,7 +424,7 @@ if (!empty($app['category_id'])) {
       <?php foreach ($relatedApps as $r): ?>
       <a href="<?= h(app_url($r['slug'])) ?>" class="dlp-related-card">
         <?php if ($r['icon_path']): ?>
-          <img src="<?= h(url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="dlp-related-icon" loading="lazy">
+          <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="dlp-related-icon" loading="lazy">
         <?php else: ?>
           <div class="dlp-related-icon-ph">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>

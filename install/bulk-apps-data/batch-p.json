@@ -1,0 +1,504 @@
+{
+  "apps": [
+    {
+      "name": "سامسونج هيلث",
+      "name_en": "Samsung Health",
+      "developer": "Samsung Electronics",
+      "category_slug": "health",
+      "package_name": "com.sec.android.app.shealth",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل هيلث",
+      "name_en": "Google Fit",
+      "developer": "Google LLC",
+      "category_slug": "health",
+      "package_name": "com.google.android.apps.fitness",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماب ماي فيتنس",
+      "name_en": "MapMyFitness",
+      "developer": "Under Armour",
+      "category_slug": "health",
+      "package_name": "com.mapmyfitness.android2",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماين سبيس",
+      "name_en": "Mindbody",
+      "developer": "Mindbody",
+      "category_slug": "health",
+      "package_name": "com.mindbodyonline.connect",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بيست فيت",
+      "name_en": "BetterMe",
+      "developer": "BetterMe LLC",
+      "category_slug": "health",
+      "package_name": "com.appsindependent.bestfit",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كيل",
+      "name_en": "Kegel",
+      "developer": "Kegel",
+      "category_slug": "health",
+      "package_name": "com.kcyclic.kegelex",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كالم",
+      "name_en": "Calm",
+      "developer": "Calm.com Inc",
+      "category_slug": "health",
+      "package_name": "com.calm.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيدسبيس",
+      "name_en": "Headspace",
+      "developer": "Headspace Inc",
+      "category_slug": "health",
+      "package_name": "com.getsomeheadspace.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إنسايت تايمر",
+      "name_en": "Insight Timer",
+      "developer": "Insight Network",
+      "category_slug": "health",
+      "package_name": "com.mzmgroup.alokana",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ياودو",
+      "name_en": "YO!",
+      "developer": "YO! Studio",
+      "category_slug": "health",
+      "package_name": "com.yo.app.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "واتار مايندر",
+      "name_en": "WaterMinder",
+      "developer": "Funn Media",
+      "category_slug": "health",
+      "package_name": "com.funn.waterminder",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بلانت ناني",
+      "name_en": "Plant Nanny",
+      "developer": "fourdesire",
+      "category_slug": "health",
+      "package_name": "com.fourdesire.plantnanny",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هايدرو",
+      "name_en": "Hydro",
+      "developer": "Hydro",
+      "category_slug": "health",
+      "package_name": "com.hydro.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سليب سيكيل",
+      "name_en": "Sleep Cycle",
+      "developer": "Sleep Cycle AB",
+      "category_slug": "health",
+      "package_name": "com.northcube.sleepcycle",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيلث بيوت",
+      "name_en": "Health Byte",
+      "developer": "Health Byte",
+      "category_slug": "health",
+      "package_name": "com.healthbyte",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سيمبل هيبيت",
+      "name_en": "Simple Habit",
+      "developer": "Simple Habit Inc",
+      "category_slug": "health",
+      "package_name": "com.simplehabit.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هيبيت",
+      "name_en": "Habitica",
+      "developer": "HabitRPG Inc",
+      "category_slug": "health",
+      "package_name": "com.habitrpg.android.habitica",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "لايف سكور",
+      "name_en": "Daily Burn",
+      "developer": "Daily Burn",
+      "category_slug": "health",
+      "package_name": "cn.dailyburn.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "أبفت",
+      "name_en": "Aaptiv",
+      "developer": "Aaptiv",
+      "category_slug": "health",
+      "package_name": "com.fds.aaptiv",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "باي بال",
+      "name_en": "PayPal",
+      "developer": "PayPal Holdings",
+      "category_slug": "finance",
+      "package_name": "com.paypal.android.p2pmobile",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كاش آب",
+      "name_en": "Cash App",
+      "developer": "Block Inc",
+      "category_slug": "finance",
+      "package_name": "com.squareup.cash",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "فينمو",
+      "name_en": "Venmo",
+      "developer": "PayPal Holdings",
+      "category_slug": "finance",
+      "package_name": "com.venmo",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ريفلوت",
+      "name_en": "Revolut",
+      "developer": "Revolut Ltd",
+      "category_slug": "finance",
+      "package_name": "com.revolut.revolut",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "وايز",
+      "name_en": "Wise",
+      "developer": "Wise Payments Limited",
+      "category_slug": "finance",
+      "package_name": "com.transferwise.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كريبتو دوت كوم",
+      "name_en": "Crypto.com",
+      "developer": "Crypto.com",
+      "category_slug": "finance",
+      "package_name": "co.mona.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بينانس",
+      "name_en": "Binance",
+      "developer": "Binance",
+      "category_slug": "finance",
+      "package_name": "com.binance.dev",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كوين بيس",
+      "name_en": "Coinbase",
+      "developer": "Coinbase Inc",
+      "category_slug": "finance",
+      "package_name": "com.coinbase.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "إتورو",
+      "name_en": "eToro",
+      "developer": "eToro",
+      "category_slug": "finance",
+      "package_name": "com.etoro.openbook",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بلوكفاي",
+      "name_en": "BlockFi",
+      "developer": "BlockFi Inc",
+      "category_slug": "finance",
+      "package_name": "com.blockfi.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "زيليو",
+      "name_en": "Zillo",
+      "developer": "Zillow",
+      "category_slug": "finance",
+      "package_name": "com.zillow.android.zillowmap",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بوكيت",
+      "name_en": "Pocket",
+      "developer": "Pocket",
+      "category_slug": "finance",
+      "package_name": "com.ideashower.readitlater.pro",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليموناد",
+      "name_en": "Lemonade",
+      "developer": "Lemonade",
+      "category_slug": "finance",
+      "package_name": "com.lemonade.brokerage",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يودلي",
+      "name_en": "Yodlee",
+      "developer": "Envestnet Yodlee",
+      "category_slug": "finance",
+      "package_name": "com.yodlee",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "مايكروسوفت ماني",
+      "name_en": "Budget",
+      "developer": "Microsoft Corporation",
+      "category_slug": "finance",
+      "package_name": "com.microsoft.money",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ميج",
+      "name_en": "MEEM",
+      "developer": "MEEM",
+      "category_slug": "finance",
+      "package_name": "com.meem.android",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ماني مانجر",
+      "name_en": "Money Manager",
+      "developer": "Realbyte Inc",
+      "category_slug": "finance",
+      "package_name": "com.realbyteapps.moneymanagerfree",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "والت",
+      "name_en": "Wallet",
+      "developer": "BudgetBakers",
+      "category_slug": "finance",
+      "package_name": "com.droid.bakers.money",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "يو بي إس",
+      "name_en": "UBS",
+      "developer": "UBS",
+      "category_slug": "finance",
+      "package_name": "com.ubs.finance",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بنك أبوظبي",
+      "name_en": "ADIB Mobile",
+      "developer": "Abu Dhabi Islamic Bank",
+      "category_slug": "finance",
+      "package_name": "com.adib.mobileapp",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "هولاي",
+      "name_en": "Holday",
+      "developer": "Holday",
+      "category_slug": "finance",
+      "package_name": "com.holday.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليرا",
+      "name_en": "Lira",
+      "developer": "Lira",
+      "category_slug": "finance",
+      "package_name": "com.lira.app",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "جوجل باي",
+      "name_en": "Google Pay",
+      "developer": "Google LLC",
+      "category_slug": "finance",
+      "package_name": "com.google.android.apps.walletnfcrel",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سامسونج باي",
+      "name_en": "Samsung Pay",
+      "developer": "Samsung Electronics",
+      "category_slug": "finance",
+      "package_name": "com.samsung.android.spay",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "آبل باي",
+      "name_en": "Apple Pay",
+      "developer": "Apple Inc",
+      "category_slug": "finance",
+      "package_name": "com.apple.wallet",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "قرآن كريم مجود",
+      "name_en": "Quran Majeed",
+      "developer": "Pak Data Com",
+      "category_slug": "education",
+      "package_name": "com.pakdata.quranmajeed",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "بريكواي",
+      "name_en": "Brainware",
+      "developer": "Brainware",
+      "category_slug": "education",
+      "package_name": "com.brainware",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كودينج ببي",
+      "name_en": "Coding Baby",
+      "developer": "Coding Baby",
+      "category_slug": "education",
+      "package_name": "com.coding.baby",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "كودي كيدز",
+      "name_en": "Codie Kids",
+      "developer": "Codie Education",
+      "category_slug": "education",
+      "package_name": "com.codie.kids",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "ليرن بايثون",
+      "name_en": "Learn Python",
+      "developer": "SoloLearn",
+      "category_slug": "education",
+      "package_name": "com.sololearn.python",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    },
+    {
+      "name": "سولولرن",
+      "name_en": "SoloLearn",
+      "developer": "SoloLearn",
+      "category_slug": "education",
+      "package_name": "com.sololearn",
+      "license": "مجاني",
+      "short_description": "",
+      "long_description": ""
+    }
+  ]
+}

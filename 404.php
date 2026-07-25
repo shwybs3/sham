@@ -175,7 +175,7 @@ try {
     <?php foreach ($popular as $app): ?>
     <a href="<?= h(app_url($app['slug'])) ?>" class="e404-popular-card">
       <?php if ($app['icon_path']): ?>
-        <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="e404-popular-icon" loading="lazy">
+        <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="e404-popular-icon" loading="lazy">
       <?php else: ?>
         <div style="width:46px;height:46px;border-radius:12px;background:var(--navy-600,#334155);display:flex;align-items:center;justify-content:center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan,#0ea5e9)" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
