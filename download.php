@@ -12,7 +12,9 @@ if (!empty($_GET['ajax']) && $_GET['ajax'] === 'verify_captcha') {
     $token = trim($_POST['token'] ?? '');
     $type  = trim($_POST['type']  ?? 'v2');
     $ok = false;
-    if ($type === 'v3') {
+    if ($type === 'turnstile') {
+        $ok = captcha_verify_turnstile($pdo, $token);
+    } elseif ($type === 'v3') {
         $ok = captcha_verify_v3($pdo, $token);
     } else {
         $ok = captcha_verify_v2($pdo, $token);
@@ -103,9 +105,10 @@ if (!empty($app['category_id'])) {
 }
 
 // Detect if CAPTCHA is needed for this visitor
-$captchaType = captcha_should_challenge($pdo); // 'none'|'v2'|'v3'
-$v3SiteKey   = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
-$v2SiteKey   = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
+$captchaType     = captcha_should_challenge($pdo); // 'none'|'turnstile'|'v2'|'v3'
+$turnstileSiteKey = trim(get_cfg($pdo, 'turnstile_site_key'));
+$v3SiteKey        = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
+$v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -122,7 +125,9 @@ $v2SiteKey   = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
   <script><?= $customAdCode ?></script>
   <?php endif; ?>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
-  <?php if ($captchaType === 'v3' && $v3SiteKey): ?>
+  <?php if ($captchaType === 'turnstile' && $turnstileSiteKey): ?>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <?php elseif ($captchaType === 'v3' && $v3SiteKey): ?>
   <script src="https://www.google.com/recaptcha/api.js?render=<?= h($v3SiteKey) ?>" async defer></script>
   <?php elseif ($captchaType === 'v2' && $v2SiteKey): ?>
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
@@ -135,16 +140,22 @@ $v2SiteKey   = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5" style="margin-bottom:14px"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
     <h2 style="margin:0 0 8px;font-size:18px;color:#0f172a">تحقق سريع</h2>
     <p style="color:#64748b;font-size:14px;margin:0 0 20px">لحماية الموقع، نحتاج للتحقق أنك لست روبوتاً</p>
-    <?php if ($captchaType === 'v2' && $v2SiteKey): ?>
+    <?php if ($captchaType === 'turnstile' && $turnstileSiteKey): ?>
+    <div style="display:flex;justify-content:center;margin-bottom:18px">
+      <div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onCaptchaSolvedTurnstile" data-theme="light"></div>
+    </div>
+    <p style="color:#94a3b8;font-size:11px;margin:8px 0 0">محمي بواسطة Cloudflare Turnstile</p>
+    <?php elseif ($captchaType === 'v2' && $v2SiteKey): ?>
     <div style="display:flex;justify-content:center;margin-bottom:18px">
       <div class="g-recaptcha" data-sitekey="<?= h($v2SiteKey) ?>" data-callback="onCaptchaV2Done"></div>
     </div>
+    <p style="color:#94a3b8;font-size:11px;margin:14px 0 0">محمي بواسطة Google reCAPTCHA</p>
     <?php else: ?>
     <button id="captcha-v3-btn" onclick="runV3Captcha()" style="background:#2563eb;color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:15px;cursor:pointer;width:100%">
       أنا لست روبوتاً — متابعة التحميل
     </button>
-    <?php endif; ?>
     <p style="color:#94a3b8;font-size:11px;margin:14px 0 0">محمي بواسطة Google reCAPTCHA</p>
+    <?php endif; ?>
   </div>
 </div>
 <script>
@@ -170,6 +181,7 @@ $v2SiteKey   = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
     });
   }
 
+  window.onCaptchaSolvedTurnstile = function(token) { verifyCaptcha(token, 'turnstile'); };
   window.onCaptchaV2Done = function(token) { verifyCaptcha(token, 'v2'); };
 
   window.runV3Captcha = function() {

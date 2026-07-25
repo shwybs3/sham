@@ -55,8 +55,9 @@ ErrorDocument 404 /404.php
   RewriteCond %{THE_REQUEST} \s/article\.php\?slug=([^&\s]+) [NC]
   RewriteRule ^ /article/%1 [R=301,L]
 
-  # Admin: hide admin.php
-  RewriteRule ^admin/?$ admin.php [L,QSA]
+  # Admin: hide admin.php — pass through without any extra rewrite conditions
+  # so LiteSpeed/Apache serve it directly without triggering anti-bot rules
+  RewriteRule ^admin/?$ admin.php [L,QSA,NS]
 
   # Blog post: /blog/{slug} → blog-post.php
   RewriteCond %{REQUEST_FILENAME} !-f

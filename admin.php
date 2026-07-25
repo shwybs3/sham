@@ -1769,6 +1769,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'download_url_apk' && is_admin()) 
     if (!$url || !filter_var($url, FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $url)) {
         sse('error', ['msg' => 'رابط غير صالح']); exit;
     }
+
+    // Detect Play Store URL and auto-redirect to APKPure CDN
+    if (preg_match('#play\.google\.com/store/apps/details.*[?&]id=([\w.]+)#i', $url, $pkgMatch)) {
+        $pkg = $pkgMatch[1];
+        sse('progress', ['pct' => 2, 'msg' => "🔍 رابط متجر Play مكتشف — الباقة: {$pkg} — جارٍ البحث عبر APKPure…", 'bytes' => 0, 'total' => 0]);
+        // Try APKPure CDN (usually bypasses bot protection)
+        $url = "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=arm64-v8a&sv=21";
+        if (!$appName || $appName === 'app') {
+            $appName = str_replace(['.', '_'], ['-', '-'], $pkg);
+        }
+    }
+
     // Block SSRF — only allow public HTTP(S), no local addresses
     $host = parse_url($url, PHP_URL_HOST);
     if (!$host || preg_match('#^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)#i', $host)) {
@@ -2112,7 +2124,8 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
               'auto_indexnow_enabled',
               'auto_translate_langs',
               'recaptcha_v2_site_key','recaptcha_v2_secret',
-              'recaptcha_v3_site_key','recaptcha_v3_secret'] as $k) {
+              'recaptcha_v3_site_key','recaptcha_v3_secret',
+              'turnstile_site_key','turnstile_secret_key'] as $k) {
         if (isset($_POST[$k])) set_cfg($pdo, $k, trim($_POST[$k]));
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
@@ -2609,30 +2622,30 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
     header('Content-Type: application/json');
     $apps = $pdo->query("SELECT id, slug FROM apps WHERE status='published' ORDER BY id")->fetchAll();
     $pinged = 0; $errors = 0;
-    // Ping sitemap once
-    $sm = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
-    $ctx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
-    @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
-    @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
     // Submit all URLs to IndexNow in one batch (up to 10k URLs)
-    $key = get_cfg($pdo, 'indexnow_key', '');
+    $key  = get_cfg($pdo, 'indexnow_key', '');
     $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
     $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
-    // Add static pages
     foreach (['', 'blog', 'about', 'privacy-policy', 'terms', 'contact'] as $p) {
         $urlList[] = url($p);
     }
     if ($key && $urlList) {
-        $body = json_encode(['host' => $host, 'key' => $key, 'urlList' => array_values(array_unique($urlList))]);
+        $keyLocation = 'https://' . $host . '/' . $key . '.txt';
+        $body = json_encode([
+            'host'        => $host,
+            'key'         => $key,
+            'keyLocation' => $keyLocation,
+            'urlList'     => array_values(array_unique($urlList)),
+        ]);
         $ictx = stream_context_create(['http' => [
             'method' => 'POST', 'timeout' => 10, 'ignore_errors' => true,
             'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
             'content' => $body,
         ]]);
         $resp = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        @file_get_contents('https://www.bing.com/indexnow', false, $ictx);
         $pinged = count($urlList);
     }
-    // Update last_indexed_at for all published apps
     $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
     log_security_event($pdo, 'reindex_all', 'info', "Mass re-index: {$pinged} URLs submitted to IndexNow");
     echo json_encode(['ok' => true, 'pinged' => $pinged, 'total' => count($apps)], JSON_UNESCAPED_UNICODE);
@@ -2822,10 +2835,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_indexnow_log' && is_admin()
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
     header('Content-Type: application/json');
     $apps = $pdo->query("SELECT id,slug FROM apps WHERE status='published' ORDER BY id")->fetchAll();
-    $sm   = urlencode(rtrim(SITE_URL,'/').'/sitemap.xml');
-    $ctx  = stream_context_create(['http'=>['timeout'=>5,'ignore_errors'=>true]]);
-    @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
-    @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
     $key  = get_cfg($pdo,'indexnow_key','');
     $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
     $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
@@ -2835,7 +2844,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
     $pinged = 0;
     $logStatus = 'skipped'; $logCode = null; $logReason = 'مفتاح IndexNow غير مضبوط';
     if ($key && $urlList) {
-        $body = json_encode(['host'=>$host,'key'=>$key,'urlList'=>$urlList]);
+        $keyLocation = 'https://' . $host . '/' . $key . '.txt';
+        $body = json_encode([
+            'host'        => $host,
+            'key'         => $key,
+            'keyLocation' => $keyLocation,
+            'urlList'     => $urlList,
+        ]);
         $ictx = stream_context_create(['http'=>['method'=>'POST','timeout'=>10,'ignore_errors'=>true,
             'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
         $resp = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
@@ -2847,7 +2862,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
         $logStatus = in_array($logCode, [200, 202], true) ? 'success' : 'failed';
         $logReason = ($logStatus === 'failed') ? "HTTP {$logCode}" . ($resp ? ': ' . mb_substr(trim($resp), 0, 200) : '') : null;
         $pinged = count($urlList);
-        // Also ping Bing IndexNow
         @file_get_contents('https://www.bing.com/indexnow', false, $ictx);
     }
     // Log one summary entry for the bulk ping
@@ -2886,16 +2900,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ping_engine' && is_admin()) {
 
     switch ($engine) {
         case 'google_sitemap':
-            @file_get_contents("https://www.google.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
-            $code = $getCode($http_response_header ?? []);
-            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
-            $result['msg']  = $result['ok'] ? 'تم إرسال Sitemap لـ Google بنجاح' : "HTTP {$code}";
+            // Google sitemap ping deprecated since June 2023 — use Google Search Console instead
+            $result['code'] = 0; $result['ok'] = false;
+            $result['msg']  = 'Google أوقف هذا الـ endpoint في 2023 — استخدم Google Search Console مباشرة لفهرسة Sitemap';
             break;
         case 'bing_sitemap':
-            @file_get_contents("https://www.bing.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
-            $code = $getCode($http_response_header ?? []);
-            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
-            $result['msg']  = $result['ok'] ? 'تم إرسال Sitemap لـ Bing بنجاح' : "HTTP {$code}";
+            // Bing sitemap ping deprecated — use IndexNow (already configured above)
+            $result['code'] = 0; $result['ok'] = false;
+            $result['msg']  = 'Bing أوقف هذا الـ endpoint — استخدم IndexNow بدلاً منه (مضبوط أعلاه)';
             break;
         case 'yandex_sitemap':
             @file_get_contents("https://webmaster.yandex.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
@@ -2905,33 +2917,33 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ping_engine' && is_admin()) {
             break;
         case 'indexnow_yandex':
             if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
-            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'keyLocation'=>'https://'.$host.'/'.$indexnowKey.'.txt','urlList'=>[$siteUrl]]);
             $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
                 'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
             @file_get_contents('https://yandex.com/indexnow', false, $ctx2);
             $code = $getCode($http_response_header ?? []);
             $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
-            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Yandex' : "HTTP {$code}";
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Yandex بنجاح' : "HTTP {$code}";
             break;
         case 'indexnow_naver':
             if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
-            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'keyLocation'=>'https://'.$host.'/'.$indexnowKey.'.txt','urlList'=>[$siteUrl]]);
             $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
                 'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
             @file_get_contents('https://searchadvisor.naver.com/indexnow', false, $ctx2);
             $code = $getCode($http_response_header ?? []);
             $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
-            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Naver' : "HTTP {$code}";
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Naver بنجاح' : "HTTP {$code}";
             break;
         case 'indexnow_seznam':
             if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
-            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'keyLocation'=>'https://'.$host.'/'.$indexnowKey.'.txt','urlList'=>[$siteUrl]]);
             $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
                 'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
-            @file_get_contents('https://api.indexnow.org/indexnow?key='.$indexnowKey.'&keyLocation=https://'.$host.'/'.$indexnowKey.'.txt', false, $ctx2);
+            @file_get_contents('https://api.indexnow.org/indexnow', false, $ctx2);
             $code = $getCode($http_response_header ?? []);
             $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
-            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow عبر api.indexnow.org' : "HTTP {$code}";
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow عبر api.indexnow.org بنجاح' : "HTTP {$code}";
             break;
         case 'pubsubhubbub':
             $feedUrl  = urlencode(rtrim(SITE_URL,'/').'/feed.php');
@@ -6184,7 +6196,29 @@ function toggleSettingDetail(btn){
   </div>
 
   <div class="panel">
-    <h2>reCAPTCHA — حماية النماذج والتحميل <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <h2>Cloudflare Turnstile — كابتشا مجاني وصديق للخصوصية ⭐ <span style="color:var(--muted);font-weight:400">(موصى به)</span></h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      بديل مجاني وخصوصي تماماً لـ reCAPTCHA — لا يتتبع المستخدمين، لا يحتاج إلى بيانات Google، ويعمل في الخلفية بشكل غير مرئي في معظم الأوقات.
+      احصل على المفاتيح المجانية من <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" style="color:var(--cyan)">dash.cloudflare.com → Turnstile</a>.
+      <strong>عند ضبط Turnstile يُعطَّل reCAPTCHA تلقائياً — لا تحتاج لكليهما.</strong>
+    </p>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Turnstile — Site Key <span style="color:var(--muted);font-size:11px">(مفتاح الموقع)</span></label>
+        <input class="form-input" type="text" name="turnstile_site_key" dir="ltr" style="font-family:var(--f-mono);font-size:12px"
+               value="<?= h(get_cfg($pdo,'turnstile_site_key','')) ?>" placeholder="0x4AAAAAAA...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Turnstile — Secret Key <span style="color:var(--muted);font-size:11px">(مفتاح السر)</span></label>
+        <input class="form-input" type="text" name="turnstile_secret_key" dir="ltr" style="font-family:var(--f-mono);font-size:12px"
+               value="<?= h(get_cfg($pdo,'turnstile_secret_key','')) ?>" placeholder="0x4AAAAAAA...">
+      </div>
+    </div>
+    <div class="form-hint">يُفعَّل على صفحة التحميل وعند رصد نشاط مريب (VPN / تكرار طلبات / تغيير IP). الإعداد المجاني يدعم طلبات غير محدودة.</div>
+  </div>
+
+  <div class="panel">
+    <h2>reCAPTCHA — حماية النماذج والتحميل <span style="color:var(--muted);font-weight:400">(اختياري — بديل لـ Turnstile)</span></h2>
     <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
       احصل على مفاتيح من <a href="https://www.google.com/recaptcha/admin/create" target="_blank" style="color:var(--cyan)">google.com/recaptcha</a>. يُنصح باستخدام v3 (غير مرئي) + v2 (احتياطي عند انخفاض الدرجة). اترك الحقول فارغة لتعطيل reCAPTCHA.
     </p>

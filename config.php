@@ -514,7 +514,7 @@ function ensure_schema(PDO $pdo): array {
             try {
                 $apps = $pdo->query("SELECT id, slug FROM apps WHERE status='published' LIMIT 30")->fetchAll();
                 foreach ($apps as $app) {
-                    $url = rtrim(SITE_URL,'/') . '/app/' . $app['slug'];
+                    $url = rtrim(SITE_URL,'/') . '/' . rawurlencode($app['slug']);
                     ping_search_engines($pdo, $url, (int)$app['id']);
                 }
             } catch (Throwable $e) {}
@@ -583,24 +583,28 @@ function cache_version(PDO $pdo): int {
 }
 function ping_search_engines(PDO $pdo, string $url, ?int $appId = null): void {
     try {
-        $sm  = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
-        $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
-        @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
-        @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
+        // Google sitemap ping deprecated since 2023 — skip silently
+        // Bing sitemap ping deprecated (HTTP 410) — skip, use IndexNow instead
 
         $key = get_cfg($pdo, 'indexnow_key', '');
         if ($key && $url) {
-            $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
-            $body = json_encode(['host' => $host, 'key' => $key, 'urlList' => [$url]]);
+            $host        = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+            $keyLocation = 'https://' . $host . '/' . $key . '.txt';
+            $body = json_encode([
+                'host'        => $host,
+                'key'         => $key,
+                'keyLocation' => $keyLocation,
+                'urlList'     => [$url],
+            ]);
+            $headers = "Content-Type: application/json\r\nContent-Length: " . strlen($body);
             $ictx = stream_context_create(['http' => [
-                'method' => 'POST', 'timeout' => 6, 'ignore_errors' => true,
-                'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
-                'content' => $body,
+                'method' => 'POST', 'timeout' => 8, 'ignore_errors' => true,
+                'header' => $headers, 'content' => $body,
             ]]);
             $resp    = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
-            $headers = $http_response_header ?? [];
+            $rh      = $http_response_header ?? [];
             $code    = 0;
-            foreach ($headers as $h) {
+            foreach ($rh as $h) {
                 if (preg_match('#HTTP/\S+\s+(\d+)#', $h, $m)) { $code = (int)$m[1]; break; }
             }
             $ok     = in_array($code, [200, 202], true);
@@ -612,9 +616,8 @@ function ping_search_engines(PDO $pdo, string $url, ?int $appId = null): void {
 
             // Also ping Bing via IndexNow API
             $bingCtx = stream_context_create(['http' => [
-                'method' => 'POST', 'timeout' => 6, 'ignore_errors' => true,
-                'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
-                'content' => $body,
+                'method' => 'POST', 'timeout' => 8, 'ignore_errors' => true,
+                'header' => $headers, 'content' => $body,
             ]]);
             @file_get_contents('https://www.bing.com/indexnow', false, $bingCtx);
         } elseif (!$key) {
@@ -799,23 +802,41 @@ function translate_app(PDO $pdo, array $app, string $targetLang): bool {
     ];
     $langName = $langNames[$targetLang] ?? $targetLang;
 
-    $prompt = "You are a professional translator. Translate the following Android app metadata from Arabic to {$langName}.
-Return ONLY valid JSON with exactly these keys and no extra commentary.
+    $catName = '';
+    try {
+        if (!empty($app['category_id'])) {
+            $catRow = $pdo->prepare("SELECT name FROM categories WHERE id=? LIMIT 1");
+            $catRow->execute([$app['category_id']]);
+            $catName = (string)($catRow->fetchColumn() ?: '');
+        }
+    } catch (Throwable $e) {}
 
-Input (Arabic):
-- name: " . json_encode($app['name'], JSON_UNESCAPED_UNICODE) . "
-- short_description: " . json_encode($app['short_description'] ?? '', JSON_UNESCAPED_UNICODE) . "
-- long_description: " . json_encode(mb_substr($app['long_description'] ?? '', 0, 3000), JSON_UNESCAPED_UNICODE) . "
-- seo_title: " . json_encode($app['seo_title'] ?? '', JSON_UNESCAPED_UNICODE) . "
-- meta_description: " . json_encode($app['meta_description'] ?? '', JSON_UNESCAPED_UNICODE) . "
-- keywords: " . json_encode($app['keywords'] ?? '', JSON_UNESCAPED_UNICODE) . "
-- whats_new: " . json_encode($app['whats_new'] ?? '', JSON_UNESCAPED_UNICODE) . "
-- features: " . ($app['features'] ?? '[]') . "
-- pros: " . ($app['pros'] ?? '[]') . "
-- cons: " . ($app['cons'] ?? '[]') . "
-- install_steps: " . ($app['install_steps'] ?? '[]') . "
+    $prompt = "You are a professional app localization specialist and marketing copywriter for the {$langName} market.
+Your task is NOT simple word-for-word translation — you must create a completely SEPARATE, market-optimized page
+that feels native to {$langName} speakers and maximizes organic search traffic and downloads in that market.
 
-Return JSON:
+App category: {$catName}
+Original Arabic app name: " . json_encode($app['name'], JSON_UNESCAPED_UNICODE) . "
+Original short description: " . json_encode($app['short_description'] ?? '', JSON_UNESCAPED_UNICODE) . "
+Original long description: " . json_encode(mb_substr($app['long_description'] ?? '', 0, 2500), JSON_UNESCAPED_UNICODE) . "
+Original features: " . ($app['features'] ?? '[]') . "
+Original pros: " . ($app['pros'] ?? '[]') . "
+Original cons: " . ($app['cons'] ?? '[]') . "
+
+REQUIREMENTS:
+1. \"name\": Adapt the app name to sound catchy and natural in {$langName} — keep it recognizable but optimize for local SEO appeal
+2. \"short_description\": Write a compelling 2-sentence marketing hook targeting {$langName} speakers (not translation, fresh copy)
+3. \"long_description\": Write a COMPLETE, ORIGINAL marketing description of at least 800 words in {$langName} — cover features, benefits, use cases, comparison with alternatives, and a strong call-to-action. Use natural {$langName} vocabulary and address the local audience directly.
+4. \"seo_title\": Write an SEO title (max 65 chars) using actual {$langName} search terms people use to find this app — format: [App Name] - [Primary Keyword] | Free Download
+5. \"meta_description\": Write a compelling meta description (max 155 chars) in {$langName} with a call-to-action that drives clicks from search results
+6. \"keywords\": List 15-20 actual {$langName}-language search keywords people use to find this type of app, comma-separated
+7. \"whats_new\": Translate/adapt the whats_new section: " . json_encode($app['whats_new'] ?? '', JSON_UNESCAPED_UNICODE) . "
+8. \"features\": Rewrite as {$langName} marketing bullet points (array of strings)
+9. \"pros\": Rewrite as {$langName} benefits from local user perspective (array of strings)
+10. \"cons\": Translate honestly (array of strings)
+11. \"install_steps\": Translate clearly (array of strings): " . ($app['install_steps'] ?? '[]') . "
+
+Return ONLY valid JSON — no commentary, no markdown:
 {\"name\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"whats_new\":\"\",\"features\":[],\"pros\":[],\"cons\":[],\"install_steps\":[]}";
 
     $raw = ai_text($pdo, $prompt, 4000, 90);
@@ -1184,9 +1205,10 @@ function visitor_record_download(PDO $pdo): void {
 function captcha_should_challenge(PDO $pdo): string {
     if (evil_is_admin_ip()) return 'none';
 
+    $turnstileSite = trim(get_cfg($pdo, 'turnstile_site_key'));
     $v3Site = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
     $v2Site = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
-    if (!$v3Site && !$v2Site) return 'none'; // not configured
+    if (!$turnstileSite && !$v3Site && !$v2Site) return 'none'; // not configured
 
     // Already solved in this session (valid 1 h)?
     if (!empty($_SESSION['captcha_solved_at']) && (time() - (int)$_SESSION['captcha_solved_at']) < 3600) {
@@ -1216,6 +1238,9 @@ function captcha_should_challenge(PDO $pdo): string {
 
     if (!$triggers) return 'none';
 
+    // Prefer Turnstile (free, privacy-friendly, no Google dependency)
+    if ($turnstileSite) return 'turnstile';
+
     // High risk (VPN or heavy rate abuse) → v2 checkbox; mild → v3 invisible
     $highRisk = in_array('vpn_suspect', $triggers, true) ||
                 (in_array('rate_limit', $triggers, true) && (int)($_SESSION['rv_window']['n'] ?? 0) > 40);
@@ -1223,6 +1248,17 @@ function captcha_should_challenge(PDO $pdo): string {
     if ($v3Site)  return 'v3';
     if ($v2Site)  return 'v2';
     return 'none';
+}
+
+function captcha_verify_turnstile(PDO $pdo, string $token): bool {
+    $secret = trim(get_cfg($pdo, 'turnstile_secret_key'));
+    if (!$secret || !$token) return false;
+    $ch = curl_init('https://challenges.cloudflare.com/turnstile/v0/siteverify');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 8,
+        CURLOPT_POSTFIELDS => http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => client_ip()])]);
+    $res = curl_exec($ch); curl_close($ch);
+    $d = json_decode((string)$res, true);
+    return (bool)($d['success'] ?? false);
 }
 
 function captcha_verify_v3(PDO $pdo, string $token, float $minScore = 0.5): bool {
@@ -1259,6 +1295,11 @@ function captcha_mark_solved(PDO $pdo): void {
 /* Renders CAPTCHA widget HTML + JS to be embedded in any page.
    Call captcha_should_challenge() first; only render when needed. */
 function captcha_widget_html(PDO $pdo, string $type, string $action = 'download'): string {
+    if ($type === 'turnstile') {
+        $site = h(trim(get_cfg($pdo, 'turnstile_site_key')));
+        return '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>'
+            . '<div class="cf-turnstile" data-sitekey="' . $site . '" data-callback="onCaptchaSolvedTurnstile" data-theme="light" data-size="normal"></div>';
+    }
     $v3Site = h(trim(get_cfg($pdo, 'recaptcha_v3_site_key')));
     $v2Site = h(trim(get_cfg($pdo, 'recaptcha_v2_site_key')));
     if ($type === 'v3') {
