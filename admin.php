@@ -2810,6 +2810,128 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Ping single indexing engine
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'ping_engine' && is_admin()) {
+    header('Content-Type: application/json');
+    $engine = preg_replace('/[^a-z0-9_\-]/', '', $_GET['engine'] ?? '');
+    $sitemapUrl = rtrim(SITE_URL,'/').'/sitemap.xml';
+    $sitemapEnc = urlencode($sitemapUrl);
+    $siteUrl    = rtrim(SITE_URL,'/').'/';
+    $host       = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+    $indexnowKey = get_cfg($pdo, 'indexnow_key', '');
+
+    $httpCtx = stream_context_create(['http'=>['timeout'=>8,'ignore_errors'=>true,'user_agent'=>'yassota-bot/1.0']]);
+
+    $result = ['engine'=>$engine,'ok'=>false,'code'=>0,'msg'=>''];
+
+    $getCode = function(array $headers): int {
+        foreach ($headers as $h) {
+            if (preg_match('#HTTP/\S+\s+(\d+)#', $h, $m)) return (int)$m[1];
+        }
+        return 0;
+    };
+
+    switch ($engine) {
+        case 'google_sitemap':
+            @file_get_contents("https://www.google.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
+            $result['msg']  = $result['ok'] ? 'تم إرسال Sitemap لـ Google بنجاح' : "HTTP {$code}";
+            break;
+        case 'bing_sitemap':
+            @file_get_contents("https://www.bing.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
+            $result['msg']  = $result['ok'] ? 'تم إرسال Sitemap لـ Bing بنجاح' : "HTTP {$code}";
+            break;
+        case 'yandex_sitemap':
+            @file_get_contents("https://webmaster.yandex.com/ping?sitemap={$sitemapEnc}", false, $httpCtx);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
+            $result['msg']  = $result['ok'] ? 'تم إرسال Sitemap لـ Yandex بنجاح' : "HTTP {$code}";
+            break;
+        case 'indexnow_yandex':
+            if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
+                'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
+            @file_get_contents('https://yandex.com/indexnow', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Yandex' : "HTTP {$code}";
+            break;
+        case 'indexnow_naver':
+            if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
+                'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
+            @file_get_contents('https://searchadvisor.naver.com/indexnow', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow لـ Naver' : "HTTP {$code}";
+            break;
+        case 'indexnow_seznam':
+            if (!$indexnowKey) { $result['msg'] = 'مفتاح IndexNow غير مضبوط'; break; }
+            $body = json_encode(['host'=>$host,'key'=>$indexnowKey,'urlList'=>[$siteUrl]]);
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
+                'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
+            @file_get_contents('https://api.indexnow.org/indexnow?key='.$indexnowKey.'&keyLocation=https://'.$host.'/'.$indexnowKey.'.txt', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = in_array($code, [200,202], true);
+            $result['msg']  = $result['ok'] ? 'تم إرسال IndexNow عبر api.indexnow.org' : "HTTP {$code}";
+            break;
+        case 'pubsubhubbub':
+            $feedUrl  = urlencode(rtrim(SITE_URL,'/').'/feed.php');
+            $postBody = "hub.mode=publish&hub.url={$feedUrl}";
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>8,'ignore_errors'=>true,
+                'header'=>"Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ".strlen($postBody),
+                'content'=>$postBody]]);
+            @file_get_contents('https://pubsubhubbub.appspot.com/', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code === 204 || ($code >= 200 && $code < 400);
+            $result['msg']  = $result['ok'] ? 'تم إشعار PubSubHubbub بتحديث RSS' : "HTTP {$code}";
+            break;
+        case 'ping_o_matic':
+            $xmlBody = '<?xml version="1.0"?><methodCall><methodName>weblogUpdates.ping</methodName>'
+                     . '<params><param><value>' . htmlspecialchars(get_cfg($pdo,'site_name','yassota')) . '</value></param>'
+                     . '<param><value>' . htmlspecialchars($siteUrl) . '</value></param>'
+                     . '<param><value>' . htmlspecialchars($sitemapUrl) . '</value></param></params></methodCall>';
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>10,'ignore_errors'=>true,
+                'header'=>"Content-Type: text/xml\r\nContent-Length: ".strlen($xmlBody),'content'=>$xmlBody]]);
+            $resp = @file_get_contents('https://rpc.pingomatic.com/', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
+            $result['msg']  = $result['ok'] ? 'تم إرسال Ping-O-Matic (20+ محرك بحث)' : "HTTP {$code}";
+            break;
+        case 'baidu_ping':
+            $xmlBody = '<?xml version="1.0"?><methodCall><methodName>weblogUpdates.extendedPing</methodName>'
+                     . '<params><param><value>' . htmlspecialchars(get_cfg($pdo,'site_name','yassota')) . '</value></param>'
+                     . '<param><value>' . htmlspecialchars($siteUrl) . '</value></param>'
+                     . '<param><value>' . htmlspecialchars($siteUrl) . '</value></param>'
+                     . '<param><value>' . htmlspecialchars($sitemapUrl) . '</value></param></params></methodCall>';
+            $ctx2 = stream_context_create(['http'=>['method'=>'POST','timeout'=>10,'ignore_errors'=>true,
+                'header'=>"Content-Type: text/xml\r\nContent-Length: ".strlen($xmlBody),'content'=>$xmlBody]]);
+            @file_get_contents('http://ping.baidu.com/ping/RPC2', false, $ctx2);
+            $code = $getCode($http_response_header ?? []);
+            $result['code'] = $code; $result['ok'] = $code >= 200 && $code < 400;
+            $result['msg']  = $result['ok'] ? 'تم إرسال Baidu Ping' : "HTTP {$code} (قد يكون محجوباً خارج الصين)";
+            break;
+        default:
+            $result['msg'] = 'محرك غير معروف';
+    }
+
+    try {
+        $pdo->prepare("INSERT INTO indexnow_log (url,engine,status,http_code,reason) VALUES (?,?,?,?,?)")
+            ->execute([$sitemapUrl, $engine, $result['ok']?'success':'failed', $result['code']?:null,
+                       $result['ok']?null:$result['msg']]);
+    } catch (Throwable $le) {}
+
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Clear old security log entries
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_security_log' && is_admin()) {
@@ -2960,7 +3082,8 @@ $navLinks = [
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
-    'indexnow-log' => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+    'indexnow-log'   => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
+    'indexing-tools' => ['label'=>'أدوات الفهرسة', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7'],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -6293,6 +6416,187 @@ $logStats = [
     }
   };
   loadLog(0);
+})();
+</script>
+<?php endif; ?>
+
+<?php
+/* ─────────────── INDEXING TOOLS ─────────────── */
+if ($page === 'indexing-tools'):
+$lpRows = $pdo->query("SELECT engine, MAX(created_at) AS last_at, (SELECT status FROM indexnow_log il2 WHERE il2.engine=il.engine ORDER BY id DESC LIMIT 1) AS last_status FROM indexnow_log il GROUP BY engine")->fetchAll(PDO::FETCH_ASSOC);
+$lastPings = [];
+foreach ($lpRows as $r) $lastPings[$r['engine']] = ['at'=>$r['last_at'], 'status'=>$r['last_status']];
+$hasKey = (bool)get_cfg($pdo,'indexnow_key','');
+$sitemapUrl = rtrim(SITE_URL,'/').'/sitemap.xml';
+$itEngines = [
+  ['id'=>'google_sitemap',   'name'=>'Google Sitemap Ping',  'flag'=>'🇺🇸', 'color'=>'#4285F4',
+   'desc'=>'يُبلّغ Google فوراً بتحديث خريطة الموقع لإعادة فهرسة المحتوى الجديد.',
+   'link'=>'https://search.google.com/search-console', 'link_label'=>'Google SC', 'key_required'=>false],
+  ['id'=>'bing_sitemap',     'name'=>'Bing Sitemap Ping',    'flag'=>'🔷', 'color'=>'#00809D',
+   'desc'=>'يُبلّغ Bing بتحديث Sitemap — يؤثر أيضاً على DuckDuckGo ومحركات Bing-powered.',
+   'link'=>'https://www.bing.com/webmasters', 'link_label'=>'Bing WMT', 'key_required'=>false],
+  ['id'=>'yandex_sitemap',   'name'=>'Yandex Sitemap Ping',  'flag'=>'🇷🇺', 'color'=>'#FF3333',
+   'desc'=>'يُبلّغ Yandex بتحديث خريطة الموقع — ضروري للترتيب في روسيا ودول CIS.',
+   'link'=>'https://webmaster.yandex.com', 'link_label'=>'Yandex WMT', 'key_required'=>false],
+  ['id'=>'indexnow_yandex',  'name'=>'IndexNow → Yandex',   'flag'=>'🇷🇺', 'color'=>'#FF3333',
+   'desc'=>'بروتوكول IndexNow موجَّه مباشرةً لـ Yandex — أسرع من ping Sitemap.',
+   'link'=>null, 'link_label'=>null, 'key_required'=>true],
+  ['id'=>'indexnow_naver',   'name'=>'IndexNow → Naver',    'flag'=>'🇰🇷', 'color'=>'#19CE60',
+   'desc'=>'محرك البحث الكوري الأول — يدعم IndexNow للفهرسة الفورية.',
+   'link'=>'https://searchadvisor.naver.com', 'link_label'=>'Naver SA', 'key_required'=>true],
+  ['id'=>'indexnow_seznam',  'name'=>'IndexNow → api.indexnow.org', 'flag'=>'🌐', 'color'=>'#6366F1',
+   'desc'=>'API مركزي يوزّع الإشعار على كل محركات IndexNow (Bing، Yandex، Seznam…) دفعةً.',
+   'link'=>'https://www.indexnow.org', 'link_label'=>'IndexNow.org', 'key_required'=>true],
+  ['id'=>'pubsubhubbub',     'name'=>'PubSubHubbub (WebSub)', 'flag'=>'📡', 'color'=>'#F59E0B',
+   'desc'=>'يُعلم مشتركي RSS/Atom بتحديث جديد — يُسرّع توزيع المحتوى على قارئات الأخبار.',
+   'link'=>'https://pubsubhubbub.appspot.com', 'link_label'=>'WebSub Hub', 'key_required'=>false],
+  ['id'=>'ping_o_matic',     'name'=>'Ping-O-Matic',        'flag'=>'🔔', 'color'=>'#EC4899',
+   'desc'=>'يُرسل XML-RPC ping لأكثر من 20 خدمة ومحرك بحث في آنٍ واحد بضغطة زر.',
+   'link'=>'https://pingomatic.com', 'link_label'=>'Ping-O-Matic', 'key_required'=>false],
+  ['id'=>'baidu_ping',       'name'=>'Baidu XML-RPC Ping',  'flag'=>'🇨🇳', 'color'=>'#2932E1',
+   'desc'=>'يُبلّغ Baidu بمحتوى جديد — قد يكون محجوباً خارج الصين لكنه يُسجَّل في المحاولة.',
+   'link'=>'https://ziyuan.baidu.com/site/index', 'link_label'=>'Baidu WMT', 'key_required'=>false],
+];
+?>
+<div class="admin-header"><h1>أدوات الفهرسة — 10 طرق</h1></div>
+
+<div class="panel" style="margin-bottom:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:13px;color:var(--white);font-weight:600;margin-bottom:4px">الفهرسة الفورية الشاملة</div>
+      <div style="font-size:12px;color:var(--muted)">أرسل إشعارات لكل المحركات دفعةً واحدة لضمان أسرع فهرسة ممكنة.</div>
+    </div>
+    <button type="button" id="btn-ping-all" class="btn-primary" style="display:flex;align-items:center;gap:8px;padding:11px 22px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      إرسال لكل المحركات
+    </button>
+  </div>
+  <div id="ping-all-status" style="display:none;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:12px;line-height:2"></div>
+</div>
+
+<?php if (!$hasKey): ?>
+<div style="margin-bottom:14px;padding:12px 14px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:8px;font-size:12px;color:#fbbf24">
+  ⚠️ مفتاح IndexNow غير مضبوط — أضفه في <a href="admin.php?page=settings" style="color:var(--cyan)">الإعدادات</a> لتفعيل 3 طرق إضافية.
+</div>
+<?php endif; ?>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:20px">
+<?php foreach ($itEngines as $eng):
+  $last  = $lastPings[$eng['id']] ?? null;
+  $ok    = $last && $last['status'] === 'success';
+  $disabled = $eng['key_required'] && !$hasKey;
+?>
+<div class="panel" style="padding:16px;border-top:3px solid <?= $eng['color'] ?>55;margin-bottom:0">
+  <div style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap">
+      <span style="font-size:15px"><?= $eng['flag'] ?></span>
+      <span style="font-weight:700;font-size:13px;color:var(--white)"><?= h($eng['name']) ?></span>
+      <?php if ($disabled): ?>
+        <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">يحتاج مفتاح</span>
+      <?php elseif ($last): ?>
+        <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:<?= $ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)' ?>;color:<?= $ok?'#4ade80':'#f87171' ?>;border:1px solid <?= $ok?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)' ?>">
+          <?= $ok ? '✓ ناجح' : '✗ فاشل' ?>
+        </span>
+      <?php endif; ?>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.7"><?= h($eng['desc']) ?></div>
+    <?php if ($last): ?>
+      <div style="font-size:10px;color:var(--muted);margin-top:5px">آخر إرسال: <?= h(substr($last['at'],0,16)) ?></div>
+    <?php endif; ?>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button type="button"
+      class="ping-engine-btn <?= $disabled ? '' : 'btn-ai' ?>"
+      data-engine="<?= h($eng['id']) ?>"
+      style="padding:7px 14px;font-size:12px;display:flex;align-items:center;gap:6px;<?= $disabled ? 'opacity:.4;cursor:not-allowed;background:var(--surface);border:1px solid var(--border-c);border-radius:8px;color:var(--muted)' : '' ?>"
+      <?= $disabled ? 'disabled' : '' ?>>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      إرسال
+    </button>
+    <?php if ($eng['link']): ?>
+      <a href="<?= h($eng['link']) ?>" target="_blank" rel="noopener" style="font-size:11px;color:var(--cyan);display:flex;align-items:center;gap:4px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+        <?= h($eng['link_label']) ?>
+      </a>
+    <?php endif; ?>
+    <span class="ping-result-<?= h($eng['id']) ?>" style="font-size:11px"></span>
+  </div>
+</div>
+<?php endforeach; ?>
+</div>
+
+<div class="panel">
+  <h2 style="margin-bottom:14px">روابط مباشرة — إرسال يدوي ومراقبة</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">
+    <?php foreach ([
+      ['name'=>'Google Search Console', 'desc'=>'إرسال Sitemap + فهرسة URL محدد',
+       'href'=>'https://search.google.com/search-console', 'color'=>'#4285F4'],
+      ['name'=>'Bing Webmaster Tools', 'desc'=>'URL Submission + Sitemap + تقارير',
+       'href'=>'https://www.bing.com/webmasters', 'color'=>'#00809D'],
+      ['name'=>'Yandex Webmaster', 'desc'=>'فهرسة وإحصاءات Yandex',
+       'href'=>'https://webmaster.yandex.com', 'color'=>'#FF3333'],
+      ['name'=>'Rich Results Test', 'desc'=>'اختبر Schema JSON-LD الموقع',
+       'href'=>'https://search.google.com/test/rich-results?url='.urlencode(rtrim(SITE_URL,'/')), 'color'=>'#34A853'],
+      ['name'=>'PageSpeed Insights', 'desc'=>'سرعة الموقع من منظور Google',
+       'href'=>'https://pagespeed.web.dev/?url='.urlencode(rtrim(SITE_URL,'/')), 'color'=>'#FBBC04'],
+    ] as $m): ?>
+    <a href="<?= h($m['href']) ?>" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border-c);border-radius:9px;text-decoration:none;border-right:3px solid <?= $m['color'] ?>;transition:background .15s"
+       onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="<?= $m['color'] ?>" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--white)"><?= h($m['name']) ?></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px"><?= h($m['desc']) ?></div>
+      </div>
+    </a>
+    <?php endforeach; ?>
+  </div>
+  <div style="margin-top:14px;padding:11px 13px;background:rgba(6,182,212,.05);border:1px solid rgba(6,182,212,.18);border-radius:8px;font-size:12px;color:var(--muted)">
+    <strong style="color:var(--cyan)">Sitemap URL:</strong>
+    <code style="margin-right:8px;font-size:12px;color:var(--white);direction:ltr;display:inline-block"><?= h($sitemapUrl) ?></code>
+    <button type="button" onclick="navigator.clipboard.writeText('<?= addslashes(h($sitemapUrl)) ?>').then(function(){this.textContent='✓ تم';}.bind(this))"
+      style="border:none;background:none;color:var(--cyan);font-size:11px;cursor:pointer;padding:0">نسخ</button>
+  </div>
+</div>
+
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<script>
+(function(){
+  document.querySelectorAll('.ping-engine-btn:not([disabled])').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      var engine=btn.dataset.engine, resultEl=document.querySelector('.ping-result-'+engine);
+      btn.disabled=true;
+      btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin .8s linear infinite"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> جارٍ…';
+      try {
+        var d=await(await fetch('admin.php?ajax=ping_engine&engine='+encodeURIComponent(engine),{method:'POST'})).json();
+        resultEl.style.color=d.ok?'#4ade80':'#f87171';
+        resultEl.textContent=(d.ok?'✓ ':'✗ ')+d.msg;
+      } catch(e){resultEl.style.color='#f87171';resultEl.textContent='✗ خطأ';}
+      btn.disabled=false;
+      btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>إرسال';
+    });
+  });
+
+  document.getElementById('btn-ping-all').addEventListener('click', async function(){
+    var btn=this, statusEl=document.getElementById('ping-all-status'), results=[];
+    btn.disabled=true; btn.textContent='⏳ جارٍ الإرسال…';
+    statusEl.style.cssText='display:block;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:12px;line-height:2;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.2);color:var(--muted)';
+    var activeEngines=Array.from(document.querySelectorAll('.ping-engine-btn:not([disabled])'));
+    for(var i=0;i<activeEngines.length;i++){
+      var e=activeEngines[i].dataset.engine;
+      try{
+        var d=await(await fetch('admin.php?ajax=ping_engine&engine='+encodeURIComponent(e),{method:'POST'})).json();
+        results.push((d.ok?'✅ ':'❌ ')+d.engine+': '+d.msg); statusEl.innerHTML=results.join('<br>');
+      }catch(err){results.push('❌ '+e+': خطأ');statusEl.innerHTML=results.join('<br>');}
+    }
+    try{var r=await(await fetch('admin.php?ajax=reindex_all',{method:'POST'})).json();
+      results.push('📡 IndexNow Bulk: '+(r.ok?'تم إرسال '+r.pinged+' رابط':'فشل'));
+      statusEl.innerHTML=results.join('<br>');
+    }catch(e2){}
+    statusEl.innerHTML=results.join('<br>')+'<br><strong style="color:var(--cyan)">✅ اكتمل الإرسال لجميع المحركات</strong>';
+    btn.disabled=false;
+    btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> إرسال لكل المحركات';
+  });
 })();
 </script>
 <?php endif; ?>
