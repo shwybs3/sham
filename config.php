@@ -231,6 +231,19 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'security_log';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS indexnow_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      url TEXT NOT NULL,
+      engine VARCHAR(60) NOT NULL DEFAULT 'indexnow',
+      status ENUM('success','failed','skipped') NOT NULL DEFAULT 'success',
+      http_code SMALLINT UNSIGNED NULL,
+      reason VARCHAR(500) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status),
+      INDEX idx_date (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'indexnow_log';
+
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
         $fk = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
@@ -460,25 +473,48 @@ function cache_version(PDO $pdo): int {
     return (int)get_cfg($pdo, 'cache_version', '1');
 }
 function ping_search_engines(PDO $pdo, string $url, ?int $appId = null): void {
-    $success = false;
     try {
         $sm  = urlencode(rtrim(SITE_URL, '/') . '/sitemap.xml');
-        $ctx = stream_context_create(['http' => ['timeout' => 4, 'ignore_errors' => true]]);
+        $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
         @file_get_contents("https://www.google.com/ping?sitemap={$sm}", false, $ctx);
         @file_get_contents("https://www.bing.com/ping?sitemap={$sm}", false, $ctx);
-        $success = true;
+
         $key = get_cfg($pdo, 'indexnow_key', '');
         if ($key && $url) {
             $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
             $body = json_encode(['host' => $host, 'key' => $key, 'urlList' => [$url]]);
             $ictx = stream_context_create(['http' => [
-                'method' => 'POST', 'timeout' => 4, 'ignore_errors' => true,
+                'method' => 'POST', 'timeout' => 6, 'ignore_errors' => true,
                 'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
                 'content' => $body,
             ]]);
-            @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+            $resp    = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+            $headers = $http_response_header ?? [];
+            $code    = 0;
+            foreach ($headers as $h) {
+                if (preg_match('#HTTP/\S+\s+(\d+)#', $h, $m)) { $code = (int)$m[1]; break; }
+            }
+            $ok     = in_array($code, [200, 202], true);
+            $reason = $ok ? null : "HTTP {$code}" . ($resp ? ': ' . mb_substr(trim($resp), 0, 200) : '');
+            try {
+                $pdo->prepare("INSERT INTO indexnow_log (url, engine, status, http_code, reason) VALUES (?,?,?,?,?)")
+                    ->execute([$url, 'indexnow', $ok ? 'success' : 'failed', $code ?: null, $reason]);
+            } catch (Throwable $le) {}
+
+            // Also ping Bing via IndexNow API
+            $bingCtx = stream_context_create(['http' => [
+                'method' => 'POST', 'timeout' => 6, 'ignore_errors' => true,
+                'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
+                'content' => $body,
+            ]]);
+            @file_get_contents('https://www.bing.com/indexnow', false, $bingCtx);
+        } elseif (!$key) {
+            try {
+                $pdo->prepare("INSERT INTO indexnow_log (url, engine, status, reason) VALUES (?,?,?,?)")
+                    ->execute([$url, 'indexnow', 'skipped', 'مفتاح IndexNow غير مضبوط في الإعدادات']);
+            } catch (Throwable $le) {}
         }
-        // Update last_indexed_at on the app row if given
+
         if ($appId) {
             $pdo->prepare("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE id=?")
                 ->execute([$appId]);
@@ -488,6 +524,10 @@ function ping_search_engines(PDO $pdo, string $url, ?int $appId = null): void {
             try { $pdo->prepare("UPDATE apps SET index_status='error' WHERE id=?")->execute([$appId]); }
             catch (Throwable $e2) {}
         }
+        try {
+            $pdo->prepare("INSERT INTO indexnow_log (url, engine, status, reason) VALUES (?,?,?,?)")
+                ->execute([$url, 'indexnow', 'failed', mb_substr($e->getMessage(), 0, 300)]);
+        } catch (Throwable $le) {}
     }
 }
 

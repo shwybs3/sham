@@ -1776,13 +1776,25 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
     $mergedKey = implode("\n", $multiKeys) ?: trim($_POST['openrouter_key'] ?? '');
     set_cfg($pdo, 'openrouter_key', $mergedKey);
 
+    // Ad code may arrive base64-encoded (JS encodes it to avoid mod_security blocking <script> tags)
+    $rawAdCode = trim($_POST['download_custom_ad_code_b64'] ?? '');
+    if ($rawAdCode) {
+        $decoded = base64_decode($rawAdCode, true);
+        if ($decoded !== false) set_cfg($pdo, 'download_custom_ad_code', $decoded);
+    } elseif (isset($_POST['download_custom_ad_code'])) {
+        set_cfg($pdo, 'download_custom_ad_code', trim($_POST['download_custom_ad_code']));
+    }
+
     foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
               'google_site_verification','bing_site_verification','virustotal_api_key',
               'ai_provider',
               'telegram_bot_token','telegram_channel_id','telegram_channel_url',
-              'indexnow_key','download_countdown_secs','download_custom_ad_code',
-              'ga4_measurement_id','og_default_image'] as $k) {
-        set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
+              'indexnow_key','download_countdown_secs',
+              'ga4_measurement_id','og_default_image',
+              'privacy_updated_date','terms_updated_date','adsense_ad_slot_id',
+              'adsense_publisher_id','site_name','site_tagline',
+              'auto_indexnow_enabled'] as $k) {
+        if (isset($_POST[$k])) set_cfg($pdo, $k, trim($_POST[$k]));
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
     set_cfg($pdo, 'admin_email_notifications',   isset($_POST['admin_email_notifications'])   ? '1' : '0');

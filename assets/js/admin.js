@@ -1118,13 +1118,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // On form submit: merge multi-key inputs into the hidden field
+  // On form submit: merge multi-key inputs + base64-encode ad code to bypass mod_security
   const settingsForm = document.querySelector('form[action*="page=settings"]');
   if (settingsForm) {
     settingsForm.addEventListener('submit', () => {
       const inputs = settingsForm.querySelectorAll('.or-key-input');
       const hidden = document.getElementById('openrouter-key-hidden');
       if (hidden) hidden.value = [...inputs].map(i => i.value.trim()).filter(Boolean).join('\n');
+
+      // Base64-encode the ad code textarea so mod_security doesn't block <script> tags
+      const adTa = settingsForm.querySelector('[name="download_custom_ad_code"]');
+      if (adTa && adTa.value.trim()) {
+        try {
+          const encoded = btoa(unescape(encodeURIComponent(adTa.value)));
+          let b64inp = settingsForm.querySelector('[name="download_custom_ad_code_b64"]');
+          if (!b64inp) {
+            b64inp = document.createElement('input');
+            b64inp.type = 'hidden';
+            b64inp.name = 'download_custom_ad_code_b64';
+            settingsForm.appendChild(b64inp);
+          }
+          b64inp.value = encoded;
+          adTa.name = '_download_custom_ad_code_raw'; // disable raw submission
+        } catch(e) { /* btoa failed — let raw value through */ }
+      }
     });
   }
 

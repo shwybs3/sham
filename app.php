@@ -116,25 +116,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment_submit'])) {
     }
 }
 
-// Schema.org
-$schema = json_encode([
+// Category → schema applicationCategory mapping
+$catMap = [
+    'games' => 'GameApplication', 'game' => 'GameApplication',
+    'tools' => 'UtilitiesApplication', 'utility' => 'UtilitiesApplication',
+    'social' => 'SocialNetworkingApplication',
+    'entertainment' => 'EntertainmentApplication',
+    'shopping' => 'ShoppingApplication', 'shop' => 'ShoppingApplication',
+    'finance' => 'FinanceApplication', 'health' => 'HealthApplication',
+    'education' => 'EducationApplication', 'music' => 'MusicApplication',
+    'travel' => 'TravelApplication', 'news' => 'NewsApplication',
+    'photo' => 'MultimediaApplication', 'media' => 'MultimediaApplication',
+    'sports' => 'SportsApplication', 'lifestyle' => 'LifestyleApplication',
+    'business' => 'BusinessApplication', 'productivity' => 'BusinessApplication',
+    'communication' => 'CommunicationApplication',
+];
+$schemaCategory = $catMap[strtolower($app['cat_slug'] ?? '')] ?? 'MobileApplication';
+$ratingCount = $commentCount > 0 ? $commentCount : max(3, intval(($app['downloads'] ?: 0) / 100));
+
+$schemaData = [
     "@context" => "https://schema.org",
     "@type" => "SoftwareApplication",
     "name" => $app['name'],
-    "operatingSystem" => "ANDROID",
-    "applicationCategory" => $app['cat_name'] ?? "Application",
+    "url" => app_url($app['slug']),
+    "operatingSystem" => "Android",
+    "applicationCategory" => $schemaCategory,
     "description" => $app['meta_description'] ?: $app['short_description'],
-    "softwareVersion" => $app['version'],
+    "softwareVersion" => $app['version'] ?: null,
+    "offers" => [
+        "@type" => "Offer",
+        "price" => "0",
+        "priceCurrency" => "USD",
+        "availability" => "https://schema.org/InStock",
+    ],
     "aggregateRating" => [
         "@type" => "AggregateRating",
-        "ratingValue" => $avgRating,
-        "ratingCount" => max(1, $commentCount > 0 ? $commentCount : max(1, intval($app['downloads'] / 50))),
+        "ratingValue" => number_format($avgRating, 1),
+        "ratingCount" => $ratingCount,
         "bestRating"  => "5",
         "worstRating" => "1",
     ],
-    "offers" => ["@type" => "Offer", "price" => "0", "priceCurrency" => "USD"],
-    "author" => ["@type" => "Organization", "name" => $app['developer']],
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    "publisher" => ["@type" => "Organization", "name" => get_cfg($pdo, 'site_name', 'yassota'), "url" => rtrim(SITE_URL, '/')],
+];
+if ($app['developer']) $schemaData["author"] = ["@type" => "Organization", "name" => $app['developer']];
+if ($app['icon_path']) $schemaData["image"] = media_url($app['icon_path']);
+if ($app['size_mb'])   $schemaData["fileSize"] = $app['size_mb'] . ' MB';
+if ($app['downloads'] > 0) $schemaData["interactionStatistic"] = [
+    "@type" => "InteractionCounter",
+    "interactionType" => "https://schema.org/DownloadAction",
+    "userInteractionCount" => (int)$app['downloads'],
+];
+// Remove null values
+$schemaData = array_filter($schemaData, fn($v) => $v !== null && $v !== '');
+$schema = json_encode($schemaData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 $breadcrumbItems = [
     ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
@@ -196,9 +230,12 @@ function wave(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?php
     if ($app['seo_title']) echo h($app['seo_title']);
-    else printf('%s للأندرويد%s مجاناً | yassota', h($app['name']), $app['version'] ? ' v'.h($app['version']) : '');
+    else {
+        $vtag = $app['version'] ? ' ' . h($app['version']) : '';
+        printf('%s%s لـ Android - تحميل APK الموثوق | yassota', h($app['name']), $vtag);
+    }
   ?></title>
-  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل {$app['name']} للأندرويد " . ($app['version'] ? "v{$app['version']} " : '') . "مجاناً بأمان وسرعة — " . ($app['short_description'] ?: "أحدث إصدار متاح على yassota.com")) ?>">
+  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل " . $app['name'] . ($app['version'] ? " v{$app['version']}" : '') . " لـ Android مجاناً — " . ($app['short_description'] ?: "أحدث إصدار APK آمن وموثوق متاح على yassota.com")) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
   <?php
     $descLen = mb_strlen(strip_tags($app['long_description'] ?? ''));
@@ -442,6 +479,18 @@ function wave(): string {
     <div style="color:var(--muted);font-size:14px;line-height:1.85">
       <?= nl2br(h($longDescription)) ?>
     </div>
+    <!-- Button 1: inline download anchor in description — scrolls to Button 2 countdown -->
+    <?php if (!empty($app['download_url']) || !empty($app['apk_path'])): ?>
+    <div style="margin-top:20px;text-align:center">
+      <a href="#dl-quick-zone"
+         class="btn-download-hero"
+         style="display:inline-flex;font-size:15px;padding:13px 28px;text-decoration:none"
+         onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});
+                  if(window._dlBtn2Countdown) window._dlBtn2Countdown(); return false;">
+        <?= svgi('download') ?> تحميل <?= h($app['name']) ?> مجاناً
+      </a>
+    </div>
+    <?php endif; ?>
   </div>
   <?= wave() ?>
   <?php endif; ?>
@@ -576,11 +625,29 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Slim download + previous versions + Telegram — above comments -->
+  <!-- Quick download zone — Button 2 (4-second countdown before going to download page) -->
   <div id="dl-quick-zone" class="quick-actions-zone">
+
+    <?php if (!empty($app['download_url']) || !empty($app['apk_path'])): ?>
+    <!-- Button 2: countdown, then becomes clickable link to download.php -->
+    <div id="dl-btn2-wrap" style="text-align:center;margin-bottom:12px">
+      <button id="dl-btn2"
+        data-href="<?= h(download_url($app['slug'])) ?>"
+        disabled
+        style="display:inline-flex;align-items:center;gap:12px;padding:15px 36px;border-radius:50px;
+               font-family:var(--f-head);font-size:17px;font-weight:900;border:none;cursor:not-allowed;
+               background:linear-gradient(135deg,#374151,#4b5563);color:#9ca3af;transition:all .3s;
+               box-shadow:none;min-width:260px;justify-content:center">
+        <?= svgi('download') ?>
+        <span id="dl-btn2-label">جاري تجهيز الرابط... <span id="dl-btn2-count">4</span>ث</span>
+      </button>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">انتظر ثوانٍ قليلة لتفعيل زر التحميل</div>
+    </div>
+    <?php else: ?>
     <a href="<?= h(download_url($app['slug'])) ?>" class="btn-slim-dl" data-hardnav="1">
       <?= svgi('download') ?> تحميل <?= h($app['name']) ?><?= $app['version'] ? ' (v'.h($app['version']).')' : '' ?>
     </a>
+    <?php endif; ?>
 
     <?php $dlVersions = array_filter($versionHistory, fn($v) => !empty($v['download_url'])); ?>
     <?php if ($dlVersions): ?>
@@ -605,6 +672,43 @@ function wave(): string {
     </a>
     <?php endif; ?>
   </div>
+  <!-- Button 2 countdown script -->
+  <script>
+  (function(){
+    var btn2 = document.getElementById('dl-btn2');
+    if (!btn2) return;
+    var countEl = document.getElementById('dl-btn2-count');
+    var labelEl = document.getElementById('dl-btn2-label');
+    var secs = 4, started = false;
+    function startCountdown() {
+      if (started) return; started = true;
+      var n = secs;
+      var iv = setInterval(function(){
+        n--;
+        if (countEl) countEl.textContent = n;
+        if (n <= 0) {
+          clearInterval(iv);
+          btn2.disabled = false;
+          btn2.style.cssText = 'display:inline-flex;align-items:center;gap:12px;padding:15px 36px;border-radius:50px;font-family:var(--f-head);font-size:17px;font-weight:900;border:none;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:all .3s;box-shadow:0 6px 20px rgba(37,99,235,.28);min-width:260px;justify-content:center';
+          if (labelEl) labelEl.textContent = 'اضغط هنا للتحميل';
+          btn2.addEventListener('click', function(){
+            var href = btn2.getAttribute('data-href');
+            if (href) { window.location.href = href; }
+          }, {once:true});
+        }
+      }, 1000);
+    }
+    // Auto-start when element enters viewport
+    if ('IntersectionObserver' in window) {
+      var obs = new IntersectionObserver(function(entries){
+        if (entries[0].isIntersecting) { startCountdown(); obs.disconnect(); }
+      }, {threshold:0.1});
+      obs.observe(btn2);
+    }
+    // Also trigger from Button 1 click
+    window._dlBtn2Countdown = startCountdown;
+  })();
+  </script>
 
   <!-- Comments & Ratings -->
   <div class="section-box reveal">

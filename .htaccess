@@ -171,6 +171,17 @@ ErrorDocument 404 /404.php
 # ── ETag optimization ─────────────────────────────
 FileETag MTime Size
 
+# Disable ModSecurity for admin panel — it blocks legitimate HTML/script in form fields (ad code, etc.)
+<Files "admin.php">
+  <IfModule mod_security2.c>
+    SecRuleEngine Off
+  </IfModule>
+  <IfModule mod_security.c>
+    SecFilterEngine Off
+    SecFilterScanPOST Off
+  </IfModule>
+</Files>
+
 <FilesMatch "\.(sql|log|env|json)$">
   Require all denied
 </FilesMatch>

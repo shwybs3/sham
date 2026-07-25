@@ -239,7 +239,6 @@ if (!empty($app['category_id'])) {
   </div>
 
   <!-- ── App meta grid ── -->
-  <?php if ($displayVersion || $app['size_mb'] || $app['developer'] || $catName): ?>
   <div class="dlp-meta-grid">
     <?php if ($displayVersion): ?>
     <div class="dlp-meta-cell">
@@ -247,10 +246,14 @@ if (!empty($app['category_id'])) {
       <div class="dlp-meta-val"><?= h($displayVersion) ?></div>
     </div>
     <?php endif; ?>
-    <?php if ($app['size_mb']): ?>
+    <?php
+      $apkSizeBytes = $app['apk_size_bytes'] ?? null;
+      $fileSizeMb   = $apkSizeBytes ? round($apkSizeBytes / 1048576, 2) : ($app['size_mb'] ?: null);
+    ?>
+    <?php if ($fileSizeMb): ?>
     <div class="dlp-meta-cell">
       <div class="dlp-meta-key">الحجم</div>
-      <div class="dlp-meta-val"><?= h($app['size_mb']) ?> MB</div>
+      <div class="dlp-meta-val"><?= h($fileSizeMb) ?> MB</div>
     </div>
     <?php endif; ?>
     <?php if ($catName): ?>
@@ -272,6 +275,57 @@ if (!empty($app['category_id'])) {
     <div class="dlp-meta-cell">
       <div class="dlp-meta-key">الترخيص</div>
       <div class="dlp-meta-val">مجاني</div>
+    </div>
+    <?php if (!empty($app['android_version'])): ?>
+    <div class="dlp-meta-cell">
+      <div class="dlp-meta-key">الحد الأدنى</div>
+      <div class="dlp-meta-val">Android <?= h($app['android_version']) ?>+</div>
+    </div>
+    <?php endif; ?>
+    <div class="dlp-meta-cell">
+      <div class="dlp-meta-key">نوع الملف</div>
+      <div class="dlp-meta-val"><?= !empty($app['apk_path']) ? 'APK' : 'APK/XAPK' ?></div>
+    </div>
+    <?php if ($app['downloads'] > 0): ?>
+    <div class="dlp-meta-cell">
+      <div class="dlp-meta-key">التحميلات</div>
+      <div class="dlp-meta-val"><?= number_format($app['downloads']) ?>+</div>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($app['updated_at'])): ?>
+    <div class="dlp-meta-cell">
+      <div class="dlp-meta-key">آخر تحديث</div>
+      <div class="dlp-meta-val"><?= date('j M Y', strtotime($app['updated_at'])) ?></div>
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- ── Technical info (SHA256, MD5, certificate) ── -->
+  <?php if (!empty($app['apk_hash_sha256']) || !empty($app['apk_hash_md5']) || !empty($app['package_name'])): ?>
+  <div style="background:var(--surface);border:1px solid var(--border-c);border-radius:12px;padding:16px 20px;margin:12px 0;font-size:12px">
+    <div style="font-weight:700;color:var(--white);margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      معلومات الأمان والتحقق
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <?php if (!empty($app['package_name'])): ?>
+      <div style="display:flex;gap:8px;align-items:center"><span style="color:var(--muted);min-width:80px">Package:</span><code style="color:var(--cyan);word-break:break-all;font-size:11px"><?= h($app['package_name']) ?></code></div>
+      <?php endif; ?>
+      <?php if (!empty($app['apk_hash_sha256'])): ?>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <span style="color:var(--muted);min-width:80px;flex-shrink:0">SHA-256:</span>
+        <code style="color:var(--muted);word-break:break-all;font-size:10px;cursor:pointer" onclick="navigator.clipboard.writeText('<?= h($app['apk_hash_sha256']) ?>');this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)" title="انقر للنسخ"><?= h($app['apk_hash_sha256']) ?></code>
+      </div>
+      <?php endif; ?>
+      <?php if (!empty($app['apk_hash_md5'])): ?>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <span style="color:var(--muted);min-width:80px;flex-shrink:0">MD5:</span>
+        <code style="color:var(--muted);word-break:break-all;font-size:10px;cursor:pointer" onclick="navigator.clipboard.writeText('<?= h($app['apk_hash_md5']) ?>');this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)" title="انقر للنسخ"><?= h($app['apk_hash_md5']) ?></code>
+      </div>
+      <?php endif; ?>
+      <?php if (!empty($app['virustotal_report_url'])): ?>
+      <div><a href="<?= h($app['virustotal_report_url']) ?>" target="_blank" rel="nofollow noopener" style="color:var(--cyan);font-size:11px">🛡️ عرض تقرير VirusTotal</a></div>
+      <?php endif; ?>
     </div>
   </div>
   <?php endif; ?>
