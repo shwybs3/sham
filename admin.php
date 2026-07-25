@@ -255,6 +255,10 @@ P;
         exit;
     }
 
+    if (!empty($data['seo_title'])) {
+        $data['seo_title'] = seo_title_clamp($data['seo_title']);
+    }
+
     $fields = ['seo_title','meta_description','keywords','short_description','long_description','whats_new'];
     $parts  = ['features','pros','cons','install_steps','faq'];
 
@@ -280,6 +284,25 @@ P;
     }
 
     echo json_encode(['success'=>true,'model'=>$result['model'],'name'=>$name]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Bulk-fix existing SEO titles > 60 chars
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'fix_long_seo_titles' && is_admin()) {
+    header('Content-Type: application/json');
+    $rows = $pdo->query("SELECT id, seo_title FROM apps WHERE CHAR_LENGTH(seo_title) > 60")->fetchAll(PDO::FETCH_ASSOC);
+    $fixed = 0;
+    $upd = $pdo->prepare("UPDATE apps SET seo_title=? WHERE id=?");
+    foreach ($rows as $r) {
+        $clamped = seo_title_clamp($r['seo_title']);
+        if ($clamped !== $r['seo_title']) {
+            $upd->execute([$clamped, $r['id']]);
+            $fixed++;
+        }
+    }
+    echo json_encode(['ok'=>true,'fixed'=>$fixed,'total'=>count($rows)]);
     exit;
 }
 
@@ -6727,9 +6750,14 @@ elseif ($page === 'seo-preview'):
     $previewApps = $pdo->query("SELECT id,name,slug,seo_title,meta_description,icon_path,updated_at FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
     $siteHost = parse_url(SITE_URL, PHP_URL_HOST) ?: SITE_URL;
 ?>
-<div class="admin-header">
-  <h1>معاينة نتائج Google</h1>
-  <p style="color:var(--muted);font-size:13px;margin-top:4px">كيف تبدو صفحات الموقع في نتائج بحث Google — معاينة حية للعنوان والوصف والرابط</p>
+<div class="admin-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div>
+    <h1>معاينة نتائج Google</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">كيف تبدو صفحات الموقع في نتائج بحث Google — معاينة حية للعنوان والوصف والرابط</p>
+  </div>
+  <button id="fix-seo-btn" onclick="fixLongSeoTitles()" style="padding:8px 16px;border-radius:8px;border:none;background:rgba(239,68,68,.12);color:#ef4444;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap">
+    ✂️ تصحيح العناوين الطويلة (&gt;60 حرف)
+  </button>
 </div>
 
 <!-- Live Preview Editor -->
@@ -6854,6 +6882,26 @@ function filterPreviewApps(q) {
     row.style.display = !q || row.dataset.name.includes(q) ? '' : 'none';
     row.nextElementSibling.style.display = 'none';
   });
+}
+function fixLongSeoTitles() {
+  const btn = document.getElementById('fix-seo-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'جارٍ التصحيح...';
+  fetch('admin.php?ajax=fix_long_seo_titles', {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        btn.textContent = `✓ تم تصحيح ${d.fixed} عنوان من أصل ${d.total}`;
+        btn.style.background = 'rgba(34,197,94,.12)';
+        btn.style.color = '#22c55e';
+        if (d.fixed > 0) setTimeout(() => location.reload(), 1500);
+      } else {
+        btn.textContent = '❌ فشل التصحيح';
+        btn.disabled = false;
+      }
+    })
+    .catch(() => { btn.textContent = '❌ خطأ في الاتصال'; btn.disabled = false; });
 }
 </script>
 

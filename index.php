@@ -5,6 +5,30 @@ require_once __DIR__ . '/partials.php';
 evil_check_ban($pdo);
 waf_check($pdo);
 
+// ── Legacy URL 301 redirects ─────────────────────────────────────────────────
+// Old query-string format indexed by Google: ?page=app&id=N, ?page=apps, etc.
+if (!empty($_GET['page'])) {
+    $legacyPage = $_GET['page'];
+    if ($legacyPage === 'app' && !empty($_GET['id'])) {
+        $legacyId = (int)$_GET['id'];
+        $legacyStmt = $pdo->prepare("SELECT slug FROM apps WHERE id=? AND status='published' LIMIT 1");
+        $legacyStmt->execute([$legacyId]);
+        $legacySlug = $legacyStmt->fetchColumn();
+        if ($legacySlug) {
+            header('Location: ' . app_url($legacySlug), true, 301);
+        } else {
+            header('Location: ' . url(''), true, 301);
+        }
+        exit;
+    }
+    // ?page=apps, ?page=orders, ?page=home, any other legacy page → homepage
+    $legacyToHome = ['apps','games','orders','home','index','search','categories','all'];
+    if (in_array(strtolower($legacyPage), $legacyToHome, true) || ctype_alpha($legacyPage)) {
+        header('Location: ' . url(''), true, 301);
+        exit;
+    }
+}
+
 /* ── Data ── */
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
