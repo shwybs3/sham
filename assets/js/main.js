@@ -50,31 +50,37 @@ document.addEventListener('DOMContentLoaded', () => {
     reveals.forEach(el => el.classList.add('visible'));
   }
 
-  /* ── Mobile nav drawer (replaces old sidebar toggle) ── */
-  const navToggle = document.querySelector('#nav-toggle');
+  /* ── Mobile nav drawer — right-side RTL panel ── */
+  const navToggle   = document.querySelector('#nav-toggle');
   const mobileNavDrawer = document.querySelector('#mobile-nav-drawer');
+  const mobileNavOverlay = document.querySelector('#mobile-nav-overlay');
+  const mobileNavClose   = document.querySelector('#mobile-nav-close');
+
+  function openDrawer() {
+    mobileNavDrawer.classList.add('open');
+    mobileNavOverlay && mobileNavOverlay.classList.add('open');
+    navToggle && navToggle.setAttribute('aria-expanded', 'true');
+    mobileNavDrawer.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeDrawer() {
+    mobileNavDrawer.classList.remove('open');
+    mobileNavOverlay && mobileNavOverlay.classList.remove('open');
+    navToggle && navToggle.setAttribute('aria-expanded', 'false');
+    mobileNavDrawer.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
   if (navToggle && mobileNavDrawer) {
     navToggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isOpen = mobileNavDrawer.classList.toggle('open');
-      navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      mobileNavDrawer.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      mobileNavDrawer.classList.contains('open') ? closeDrawer() : openDrawer();
     });
-    document.addEventListener('click', (e) => {
-      if (mobileNavDrawer.classList.contains('open')
-          && !mobileNavDrawer.contains(e.target)
-          && !e.target.closest('#nav-toggle')) {
-        mobileNavDrawer.classList.remove('open');
-        navToggle.setAttribute('aria-expanded', 'false');
-        mobileNavDrawer.setAttribute('aria-hidden', 'true');
-      }
-    });
-    // Close drawer on nav link click (page navigates)
-    mobileNavDrawer.querySelectorAll('a').forEach(a => {
-      a.addEventListener('click', () => {
-        mobileNavDrawer.classList.remove('open');
-        navToggle.setAttribute('aria-expanded', 'false');
-      });
+    mobileNavClose && mobileNavClose.addEventListener('click', closeDrawer);
+    mobileNavOverlay && mobileNavOverlay.addEventListener('click', closeDrawer);
+    mobileNavDrawer.querySelectorAll('a').forEach(a => a.addEventListener('click', closeDrawer));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && mobileNavDrawer.classList.contains('open')) closeDrawer();
     });
   }
 

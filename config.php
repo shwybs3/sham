@@ -1973,6 +1973,7 @@ gtag("set","url_passthrough",true);
         . '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
         . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
         . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
+        . '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>' . "\n  "
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
         . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
