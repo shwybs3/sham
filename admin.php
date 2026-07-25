@@ -1606,6 +1606,160 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_apk' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Download APK from URL server-side (SSE streaming progress)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'download_url_apk' && is_admin()) {
+    @set_time_limit(600);
+    @ini_set('memory_limit', '256M');
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+    if (ob_get_level()) ob_end_clean();
+
+    function sse(string $event, array $data): void {
+        echo "event: {$event}\ndata: " . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+        if (ob_get_level()) ob_flush();
+        flush();
+    }
+
+    $url     = trim($_POST['url'] ?? '');
+    $appId   = (int)($_POST['app_id'] ?? 0);
+    $appName = trim($_POST['app_name'] ?? 'app');
+
+    if (!$url || !filter_var($url, FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $url)) {
+        sse('error', ['msg' => 'رابط غير صالح']); exit;
+    }
+    // Block SSRF — only allow public HTTP(S), no local addresses
+    $host = parse_url($url, PHP_URL_HOST);
+    if (!$host || preg_match('#^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)#i', $host)) {
+        sse('error', ['msg' => 'الرابط غير مسموح به']); exit;
+    }
+
+    // Resolve slug from app_id or app_name
+    $slug = '';
+    if ($appId > 0) {
+        $row = $pdo->query("SELECT slug FROM apps WHERE id=$appId")->fetch();
+        if ($row) $slug = $row['slug'];
+    }
+    if (!$slug) $slug = unique_slug($pdo, $appName ?: 'app');
+
+    // Sanitize display name for filename
+    $safeName = preg_replace('/[^a-z0-9\-]/', '', strtolower(str_replace([' ','_'], '-', $appName)));
+    $safeName = trim($safeName, '-') ?: $slug;
+
+    $dir = UPLOAD_PATH . '/apk';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $tmpFile = $dir . '/._dl_' . $slug . '_' . time() . '.apk.tmp';
+
+    sse('progress', ['pct' => 0, 'msg' => 'جارٍ الاتصال بالرابط…', 'bytes' => 0, 'total' => 0]);
+
+    // Open remote stream
+    $ctx = stream_context_create(['http' => [
+        'method'          => 'GET',
+        'timeout'         => 300,
+        'ignore_errors'   => true,
+        'follow_location' => true,
+        'max_redirects'   => 5,
+        'header'          => "User-Agent: Mozilla/5.0 (compatible; yassota-bot/1.0)\r\n",
+    ]]);
+
+    $remote = @fopen($url, 'rb', false, $ctx);
+    if (!$remote) {
+        sse('error', ['msg' => 'فشل الاتصال بالرابط — تحقق من الرابط']); exit;
+    }
+
+    // Detect total size from headers
+    $totalBytes = 0;
+    foreach ($http_response_header ?? [] as $h) {
+        if (preg_match('/^Content-Length:\s*(\d+)/i', $h, $m)) { $totalBytes = (int)$m[1]; break; }
+        if (preg_match('/^HTTP\/\S+\s+([45]\d\d)/i', $h, $m)) {
+            fclose($remote);
+            sse('error', ['msg' => "HTTP {$m[1]} — تحقق من صحة الرابط"]); exit;
+        }
+    }
+
+    $out = fopen($tmpFile, 'wb');
+    if (!$out) { fclose($remote); sse('error', ['msg' => 'فشل إنشاء الملف المؤقت']); exit; }
+
+    $downloaded = 0;
+    $chunkSize  = 512 * 1024; // 512 KB
+    $lastReport = 0;
+    $startTime  = microtime(true);
+
+    while (!feof($remote)) {
+        $chunk = fread($remote, $chunkSize);
+        if ($chunk === false) break;
+        fwrite($out, $chunk);
+        $downloaded += strlen($chunk);
+
+        // Report every 2% change or every 1 MB
+        $pct = $totalBytes > 0 ? min(99, round($downloaded / $totalBytes * 100)) : 0;
+        if ($pct >= $lastReport + 2 || $downloaded - ($lastReport / 100 * $totalBytes) >= 1048576) {
+            $elapsed = microtime(true) - $startTime;
+            $speed   = $elapsed > 0 ? $downloaded / $elapsed : 0;
+            $eta     = ($totalBytes > 0 && $speed > 0) ? round(($totalBytes - $downloaded) / $speed) : 0;
+            $mbDown  = round($downloaded / 1048576, 1);
+            $mbTotal = $totalBytes > 0 ? round($totalBytes / 1048576, 1) : '?';
+            $msg = "تم تحميل {$mbDown} MB" . ($totalBytes > 0 ? " من {$mbTotal} MB" : '') . ($eta > 0 ? " — متبقي {$eta}ث" : '');
+            sse('progress', ['pct' => $pct, 'msg' => $msg, 'bytes' => $downloaded, 'total' => $totalBytes]);
+            $lastReport = $pct;
+        }
+    }
+
+    fclose($remote);
+    fclose($out);
+
+    if ($downloaded < 1024) {
+        @unlink($tmpFile);
+        sse('error', ['msg' => 'الملف فارغ أو الرابط لا يحتوي على APK']); exit;
+    }
+
+    // Verify APK ZIP signature
+    $fh = fopen($tmpFile, 'rb');
+    $magic = fread($fh, 4);
+    fclose($fh);
+    if ($magic !== "PK\x03\x04") {
+        @unlink($tmpFile);
+        sse('error', ['msg' => 'الملف المُحمَّل ليس APK صالح (توقيع ZIP غير صحيح) — تأكد من الرابط']); exit;
+    }
+
+    sse('progress', ['pct' => 99, 'msg' => 'جارٍ معالجة الملف وحساب التجزئة…', 'bytes' => $downloaded, 'total' => $totalBytes]);
+
+    $sha256 = hash_file('sha256', $tmpFile);
+    $md5    = hash_file('md5', $tmpFile);
+    $size   = filesize($tmpFile);
+    $filename = $safeName . '-yassota-' . substr($sha256, 0, 8) . '.apk';
+    $dest     = $dir . '/' . $filename;
+
+    if (file_exists($dest)) @unlink($dest);
+    rename($tmpFile, $dest);
+    chmod($dest, 0644);
+
+    $apkPath = 'uploads/apk/' . $filename;
+
+    // Update DB if we have an appId
+    if ($appId > 0) {
+        $pdo->prepare("UPDATE apps SET apk_path=?,apk_size_bytes=?,apk_hash_sha256=?,apk_hash_md5=?,apk_uploaded_at=NOW() WHERE id=?")
+            ->execute([$apkPath, $size, $sha256, $md5, $appId]);
+        if (empty($pdo->query("SELECT download_url FROM apps WHERE id=$appId")->fetchColumn())) {
+            $pdo->prepare("UPDATE apps SET download_url='#' WHERE id=?")->execute([$appId]);
+        }
+        bump_cache_version($pdo);
+    }
+
+    sse('done', [
+        'apk_path'     => $apkPath,
+        'filename'     => $filename,
+        'size_bytes'   => $size,
+        'size_mb'      => round($size / 1048576, 2),
+        'sha256'       => $sha256,
+        'md5'          => $md5,
+        'msg'          => "✅ تم التحميل! {$filename} (" . round($size/1048576,1) . " MB)",
+    ]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Delete APK file for an app
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'delete_apk' && is_admin()) {
@@ -3201,6 +3355,28 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <div id="apk-meta-box" style="display:none;margin-top:12px;background:var(--bg-light,#f8f9fa);border-radius:8px;padding:12px;font-size:12px"></div>
     </div>
 
+    <!-- Server-side URL download -->
+    <div style="border:1px solid var(--border-c);border-radius:12px;padding:16px;margin-bottom:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        تحميل APK من رابط مباشر (يُحمَّل على السيرفر)
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="text" id="apk-url-input" class="form-input" placeholder="https://example.com/app.apk" dir="ltr" style="flex:1;min-width:200px;font-size:12px">
+        <button type="button" id="btn-dl-from-url" onclick="startUrlDownload()" class="btn-primary" style="font-size:12px;padding:9px 18px;white-space:nowrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          تحميل من السيرفر
+        </button>
+      </div>
+      <div id="url-dl-progress" style="display:none;margin-top:12px">
+        <div style="height:8px;background:rgba(99,130,190,.15);border-radius:6px;overflow:hidden;margin-bottom:8px">
+          <div id="url-dl-bar" style="height:100%;width:0;background:linear-gradient(90deg,var(--accent,#0d6efd),#6366f1);border-radius:6px;transition:width .3s"></div>
+        </div>
+        <div id="url-dl-status" style="font-size:12px;color:var(--muted);text-align:center"></div>
+      </div>
+      <div class="form-hint">سيُحمَّل الملف على السيرفر ويُعاد تسميته إلى <code>اسم-التطبيق-yassota.apk</code> تلقائياً مع حساب SHA-256 وMD5.</div>
+    </div>
+
     <!-- External URL section -->
     <div class="form-group" style="margin-bottom:12px">
       <label class="form-label">رابط التحميل الخارجي (Google Play / CDN)</label>
@@ -3554,6 +3730,87 @@ window.EXISTING_DATA = <?= json_encode([
     return b+' B';
   }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── Server-side URL download via SSE ──
+  window.startUrlDownload = function() {
+    var url = (document.getElementById('apk-url-input')?.value||'').trim();
+    if (!url) { alert('أدخل رابط APK أولاً'); return; }
+    var btn      = document.getElementById('btn-dl-from-url');
+    var progress = document.getElementById('url-dl-progress');
+    var bar      = document.getElementById('url-dl-bar');
+    var status   = document.getElementById('url-dl-status');
+    btn.disabled = true; btn.textContent = '⏳ جارٍ التحميل…';
+    progress.style.display = 'block';
+    bar.style.width = '0%';
+    status.textContent = 'جارٍ الاتصال…';
+
+    var appId   = <?= (int)($app['id'] ?? 0) ?>;
+    var appName = (document.querySelector('[name="name"]')?.value||'').trim() || '<?= h($app['name'] ?? 'app') ?>';
+
+    var fd = new FormData();
+    fd.append('url', url);
+    fd.append('app_id', appId);
+    fd.append('app_name', appName);
+
+    // Use fetch + ReadableStream to consume SSE
+    fetch('admin.php?ajax=download_url_apk', {method:'POST', body:fd})
+    .then(function(res){
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+      function read(){
+        reader.read().then(function(chunk){
+          if(chunk.done) return;
+          buf += decoder.decode(chunk.value, {stream:true});
+          var parts = buf.split('\n\n');
+          buf = parts.pop();
+          parts.forEach(function(block){
+            var lines = block.split('\n');
+            var eventType = 'message', dataStr = '';
+            lines.forEach(function(l){
+              if(l.startsWith('event: ')) eventType = l.slice(7).trim();
+              if(l.startsWith('data: ')) dataStr = l.slice(6).trim();
+            });
+            if(!dataStr) return;
+            var d; try{ d=JSON.parse(dataStr); }catch(e){ return; }
+            if(eventType==='progress'){
+              bar.style.width = (d.pct||0) + '%';
+              status.textContent = d.msg || '';
+            } else if(eventType==='done'){
+              bar.style.width = '100%';
+              status.style.color = 'var(--success,#198754)';
+              status.textContent = d.msg || '✅ اكتمل التحميل';
+              // Update hidden fields
+              if(d.apk_path){ hidPath.value=d.apk_path; }
+              if(d.size_bytes){ hidSize.value=d.size_bytes; }
+              if(d.sha256){ hidSha.value=d.sha256; }
+              if(d.md5){ hidMd5.value=d.md5; }
+              // Show meta
+              metaBox.style.display='block';
+              var rows=[];
+              if(d.size_mb) rows.push(`<div><b>الحجم:</b> ${d.size_mb} MB</div>`);
+              if(d.sha256) rows.push(`<div style="grid-column:1/-1"><b>SHA-256:</b> <code style="font-size:10px;word-break:break-all;cursor:pointer" onclick="navigator.clipboard.writeText('${d.sha256}');this.style.color='green'">${d.sha256}</code></div>`);
+              if(d.md5) rows.push(`<div><b>MD5:</b> <code style="cursor:pointer" onclick="navigator.clipboard.writeText('${d.md5}');this.style.color='green'">${d.md5}</code></div>`);
+              metaBox.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+rows.join('')+'</div>';
+              // Auto-update size_mb field
+              if(d.size_mb){ const sf=document.querySelector('[name="size_mb"]'); if(sf&&!sf.value) sf.value=d.size_mb; }
+              btn.textContent = '✅ تم التحميل';
+            } else if(eventType==='error'){
+              bar.style.width='100%'; bar.style.background='var(--danger,#dc3545)';
+              status.style.color='var(--danger,#dc3545)';
+              status.textContent = '❌ ' + (d.msg||'خطأ');
+              btn.disabled=false; btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> تحميل من السيرفر';
+            }
+          });
+          read();
+        });
+      }
+      read();
+    }).catch(function(e){
+      status.textContent = '❌ خطأ في الاتصال'; status.style.color='var(--danger,#dc3545)';
+      btn.disabled=false; btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> تحميل من السيرفر';
+    });
+  };
 })();
 </script>
 
