@@ -3309,6 +3309,8 @@ $navLinks = [
     'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
     'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
+    'visitors'  => ['label'=>'الزوار والسلوك',  'icon'=>'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'],
+    'indexing-monitor' => ['label'=>'مراقب الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'indexnow-log'   => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
@@ -4381,7 +4383,7 @@ elseif ($page === 'bulk-generate'): ?>
 elseif ($page === 'bulk-content'):
     /* Fetch apps that have incomplete content — short_description or long_description empty/very short */
     $incompleteApps = $pdo->query(
-        "SELECT id, name, icon, status,
+        "SELECT id, name, icon_path, status,
                 CHAR_LENGTH(COALESCE(long_description,'')) AS ld_len,
                 CHAR_LENGTH(COALESCE(short_description,'')) AS sd_len
          FROM apps
@@ -4436,7 +4438,7 @@ elseif ($page === 'bulk-content'):
 
 <div style="display:flex;flex-direction:column;gap:10px" id="bc-list">
 <?php foreach ($incompleteApps as $a):
-    $iconSrc = !empty($a['icon_path']) ? h(media_url($a['icon_path'])) : '';
+    $iconSrc = !empty($a['icon_path']) ? h(media_url($a['icon_path'] ?? '')) : '';
 ?>
 <div class="bc-row" id="bc-row-<?= (int)$a['id'] ?>">
   <?php if ($iconSrc): ?>
@@ -6832,6 +6834,379 @@ $logStats = [
   };
   loadLog(0);
 })();
+</script>
+<?php endif; ?>
+
+<?php
+/* ─────────────── VISITOR ANALYTICS ─────────────── */
+if ($page === 'visitors'):
+// Aggregate stats
+$totalVisitors = 0; $totalViews = 0; $totalDl = 0; $vpnCount = 0;
+$byCountry = []; $byBrowser = []; $byOs = [];
+$recentVisitors = [];
+$topCategories = []; $topApps = [];
+
+try {
+    $tblList = array_column($pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_NUM), 0);
+    if (in_array('visitor_profiles', $tblList)) {
+        $stats = $pdo->query("SELECT COUNT(*) as total, SUM(total_views) as views, SUM(total_downloads) as dl, SUM(is_vpn) as vpn FROM visitor_profiles")->fetch();
+        $totalVisitors = (int)($stats['total'] ?? 0);
+        $totalViews    = (int)($stats['views'] ?? 0);
+        $totalDl       = (int)($stats['dl'] ?? 0);
+        $vpnCount      = (int)($stats['vpn'] ?? 0);
+
+        $byCountry = $pdo->query("SELECT country, COUNT(*) as cnt FROM visitor_profiles WHERE country IS NOT NULL GROUP BY country ORDER BY cnt DESC LIMIT 12")->fetchAll();
+        $byBrowser = $pdo->query("SELECT browser_family, COUNT(*) as cnt FROM visitor_profiles WHERE browser_family IS NOT NULL GROUP BY browser_family ORDER BY cnt DESC LIMIT 8")->fetchAll();
+        $byOs      = $pdo->query("SELECT os_family, COUNT(*) as cnt FROM visitor_profiles WHERE os_family IS NOT NULL GROUP BY os_family ORDER BY cnt DESC LIMIT 8")->fetchAll();
+        $recentVisitors = $pdo->query("SELECT fingerprint, country, city, browser_family, os_family, is_vpn, total_views, total_downloads, last_seen, last_ip_change FROM visitor_profiles ORDER BY last_seen DESC LIMIT 50")->fetchAll();
+
+        // Category interests: aggregate across all profiles
+        $catRaw = $pdo->query("SELECT category_interests FROM visitor_profiles WHERE category_interests IS NOT NULL AND category_interests != 'null'")->fetchAll(PDO::FETCH_COLUMN);
+        $catTotals = [];
+        foreach ($catRaw as $j) {
+            $d = json_decode($j, true);
+            if (!is_array($d)) continue;
+            foreach ($d as $slug => $cnt) $catTotals[$slug] = ($catTotals[$slug] ?? 0) + $cnt;
+        }
+        arsort($catTotals);
+        $topCategories = array_slice($catTotals, 0, 8, true);
+
+        // Top app interests
+        $appRaw = $pdo->query("SELECT app_interests FROM visitor_profiles WHERE app_interests IS NOT NULL AND app_interests != 'null'")->fetchAll(PDO::FETCH_COLUMN);
+        $appTotals = [];
+        foreach ($appRaw as $j) {
+            $ids = json_decode($j, true);
+            if (!is_array($ids)) continue;
+            foreach ($ids as $i => $appId) {
+                $score = max(1, 10 - $i); // more recent = higher score
+                $appTotals[$appId] = ($appTotals[$appId] ?? 0) + $score;
+            }
+        }
+        arsort($appTotals);
+        $topAppIds = array_slice(array_keys($appTotals), 0, 10, true);
+        if ($topAppIds) {
+            $ph = implode(',', array_fill(0, count($topAppIds), '?'));
+            $topApps = $pdo->prepare("SELECT id,name,icon_path FROM apps WHERE id IN ($ph)")->execute($topAppIds) ? $pdo->prepare("SELECT id,name,icon_path FROM apps WHERE id IN ($ph)")->execute($topAppIds) : [];
+            // Refetch properly
+            $stmt = $pdo->prepare("SELECT id,name,icon_path FROM apps WHERE id IN ($ph)");
+            $stmt->execute($topAppIds);
+            $topAppsRows = $stmt->fetchAll();
+            $topAppsMap = [];
+            foreach ($topAppsRows as $r) $topAppsMap[(int)$r['id']] = $r;
+            $topApps = [];
+            foreach ($topAppIds as $aid) { if (isset($topAppsMap[$aid])) $topApps[] = $topAppsMap[$aid] + ['score' => $appTotals[$aid] ?? 0]; }
+        }
+    }
+} catch (Throwable $e) {}
+?>
+<div class="admin-content-header"><h1>الزوار والسلوك</h1><p>تحليلات الزوار بناءً على البصمة الرقمية — الهوية مجهولة وعناوين IP مُشفَّرة</p></div>
+
+<!-- Summary cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px">
+<?php foreach ([
+    ['label'=>'زوار فريدون','val'=>number_format($totalVisitors),'icon'=>'👥'],
+    ['label'=>'إجمالي المشاهدات','val'=>number_format($totalViews),'icon'=>'👁️'],
+    ['label'=>'إجمالي التحميلات','val'=>number_format($totalDl),'icon'=>'⬇️'],
+    ['label'=>'مشتبه بـ VPN','val'=>number_format($vpnCount),'icon'=>'🕵️'],
+] as $c): ?>
+<div class="card" style="text-align:center;padding:18px 12px">
+  <div style="font-size:26px;margin-bottom:6px"><?= $c['icon'] ?></div>
+  <div style="font-size:22px;font-weight:700;color:var(--primary)"><?= $c['val'] ?></div>
+  <div style="font-size:12px;color:var(--text-muted);margin-top:3px"><?= $c['label'] ?></div>
+</div>
+<?php endforeach; ?>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:22px">
+
+<!-- Countries -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">🌍 الدول</h3>
+  <?php $maxC = max(1, max(array_column($byCountry ?: [[0,0,'cnt'=>1]], 'cnt')));
+  foreach ($byCountry as $r): $pct = round(100*$r['cnt']/$maxC); ?>
+  <div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+      <span><?= h($r['country'] ?: 'Unknown') ?></span><span style="color:var(--text-muted)"><?= $r['cnt'] ?></span>
+    </div>
+    <div style="height:6px;background:#f1f5f9;border-radius:3px"><div style="height:100%;width:<?= $pct ?>%;background:#2563eb;border-radius:3px"></div></div>
+  </div>
+  <?php endforeach; ?>
+  <?php if (!$byCountry): ?><p style="color:var(--text-muted);font-size:13px">لا بيانات بعد</p><?php endif; ?>
+</div>
+
+<!-- Browsers -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">🌐 المتصفحات</h3>
+  <?php $maxB = max(1, max(array_column($byBrowser ?: [[0,0,'cnt'=>1]], 'cnt')));
+  foreach ($byBrowser as $r): $pct = round(100*$r['cnt']/$maxB); ?>
+  <div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+      <span><?= h($r['browser_family'] ?: 'Other') ?></span><span style="color:var(--text-muted)"><?= $r['cnt'] ?></span>
+    </div>
+    <div style="height:6px;background:#f1f5f9;border-radius:3px"><div style="height:100%;width:<?= $pct ?>%;background:#0891b2;border-radius:3px"></div></div>
+  </div>
+  <?php endforeach; ?>
+  <?php if (!$byBrowser): ?><p style="color:var(--text-muted);font-size:13px">لا بيانات بعد</p><?php endif; ?>
+</div>
+
+<!-- OS -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">📱 أنظمة التشغيل</h3>
+  <?php $maxO = max(1, max(array_column($byOs ?: [[0,0,'cnt'=>1]], 'cnt')));
+  foreach ($byOs as $r): $pct = round(100*$r['cnt']/$maxO); ?>
+  <div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+      <span><?= h($r['os_family'] ?: 'Other') ?></span><span style="color:var(--text-muted)"><?= $r['cnt'] ?></span>
+    </div>
+    <div style="height:6px;background:#f1f5f9;border-radius:3px"><div style="height:100%;width:<?= $pct ?>%;background:#7c3aed;border-radius:3px"></div></div>
+  </div>
+  <?php endforeach; ?>
+  <?php if (!$byOs): ?><p style="color:var(--text-muted);font-size:13px">لا بيانات بعد</p><?php endif; ?>
+</div>
+
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
+
+<!-- Top categories by interest -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">📂 أكثر التصنيفات اهتماماً</h3>
+  <?php $maxCat = max(1, $topCategories ? max(array_values($topCategories)) : 1);
+  foreach ($topCategories as $slug => $score): $pct = round(100*$score/$maxCat); ?>
+  <div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+      <span><?= h($slug) ?></span><span style="color:var(--text-muted)"><?= $score ?></span>
+    </div>
+    <div style="height:6px;background:#f1f5f9;border-radius:3px"><div style="height:100%;width:<?= $pct ?>%;background:#059669;border-radius:3px"></div></div>
+  </div>
+  <?php endforeach; ?>
+  <?php if (!$topCategories): ?><p style="color:var(--text-muted);font-size:13px">لا بيانات بعد</p><?php endif; ?>
+</div>
+
+<!-- Top apps by interest score -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">⭐ أكثر التطبيقات اهتماماً</h3>
+  <?php foreach ($topApps as $a): ?>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+    <?php if ($a['icon_path']): ?>
+      <img src="<?= h(media_url($a['icon_path'])) ?>" style="width:30px;height:30px;border-radius:8px;object-fit:cover" alt="">
+    <?php endif; ?>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= h($a['name']) ?></div>
+      <div style="font-size:11px;color:var(--text-muted)">نقاط الاهتمام: <?= $a['score'] ?></div>
+    </div>
+  </div>
+  <?php endforeach; ?>
+  <?php if (!$topApps): ?><p style="color:var(--text-muted);font-size:13px">لا بيانات بعد</p><?php endif; ?>
+</div>
+
+</div>
+
+<!-- Recent visitors table -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 16px;font-size:14px">🕐 آخر الزوار (50 الأخيرة)</h3>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr>
+      <th>بصمة</th><th>الدولة</th><th>المدينة</th><th>المتصفح</th><th>النظام</th>
+      <th>مشاهدات</th><th>تحميلات</th><th>VPN</th><th>آخر زيارة</th><th>تغيير IP</th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($recentVisitors as $v): ?>
+    <tr>
+      <td><code style="font-size:11px"><?= h(substr($v['fingerprint'], 0, 12)) ?>…</code></td>
+      <td><?= h($v['country'] ?: '—') ?></td>
+      <td style="font-size:12px"><?= h($v['city'] ?: '—') ?></td>
+      <td><?= h($v['browser_family'] ?: '—') ?></td>
+      <td><?= h($v['os_family'] ?: '—') ?></td>
+      <td><?= number_format((int)$v['total_views']) ?></td>
+      <td><?= number_format((int)$v['total_downloads']) ?></td>
+      <td><?php if ($v['is_vpn']): ?><span class="badge-danger">VPN</span><?php else: ?>—<?php endif; ?></td>
+      <td style="font-size:11px;color:var(--text-muted)"><?= h($v['last_seen']) ?></td>
+      <td style="font-size:11px;color:<?= $v['last_ip_change'] ? '#f59e0b' : 'var(--text-muted)' ?>"><?= $v['last_ip_change'] ? h($v['last_ip_change']) : '—' ?></td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if (!$recentVisitors): ?><tr><td colspan="10" style="text-align:center;color:var(--text-muted)">لا يوجد زوار مسجلون بعد</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<?php endif; ?>
+
+<?php
+/* ─────────────── SMART INDEXING MONITOR ─────────────── */
+if ($page === 'indexing-monitor'):
+// Handle re-ping AJAX
+if (!empty($_GET['ajax']) && $_GET['ajax'] === 'ping_app') {
+    header('Content-Type: application/json; charset=utf-8');
+    $aid = (int)($_POST['app_id'] ?? 0);
+    if ($aid > 0) {
+        $aRow = $pdo->prepare("SELECT slug FROM apps WHERE id=? AND status='published' LIMIT 1");
+        $aRow->execute([$aid]);
+        $aSlug = $aRow->fetchColumn();
+        if ($aSlug) {
+            ping_search_engines($pdo, rtrim(SITE_URL,'/').'/'.rawurlencode($aSlug), $aid);
+            echo json_encode(['ok'=>true]);
+        } else {
+            echo json_encode(['ok'=>false,'error'=>'app not found']);
+        }
+    } else {
+        echo json_encode(['ok'=>false,'error'=>'missing app_id']);
+    }
+    exit;
+}
+if (!empty($_GET['ajax']) && $_GET['ajax'] === 'ping_all') {
+    header('Content-Type: application/json; charset=utf-8');
+    $apps2ping = $pdo->query("SELECT id,slug FROM apps WHERE status='published' ORDER BY id ASC LIMIT 200")->fetchAll();
+    $count = 0;
+    foreach ($apps2ping as $a) {
+        ping_search_engines($pdo, rtrim(SITE_URL,'/').'/'.rawurlencode($a['slug']), (int)$a['id']);
+        $count++;
+    }
+    echo json_encode(['ok'=>true,'count'=>$count]);
+    exit;
+}
+
+// Stats
+$totalApps = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+try {
+    $indexedCount = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn();
+    $pendingCount = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='pending'")->fetchColumn();
+    $errorCount   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='error'")->fetchColumn();
+    $neverPinged  = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND last_indexed_at IS NULL")->fetchColumn();
+    $staleCount   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND last_indexed_at < DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
+} catch (Throwable $e) { $indexedCount=$pendingCount=$errorCount=$neverPinged=$staleCount=0; }
+
+// Recent IndexNow log
+$recentLog = $pdo->query("SELECT * FROM indexnow_log ORDER BY created_at DESC LIMIT 60")->fetchAll();
+
+// Problem apps
+try {
+    $problemApps = $pdo->query("SELECT id,name,slug,icon_path,index_status,last_indexed_at FROM apps
+        WHERE status='published' AND (index_status='error' OR last_indexed_at IS NULL OR last_indexed_at < DATE_SUB(NOW(), INTERVAL 7 DAY))
+        ORDER BY last_indexed_at ASC NULLS FIRST LIMIT 30")->fetchAll();
+} catch (Throwable $e) {
+    // MySQL doesn't support NULLS FIRST — use workaround
+    $problemApps = $pdo->query("SELECT id,name,slug,icon_path,index_status,last_indexed_at FROM apps
+        WHERE status='published' AND (index_status='error' OR last_indexed_at IS NULL OR last_indexed_at < DATE_SUB(NOW(), INTERVAL 7 DAY))
+        ORDER BY ISNULL(last_indexed_at) DESC, last_indexed_at ASC LIMIT 30")->fetchAll();
+}
+?>
+<div class="admin-content-header">
+  <h1>مراقب الفهرسة الذكي</h1>
+  <p>حالة الفهرسة والإشعارات الفورية لمشاكل الإرسال إلى محركات البحث</p>
+</div>
+
+<!-- Stats row -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-bottom:22px">
+<?php foreach ([
+    ['label'=>'مُفهرَسة','val'=>$indexedCount,'color'=>'#059669','icon'=>'✅'],
+    ['label'=>'قيد الانتظار','val'=>$pendingCount,'color'=>'#f59e0b','icon'=>'⏳'],
+    ['label'=>'أخطاء','val'=>$errorCount,'color'=>'#ef4444','icon'=>'❌'],
+    ['label'=>'لم تُرسَل قط','val'=>$neverPinged,'color'=>'#8b5cf6','icon'=>'⚠️'],
+    ['label'=>'أكثر من 7 أيام','val'=>$staleCount,'color'=>'#64748b','icon'=>'🕰️'],
+] as $c): ?>
+<div class="card" style="text-align:center;padding:16px 10px;border-top:3px solid <?= $c['color'] ?>">
+  <div style="font-size:22px;margin-bottom:4px"><?= $c['icon'] ?></div>
+  <div style="font-size:22px;font-weight:700;color:<?= $c['color'] ?>"><?= number_format($c['val']) ?></div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:2px"><?= $c['label'] ?></div>
+</div>
+<?php endforeach; ?>
+</div>
+
+<!-- Bulk actions -->
+<div class="card" style="padding:18px;margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <h3 style="margin:0;font-size:14px">إجراءات جماعية</h3>
+    <button onclick="pingAll(this)" class="btn" style="font-size:13px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+      إرسال كل التطبيقات إلى IndexNow
+    </button>
+    <span id="ping-all-status" style="font-size:13px;color:var(--text-muted)"></span>
+  </div>
+</div>
+
+<!-- Problem apps -->
+<?php if ($problemApps): ?>
+<div class="card" style="padding:18px;margin-bottom:20px">
+  <h3 style="margin:0 0 14px;font-size:14px">⚠️ تطبيقات تحتاج إعادة إرسال (<?= count($problemApps) ?>)</h3>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr><th>التطبيق</th><th>الحالة</th><th>آخر إرسال</th><th>إجراء</th></tr></thead>
+    <tbody>
+    <?php foreach ($problemApps as $a):
+      $stColor = ['indexed'=>'#059669','pending'=>'#f59e0b','error'=>'#ef4444'][$a['index_status']] ?? '#64748b';
+    ?>
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <?php if ($a['icon_path']): ?><img src="<?= h(media_url($a['icon_path'])) ?>" style="width:28px;height:28px;border-radius:7px;object-fit:cover" alt=""><?php endif; ?>
+          <span style="font-size:13px"><?= h($a['name']) ?></span>
+        </div>
+      </td>
+      <td><span style="color:<?= $stColor ?>;font-size:12px;font-weight:600"><?= h($a['index_status']) ?></span></td>
+      <td style="font-size:12px;color:var(--text-muted)"><?= $a['last_indexed_at'] ? h($a['last_indexed_at']) : '—' ?></td>
+      <td>
+        <button onclick="pingApp(<?= (int)$a['id'] ?>, this)" class="btn btn-sm" style="font-size:12px">
+          إرسال الآن
+        </button>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+<?php endif; ?>
+
+<!-- Recent IndexNow log -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">📋 سجل الإرسال الأخير</h3>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr><th>URL</th><th>محرك البحث</th><th>الحالة</th><th>كود HTTP</th><th>السبب</th><th>التاريخ</th></tr></thead>
+    <tbody>
+    <?php foreach ($recentLog as $l):
+      $lColor = ['success'=>'#059669','failed'=>'#ef4444','skipped'=>'#64748b'][$l['status']] ?? '#64748b';
+    ?>
+    <tr>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="<?= h($l['url']) ?>"><?= h(mb_substr($l['url'], 0, 60)) ?></td>
+      <td><?= h($l['engine']) ?></td>
+      <td><span style="color:<?= $lColor ?>;font-weight:600;font-size:12px"><?= h($l['status']) ?></span></td>
+      <td><?= $l['http_code'] ? h($l['http_code']) : '—' ?></td>
+      <td style="font-size:11px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis"><?= h($l['reason'] ?? '') ?></td>
+      <td style="font-size:11px;color:var(--text-muted);white-space:nowrap"><?= h($l['created_at']) ?></td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if (!$recentLog): ?><tr><td colspan="6" style="text-align:center;color:var(--text-muted)">لا يوجد سجل بعد</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+function pingApp(id, btn) {
+  btn.disabled = true; btn.textContent = 'جارٍ…';
+  fetch('admin.php?page=indexing-monitor&ajax=ping_app', {
+    method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'app_id='+id
+  }).then(r=>r.json()).then(d=>{
+    btn.textContent = d.ok ? '✅ تم' : '❌ خطأ';
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='إرسال الآن'; }, 3000);
+  });
+}
+function pingAll(btn) {
+  if (!confirm('إرسال جميع التطبيقات المنشورة إلى IndexNow؟')) return;
+  btn.disabled = true; btn.textContent = 'جارٍ الإرسال…';
+  var st = document.getElementById('ping-all-status');
+  fetch('admin.php?page=indexing-monitor&ajax=ping_all', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) { btn.textContent = '✅ تم'; if (st) st.textContent = 'تم إرسال ' + d.count + ' تطبيق.'; }
+      else { btn.textContent = '❌ خطأ'; }
+      setTimeout(()=>{ btn.disabled=false; btn.textContent='إرسال كل التطبيقات إلى IndexNow'; if(st) st.textContent=''; }, 5000);
+    });
+}
 </script>
 <?php endif; ?>
 

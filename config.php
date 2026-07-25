@@ -521,6 +521,47 @@ function ensure_schema(PDO $pdo): array {
         });
     }
 
+    // Visitor profiles — privacy-safe analytics, interests, geo, IP history
+    $pdo->exec("CREATE TABLE IF NOT EXISTS visitor_profiles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      fingerprint VARCHAR(64) NOT NULL,
+      first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      total_views INT UNSIGNED NOT NULL DEFAULT 0,
+      total_downloads INT UNSIGNED NOT NULL DEFAULT 0,
+      country VARCHAR(4) NULL,
+      city VARCHAR(120) NULL,
+      ip_hash VARCHAR(64) NOT NULL DEFAULT '',
+      ip_history JSON NULL,
+      category_interests JSON NULL,
+      app_interests JSON NULL,
+      browser_family VARCHAR(80) NULL,
+      os_family VARCHAR(80) NULL,
+      is_vpn TINYINT(1) NOT NULL DEFAULT 0,
+      last_ip_change DATETIME NULL,
+      captcha_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+      UNIQUE KEY uq_fp (fingerprint),
+      INDEX idx_last_seen (last_seen),
+      INDEX idx_country (country)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'visitor_profiles';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS captcha_challenges (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      token VARCHAR(64) NOT NULL,
+      fingerprint VARCHAR(64) NOT NULL DEFAULT '',
+      ip VARCHAR(45) NOT NULL DEFAULT '',
+      challenge_type ENUM('v2','v3') NOT NULL DEFAULT 'v2',
+      reason VARCHAR(60) NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      solved_at DATETIME NULL,
+      status ENUM('pending','solved','expired') NOT NULL DEFAULT 'pending',
+      UNIQUE KEY uq_token (token),
+      INDEX idx_fp_status (fingerprint, status),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'captcha_challenges';
+
     return $log;
 }
 ensure_schema($pdo);
@@ -896,6 +937,242 @@ function evil_rate_check(PDO $pdo, string $action, int $maxPerMinute = 60): bool
         }
         return true;
     } catch (Throwable $e) { return true; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Visitor Analytics — privacy-safe tracking.
+   IPs are never stored raw; only a SHA-256 hash is kept.
+   Fingerprints use only server-visible headers (no client JS needed).
+   All functions are no-ops when called from the admin IP.
+   ═══════════════════════════════════════════════════════════════════ */
+function visitor_fingerprint(): string {
+    $ua   = $_SERVER['HTTP_USER_AGENT']      ?? '';
+    $lang = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+    return hash('sha256', $ua . '|' . $lang);
+}
+
+function get_visitor_geo(string $ip, PDO $pdo): array {
+    $default = ['country' => null, 'city' => null, 'is_vpn' => false];
+    if (!$ip || $ip === '127.0.0.1' || str_starts_with($ip, '192.168.') || str_starts_with($ip, '10.')) return $default;
+
+    // Cache per IP in settings (TTL 24h, key = _geo_<short-hash>)
+    $cacheKey = '_geo_' . substr(hash('sha256', $ip), 0, 20);
+    try {
+        $cached = get_cfg($pdo, $cacheKey, '');
+        if ($cached) {
+            $c = json_decode($cached, true);
+            if (is_array($c) && isset($c['ts']) && (time() - (int)$c['ts']) < 86400) {
+                return ['country' => $c['country'] ?? null, 'city' => $c['city'] ?? null, 'is_vpn' => (bool)($c['vpn'] ?? false)];
+            }
+        }
+    } catch (Throwable $e) {}
+
+    $url = 'http://ip-api.com/json/' . urlencode($ip) . '?fields=status,countryCode,city,proxy,hosting&lang=en';
+    $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => true, 'method' => 'GET']]);
+    $res = @file_get_contents($url, false, $ctx);
+    if (!$res) return $default;
+    $d = json_decode($res, true);
+    if (!is_array($d) || ($d['status'] ?? '') !== 'success') return $default;
+
+    $geo = [
+        'country' => $d['countryCode'] ?? null,
+        'city'    => $d['city'] ?? null,
+        'is_vpn'  => (bool)($d['proxy'] ?? false) || (bool)($d['hosting'] ?? false),
+    ];
+    try { set_cfg($pdo, $cacheKey, json_encode(['country' => $geo['country'], 'city' => $geo['city'], 'vpn' => (int)$geo['is_vpn'], 'ts' => time()])); } catch (Throwable $e) {}
+    return $geo;
+}
+
+function visitor_ua_info(): array {
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $browser = 'Other';
+    foreach (['SamsungBrowser' => 'Samsung', 'Edg' => 'Edge', 'OPR' => 'Opera', 'Opera' => 'Opera',
+              'Firefox' => 'Firefox', 'Chrome' => 'Chrome', 'Safari' => 'Safari'] as $tok => $name) {
+        if (stripos($ua, $tok) !== false) { $browser = $name; break; }
+    }
+    $os = 'Other';
+    foreach (['Android' => 'Android', 'iPhone' => 'iOS', 'iPad' => 'iOS',
+              'Windows' => 'Windows', 'Macintosh' => 'macOS', 'Linux' => 'Linux'] as $tok => $name) {
+        if (stripos($ua, $tok) !== false) { $os = $name; break; }
+    }
+    return [$browser, $os];
+}
+
+function visitor_track(PDO $pdo, ?int $appId = null, ?int $categoryId = null): void {
+    if (evil_is_admin_ip()) return;
+    try {
+        $fp     = visitor_fingerprint();
+        $ip     = client_ip();
+        $ipHash = hash('sha256', $ip);
+
+        [$browser, $os] = visitor_ua_info();
+
+        // Category slug for interest tracking
+        $catSlug = null;
+        if ($categoryId) {
+            $r = $pdo->prepare("SELECT slug FROM categories WHERE id=? LIMIT 1");
+            $r->execute([$categoryId]);
+            $catSlug = $r->fetchColumn() ?: null;
+        }
+
+        // Fetch existing profile
+        $stmt = $pdo->prepare("SELECT id,ip_hash,ip_history,category_interests,app_interests,is_vpn FROM visitor_profiles WHERE fingerprint=? LIMIT 1");
+        $stmt->execute([$fp]);
+        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $ipChanged = $profile && $profile['ip_hash'] !== $ipHash;
+        $isVpn = 0; $country = null; $city = null; $histJson = null;
+
+        if ($ipChanged || !$profile) {
+            $geo     = get_visitor_geo($ip, $pdo);
+            $country = $geo['country'];
+            $city    = $geo['city'];
+            $isVpn   = (int)$geo['is_vpn'];
+            $entry   = ['h' => substr($ipHash, 0, 16), 'c' => $country, 't' => date('Y-m-d H:i')];
+            if ($profile) {
+                $hist = json_decode($profile['ip_history'] ?? '[]', true) ?: [];
+                array_unshift($hist, $entry);
+                $histJson = json_encode(array_slice($hist, 0, 30));
+            } else {
+                $histJson = json_encode([$entry]);
+            }
+        }
+
+        // Merge interests
+        $catI = json_decode($profile['category_interests'] ?? '{}', true) ?: [];
+        if ($catSlug) $catI[$catSlug] = ($catI[$catSlug] ?? 0) + 1;
+        arsort($catI);
+
+        $appI = json_decode($profile['app_interests'] ?? '[]', true) ?: [];
+        if ($appId) {
+            $appI = array_values(array_filter($appI, fn($x) => $x !== $appId));
+            array_unshift($appI, $appId);
+            $appI = array_slice($appI, 0, 50);
+        }
+
+        $catJson = json_encode($catI,  JSON_UNESCAPED_UNICODE);
+        $appJson = json_encode($appI);
+
+        if ($profile) {
+            $params = [':br' => $browser, ':os' => $os, ':ci' => $catJson, ':ai' => $appJson, ':fp' => $fp];
+            $sets   = ['last_seen=NOW()', 'total_views=total_views+1', 'browser_family=:br', 'os_family=:os', 'category_interests=:ci', 'app_interests=:ai'];
+            if ($ipChanged) {
+                $sets[] = 'ip_hash=:ih'; $sets[] = 'ip_history=:ih2';
+                $sets[] = 'is_vpn=:vpn'; $sets[] = 'last_ip_change=NOW()';
+                $params += [':ih' => $ipHash, ':ih2' => $histJson, ':vpn' => $isVpn];
+                if ($country !== null) { $sets[] = 'country=:co'; $params[':co'] = $country; }
+                if ($city !== null)    { $sets[] = 'city=:cy';    $params[':cy'] = $city; }
+            }
+            $pdo->prepare("UPDATE visitor_profiles SET " . implode(',', $sets) . " WHERE fingerprint=:fp")->execute($params);
+        } else {
+            $pdo->prepare("INSERT INTO visitor_profiles
+                (fingerprint,ip_hash,ip_history,country,city,browser_family,os_family,is_vpn,total_views,category_interests,app_interests)
+                VALUES (?,?,?,?,?,?,?,?,1,?,?)")
+                ->execute([$fp, $ipHash, $histJson, $country, $city, $browser, $os, $isVpn, $catJson, $appJson]);
+        }
+    } catch (Throwable $e) { /* never break the page */ }
+}
+
+function visitor_record_download(PDO $pdo): void {
+    if (evil_is_admin_ip()) return;
+    try {
+        $pdo->prepare("UPDATE visitor_profiles SET total_downloads=total_downloads+1 WHERE fingerprint=?")
+            ->execute([visitor_fingerprint()]);
+    } catch (Throwable $e) {}
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CAPTCHA challenge system — triggers on: IP change with same device
+   fingerprint, rate limit exceeded (>20 req/60s), VPN detected.
+   Returns 'none'|'v3'|'v2'.  All ops are no-ops for admin IP.
+   ═══════════════════════════════════════════════════════════════════ */
+function captcha_should_challenge(PDO $pdo): string {
+    if (evil_is_admin_ip()) return 'none';
+
+    $v3Site = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
+    $v2Site = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
+    if (!$v3Site && !$v2Site) return 'none'; // not configured
+
+    // Already solved in this session (valid 1 h)?
+    if (!empty($_SESSION['captcha_solved_at']) && (time() - (int)$_SESSION['captcha_solved_at']) < 3600) {
+        return 'none';
+    }
+
+    $triggers = [];
+
+    // Rate limit: >20 requests within 60 s (session rolling window)
+    if (!isset($_SESSION['rv_window'])) $_SESSION['rv_window'] = ['t' => time(), 'n' => 0];
+    if (time() - (int)$_SESSION['rv_window']['t'] > 60) $_SESSION['rv_window'] = ['t' => time(), 'n' => 0];
+    $_SESSION['rv_window']['n'] = (int)$_SESSION['rv_window']['n'] + 1;
+    if ($_SESSION['rv_window']['n'] > 20) $triggers[] = 'rate_limit';
+
+    // IP change + VPN from visitor_profiles
+    $fp     = visitor_fingerprint();
+    $ipHash = hash('sha256', client_ip());
+    try {
+        $row = $pdo->prepare("SELECT ip_hash, is_vpn FROM visitor_profiles WHERE fingerprint=? LIMIT 1");
+        $row->execute([$fp]);
+        $p = $row->fetch(PDO::FETCH_ASSOC);
+        if ($p) {
+            if ($p['ip_hash'] !== $ipHash) $triggers[] = 'ip_change';
+            if ($p['is_vpn'])              $triggers[] = 'vpn_suspect';
+        }
+    } catch (Throwable $e) {}
+
+    if (!$triggers) return 'none';
+
+    // High risk (VPN or heavy rate abuse) → v2 checkbox; mild → v3 invisible
+    $highRisk = in_array('vpn_suspect', $triggers, true) ||
+                (in_array('rate_limit', $triggers, true) && (int)($_SESSION['rv_window']['n'] ?? 0) > 40);
+    if ($highRisk && $v2Site) return 'v2';
+    if ($v3Site)  return 'v3';
+    if ($v2Site)  return 'v2';
+    return 'none';
+}
+
+function captcha_verify_v3(PDO $pdo, string $token, float $minScore = 0.5): bool {
+    $secret = trim(get_cfg($pdo, 'recaptcha_v3_secret'));
+    if (!$secret || !$token) return false;
+    $ch = curl_init('https://www.google.com/recaptcha/api/siteverify');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 8,
+        CURLOPT_POSTFIELDS => http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => client_ip()])]);
+    $res = curl_exec($ch); curl_close($ch);
+    $d = json_decode((string)$res, true);
+    return ($d['success'] ?? false) && (float)($d['score'] ?? 0) >= $minScore;
+}
+
+function captcha_verify_v2(PDO $pdo, string $token): bool {
+    $secret = trim(get_cfg($pdo, 'recaptcha_v2_secret'));
+    if (!$secret || !$token) return false;
+    $ch = curl_init('https://www.google.com/recaptcha/api/siteverify');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 8,
+        CURLOPT_POSTFIELDS => http_build_query(['secret' => $secret, 'response' => $token, 'remoteip' => client_ip()])]);
+    $res = curl_exec($ch); curl_close($ch);
+    $d = json_decode((string)$res, true);
+    return (bool)($d['success'] ?? false);
+}
+
+function captcha_mark_solved(PDO $pdo): void {
+    $_SESSION['captcha_solved_at'] = time();
+    $_SESSION['rv_window'] = ['t' => time(), 'n' => 0]; // reset rate counter
+    $fp = visitor_fingerprint();
+    try {
+        $pdo->prepare("UPDATE visitor_profiles SET captcha_count=captcha_count+1 WHERE fingerprint=?")->execute([$fp]);
+    } catch (Throwable $e) {}
+}
+
+/* Renders CAPTCHA widget HTML + JS to be embedded in any page.
+   Call captcha_should_challenge() first; only render when needed. */
+function captcha_widget_html(PDO $pdo, string $type, string $action = 'download'): string {
+    $v3Site = h(trim(get_cfg($pdo, 'recaptcha_v3_site_key')));
+    $v2Site = h(trim(get_cfg($pdo, 'recaptcha_v2_site_key')));
+    if ($type === 'v3') {
+        return '<script src="https://www.google.com/recaptcha/api.js?render=' . $v3Site . '" async defer></script>'
+            . '<input type="hidden" name="g-recaptcha-response" id="captcha-token-v3">'
+            . '<script>window._captchaAction="' . h($action) . '";window._captchaSiteV3="' . $v3Site . '";</script>';
+    }
+    return '<script src="https://www.google.com/recaptcha/api.js" async defer></script>'
+        . '<div class="g-recaptcha" data-sitekey="' . $v2Site . '" data-callback="onCaptchaSolvedV2"></div>';
 }
 
 function bump_cache_version(PDO $pdo): void {
