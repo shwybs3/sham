@@ -14,7 +14,8 @@ if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
 
-$where  = "WHERE a.status='published'";
+// Only show original (non-translated) apps on homepage — translations are separate pages
+$where  = "WHERE a.status='published' AND (a.parent_id IS NULL OR a.parent_id = 0)";
 $params = [];
 if ($catSlug && $catSlug !== 'all') {
     $where .= " AND c.slug = ?"; $params[] = $catSlug;
@@ -35,8 +36,8 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
 $stmt->execute($params);
 $apps = $stmt->fetchAll();
 
-// Featured carousel: top 6 downloaded published apps
-$featuredApps = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.downloads DESC LIMIT 6")->fetchAll();
+// Featured carousel: top 6 downloaded original (non-translated) apps
+$featuredApps = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' AND (a.parent_id IS NULL OR a.parent_id=0) ORDER BY a.downloads DESC LIMIT 6")->fetchAll();
 $featured = $featuredApps[0] ?? null;
 
 // Latest blog posts for homepage

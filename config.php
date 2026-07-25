@@ -91,6 +91,9 @@ function ensure_schema(PDO $pdo): array {
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS apps (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      parent_id INT NULL COMMENT 'NULL = original; set to parent app id for auto-translated versions',
+      lang_code VARCHAR(10) NOT NULL DEFAULT 'ar' COMMENT 'BCP-47 language code',
+      subdomain_slug VARCHAR(120) NULL COMMENT 'Optional custom subdomain slug (e.g. tiktok-download)',
       name VARCHAR(220) NOT NULL,
       slug VARCHAR(240) NOT NULL UNIQUE,
       category_id INT,
@@ -125,7 +128,9 @@ function ensure_schema(PDO $pdo): array {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_slug (slug),
       INDEX idx_status (status),
-      INDEX idx_category (category_id)
+      INDEX idx_category (category_id),
+      INDEX idx_parent (parent_id),
+      INDEX idx_lang (lang_code)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'apps';
 
@@ -248,6 +253,35 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_date (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'indexnow_log';
+
+    // Additive migrations for apps table (existing installs don't have new columns)
+    $appCols = $pdo->query("SHOW COLUMNS FROM apps")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('parent_id', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN parent_id INT NULL AFTER id");
+    if (!in_array('lang_code', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN lang_code VARCHAR(10) NOT NULL DEFAULT 'ar' AFTER parent_id");
+    if (!in_array('subdomain_slug', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN subdomain_slug VARCHAR(120) NULL AFTER lang_code");
+
+    // Comments: add ip column if missing
+    $commentCols = $pdo->query("SHOW COLUMNS FROM comments")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('ip', $commentCols))
+        @$pdo->exec("ALTER TABLE comments ADD COLUMN ip VARCHAR(45) NULL AFTER status");
+
+    // WebAuthn / biometric login credentials for admin
+    $pdo->exec("CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      admin_id INT NOT NULL,
+      credential_id VARCHAR(500) NOT NULL,
+      public_key TEXT NOT NULL,
+      sign_count INT NOT NULL DEFAULT 0,
+      label VARCHAR(120) NOT NULL DEFAULT 'مفتاح بصمة',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_used_at DATETIME NULL,
+      UNIQUE KEY uq_cred (credential_id(200)),
+      INDEX idx_admin (admin_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'webauthn_credentials';
 
     // Evil — brute-force login tracking per IP
     $pdo->exec("CREATE TABLE IF NOT EXISTS evil_login_attempts (
@@ -616,6 +650,101 @@ function log_security_event(PDO $pdo, string $type, string $severity, string $de
    All checks skip EVIL_ADMIN_IP entirely. Every protection type
    can be toggled independently from admin Settings.
    ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   Multilingual — auto-translate an app into target language via AI
+   ═══════════════════════════════════════════════════════════════ */
+function translate_app(PDO $pdo, array $app, string $targetLang): bool {
+    $langNames = [
+        'en'=>'English','ru'=>'Russian','fr'=>'French','de'=>'German','es'=>'Spanish',
+        'tr'=>'Turkish','id'=>'Indonesian','pt'=>'Portuguese','ur'=>'Urdu','hi'=>'Hindi',
+        'zh'=>'Chinese (Simplified)','ja'=>'Japanese','ko'=>'Korean','it'=>'Italian',
+        'nl'=>'Dutch','fa'=>'Persian','bn'=>'Bengali','th'=>'Thai','vi'=>'Vietnamese',
+    ];
+    $langName = $langNames[$targetLang] ?? $targetLang;
+
+    $prompt = "You are a professional translator. Translate the following Android app metadata from Arabic to {$langName}.
+Return ONLY valid JSON with exactly these keys and no extra commentary.
+
+Input (Arabic):
+- name: " . json_encode($app['name'], JSON_UNESCAPED_UNICODE) . "
+- short_description: " . json_encode($app['short_description'] ?? '', JSON_UNESCAPED_UNICODE) . "
+- long_description: " . json_encode(mb_substr($app['long_description'] ?? '', 0, 3000), JSON_UNESCAPED_UNICODE) . "
+- seo_title: " . json_encode($app['seo_title'] ?? '', JSON_UNESCAPED_UNICODE) . "
+- meta_description: " . json_encode($app['meta_description'] ?? '', JSON_UNESCAPED_UNICODE) . "
+- keywords: " . json_encode($app['keywords'] ?? '', JSON_UNESCAPED_UNICODE) . "
+- whats_new: " . json_encode($app['whats_new'] ?? '', JSON_UNESCAPED_UNICODE) . "
+- features: " . ($app['features'] ?? '[]') . "
+- pros: " . ($app['pros'] ?? '[]') . "
+- cons: " . ($app['cons'] ?? '[]') . "
+- install_steps: " . ($app['install_steps'] ?? '[]') . "
+
+Return JSON:
+{\"name\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"whats_new\":\"\",\"features\":[],\"pros\":[],\"cons\":[],\"install_steps\":[]}";
+
+    $raw = ai_text($pdo, $prompt, 4000, 90);
+    if (!$raw) return false;
+    $data = ai_extract_json($raw);
+    if (!$data || !isset($data['name'])) return false;
+
+    // Build slug for translated version
+    $baseSlug = $app['slug'] . '-' . $targetLang;
+    $slug = $baseSlug;
+    $n = 1;
+    while ($pdo->prepare("SELECT id FROM apps WHERE slug=? AND id!=?")->execute([$slug, $app['id'] ?? 0])
+           && $pdo->query("SELECT COUNT(*) FROM apps WHERE slug='$slug'")->fetchColumn()) {
+        $slug = $baseSlug . '-' . $n++;
+    }
+
+    // Check if translation already exists
+    $existing = $pdo->prepare("SELECT id FROM apps WHERE parent_id=? AND lang_code=?");
+    $existing->execute([$app['id'], $targetLang]);
+    $existId = $existing->fetchColumn();
+
+    $d = [
+        'parent_id'         => (int)$app['id'],
+        'lang_code'         => $targetLang,
+        'name'              => trim($data['name'] ?? $app['name']),
+        'slug'              => $slug,
+        'seo_title'         => trim($data['seo_title'] ?? ''),
+        'meta_description'  => trim($data['meta_description'] ?? ''),
+        'keywords'          => trim($data['keywords'] ?? ''),
+        'short_description' => trim($data['short_description'] ?? ''),
+        'long_description'  => trim($data['long_description'] ?? ''),
+        'whats_new'         => trim($data['whats_new'] ?? ''),
+        'features'          => json_encode($data['features'] ?? [], JSON_UNESCAPED_UNICODE),
+        'pros'              => json_encode($data['pros'] ?? [], JSON_UNESCAPED_UNICODE),
+        'cons'              => json_encode($data['cons'] ?? [], JSON_UNESCAPED_UNICODE),
+        'install_steps'     => json_encode($data['install_steps'] ?? [], JSON_UNESCAPED_UNICODE),
+        'developer'         => $app['developer'] ?? '',
+        'version'           => $app['version'] ?? '',
+        'android_version'   => $app['android_version'] ?? '',
+        'size_mb'           => $app['size_mb'] ?? '',
+        'license'           => $app['license'] ?? 'Free',
+        'package_name'      => $app['package_name'] ?? '',
+        'category_id'       => $app['category_id'] ?? null,
+        'icon_path'         => $app['icon_path'] ?? '',
+        'screenshots'       => $app['screenshots'] ?? '[]',
+        'download_url'      => $app['download_url'] ?? '',
+        'playstore_url'     => $app['playstore_url'] ?? '',
+        'rating'            => (float)($app['rating'] ?? 4.5),
+        'status'            => 'published',
+        'faq'               => $app['faq'] ?? '[]',
+    ];
+
+    try {
+        if ($existId) {
+            $sets = implode(',', array_map(fn($k) => "$k=:$k", array_keys($d)));
+            $d['id'] = $existId;
+            $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
+        } else {
+            $cols = implode(',', array_keys($d));
+            $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
+            $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+        }
+        return true;
+    } catch (Throwable $e) { return false; }
+}
 
 function evil_is_admin_ip(): bool {
     return (($_SERVER['REMOTE_ADDR'] ?? '') === EVIL_ADMIN_IP);

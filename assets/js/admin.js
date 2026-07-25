@@ -415,17 +415,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const status = document.getElementById('playstore-import-status');
       const url = urlInput?.value.trim();
       if (!url) { status.textContent = 'الصق رابط صفحة التطبيق من Google Play أولاً'; return; }
-      status.textContent = '⏳ جاري الاستيراد...';
+      status.textContent = '⏳ جاري الاستيراد الكامل (أيقونة + صور + محتوى AI) — قد يستغرق دقيقة...';
       btnImportPS.disabled = true;
       try {
-        const res = await fetch('admin.php?ajax=fetch_playstore', {
+        const res = await fetch('admin.php?ajax=fetch_playstore_full', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
         });
         const data = await res.json();
         if (!data.success) { status.textContent = '❌ ' + data.error; btnImportPS.disabled = false; return; }
         const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-        // Note: name field is intentionally NOT filled — user manages the title themselves
         set('f-short-desc', data.short_description);
         set('f-long-desc', data.long_description);
         set('f-pkg', data.package_name);
@@ -436,25 +435,50 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.android_version && avField && !avField.value) avField.value = data.android_version;
         const playstoreField = document.querySelector('[name=playstore_url]');
         if (playstoreField) playstoreField.value = data.playstore_url || url;
-        if (data.icon_url) {
+        set('f-whats-new', data.whats_new);
+
+        // Fill AI-generated lists (pros/cons/features/install_steps)
+        ['feat-list','pros-list','cons-list','steps-list'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        const fillFromPs = (id, nm, items) => {
+          const add = window.initDynamicList(id, nm, '');
+          if (add && items) items.forEach(v => add(v));
+        };
+        fillFromPs('feat-list', 'features', data.features);
+        fillFromPs('pros-list', 'pros', data.pros);
+        fillFromPs('cons-list', 'cons', data.cons);
+        fillFromPs('steps-list', 'install_steps', data.install_steps);
+
+        // Icon — prefer locally saved path, fall back to remote URL
+        if (data.icon_path) {
+          const preview = document.getElementById('icon-preview');
+          if (preview) { preview.src = data.icon_path; preview.style.display = 'block'; }
+          let hidden = document.querySelector('[name=icon_saved_import]');
+          if (!hidden) { hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='icon_saved_import'; document.querySelector('form').appendChild(hidden); }
+          hidden.value = data.icon_path;
+        } else if (data.icon_url) {
           const preview = document.getElementById('icon-preview');
           if (preview) { preview.src = data.icon_url; preview.style.display = 'block'; }
-          const hidden = document.querySelector('[name=icon_url_import]');
-          if (!hidden) {
-            const inp = document.createElement('input');
-            inp.type = 'hidden'; inp.name = 'icon_url_import'; inp.value = data.icon_url;
-            document.querySelector('form').appendChild(inp);
-          } else { hidden.value = data.icon_url; }
+          let hidden = document.querySelector('[name=icon_url_import]');
+          if (!hidden) { hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='icon_url_import'; document.querySelector('form').appendChild(hidden); }
+          hidden.value = data.icon_url;
         }
-        // Inject screenshot URLs as hidden inputs + show previews
+
+        // Screenshots — prefer locally saved paths, fall back to remote URLs
         const psInputsBox = document.getElementById('ps-screenshot-inputs');
         const psPreviewBox = document.getElementById('ps-screenshot-preview');
         if (psInputsBox) {
           psInputsBox.innerHTML = '';
           if (psPreviewBox) psPreviewBox.innerHTML = '';
-          (data.screenshot_urls || []).forEach(su => {
+          const savedShots = data.screenshots || [];
+          const remoteUrls = data.screenshot_urls || [];
+          const useLocal = savedShots.length > 0;
+          const shots = useLocal ? savedShots : remoteUrls;
+          const fieldName = useLocal ? 'screenshot_paths_import[]' : 'screenshot_urls_import[]';
+          shots.forEach(su => {
             const inp = document.createElement('input');
-            inp.type = 'hidden'; inp.name = 'screenshot_urls_import[]'; inp.value = su;
+            inp.type = 'hidden'; inp.name = fieldName; inp.value = su;
             psInputsBox.appendChild(inp);
             if (psPreviewBox) {
               const img = document.createElement('img');
@@ -462,15 +486,17 @@ document.addEventListener('DOMContentLoaded', () => {
               psPreviewBox.appendChild(img);
             }
           });
-          if ((data.screenshot_urls || []).length > 0) {
+          if (shots.length > 0) {
             const note = document.createElement('p');
             note.style.cssText = 'font-size:11px;color:var(--muted);margin:4px 0 0;width:100%';
-            note.textContent = `سيتم استيراد ${data.screenshot_urls.length} لقطة شاشة من Play Store عند الحفظ`;
+            note.textContent = `تم استيراد ${shots.length} لقطة شاشة ${useLocal?'وحفظها محلياً':'من Play Store'} — ستُحفظ عند الضغط على حفظ`;
             psPreviewBox && psPreviewBox.appendChild(note);
           }
         }
-        status.textContent = '✅ ' + (data.note || 'تم الاستيراد — راجع الحقول ثم أكمل الباقي بالذكاء الاصطناعي');
-      } catch { status.textContent = '❌ خطأ في الاتصال'; }
+
+        const totalFields = [data.pros?.length,data.cons?.length,data.features?.length,data.install_steps?.length].filter(n=>n>0).length;
+        status.textContent = `✅ ${data.note || 'تم الاستيراد الكامل'} — تم ملء ${totalFields} قسم AI (مميزات/إيجابيات/سلبيات/خطوات)`;
+      } catch(e) { status.textContent = '❌ خطأ في الاتصال: ' + (e.message||''); }
       btnImportPS.disabled = false;
     });
   }

@@ -207,7 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
       current = ((i % slides.length) + slides.length) % slides.length;
       slides[current].classList.add('active');
       thumbs[current].classList.add('active');
-      thumbs[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      // Only scroll the thumb strip horizontally — never scroll the full page vertically
+      thumbs[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       resetProgress();
     }
 
@@ -226,7 +227,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     prevBtn?.addEventListener('click', (e) => { e.preventDefault(); goTo(current - 1); });
     nextBtn?.addEventListener('click', (e) => { e.preventDefault(); goTo(current + 1); });
-    thumbs.forEach((t, i) => t.addEventListener('click', (e) => { e.preventDefault(); goTo(i); }));
+    thumbs.forEach((t, i) => t.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      goTo(i);
+      t.blur(); // prevent browser's focus-scroll from jumping page
+    }));
 
     /* Touch / swipe (RTL: swipe left → next, swipe right → prev) */
     let txStart = 0;

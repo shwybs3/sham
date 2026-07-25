@@ -2,7 +2,8 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
-$slug = trim($_GET['slug'] ?? '');
+$slug    = trim($_GET['slug'] ?? '');
+$reqLang = preg_replace('/[^a-z]/', '', strtolower(trim($_GET['lang'] ?? '')));
 if (!$slug) { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
@@ -10,6 +11,32 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
     WHERE a.slug=? AND a.status='published'");
 $stmt->execute([$slug]);
 $app = $stmt->fetch();
+
+// Multilingual: if ?lang=XX requested, try to load that translation
+$parentApp = null;
+if ($app && $reqLang && $reqLang !== ($app['lang_code'] ?? 'ar')) {
+    $tStmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
+        FROM apps a LEFT JOIN categories c ON a.category_id=c.id
+        WHERE a.parent_id=? AND a.lang_code=? AND a.status='published' LIMIT 1");
+    $tStmt->execute([$app['id'], $reqLang]);
+    $tr = $tStmt->fetch();
+    if ($tr) { $parentApp = $app; $app = $tr; }
+}
+// Also handle: URL is the translation slug directly
+if ($app && !$parentApp && ($app['parent_id'] ?? null)) {
+    $pStmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
+        FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.id=?");
+    $pStmt->execute([$app['parent_id']]);
+    $parentApp = $pStmt->fetch() ?: null;
+}
+// Load all language versions for hreflang + switcher
+$langVersions = [];
+if ($app) {
+    $rootId = $parentApp ? $parentApp['id'] : ($app['parent_id'] ? $app['parent_id'] : $app['id']);
+    $lv = $pdo->prepare("SELECT id, lang_code, slug, name FROM apps WHERE (id=? OR parent_id=?) AND status='published'");
+    $lv->execute([$rootId, $rootId]);
+    foreach ($lv->fetchAll(PDO::FETCH_ASSOC) as $row) $langVersions[$row['lang_code']] = $row;
+}
 
 if (!$app) {
     http_response_code(404);
@@ -244,6 +271,12 @@ function wave(): string {
   ?>
   <meta name="robots" content="<?= $robotsApp ?>">
   <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">
+  <?php foreach ($langVersions as $lc => $lv): ?>
+  <link rel="alternate" hreflang="<?= h($lc) ?>" href="<?= h(app_url($lv['slug'])) ?>">
+  <?php endforeach; ?>
+  <?php if (count($langVersions) > 1): ?>
+  <link rel="alternate" hreflang="x-default" href="<?= h(app_url($parentApp ? $parentApp['slug'] : $app['slug'])) ?>">
+  <?php endif; ?>
   <meta property="og:type" content="product">
   <meta property="og:title" content="<?= h($app['seo_title'] ?: $app['name']) ?>">
   <meta property="og:description" content="<?= h($app['meta_description'] ?: $app['short_description']) ?>">
@@ -298,6 +331,27 @@ function wave(): string {
   $bcItems[] = ['label' => $app['name']];
   render_breadcrumbs($bcItems);
   ?>
+  <!-- Language switcher (shown when translations exist) -->
+  <?php if (count($langVersions) > 1): ?>
+  <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <span style="font-size:12px;color:var(--muted)">🌐 اللغات المتاحة:</span>
+    <?php
+    $langLabels = ['ar'=>'العربية','en'=>'English','ru'=>'Русский','fr'=>'Français','de'=>'Deutsch',
+                   'es'=>'Español','tr'=>'Türkçe','id'=>'Indonesia','pt'=>'Português','ur'=>'اردو',
+                   'hi'=>'हिन्दी','zh'=>'中文','ja'=>'日本語','ko'=>'한국어','it'=>'Italiano',
+                   'nl'=>'Nederlands','fa'=>'فارسی','bn'=>'বাংলা','th'=>'ภาษาไทย','vi'=>'Tiếng Việt'];
+    foreach ($langVersions as $lc => $lv):
+      $active = $lc === ($app['lang_code'] ?? 'ar');
+    ?>
+    <a href="<?= h(app_url($lv['slug'])) ?>"
+       style="padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600;text-decoration:none;
+              <?= $active ? 'background:var(--cyan);color:#fff' : 'background:var(--hover-bg);color:var(--muted);border:1px solid var(--border)' ?>">
+      <?= h($langLabels[$lc] ?? strtoupper($lc)) ?>
+    </a>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
   <!-- Editorial trust badge -->
   <div style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">
     <span class="editorial-badge">
@@ -344,7 +398,13 @@ function wave(): string {
         </div>
 
         <div class="app-hero-actions">
-          <a href="#dl-quick-zone" class="btn-download-hero" onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});return false;">
+          <?php
+          // 3-step funnel: Button 1 → mid-description (Button 2, 5s) → bottom zone (Button 3 → download.php)
+          $hasDlMethod = !empty($app['download_url']) || !empty($app['apk_path']);
+          $hasMidBtn   = $hasDlMethod && mb_strlen($app['long_description'] ?? '') > 600;
+          $btn1Target  = $hasMidBtn ? '#dl-mid-zone' : '#dl-quick-zone';
+          ?>
+          <a href="<?= $btn1Target ?>" class="btn-download-hero" onclick="document.getElementById('<?= ltrim($btn1Target,'#') ?>').scrollIntoView({behavior:'smooth',block:'center'});<?php if($hasMidBtn): ?>if(window._dlMidStart)window._dlMidStart();<?php endif; ?>return false;">
             <?= svgi('download') ?> تحميل مجاني
           </a>
           <?php if (!empty($app['playstore_url'])): ?>
@@ -548,27 +608,87 @@ function wave(): string {
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Description — no .reveal so it loads immediately visible (not hidden on scroll) -->
+  <!-- Description with mid-download button (Button 2, Step 2 of 3-step funnel) -->
   <?php if ($longDescription !== ''): ?>
+  <?php
+  // Split description at natural paragraph boundary near midpoint for Button 2 injection
+  $descFirst = $longDescription; $descSecond = '';
+  if ($hasMidBtn) {
+      $mid = (int)(mb_strlen($longDescription) / 2);
+      // Find paragraph break near midpoint (search ±300 chars)
+      $window = mb_substr($longDescription, max(0,$mid-300), 600);
+      $nlPos = strrpos($window, "\n\n");
+      $splitAt = $nlPos !== false ? max(0,$mid-300) + $nlPos + 2 : $mid;
+      $descFirst  = mb_substr($longDescription, 0, $splitAt);
+      $descSecond = mb_substr($longDescription, $splitAt);
+  }
+  ?>
   <div class="section-box">
     <div class="section-head"><span class="section-title">الوصف</span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85">
-      <?= nl2br(h($longDescription)) ?>
+      <?= nl2br(h($descFirst)) ?>
     </div>
-    <!-- Button 1: inline download anchor in description — scrolls to Button 2 countdown -->
-    <?php if (!empty($app['download_url']) || !empty($app['apk_path'])): ?>
+    <?php if ($hasMidBtn): ?>
+    <!-- Button 2: mid-description, 5s countdown → scrolls to Button 3 (bottom zone) -->
+    <div id="dl-mid-zone" style="margin:24px 0;padding:20px;background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(124,58,237,.07));border:1px solid rgba(37,99,235,.2);border-radius:14px;text-align:center">
+      <p style="margin:0 0 12px;font-size:13px;color:var(--muted)">زر التحميل سيتفعل خلال ثوانٍ قليلة...</p>
+      <button id="dl-mid-btn" disabled
+        style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:50px;
+               font-size:16px;font-weight:800;border:none;cursor:not-allowed;font-family:var(--f-head);
+               background:linear-gradient(135deg,#374151,#4b5563);color:#9ca3af;min-width:240px;justify-content:center">
+        <?= svgi('download') ?>
+        <span id="dl-mid-label">جاري تجهيز الرابط... <span id="dl-mid-count">5</span>ث</span>
+      </button>
+    </div>
+    <div style="color:var(--muted);font-size:14px;line-height:1.85;margin-top:8px">
+      <?= nl2br(h($descSecond)) ?>
+    </div>
+    <?php else: ?>
+    <?php if ($hasDlMethod): ?>
     <div style="margin-top:20px;text-align:center">
-      <a href="#dl-quick-zone"
-         class="btn-download-hero"
-         style="display:inline-flex;font-size:15px;padding:13px 28px;text-decoration:none"
-         onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});
-                  if(window._dlBtn2Countdown) window._dlBtn2Countdown(); return false;">
+      <a href="#dl-quick-zone" class="btn-download-hero" style="display:inline-flex;font-size:15px;padding:13px 28px;text-decoration:none"
+         onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});if(window._dlBtn2Countdown)window._dlBtn2Countdown();return false;">
         <?= svgi('download') ?> تحميل <?= h($app['name']) ?> مجاناً
       </a>
     </div>
     <?php endif; ?>
+    <?php endif; ?>
   </div>
   <?= wave() ?>
+  <?php endif; ?>
+  <?php if ($hasMidBtn): ?>
+  <script>
+  (function(){
+    var btn = document.getElementById('dl-mid-btn');
+    var countEl = document.getElementById('dl-mid-count');
+    var labelEl = document.getElementById('dl-mid-label');
+    var started = false;
+    function start(){
+      if(started) return; started = true;
+      var n = 5;
+      var iv = setInterval(function(){
+        n--;
+        if(countEl) countEl.textContent = n;
+        if(n <= 0){
+          clearInterval(iv);
+          btn.disabled = false;
+          btn.style.cssText = 'display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:50px;font-size:16px;font-weight:800;border:none;cursor:pointer;font-family:var(--f-head);background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;box-shadow:0 6px 20px rgba(37,99,235,.28);min-width:240px;justify-content:center';
+          if(labelEl) labelEl.textContent = '⬇ اضغط لمتابعة التحميل';
+          btn.onclick = function(){
+            document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});
+            if(window._dlBtn2Countdown) window._dlBtn2Countdown();
+          };
+        }
+      }, 1000);
+    }
+    window._dlMidStart = start;
+    // Auto-trigger when scrolled into view
+    if('IntersectionObserver' in window){
+      var obs = new IntersectionObserver(function(e){ if(e[0].isIntersecting){ start(); obs.disconnect(); }},{threshold:0.2});
+      obs.observe(btn);
+    }
+  })();
+  </script>
   <?php endif; ?>
 
   <!-- Features -->
