@@ -371,10 +371,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!data.success) { status.textContent = '❌ ' + data.error; btnImportPS.disabled = false; return; }
         const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-        set('f-name', data.name); set('ai-name', data.name);
+        // Note: name field is intentionally NOT filled — user manages the title themselves
         set('f-short-desc', data.short_description);
         set('f-long-desc', data.long_description);
         set('f-pkg', data.package_name);
+        if (data.developer) set('f-developer', data.developer);
+        const vField = document.querySelector('[name="version"]');
+        if (data.version && vField && !vField.value) vField.value = data.version;
+        const avField = document.querySelector('[name="android_version"]');
+        if (data.android_version && avField && !avField.value) avField.value = data.android_version;
         const playstoreField = document.querySelector('[name=playstore_url]');
         if (playstoreField) playstoreField.value = data.playstore_url || url;
         if (data.icon_url) {
@@ -386,6 +391,29 @@ document.addEventListener('DOMContentLoaded', () => {
             inp.type = 'hidden'; inp.name = 'icon_url_import'; inp.value = data.icon_url;
             document.querySelector('form').appendChild(inp);
           } else { hidden.value = data.icon_url; }
+        }
+        // Inject screenshot URLs as hidden inputs + show previews
+        const psInputsBox = document.getElementById('ps-screenshot-inputs');
+        const psPreviewBox = document.getElementById('ps-screenshot-preview');
+        if (psInputsBox) {
+          psInputsBox.innerHTML = '';
+          if (psPreviewBox) psPreviewBox.innerHTML = '';
+          (data.screenshot_urls || []).forEach(su => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = 'screenshot_urls_import[]'; inp.value = su;
+            psInputsBox.appendChild(inp);
+            if (psPreviewBox) {
+              const img = document.createElement('img');
+              img.src = su; img.style.cssText = 'width:60px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--border-c)';
+              psPreviewBox.appendChild(img);
+            }
+          });
+          if ((data.screenshot_urls || []).length > 0) {
+            const note = document.createElement('p');
+            note.style.cssText = 'font-size:11px;color:var(--muted);margin:4px 0 0;width:100%';
+            note.textContent = `سيتم استيراد ${data.screenshot_urls.length} لقطة شاشة من Play Store عند الحفظ`;
+            psPreviewBox && psPreviewBox.appendChild(note);
+          }
         }
         status.textContent = '✅ ' + (data.note || 'تم الاستيراد — راجع الحقول ثم أكمل الباقي بالذكاء الاصطناعي');
       } catch { status.textContent = '❌ خطأ في الاتصال'; }
@@ -677,6 +705,48 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       bgStatus.textContent = `✅ اكتمل: ${done} تم إنشاؤهم${failed ? `، فشل ${failed}` : ''}`;
       btnBgCreate.disabled = false;
+    });
+  }
+
+  /* ── XHR form submit with progress overlay ── */
+  const appForm = document.getElementById('app-form');
+  if (appForm) {
+    const overlay  = document.getElementById('app-save-overlay');
+    const bar      = document.getElementById('app-save-bar');
+    const statTxt  = document.getElementById('app-save-status');
+    appForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (overlay) { overlay.style.display = 'flex'; }
+      if (bar)     { bar.style.width = '0%'; }
+      if (statTxt) { statTxt.textContent = 'رفع البيانات...'; }
+      const fd = new FormData(appForm);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', appForm.action || window.location.href);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.upload.onprogress = function(ev) {
+        if (ev.lengthComputable && bar) {
+          bar.style.width = Math.min(90, Math.round(ev.loaded / ev.total * 90)) + '%';
+          if (statTxt) statTxt.textContent = 'رفع البيانات... ' + Math.round(ev.loaded / ev.total * 90) + '%';
+        }
+      };
+      xhr.onload = function() {
+        if (bar) bar.style.width = '100%';
+        let data;
+        try { data = JSON.parse(xhr.responseText); } catch(err) { data = null; }
+        if (data && data.ok) {
+          if (statTxt) statTxt.textContent = '✅ تم الحفظ — جاري التحويل...';
+          setTimeout(() => { window.location.href = data.redirect; }, 400);
+        } else {
+          if (overlay) overlay.style.display = 'none';
+          const msg = (data && data.error) ? data.error : 'حدث خطأ، حاول مجدداً';
+          alert(msg);
+        }
+      };
+      xhr.onerror = function() {
+        if (overlay) overlay.style.display = 'none';
+        alert('فشل الاتصال، حاول مجدداً');
+      };
+      xhr.send(fd);
     });
   }
 });

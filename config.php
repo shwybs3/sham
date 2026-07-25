@@ -877,17 +877,53 @@ function fetch_playstore_meta(string $url, int $timeout = 20): ?array {
 
     $pkg = null;
     if (preg_match('#[?&]id=([a-zA-Z0-9_.]+)#', $url, $m)) $pkg = $m[1];
-    // Clean up common Play Store title suffix "- Apps on Google Play"
     if ($title) $title = trim(preg_replace('/\s*[-–]\s*(Apps on Google Play|تطبيقات على Google Play).*$/i', '', $title));
 
+    // Extract developer name from HTML
+    $developer = null;
+    if (preg_match('#/store/apps/developer\?id=[^"\']*["\'][^>]*>([^<]{2,60})</a>#u', $html, $m))
+        $developer = html_entity_decode(trim($m[1]), ENT_QUOTES, 'UTF-8');
+    if (!$developer && preg_match('#"author"\s*:\s*\{\s*"@type"\s*:\s*"[^"]*"\s*,\s*"name"\s*:\s*"([^"]+)"#', $html, $m))
+        $developer = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+
+    // Extract version from JSON-LD or inline data
+    $version = null;
+    if (preg_match('#"softwareVersion"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+    if (!$version && preg_match('#"currentVersionName"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+
+    // Extract Android requirement
+    $androidReq = null;
+    if (preg_match('#"operatingSystem"\s*:\s*"([^"]{1,40})"#', $html, $m)) $androidReq = $m[1];
+
+    // Extract screenshot URLs (src attributes of screenshot img tags from Play Store)
+    $screenshots = [];
+    if (preg_match_all('#\["(https://play-lh\.googleusercontent\.com/[^"]{20,})",[^]]*\[\d+,\d+\]#', $html, $ms)) {
+        foreach (array_unique($ms[1]) as $su) {
+            if (count($screenshots) >= 6) break;
+            // Only portrait/screenshot images (exclude icons, which are square)
+            $screenshots[] = $su;
+        }
+    }
+
     return [
-        'name' => $title,
+        'name'              => $title,
         'short_description' => $desc ? mb_substr($desc, 0, 300) : null,
-        'long_description' => $desc,
-        'icon_url' => $image,
-        'package_name' => $pkg,
-        'playstore_url' => $url,
+        'long_description'  => $desc,
+        'icon_url'          => $image,
+        'package_name'      => $pkg,
+        'playstore_url'     => $url,
+        'developer'         => $developer,
+        'version'           => $version,
+        'android_version'   => $androidReq,
+        'screenshot_urls'   => $screenshots,
     ];
+}
+
+// Returns an absolute URL for a stored media path — handles both relative paths
+// (uploads/icons/...) and absolute CDN URLs stored as fallback when server download fails.
+function media_url(string $path): string {
+    if (!$path) return '';
+    return (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) ? $path : url($path);
 }
 
 // Best-effort: finds the first Play Store app-details link for a free-text search query.
