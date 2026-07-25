@@ -19,6 +19,11 @@ define('ROOT_PATH',    __DIR__);
 define('UPLOAD_PATH',  __DIR__ . '/uploads');
 define('UPLOAD_URL',   SITE_URL . '/uploads');
 
+// ─── Evil security system ───────────────────────────────────────
+// This IP is always exempt from all security checks, view/download
+// counting, and analytics. Edit to match the real admin's IP.
+define('EVIL_ADMIN_IP', '149.86.144.52');
+
 date_default_timezone_set('Asia/Riyadh');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
 
@@ -243,6 +248,33 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_date (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'indexnow_log';
+
+    // Evil — brute-force login tracking per IP
+    $pdo->exec("CREATE TABLE IF NOT EXISTS evil_login_attempts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ip VARCHAR(45) NOT NULL,
+      attempts INT UNSIGNED NOT NULL DEFAULT 0,
+      first_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      locked_until DATETIME NULL,
+      UNIQUE KEY uq_ip (ip),
+      INDEX idx_locked (locked_until)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'evil_login_attempts';
+
+    // Evil — banned IPs (escalating duration per ban_count)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS evil_banned_ips (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ip VARCHAR(45) NOT NULL,
+      reason VARCHAR(300) NOT NULL DEFAULT '',
+      ban_count INT UNSIGNED NOT NULL DEFAULT 1,
+      banned_until DATETIME NULL COMMENT 'NULL = permanent',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_ip (ip),
+      INDEX idx_until (banned_until)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'evil_banned_ips';
 
     // Foreign key (best-effort, ignored if already present or unsupported)
     try {
@@ -577,6 +609,164 @@ function log_security_event(PDO $pdo, string $type, string $severity, string $de
         $pdo->prepare("INSERT INTO security_log (event_type,severity,ip,detail,filename) VALUES (?,?,?,?,?)")
             ->execute([$type, $severity, $ip, mb_substr($detail, 0, 2000), mb_substr($filename, 0, 300)]);
     } catch (Throwable $e) { /* non-critical */ }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EVIL — Security System
+   All checks skip EVIL_ADMIN_IP entirely. Every protection type
+   can be toggled independently from admin Settings.
+   ═══════════════════════════════════════════════════════════════ */
+
+function evil_is_admin_ip(): bool {
+    return (($_SERVER['REMOTE_ADDR'] ?? '') === EVIL_ADMIN_IP);
+}
+
+function evil_is_enabled(PDO $pdo, string $feature = 'master'): bool {
+    if (evil_is_admin_ip()) return false; // exempt
+    $key = $feature === 'master' ? 'evil_enabled' : "evil_{$feature}_enabled";
+    return get_cfg($pdo, $key, '1') === '1' && get_cfg($pdo, 'evil_enabled', '1') === '1';
+}
+
+// Escalating lockout duration (seconds) for admin login brute force.
+// Index = number of TOTAL failed attempts (1-based).
+function evil_login_lockout_secs(int $attempts): int {
+    $schedule = [0, 0, 30, 60, 120, 180, 240, 360, 720, 1800, 3600, 7200, 14400, 28800, 57600, 86400, 172800];
+    $idx = min($attempts, count($schedule) - 1);
+    return $schedule[$idx];
+}
+
+// Returns seconds remaining in current lockout (0 = not locked).
+function evil_login_lockout_remaining(PDO $pdo, string $ip): int {
+    if (evil_is_admin_ip()) return 0;
+    try {
+        $row = $pdo->prepare("SELECT locked_until FROM evil_login_attempts WHERE ip=? LIMIT 1");
+        $row->execute([$ip]);
+        $r = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$r || !$r['locked_until']) return 0;
+        $remaining = strtotime($r['locked_until']) - time();
+        return $remaining > 0 ? $remaining : 0;
+    } catch (Throwable $e) { return 0; }
+}
+
+// Record a failed login attempt. Returns seconds to wait (0 if no lockout yet).
+function evil_record_login_fail(PDO $pdo, string $ip): int {
+    if (evil_is_admin_ip()) return 0;
+    try {
+        $pdo->prepare("INSERT INTO evil_login_attempts (ip, attempts, first_attempt_at, last_attempt_at)
+            VALUES (?, 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE attempts=attempts+1, last_attempt_at=NOW()")->execute([$ip]);
+        $row = $pdo->prepare("SELECT attempts FROM evil_login_attempts WHERE ip=? LIMIT 1");
+        $row->execute([$ip]);
+        $attempts = (int)($row->fetchColumn() ?: 1);
+        $lockSecs = evil_login_lockout_secs($attempts);
+        if ($lockSecs > 0) {
+            $until = date('Y-m-d H:i:s', time() + $lockSecs);
+            $pdo->prepare("UPDATE evil_login_attempts SET locked_until=? WHERE ip=?")->execute([$until, $ip]);
+            // After many failures, also ban the IP temporarily
+            if ($attempts >= 6) {
+                evil_ban_ip($pdo, $ip, 'brute_force_login', false);
+            }
+        }
+        log_security_event($pdo, 'login_fail', $attempts >= 3 ? 'critical' : 'warning',
+            "Failed login attempt #$attempts from $ip");
+        return $lockSecs;
+    } catch (Throwable $e) { return 0; }
+}
+
+// Clear login attempts on successful login.
+function evil_clear_login_fail(PDO $pdo, string $ip): void {
+    try {
+        $pdo->prepare("DELETE FROM evil_login_attempts WHERE ip=?")->execute([$ip]);
+    } catch (Throwable $e) {}
+}
+
+// Ban an IP. $permanent=true for no expiry; otherwise uses escalating duration.
+function evil_ban_ip(PDO $pdo, string $ip, string $reason = '', bool $permanent = false): void {
+    if (evil_is_admin_ip()) return;
+    try {
+        // Get current ban count for this IP
+        $row = $pdo->prepare("SELECT ban_count FROM evil_banned_ips WHERE ip=? LIMIT 1");
+        $row->execute([$ip]);
+        $banCount = (int)($row->fetchColumn() ?: 0) + 1;
+
+        $durations = [0, 10, 30, 120, 1440, 10080, 0]; // minutes: 10min,30min,2h,24h,7d,permanent
+        $durMin = $permanent ? 0 : ($durations[min($banCount, count($durations) - 1)] ?? 0);
+        $until = ($durMin > 0) ? date('Y-m-d H:i:s', time() + $durMin * 60) : null;
+
+        $pdo->prepare("INSERT INTO evil_banned_ips (ip, reason, ban_count, banned_until, created_at)
+            VALUES (?, ?, 1, ?, NOW())
+            ON DUPLICATE KEY UPDATE ban_count=ban_count+1, reason=?, banned_until=?, updated_at=NOW()")
+            ->execute([$ip, $reason, $until, $reason, $until]);
+
+        log_security_event($pdo, 'ip_banned', 'critical',
+            "IP $ip banned" . ($until ? " until $until" : " permanently") . " (reason: $reason, ban #$banCount)");
+    } catch (Throwable $e) {}
+}
+
+// Unban an IP (admin action).
+function evil_unban_ip(PDO $pdo, string $ip): void {
+    try { $pdo->prepare("DELETE FROM evil_banned_ips WHERE ip=?")->execute([$ip]); } catch (Throwable $e) {}
+}
+
+// Check if current IP is banned. Calls die() with 403 if banned (unless admin IP or Evil disabled).
+function evil_check_ban(PDO $pdo): void {
+    if (evil_is_admin_ip()) return;
+    if (!evil_is_enabled($pdo, 'ban')) return;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!$ip) return;
+    try {
+        $row = $pdo->prepare("SELECT banned_until FROM evil_banned_ips WHERE ip=? LIMIT 1");
+        $row->execute([$ip]);
+        $r = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$r) return;
+        $until = $r['banned_until'];
+        if ($until !== null && strtotime($until) < time()) {
+            // Expired — clean up silently
+            $pdo->prepare("DELETE FROM evil_banned_ips WHERE ip=? AND banned_until IS NOT NULL AND banned_until < NOW()")
+                ->execute([$ip]);
+            return;
+        }
+        $msg = $until ? 'تم حظر عنوان IP الخاص بك مؤقتاً.' : 'تم حظر عنوان IP الخاص بك.';
+        http_response_code(403);
+        header('Retry-After: 600');
+        die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+        <title>محظور</title>
+        <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+        .box{max-width:440px;padding:40px 32px;border:1px solid rgba(239,68,68,.3);border-radius:16px;background:rgba(239,68,68,.05)}
+        h1{color:#ef4444;margin:0 0 12px;font-size:22px}p{color:#94a3b8;margin:0 0 8px;font-size:14px}
+        code{background:#1e293b;color:#38bdf8;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:4px}
+        </style></head><body><div class="box">
+        <h1>🛡️ محظور</h1><p>' . h($msg) . '</p>
+        ' . ($until ? '<p>ينتهي الحظر: <code>' . h($until) . '</code></p>' : '') . '
+        </div></body></html>');
+    } catch (Throwable $e) {}
+}
+
+// Rate-limit non-admin requests by IP — for public pages (not login).
+// Returns true if OK to proceed, false if rate-limited.
+function evil_rate_check(PDO $pdo, string $action, int $maxPerMinute = 60): bool {
+    if (evil_is_admin_ip()) return true;
+    if (!evil_is_enabled($pdo, 'ratelimit')) return true;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!$ip) return true;
+    try {
+        $count = (int)$pdo->prepare("SELECT COUNT(*) FROM security_log
+            WHERE ip=? AND event_type=? AND created_at > (NOW() - INTERVAL 1 MINUTE)")
+            ->execute([$ip, "rate_$action"]) ? $pdo->query("SELECT FOUND_ROWS()")->fetchColumn() : 0;
+        // Simpler: just count from security_log inserted this minute
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM security_log WHERE ip=? AND event_type=? AND created_at > (NOW() - INTERVAL 1 MINUTE)");
+        $stmt->execute([$ip, "rate_$action"]);
+        $count = (int)$stmt->fetchColumn();
+        if ($count >= $maxPerMinute) {
+            log_security_event($pdo, "rate_$action", 'warning', "Rate limit hit: $action ($count/min) from $ip");
+            return false;
+        }
+        // Record this request lightly (only if near limit to reduce noise)
+        if ($count >= (int)($maxPerMinute * 0.8)) {
+            log_security_event($pdo, "rate_$action", 'info', "Rate near limit: $action ($count/min) from $ip");
+        }
+        return true;
+    } catch (Throwable $e) { return true; }
 }
 
 function bump_cache_version(PDO $pdo): void {

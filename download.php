@@ -2,6 +2,9 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+// Block banned IPs before any work (admin IP is auto-exempt inside evil_check_ban)
+evil_check_ban($pdo);
+
 $slug   = trim($_GET['slug'] ?? '');
 $id     = (int)($_GET['id'] ?? 0);
 $mirror = (int)($_GET['m'] ?? 1);
@@ -21,8 +24,10 @@ if (!$app) {
     exit;
 }
 
-$pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
-$pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
+if (!evil_is_admin_ip()) {
+    $pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
+    $pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
+}
 
 $archivedVersion = null;
 if (!empty($_GET['ver'])) {

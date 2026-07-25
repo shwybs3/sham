@@ -5,7 +5,7 @@
 require_once __DIR__ . '/config.php';
 
 $id = (int)($_GET['id'] ?? 0);
-if ($id > 0) {
+if ($id > 0 && !evil_is_admin_ip()) {
     $updated = $pdo->prepare("UPDATE apps SET views=views+1 WHERE id=? AND status='published'");
     $updated->execute([$id]);
     if ($updated->rowCount() > 0) {

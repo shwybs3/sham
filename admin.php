@@ -2035,18 +2035,40 @@ $error  = '';
 
 // Login action
 if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+    // Check lockout before even touching credentials (skip admin IP)
+    if (!evil_is_admin_ip()) {
+        $remaining = evil_login_lockout_remaining($pdo, $clientIp);
+        if ($remaining > 0) {
+            $error = "تم تجاوز الحد الأقصى لمحاولات الدخول. يُرجى الانتظار $remaining ثانية.";
+            goto login_done;
+        }
+    }
     if (!csrf_check()) { $error = 'جلسة غير صالحة'; }
     else {
         $stmt = $pdo->prepare("SELECT * FROM admins WHERE username=?");
         $stmt->execute([trim($_POST['username'] ?? '')]);
         $admin = $stmt->fetch();
         if ($admin && password_verify($_POST['password'] ?? '', $admin['password_hash'])) {
+            evil_clear_login_fail($pdo, $clientIp);
             $_SESSION['admin_id'] = $admin['id'];
             $_SESSION['admin_user'] = $admin['username'];
+            log_security_event($pdo, 'login_success', 'info', "Admin login from $clientIp");
             header('Location: admin.php'); exit;
         }
-        $error = 'اسم المستخدم أو كلمة المرور غير صحيحة';
+        // Wrong credentials — record failure and get lockout
+        if (!evil_is_admin_ip()) {
+            $lockSecs = evil_record_login_fail($pdo, $clientIp);
+            if ($lockSecs > 0) {
+                $error = "محاولات خاطئة متعددة. يُرجى الانتظار $lockSecs ثانية قبل المحاولة مجدداً.";
+            } else {
+                $error = 'اسم المستخدم أو كلمة المرور غير صحيحة';
+            }
+        } else {
+            $error = 'اسم المستخدم أو كلمة المرور غير صحيحة';
+        }
     }
+    login_done:;
 }
 
 // Logout
@@ -2942,6 +2964,55 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_security_log' && is_admin()
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Evil — unban IP
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'evil_unban' && is_admin()) {
+    header('Content-Type: application/json');
+    $ip = trim($_POST['ip'] ?? '');
+    if (!$ip) { echo json_encode(['ok'=>false,'error'=>'IP مطلوب']); exit; }
+    evil_unban_ip($pdo, $ip);
+    log_security_event($pdo, 'ip_unbanned', 'info', "Admin manually unbanned IP: $ip");
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Evil — clear login attempts for IP
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'evil_clear_attempts' && is_admin()) {
+    header('Content-Type: application/json');
+    $ip = trim($_POST['ip'] ?? '');
+    if (!$ip) { echo json_encode(['ok'=>false,'error'=>'IP مطلوب']); exit; }
+    evil_clear_login_fail($pdo, $ip);
+    log_security_event($pdo, 'attempts_cleared', 'info', "Admin cleared login attempts for IP: $ip");
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Evil — toggle setting
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'evil_toggle' && is_admin()) {
+    header('Content-Type: application/json');
+    $key = preg_replace('/[^a-z0-9_]/', '', $_POST['key'] ?? '');
+    $val = ($_POST['val'] ?? '') === '1' ? '1' : '0';
+    if (!str_starts_with($key, 'evil_')) { echo json_encode(['ok'=>false,'error'=>'مفتاح غير صالح']); exit; }
+    set_cfg($pdo, $key, $val);
+    echo json_encode(['ok'=>true,'val'=>$val]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Evil — clear old security log
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'evil_clear_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $pdo->exec("DELETE FROM security_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)");
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: File Manager — list directory
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_list' && is_admin()) {
@@ -3084,6 +3155,7 @@ $navLinks = [
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'indexnow-log'   => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
     'indexing-tools' => ['label'=>'أدوات الفهرسة', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7'],
+    'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -6417,6 +6489,207 @@ $logStats = [
   };
   loadLog(0);
 })();
+</script>
+<?php endif; ?>
+
+<?php
+/* ─────────────── EVIL SECURITY SYSTEM ─────────────── */
+if ($page === 'evil'):
+// Fetch stats
+$totalBanned   = (int)$pdo->query("SELECT COUNT(*) FROM evil_banned_ips WHERE (banned_until IS NULL OR banned_until > NOW())")->fetchColumn();
+$totalAttempts = (int)$pdo->query("SELECT COUNT(*) FROM evil_login_attempts")->fetchColumn();
+$recentEvents  = $pdo->query("SELECT * FROM security_log ORDER BY created_at DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+$bannedIps     = $pdo->query("SELECT * FROM evil_banned_ips WHERE (banned_until IS NULL OR banned_until > NOW()) ORDER BY updated_at DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+$lockedIps     = $pdo->query("SELECT * FROM evil_login_attempts WHERE locked_until > NOW() ORDER BY last_attempt_at DESC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
+
+// Evil settings
+$evilEnabled   = get_cfg($pdo,'evil_enabled','1') === '1';
+$bruteEnabled  = get_cfg($pdo,'evil_brute_enabled','1') === '1';
+$banEnabled    = get_cfg($pdo,'evil_ban_enabled','1') === '1';
+$rateEnabled   = get_cfg($pdo,'evil_ratelimit_enabled','1') === '1';
+$logEnabled    = get_cfg($pdo,'evil_log_enabled','1') === '1';
+
+$sevColors = ['info'=>'#64748b','warning'=>'#f59e0b','critical'=>'#ef4444'];
+?>
+<style>
+.evil-hero{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);border-radius:14px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;gap:20px}
+.evil-hero-icon{font-size:48px;line-height:1}
+.evil-hero-title{font-size:22px;font-weight:800;color:#f8fafc;margin:0 0 4px}
+.evil-hero-sub{font-size:13px;color:#94a3b8}
+.evil-master-toggle{margin-right:auto;display:flex;align-items:center;gap:12px}
+.evil-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;margin-bottom:24px}
+.evil-stat{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;text-align:center}
+.evil-stat-num{font-size:28px;font-weight:800;color:var(--cyan);display:block;font-variant-numeric:tabular-nums}
+.evil-stat-label{font-size:11px;color:var(--muted);margin-top:4px}
+.evil-toggles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px}
+.evil-toggle-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:16px 18px;display:flex;align-items:center;gap:12px}
+.evil-toggle-label{flex:1;font-size:13px;font-weight:600}
+.evil-toggle-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.evil-table{width:100%;border-collapse:collapse;font-size:12px}
+.evil-table th{background:var(--hover-bg);padding:8px 12px;text-align:right;font-weight:600;border-bottom:1px solid var(--border)}
+.evil-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.evil-table tr:last-child td{border-bottom:none}
+.evil-table tr:hover td{background:var(--hover-bg)}
+.sev-badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700}
+.sev-info{background:rgba(100,116,139,.15);color:#94a3b8}
+.sev-warning{background:rgba(245,158,11,.15);color:#f59e0b}
+.sev-critical{background:rgba(239,68,68,.15);color:#ef4444}
+.toggle-switch{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;border-radius:99px;background:#475569;cursor:pointer;transition:.2s}
+.toggle-slider::before{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;left:3px;top:3px;transition:.2s}
+.toggle-switch input:checked + .toggle-slider{background:var(--cyan)}
+.toggle-switch input:checked + .toggle-slider::before{transform:translateX(18px)}
+</style>
+
+<!-- Hero -->
+<div class="evil-hero">
+  <div class="evil-hero-icon">🛡️</div>
+  <div>
+    <div class="evil-hero-title">نظام Evil للحماية</div>
+    <div class="evil-hero-sub">حماية شاملة من الهجمات الإلكترونية · IP <?= h(EVIL_ADMIN_IP) ?> معفى من جميع الفحوصات</div>
+  </div>
+  <div class="evil-master-toggle">
+    <span style="font-size:13px;font-weight:600;color:#f8fafc">تفعيل النظام</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="evil-master-toggle" <?= $evilEnabled ? 'checked' : '' ?> onchange="evilToggle('evil_enabled',this.checked?'1':'0')">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="evil-stats">
+  <div class="evil-stat"><span class="evil-stat-num"><?= $totalBanned ?></span><div class="evil-stat-label">IP محظور</div></div>
+  <div class="evil-stat"><span class="evil-stat-num"><?= $totalAttempts ?></span><div class="evil-stat-label">محاولات تسجيل دخول</div></div>
+  <div class="evil-stat"><span class="evil-stat-num"><?= count($lockedIps) ?></span><div class="evil-stat-label">IP مقفل حالياً</div></div>
+  <div class="evil-stat"><span class="evil-stat-num"><?= count($recentEvents) ?></span><div class="evil-stat-label">أحداث الأمان (آخر 100)</div></div>
+  <?php
+  $critCount = count(array_filter($recentEvents, fn($r) => $r['severity'] === 'critical'));
+  $warnCount = count(array_filter($recentEvents, fn($r) => $r['severity'] === 'warning'));
+  ?>
+  <div class="evil-stat"><span class="evil-stat-num" style="color:#ef4444"><?= $critCount ?></span><div class="evil-stat-label">أحداث حرجة</div></div>
+  <div class="evil-stat"><span class="evil-stat-num" style="color:#f59e0b"><?= $warnCount ?></span><div class="evil-stat-label">تحذيرات</div></div>
+</div>
+
+<!-- Protection toggles -->
+<h3 style="margin:0 0 12px;font-size:14px;font-weight:700">أنواع الحماية</h3>
+<div class="evil-toggles">
+  <?php
+  $protections = [
+    ['key'=>'evil_brute_enabled','label'=>'الحماية من تخمين كلمة المرور','sub'=>'قفل تلقائي بعد 2 محاولة خاطئة','val'=>$bruteEnabled],
+    ['key'=>'evil_ban_enabled','label'=>'حظر IPs المشبوهة','sub'=>'حظر تصاعدي: 10 دق → 30 دق → دائم','val'=>$banEnabled],
+    ['key'=>'evil_ratelimit_enabled','label'=>'تحديد معدل الطلبات','sub'=>'حماية من الإغراق وDDoS','val'=>$rateEnabled],
+    ['key'=>'evil_log_enabled','label'=>'سجل الأحداث','sub'=>'تسجيل كل الأحداث الأمنية','val'=>$logEnabled],
+  ];
+  foreach ($protections as $p): ?>
+  <div class="evil-toggle-card">
+    <div style="flex:1">
+      <div class="evil-toggle-label"><?= h($p['label']) ?></div>
+      <div class="evil-toggle-sub"><?= h($p['sub']) ?></div>
+    </div>
+    <label class="toggle-switch">
+      <input type="checkbox" <?= $p['val'] ? 'checked' : '' ?> onchange="evilToggle('<?= h($p['key']) ?>',this.checked?'1':'0')">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+  <?php endforeach; ?>
+</div>
+
+<!-- Locked IPs (login attempts) -->
+<?php if ($lockedIps): ?>
+<h3 style="margin:0 0 12px;font-size:14px;font-weight:700">محاولات مقفلة حالياً</h3>
+<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:auto;margin-bottom:24px">
+  <table class="evil-table">
+    <thead><tr><th>IP</th><th>المحاولات</th><th>آخر محاولة</th><th>مقفل حتى</th><th>إجراء</th></tr></thead>
+    <tbody>
+    <?php foreach ($lockedIps as $r): ?>
+    <tr>
+      <td><code style="direction:ltr;display:inline-block"><?= h($r['ip']) ?></code></td>
+      <td><span style="font-weight:700;color:var(--danger)"><?= (int)$r['attempts'] ?></span></td>
+      <td style="color:var(--muted)"><?= h($r['last_attempt_at']) ?></td>
+      <td style="color:#f59e0b"><?= h($r['locked_until']) ?></td>
+      <td><button class="btn btn-xs" onclick="evilClearAttempts('<?= h($r['ip']) ?>')">إلغاء القفل</button></td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+
+<!-- Banned IPs -->
+<?php if ($bannedIps): ?>
+<h3 style="margin:0 0 12px;font-size:14px;font-weight:700">IPs المحظورة</h3>
+<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:auto;margin-bottom:24px">
+  <table class="evil-table">
+    <thead><tr><th>IP</th><th>السبب</th><th>عدد الحظر</th><th>ينتهي</th><th>إجراء</th></tr></thead>
+    <tbody>
+    <?php foreach ($bannedIps as $r): ?>
+    <tr>
+      <td><code style="direction:ltr;display:inline-block"><?= h($r['ip']) ?></code></td>
+      <td style="color:var(--muted)"><?= h($r['reason']) ?></td>
+      <td style="font-weight:700;color:var(--danger)"><?= (int)$r['ban_count'] ?></td>
+      <td style="color:<?= $r['banned_until'] ? '#f59e0b' : '#ef4444' ?>"><?= $r['banned_until'] ? h($r['banned_until']) : 'نهائي' ?></td>
+      <td><button class="btn btn-xs" onclick="evilUnban('<?= h($r['ip']) ?>')">رفع الحظر</button></td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php else: ?>
+<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:24px;text-align:center;color:var(--muted);margin-bottom:24px">لا توجد IPs محظورة حالياً ✅</div>
+<?php endif; ?>
+
+<!-- Security log -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <h3 style="margin:0;font-size:14px;font-weight:700">سجل الأحداث الأمنية</h3>
+  <button class="btn btn-sm" onclick="evilClearLog()">🗑️ حذف السجلات القديمة (&gt;7 أيام)</button>
+</div>
+<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;overflow:auto">
+  <table class="evil-table">
+    <thead><tr><th>التوقيت</th><th>النوع</th><th>الخطورة</th><th>IP</th><th>التفاصيل</th></tr></thead>
+    <tbody>
+    <?php foreach ($recentEvents as $r): ?>
+    <tr>
+      <td style="white-space:nowrap;color:var(--muted);font-size:11px"><?= h(substr($r['created_at'],0,16)) ?></td>
+      <td><code style="font-size:11px"><?= h($r['event_type']) ?></code></td>
+      <td><span class="sev-badge sev-<?= h($r['severity']) ?>"><?= h($r['severity']) ?></span></td>
+      <td><code style="font-size:10px;direction:ltr;display:inline-block"><?= h($r['ip'] ?? '') ?></code></td>
+      <td style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)" title="<?= h($r['detail'] ?? '') ?>"><?= h(mb_substr($r['detail'] ?? '',0,120)) ?></td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if (!$recentEvents): ?>
+    <tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">لا توجد أحداث مسجّلة</td></tr>
+    <?php endif; ?>
+    </tbody>
+  </table>
+</div>
+
+<script>
+async function evilToggle(key, val) {
+  const fd = new FormData(); fd.append('key', key); fd.append('val', val);
+  const r = await fetch('admin.php?ajax=evil_toggle', {method:'POST', body:fd});
+  const d = await r.json();
+  if (!d.ok) alert('فشل تحديث الإعداد');
+}
+async function evilUnban(ip) {
+  if (!confirm('رفع الحظر عن ' + ip + '؟')) return;
+  const fd = new FormData(); fd.append('ip', ip);
+  const r = await fetch('admin.php?ajax=evil_unban', {method:'POST', body:fd});
+  const d = await r.json();
+  if (d.ok) location.reload(); else alert('فشل رفع الحظر');
+}
+async function evilClearAttempts(ip) {
+  const fd = new FormData(); fd.append('ip', ip);
+  const r = await fetch('admin.php?ajax=evil_clear_attempts', {method:'POST', body:fd});
+  const d = await r.json();
+  if (d.ok) location.reload(); else alert('فشل إلغاء القفل');
+}
+async function evilClearLog() {
+  if (!confirm('حذف أحداث الأمان الأقدم من 7 أيام؟')) return;
+  await fetch('admin.php?ajax=evil_clear_log', {method:'POST'});
+  location.reload();
+}
 </script>
 <?php endif; ?>
 
