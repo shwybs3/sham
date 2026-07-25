@@ -2435,6 +2435,43 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_create' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Toggle auto IndexNow on/off
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'toggle_auto_indexnow' && is_admin()) {
+    header('Content-Type: application/json');
+    $current = get_cfg($pdo, 'auto_indexnow_enabled', '1');
+    $newVal  = ($current === '1') ? '0' : '1';
+    set_cfg($pdo, 'auto_indexnow_enabled', $newVal);
+    echo json_encode(['ok' => true, 'enabled' => $newVal === '1'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: IndexNow log (paginated)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'indexnow_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $offset  = max(0, (int)($_GET['offset'] ?? 0));
+    $limit   = 50;
+    $filter  = $_GET['filter'] ?? 'all';
+    $where   = ($filter !== 'all') ? "WHERE status = " . $pdo->quote($filter) : '';
+    $total   = (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log $where")->fetchColumn();
+    $rows    = $pdo->query("SELECT id,url,engine,status,http_code,reason,created_at FROM indexnow_log $where ORDER BY id DESC LIMIT $limit OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['ok' => true, 'rows' => $rows, 'total' => $total, 'offset' => $offset, 'limit' => $limit], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Clear IndexNow log
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_indexnow_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $pdo->exec("DELETE FROM indexnow_log WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Mass re-index all published apps via IndexNow
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
@@ -2451,13 +2488,28 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
         $urlList[] = url($p);
     $urlList = array_values(array_unique(array_filter($urlList)));
     $pinged = 0;
+    $logStatus = 'skipped'; $logCode = null; $logReason = 'مفتاح IndexNow غير مضبوط';
     if ($key && $urlList) {
         $body = json_encode(['host'=>$host,'key'=>$key,'urlList'=>$urlList]);
         $ictx = stream_context_create(['http'=>['method'=>'POST','timeout'=>10,'ignore_errors'=>true,
             'header'=>"Content-Type: application/json\r\nContent-Length: ".strlen($body),'content'=>$body]]);
-        @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        $resp = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
+        $httpHeaders = $http_response_header ?? [];
+        $logCode = 0;
+        foreach ($httpHeaders as $hh) {
+            if (preg_match('#HTTP/\S+\s+(\d+)#', $hh, $hm)) { $logCode = (int)$hm[1]; break; }
+        }
+        $logStatus = in_array($logCode, [200, 202], true) ? 'success' : 'failed';
+        $logReason = ($logStatus === 'failed') ? "HTTP {$logCode}" . ($resp ? ': ' . mb_substr(trim($resp), 0, 200) : '') : null;
         $pinged = count($urlList);
+        // Also ping Bing IndexNow
+        @file_get_contents('https://www.bing.com/indexnow', false, $ictx);
     }
+    // Log one summary entry for the bulk ping
+    try {
+        $pdo->prepare("INSERT INTO indexnow_log (url,engine,status,http_code,reason) VALUES (?,?,?,?,?)")
+            ->execute([rtrim(SITE_URL,'/').'/', 'indexnow-bulk', $logStatus, $logCode ?: null, $logReason]);
+    } catch (Throwable $le) {}
     $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
     log_security_event($pdo,'reindex_all','info',"Mass re-index: {$pinged} URLs submitted to IndexNow + sitemap ping");
     echo json_encode(['ok'=>true,'pinged'=>$pinged,'total'=>count($apps)], JSON_UNESCAPED_UNICODE);
@@ -2615,6 +2667,7 @@ $navLinks = [
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
+    'indexnow-log' => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
@@ -5494,6 +5547,165 @@ elseif ($page === 'deploy'):
 })();
 </script>
 
+<?php endif; ?>
+
+<?php if ($page === 'indexnow-log'): ?>
+<?php
+$autoEnabled = get_cfg($pdo, 'auto_indexnow_enabled', '1') === '1';
+$indexNowKey = get_cfg($pdo, 'indexnow_key', '');
+$logStats = [
+    'total'   => (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log")->fetchColumn(),
+    'success' => (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log WHERE status='success'")->fetchColumn(),
+    'failed'  => (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log WHERE status='failed'")->fetchColumn(),
+    'skipped' => (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log WHERE status='skipped'")->fetchColumn(),
+    'today'   => (int)$pdo->query("SELECT COUNT(*) FROM indexnow_log WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
+    'last'    => $pdo->query("SELECT MAX(created_at) FROM indexnow_log WHERE status='success'")->fetchColumn() ?: null,
+];
+?>
+<div class="admin-page-title">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+  سجل الفهرسة IndexNow
+</div>
+<div class="section-box" style="margin-bottom:20px">
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:13px;color:var(--muted)">الإرسال التلقائي:</span>
+        <button id="btn-toggle-auto" onclick="toggleAuto()" class="<?= $autoEnabled ? 'btn-primary' : 'btn-outline' ?>"
+          style="min-width:100px;font-size:12px;padding:7px 16px;display:flex;align-items:center;gap:7px">
+          <?php if ($autoEnabled): ?>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4V8z" fill="currentColor"/></svg>تشغيل
+          <?php else: ?>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M10 15V9m4 6V9"/></svg>إيقاف
+          <?php endif; ?>
+        </button>
+      </div>
+      <button id="btn-send-all" onclick="sendAll()" class="btn-primary" style="font-size:12px;padding:7px 18px;display:flex;align-items:center;gap:7px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        إرسال كل الروابط الآن
+      </button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <select id="log-filter" onchange="loadLog(0)" class="form-input" style="min-width:140px;font-size:12px;padding:7px 12px">
+        <option value="all">كل الحالات</option>
+        <option value="success">ناجح</option>
+        <option value="failed">فاشل</option>
+        <option value="skipped">متخطى</option>
+      </select>
+      <button onclick="clearOldLog()" class="btn-outline" style="font-size:11px;padding:7px 14px">حذف سجلات +30 يوم</button>
+    </div>
+  </div>
+  <div id="action-msg" style="display:none;margin-top:12px;border-radius:8px;padding:12px 16px;font-size:13px"></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px">
+  <div class="stat-card"><div class="stat-num"><?= number_format($logStats['total']) ?></div><div class="stat-label">إجمالي</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= number_format($logStats['success']) ?></div><div class="stat-label">ناجح</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--danger)"><?= number_format($logStats['failed']) ?></div><div class="stat-label">فاشل</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--warning)"><?= number_format($logStats['skipped']) ?></div><div class="stat-label">متخطى</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--cyan)"><?= number_format($logStats['today']) ?></div><div class="stat-label">اليوم</div></div>
+  <?php if ($indexNowKey): ?>
+  <div class="stat-card"><div style="font-size:11px;font-family:var(--f-mono);color:var(--cyan);word-break:break-all"><?= h(mb_substr($indexNowKey,0,16)) ?>…</div><div class="stat-label">المفتاح</div></div>
+  <?php else: ?>
+  <div class="stat-card" style="border-color:rgba(239,68,68,.3)"><div style="font-size:11px;color:var(--danger);font-weight:700">غير مضبوط</div><div class="stat-label"><a href="admin.php?page=settings" style="color:var(--danger)">أضف المفتاح</a></div></div>
+  <?php endif; ?>
+</div>
+<?php if ($logStats['last']): ?>
+<div style="font-size:12px;color:var(--muted);margin-bottom:20px">آخر نجاح: <strong style="color:var(--success)"><?= h($logStats['last']) ?></strong></div>
+<?php endif; ?>
+<div class="section-box">
+  <div style="font-size:14px;font-weight:700;color:var(--white);margin-bottom:14px">📋 سجل العمليات</div>
+  <div id="log-loading" style="text-align:center;padding:30px;color:var(--muted)">⏳ جارٍ التحميل…</div>
+  <div id="log-wrap" style="display:none;overflow-x:auto">
+    <table class="admin-table">
+      <thead><tr><th>الحالة</th><th>الرابط</th><th>المحرك</th><th>HTTP</th><th>السبب</th><th>الوقت</th></tr></thead>
+      <tbody id="log-body"></tbody>
+    </table>
+    <div id="log-pagination" style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px;flex-wrap:wrap"></div>
+  </div>
+  <div id="log-empty" style="display:none;text-align:center;padding:40px;color:var(--muted)">لا توجد سجلات</div>
+</div>
+<script>
+(function(){
+  var currentOffset = 0;
+  function showMsg(msg,ok){
+    var el=document.getElementById('action-msg');
+    el.style.cssText='display:block;margin-top:12px;border-radius:8px;padding:12px 16px;font-size:13px;background:'+(ok?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)')+';border:1px solid '+(ok?'rgba(34,197,94,.25)':'rgba(239,68,68,.25)')+';color:'+(ok?'#4ade80':'#f87171');
+    el.textContent=msg;
+    if(ok) setTimeout(function(){el.style.display='none';},5000);
+  }
+  window.toggleAuto=async function(){
+    var btn=document.getElementById('btn-toggle-auto'); btn.disabled=true;
+    try{
+      var d=await(await fetch('admin.php?ajax=toggle_auto_indexnow',{method:'POST'})).json();
+      if(d.ok){
+        showMsg(d.enabled?'✅ الإرسال التلقائي مُفعَّل':'⏸ الإرسال التلقائي موقوف',d.enabled);
+        btn.className=d.enabled?'btn-primary':'btn-outline';
+        btn.style.cssText='min-width:100px;font-size:12px;padding:7px 16px;display:flex;align-items:center;gap:7px';
+        btn.innerHTML=d.enabled
+          ?'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4V8z" fill="currentColor"/></svg>تشغيل'
+          :'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M10 15V9m4 6V9"/></svg>إيقاف';
+      }
+    }catch(e){showMsg('❌ خطأ في الاتصال',false);}
+    btn.disabled=false;
+  };
+  window.sendAll=async function(){
+    var btn=document.getElementById('btn-send-all'); btn.disabled=true; btn.textContent='⏳ جارٍ الإرسال…';
+    try{
+      var d=await(await fetch('admin.php?ajax=reindex_all',{method:'POST'})).json();
+      if(d.ok){showMsg('✅ تم الإرسال! '+d.pinged+' رابط → IndexNow + Bing + Google.',true); setTimeout(function(){loadLog(0);},1500);}
+      else showMsg('⚠️ '+(d.error||'خطأ'),false);
+    }catch(e){showMsg('❌ خطأ في الاتصال',false);}
+    btn.disabled=false;
+    btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>إرسال كل الروابط الآن';
+  };
+  window.clearOldLog=async function(){
+    if(!confirm('حذف سجلات أكثر من 30 يوم؟'))return;
+    await fetch('admin.php?ajax=clear_indexnow_log',{method:'POST'});
+    showMsg('✅ تم الحذف',true); setTimeout(function(){location.reload();},800);
+  };
+  window.loadLog=async function(offset){
+    currentOffset=offset||0;
+    var filter=document.getElementById('log-filter').value;
+    document.getElementById('log-loading').style.display='block';
+    document.getElementById('log-wrap').style.display='none';
+    document.getElementById('log-empty').style.display='none';
+    try{
+      var d=await(await fetch('admin.php?ajax=indexnow_log&offset='+currentOffset+'&filter='+encodeURIComponent(filter))).json();
+      document.getElementById('log-loading').style.display='none';
+      if(!d.ok||!d.rows.length){document.getElementById('log-empty').style.display='block';return;}
+      document.getElementById('log-wrap').style.display='block';
+      var badges={
+        success:'<span style="background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">ناجح</span>',
+        failed:'<span style="background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">فاشل</span>',
+        skipped:'<span style="background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.3);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">متخطى</span>',
+      };
+      function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+      document.getElementById('log-body').innerHTML=d.rows.map(function(row){
+        var cl=(row.http_code>=200&&row.http_code<300)?'var(--success)':'var(--danger)';
+        return '<tr>'
+          +'<td>'+(badges[row.status]||esc(row.status))+'</td>'
+          +'<td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left;font-family:var(--f-mono);font-size:11px" title="'+esc(row.url)+'">'+esc((row.url||'').replace(/^https?:\/\/[^\/]+/,''))+'</td>'
+          +'<td style="font-size:11px;color:var(--muted)">'+esc(row.engine)+'</td>'
+          +'<td style="font-size:12px;font-family:var(--f-mono);text-align:center;color:'+cl+'">'+esc(row.http_code||'—')+'</td>'
+          +'<td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(row.reason||'')+'">'+esc(row.reason||'—')+'</td>'
+          +'<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+esc(row.created_at)+'</td>'
+          +'</tr>';
+      }).join('');
+      var total=d.total,limit=d.limit,pages=Math.ceil(total/limit),cur=Math.floor(currentOffset/limit);
+      var pag='<span style="font-size:12px;color:var(--muted)">'+total+' سجل</span>';
+      if(cur>0) pag+='<button onclick="loadLog('+(Math.max(0,currentOffset-limit))+')" class="btn-outline" style="font-size:11px;padding:5px 12px">السابق</button>';
+      pag+='<span style="font-size:12px;color:var(--muted)">'+( cur+1)+' / '+pages+'</span>';
+      if(currentOffset+limit<total) pag+='<button onclick="loadLog('+(currentOffset+limit)+')" class="btn-outline" style="font-size:11px;padding:5px 12px">التالي</button>';
+      document.getElementById('log-pagination').innerHTML=pag;
+    }catch(e){
+      document.getElementById('log-loading').style.display='none';
+      document.getElementById('log-empty').textContent='❌ خطأ في تحميل السجل';
+      document.getElementById('log-empty').style.display='block';
+    }
+  };
+  loadLog(0);
+})();
+</script>
 <?php endif; ?>
 
 <?php if ($page === 'security'): ?>
