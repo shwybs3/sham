@@ -98,6 +98,103 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate AI data — SSE streaming progress log
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_sse' && is_admin()) {
+    @set_time_limit(180);
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+    if (ob_get_level()) ob_end_clean();
+
+    function sse_gen(string $event, array $data): void {
+        echo "event: {$event}\ndata: " . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+        if (ob_get_level()) ob_flush();
+        flush();
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    if (!$name) { sse_gen('error', ['msg' => 'اسم التطبيق مطلوب']); exit; }
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) { sse_gen('error', ['msg' => 'لم يتم إضافة مفتاح OpenRouter. أضفه من الإعدادات.']); exit; }
+
+    $models = build_model_rotation($pdo);
+    $seoStandards = seo_prompt_standards();
+    $prompt = <<<P
+أنت خبير تسويق تطبيقات أندرويد وكاتب محتوى SEO محترف متخصص في متاجر التطبيقات العربية. التطبيق: "{$name}"
+
+{$seoStandards}
+
+- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات.
+
+أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
+{"name":"","seo_title":"","meta_description":"","keywords":"","short_description":"","long_description":"","developer":"","version":"","android_version":"","size_mb":"","license":"Free","package_name":"","rating":4.5,"whats_new":"","features":[],"pros":[],"cons":[],"install_steps":[],"faq":[]}
+P;
+
+    $trace   = [];
+    $attempts = 0;
+    $maxAttempts = 8;
+    $timeout = 45;
+    $result  = null;
+
+    sse_gen('log', ['msg' => "🚀 بدء التوليد لـ \"{$name}\"…", 'type' => 'info']);
+    sse_gen('log', ['msg' => 'عدد النماذج المتاحة: ' . count($models) . ' | عدد المفاتيح: ' . count($keys), 'type' => 'info']);
+
+    outer: foreach ($keys as $kIdx => $key) {
+        foreach ($models as $mIdx => $model) {
+            if ($attempts >= $maxAttempts) break 2;
+            $attempts++;
+            $mId = is_array($model) ? ($model['id'] ?? 'unknown') : $model;
+            sse_gen('log', ['msg' => "🔄 محاولة {$attempts}/{$maxAttempts}: {$mId}…", 'type' => 'trying', 'model' => $mId]);
+            $r = openrouter_call($key, $mId, $prompt, $timeout, 3000);
+            $trace[] = ['model' => $mId, 'key_tail' => substr($key, -4), 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'http' => $r['http'] ?? 0];
+            if ($r['ok']) {
+                sse_gen('log', ['msg' => "✅ نجح الموديل: {$mId}", 'type' => 'success', 'model' => $mId]);
+                $result = $r;
+                $result['model'] = $mId;
+                break 2;
+            } else {
+                $errMsg = $r['error'] ?? ('HTTP ' . ($r['http'] ?? '?'));
+                sse_gen('log', ['msg' => "❌ فشل {$mId}: {$errMsg}", 'type' => 'fail', 'model' => $mId]);
+            }
+        }
+    }
+
+    if (!$result) {
+        $diagMsg = openrouter_diagnose_trace($trace);
+        sse_gen('log', ['msg' => "⛔ فشلت كل المحاولات: {$diagMsg}", 'type' => 'error']);
+        sse_gen('error', ['msg' => $diagMsg, 'trace' => $trace]);
+        exit;
+    }
+
+    sse_gen('log', ['msg' => '📝 جارٍ تحليل JSON المُستلَم…', 'type' => 'info']);
+    $data = ai_extract_json($result['content']);
+
+    if (!$data) {
+        // Retry with strict JSON prompt
+        sse_gen('log', ['msg' => '⚠️ الإجابة ليست JSON صالح — إعادة المحاولة بتعليمات أدق…', 'type' => 'warn']);
+        $strictPrompt = "أجب بـJSON فقط بدون أي نص قبله أو بعده. الطلب:\n\n" . $prompt;
+        $retry = openrouter_call($key ?? $keys[0], $result['model'], $strictPrompt, $timeout, 3000);
+        $data  = $retry['ok'] ? ai_extract_json($retry['content']) : null;
+        if ($data) {
+            sse_gen('log', ['msg' => '✅ نجحت إعادة المحاولة', 'type' => 'success']);
+        } else {
+            sse_gen('log', ['msg' => '⛔ فشل تحليل JSON في المحاولتين', 'type' => 'error']);
+            sse_gen('error', ['msg' => 'لم يُرجع الذكاء الاصطناعي JSON صالح — جرّب تغيير الموديل في الإعدادات.']);
+            exit;
+        }
+    }
+
+    $data['success']    = true;
+    $data['used_model'] = $result['model'];
+    sse_gen('log', ['msg' => "🎉 اكتمل التوليد بنجاح باستخدام: {$result['model']}", 'type' => 'done']);
+    sse_gen('done', $data);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Bulk-content regeneration for ONE existing app
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_regen_one' && is_admin()) {
@@ -5456,8 +5553,20 @@ elseif ($page === 'settings'): ?>
     </p>
     <div class="form-group">
       <label class="form-label">مفتاح IndexNow (API Key)</label>
-      <input class="form-input" type="text" name="indexnow_key" value="<?= h(get_cfg($pdo,'indexnow_key')) ?>" placeholder="مثال: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
-      <div class="form-hint">بعد الحفظ، تأكد من إنشاء ملف <code><?= h(get_cfg($pdo,'indexnow_key') ?: 'المفتاح') ?>.txt</code> في جذر الموقع يحتوي على المفتاح فقط (متطلب IndexNow لإثبات ملكية الموقع).</div>
+      <input class="form-input" type="text" id="indexnow_key" name="indexnow_key" value="<?= h(get_cfg($pdo,'indexnow_key')) ?>" placeholder="مثال: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">
+        <strong>كيف تحصل على مفتاح؟</strong> — اصنع مفتاحاً عشوائياً بنفسك: أي نص 20 إلى 128 حرفاً من الأحرف والأرقام والشرطة (مثال: <code>yassota-<?= substr(md5(uniqid()), 0, 20) ?></code>).
+        بعد الحفظ تُنشئ لك الصفحة ملف <code><?php $ik = get_cfg($pdo,'indexnow_key'); echo h($ik ?: 'مفتاحك') ?>.txt</code> في جذر الموقع تلقائياً (يُرسله IndexNow لمحركات البحث كإثبات ملكية).
+        اقرأ الشرح الكامل بـ <a href="https://www.indexnow.org/documentation" target="_blank" style="color:var(--cyan)">indexnow.org/documentation</a>
+        | <a href="https://www.bing.com/indexnow" target="_blank" style="color:var(--cyan)">Bing IndexNow</a>.
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-c)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" name="auto_indexnow_enabled" value="1" <?= get_cfg($pdo,'auto_indexnow_enabled','1')==='1'?'checked':'' ?>>
+        <span>إرسال IndexNow تلقائياً عند نشر أو تحديث أي تطبيق</span>
+      </label>
+      <div class="form-hint">يمكنك أيضاً تشغيل/إيقاف هذا من صفحة <a href="admin.php?page=indexnow-log" style="color:var(--cyan)">سجل الفهرسة</a> أو الضغط على "إرسال كل الروابط" لفهرسة دفعة واحدة.</div>
     </div>
   </div>
 

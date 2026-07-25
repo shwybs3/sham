@@ -174,47 +174,101 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiStatus = document.getElementById('ai-status');
 
   if (aiBtn) {
-    aiBtn.addEventListener('click', async () => {
+    // Ensure log panel exists
+    let aiLogPanel = document.getElementById('ai-gen-log');
+    if (!aiLogPanel) {
+      aiLogPanel = document.createElement('div');
+      aiLogPanel.id = 'ai-gen-log';
+      aiLogPanel.style.cssText = 'display:none;margin-top:12px;background:#0d1117;border:1px solid rgba(99,130,190,.2);border-radius:10px;padding:12px 14px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:12px;color:#8b949e';
+      aiStatus.parentNode?.insertBefore(aiLogPanel, aiStatus.nextSibling);
+    }
+    function addLog(msg, type) {
+      const colors = {info:'#8b949e', trying:'#79c0ff', success:'#56d364', fail:'#f85149', warn:'#e3b341', done:'#56d364', error:'#f85149'};
+      const line = document.createElement('div');
+      line.style.cssText = 'padding:2px 0;border-bottom:1px solid rgba(99,130,190,.1);color:' + (colors[type] || '#8b949e');
+      line.textContent = msg;
+      aiLogPanel.appendChild(line);
+      aiLogPanel.scrollTop = aiLogPanel.scrollHeight;
+    }
+
+    function fillAiData(data) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+      set('f-name', data.name); set('f-seo-title', data.seo_title);
+      set('f-meta-desc', data.meta_description); set('f-keywords', data.keywords);
+      set('f-short-desc', data.short_description); set('f-long-desc', data.long_description);
+      set('f-developer', data.developer); set('f-version', data.version);
+      set('f-android', data.android_version); set('f-size', data.size_mb);
+      set('f-license', data.license); set('f-pkg', data.package_name);
+      set('f-rating', data.rating); set('f-whats-new', data.whats_new);
+      ['feat-list','pros-list','cons-list','steps-list','faq-list'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.innerHTML = '';
+      });
+      const fill = (id, nm, items, second) => {
+        const add = window.initDynamicList(id, nm, '', second);
+        if (add && items) items.forEach(v => second ? add(v.q, v.a) : add(v));
+      };
+      fill('feat-list', 'features', data.features);
+      fill('pros-list', 'pros', data.pros);
+      fill('cons-list', 'cons', data.cons);
+      fill('steps-list', 'install_steps', data.install_steps);
+      fill('faq-list', 'faq', data.faq, true);
+    }
+
+    aiBtn.addEventListener('click', () => {
       const name = aiNameInput?.value.trim();
       if (!name) { aiStatus.textContent = 'اكتب اسم التطبيق أولاً'; return; }
-      aiStatus.textContent = '⏳ جاري التوليد...';
+      aiStatus.textContent = '⏳ جارٍ التوليد…';
+      aiStatus.style.color = '';
       aiBtn.disabled = true;
+      aiLogPanel.innerHTML = '';
+      aiLogPanel.style.display = 'block';
 
-      try {
-        const res = await fetch('admin.php?ajax=generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
-        });
-        const data = await res.json();
-        if (!data.success) { aiStatus.textContent = '❌ ' + data.error; return; }
-
-        const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-        set('f-name', data.name); set('f-seo-title', data.seo_title);
-        set('f-meta-desc', data.meta_description); set('f-keywords', data.keywords);
-        set('f-short-desc', data.short_description); set('f-long-desc', data.long_description);
-        set('f-developer', data.developer); set('f-version', data.version);
-        set('f-android', data.android_version); set('f-size', data.size_mb);
-        set('f-license', data.license); set('f-pkg', data.package_name);
-        set('f-rating', data.rating); set('f-whats-new', data.whats_new);
-
-        // Refill dynamic lists
-        ['feat-list', 'pros-list', 'cons-list', 'steps-list', 'faq-list'].forEach(id => {
-          const el = document.getElementById(id); if (el) el.innerHTML = '';
-        });
-        const fill = (id, name, items, second) => {
-          const add = window.initDynamicList(id, name, '', second);
-          if (add && items) items.forEach(v => second ? add(v.q, v.a) : add(v));
-        };
-        fill('feat-list', 'features', data.features);
-        fill('pros-list', 'pros', data.pros);
-        fill('cons-list', 'cons', data.cons);
-        fill('steps-list', 'install_steps', data.install_steps);
-        fill('faq-list', 'faq', data.faq, true);
-
-        aiStatus.textContent = '✅ تم التوليد بنجاح — راجع وعدّل ثم احفظ';
-      } catch { aiStatus.textContent = '❌ خطأ في الاتصال'; }
-      aiBtn.disabled = false;
+      fetch('admin.php?ajax=generate_sse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+      }).then(res => {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        function read() {
+          reader.read().then(({ done, value }) => {
+            if (done) { aiBtn.disabled = false; return; }
+            buf += decoder.decode(value, { stream: true });
+            const parts = buf.split('\n\n');
+            buf = parts.pop();
+            parts.forEach(block => {
+              let eventType = 'message', dataStr = '';
+              block.split('\n').forEach(l => {
+                if (l.startsWith('event: ')) eventType = l.slice(7).trim();
+                if (l.startsWith('data: ')) dataStr = l.slice(6).trim();
+              });
+              if (!dataStr) return;
+              let d; try { d = JSON.parse(dataStr); } catch(e) { return; }
+              if (eventType === 'log') {
+                addLog(d.msg, d.type);
+              } else if (eventType === 'done') {
+                addLog(d.msg || '🎉 اكتمل', 'done');
+                fillAiData(d);
+                aiStatus.textContent = '✅ تم التوليد بنجاح — موديل: ' + (d.used_model || '?');
+                aiStatus.style.color = 'var(--success)';
+                aiBtn.disabled = false;
+              } else if (eventType === 'error') {
+                addLog('⛔ ' + (d.msg || 'خطأ'), 'error');
+                aiStatus.textContent = '❌ ' + (d.msg || 'فشل التوليد');
+                aiStatus.style.color = 'var(--danger)';
+                aiBtn.disabled = false;
+              }
+            });
+            read();
+          });
+        }
+        read();
+      }).catch(() => {
+        aiStatus.textContent = '❌ خطأ في الاتصال';
+        aiStatus.style.color = 'var(--danger)';
+        aiBtn.disabled = false;
+      });
     });
   }
 
