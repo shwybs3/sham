@@ -7,24 +7,62 @@
    of each page hand-rolling its own copy.
    ═══════════════════════════════════════════════ */
 
-function partial_icon(string $name): string {
+function partial_icon(string $name, int $size = 0): string {
+    // Default sizes per icon group
+    $s = $size ?: 16;
     $icons = [
-        'download' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>',
-        'search'   => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
-        'menu'     => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>',
-        'star'     => '<svg width="13" height="13" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
-        'apps'     => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg>',
-        'games'    => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 12h4m-2-2v4"/><circle cx="17" cy="10" r="1" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><path d="M2 8a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8z"/></svg>',
-        'info'     => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>',
-        'home'     => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg>',
-        'developer'=> '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0114 0v1"/></svg>',
-        'trending' => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 6l-9.5 9.5-5-5L2 18"/><path d="M16 6h6v6"/></svg>',
-        'clock'    => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
-        'arrow-r'  => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>',
-        'external' => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
-        'article'  => '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>',
-        'mail'     => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+        /* ── Navigation & UI ── */
+        'download'    => "<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2'><path d='M12 3v12m0 0l-4-4m4 4l4-4'/><path d='M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2'/></svg>",
+        'search'      => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>",
+        'menu'        => "<svg width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 12h18M3 6h18M3 18h18'/></svg>",
+        'home'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9'/></svg>",
+        'info'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4m0-4h.01'/></svg>",
+        'arrow-r'     => "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M15 18l-6-6 6-6'/></svg>",
+        'external'    => "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6'/><polyline points='15,3 21,3 21,9'/><line x1='10' y1='14' x2='21' y2='3'/></svg>",
+        'chevron-d'   => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>",
+        'chevron-l'   => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M15 18l-6-6 6-6'/></svg>",
+        'chevron-r'   => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M9 18l6-6-6-6'/></svg>",
+        'close'       => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'><path d='M18 6L6 18M6 6l12 12'/></svg>",
+
+        /* ── Content types ── */
+        'apps'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='2' y='2' width='9' height='9' rx='2'/><rect x='13' y='2' width='9' height='9' rx='2'/><rect x='2' y='13' width='9' height='9' rx='2'/><rect x='13' y='13' width='9' height='9' rx='2'/></svg>",
+        'games'       => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M6 12h4m-2-2v4'/><circle cx='17' cy='10' r='1' fill='currentColor'/><circle cx='17' cy='14' r='1' fill='currentColor'/><path d='M2 8a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8z'/></svg>",
+        'article'     => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8'><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M7 8h10M7 12h10M7 16h6'/></svg>",
+        'mail'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='2' y='4' width='20' height='16' rx='2'/><polyline points='22,4 12,13 2,4'/></svg>",
+        'developer'   => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='8' r='4'/><path d='M4 21v-1a7 7 0 0114 0v1'/></svg>",
+
+        /* ── Metrics & status ── */
+        'star'        => "<svg width='13' height='13' viewBox='0 0 24 24' fill='#fbbf24' stroke='#fbbf24' stroke-width='1'><path d='M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'/></svg>",
+        'star-lg'     => "<svg width='20' height='20' viewBox='0 0 24 24' fill='#fbbf24' stroke='#fbbf24' stroke-width='1'><path d='M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'/></svg>",
+        'trending'    => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M22 6l-9.5 9.5-5-5L2 18'/><path d='M16 6h6v6'/></svg>",
+        'clock'       => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M12 6v6l4 2'/></svg>",
+
+        /* ── Emoji replacements (professional equivalents) ── */
+        'smartphone'  => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='5' y='2' width='14' height='20' rx='2'/><path d='M12 18h.01'/></svg>",
+        'folder'      => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z'/></svg>",
+        'pen'         => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 20h9'/><path d='M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z'/></svg>",
+        'check-circle'=> "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M22 11.08V12a10 10 0 11-5.93-9.14'/><polyline points='22,4 12,14.01 9,11.01'/></svg>",
+        'lock'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='3' y='11' width='18' height='11' rx='2'/><path d='M7 11V7a5 5 0 0110 0v4'/></svg>",
+        'calendar'    => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><rect x='3' y='4' width='18' height='18' rx='2'/><path d='M16 2v4M8 2v4M3 10h18'/></svg>",
+        'globe'       => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10'/><path d='M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z'/></svg>",
+        'refresh'     => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 11-2.12-9.36L23 10'/></svg>",
+        'shield'      => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>",
+        'award'       => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='8' r='6'/><path d='M15.477 12.89L17 22l-5-3-5 3 1.523-9.11'/></svg>",
+        'zap'         => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg>",
+        'layers'      => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>",
+        'code'        => "<svg width='{$s}' height='{$s}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><polyline points='16 18 22 12 16 6'/><polyline points='8 6 2 12 8 18'/></svg>",
     ];
+
+    /* Emoji → icon automatic mapping */
+    $emojiMap = [
+        '📱'=>'smartphone','🗂️'=>'folder','✍️'=>'pen','⭐'=>'star-lg',
+        '✅'=>'check-circle','🔒'=>'lock','🔐'=>'lock','📅'=>'calendar',
+        '🌐'=>'globe','🔄'=>'refresh','🔥'=>'trending','🛡️'=>'shield',
+        '🏆'=>'award','⚡'=>'zap','📂'=>'folder','🗃️'=>'folder',
+        '💡'=>'zap','🎯'=>'award',
+    ];
+    if (isset($emojiMap[$name])) $name = $emojiMap[$name];
+
     return $icons[$name] ?? '';
 }
 

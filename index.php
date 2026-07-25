@@ -35,8 +35,9 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
 $stmt->execute($params);
 $apps = $stmt->fetchAll();
 
-// Featured: most downloaded published app
-$featured = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.downloads DESC LIMIT 1")->fetch();
+// Featured carousel: top 6 downloaded published apps
+$featuredApps = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.downloads DESC LIMIT 6")->fetchAll();
+$featured = $featuredApps[0] ?? null;
 
 // Latest blog posts for homepage
 $latestPosts = [];
@@ -154,24 +155,46 @@ $orgSchema = json_encode([
   <?= partial_wave() ?>
   <?php endif; ?>
 
-  <!-- ── Featured App (editorial pick) ── -->
-  <?php if ($featured && !$search && !$catSlug): ?>
-  <a href="<?= h(app_url($featured['slug'])) ?>" class="featured-card reveal" data-hardnav="1">
-    <?php if ($featured['icon_path']): ?>
-      <img src="<?= h(url($featured['icon_path'])) ?>" alt="<?= h($featured['name']) ?>" class="featured-icon">
-    <?php else: ?>
-      <div class="featured-icon" style="background:linear-gradient(135deg,#e8ecf3,#dde3ec)"></div>
-    <?php endif; ?>
-    <div class="featured-info">
-      <div class="app-card-cat">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="1" style="vertical-align:-2px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        اختيار المحرر — <?= h($featured['cat_name'] ?? 'تطبيق') ?>
-      </div>
-      <div class="featured-name"><?= h($featured['name']) ?></div>
-      <div class="featured-desc"><?= h(mb_strimwidth($featured['short_description'] ?? '', 0, 130, '...')) ?></div>
-      <span class="btn-outline"><?= partial_icon('info') ?> اقرأ المراجعة الكاملة</span>
+  <!-- ── Featured Apps Carousel (editor's picks) ── -->
+  <?php if (!empty($featuredApps) && !$search && !$catSlug): ?>
+  <div class="featured-carousel reveal" id="featured-carousel">
+    <div class="fc-stage" id="fc-stage">
+      <?php foreach ($featuredApps as $fi => $fa): ?>
+      <a href="<?= h(app_url($fa['slug'])) ?>" class="fc-slide<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" data-hardnav="1">
+        <div class="fc-icon-wrap">
+          <?php if ($fa['icon_path']): ?>
+            <img src="<?= h(url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" class="fc-icon" loading="lazy">
+          <?php else: ?>
+            <div class="fc-icon fc-icon-blank"><?= partial_icon('smartphone', 32) ?></div>
+          <?php endif; ?>
+        </div>
+        <div class="fc-info">
+          <div class="fc-badge"><?= partial_icon('award', 12) ?> اختيار المحرر<?= $fa['cat_name'] ? ' — ' . h($fa['cat_name']) : '' ?></div>
+          <div class="fc-name"><?= h($fa['name']) ?></div>
+          <div class="fc-desc"><?= h(mb_strimwidth($fa['short_description'] ?? '', 0, 120, '...')) ?></div>
+          <span class="fc-cta"><?= partial_icon('info') ?> اقرأ المراجعة الكاملة</span>
+        </div>
+      </a>
+      <?php endforeach; ?>
+      <button class="fc-arrow fc-prev" id="fc-prev" aria-label="السابق"><?= partial_icon('chevron-r', 18) ?></button>
+      <button class="fc-arrow fc-next" id="fc-next" aria-label="التالي"><?= partial_icon('chevron-l', 18) ?></button>
     </div>
-  </a>
+    <div class="fc-footer">
+      <div class="fc-progress-bar"><div class="fc-progress-fill" id="fc-progress"></div></div>
+      <div class="fc-thumbs" id="fc-thumbs">
+        <?php foreach ($featuredApps as $fi => $fa): ?>
+        <button class="fc-thumb<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" aria-label="<?= h($fa['name']) ?>">
+          <?php if ($fa['icon_path']): ?>
+            <img src="<?= h(url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" loading="lazy">
+          <?php else: ?>
+            <div class="fc-thumb-blank"></div>
+          <?php endif; ?>
+          <span class="fc-thumb-name"><?= h(mb_strimwidth($fa['name'], 0, 12, '…')) ?></span>
+        </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
   <?= partial_wave() ?>
   <?php endif; ?>
 
@@ -233,13 +256,13 @@ $orgSchema = json_encode([
     <div class="section-head reveal"><span class="section-title">لماذا yassota؟</span></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px" class="reveal">
       <?php foreach ([
-        ['icon'=>'✍️','title'=>'محتوى تحريري','desc'=>'كل مراجعة تطبيق تُكتب بعناية وتُدقَّق من فريق المحررين قبل النشر.'],
-        ['icon'=>'🔄','title'=>'تحديث يومي','desc'=>'نتابع الإصدارات الجديدة يومياً ونحدّث معلومات كل تطبيق فور صدور تحديث.'],
-        ['icon'=>'🔒','title'=>'روابط آمنة','desc'=>'نتحقق من كل رابط تحميل ونشير بوضوح لمصدره سواء Play Store أو مصدر رسمي آخر.'],
-        ['icon'=>'🌐','title'=>'محتوى عربي','desc'=>'المراجعات مكتوبة بالعربية خصيصاً للمستخدم العربي مع الأخذ بعين الاعتبار خصوصيات المنطقة.'],
+        ['icon'=>'pen',     'title'=>'محتوى تحريري','desc'=>'كل مراجعة تطبيق تُكتب بعناية وتُدقَّق من فريق المحررين قبل النشر.'],
+        ['icon'=>'refresh', 'title'=>'تحديث يومي',  'desc'=>'نتابع الإصدارات الجديدة يومياً ونحدّث معلومات كل تطبيق فور صدور تحديث.'],
+        ['icon'=>'lock',    'title'=>'روابط آمنة',   'desc'=>'نتحقق من كل رابط تحميل ونشير بوضوح لمصدره سواء Play Store أو مصدر رسمي آخر.'],
+        ['icon'=>'globe',   'title'=>'محتوى عربي',   'desc'=>'المراجعات مكتوبة بالعربية خصيصاً للمستخدم العربي مع الأخذ بعين الاعتبار خصوصيات المنطقة.'],
       ] as $v): ?>
       <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:20px">
-        <div style="font-size:28px;margin-bottom:10px"><?= $v['icon'] ?></div>
+        <div class="feature-icon-wrap"><?= partial_icon($v['icon'], 22) ?></div>
         <div style="font-weight:800;font-size:14px;color:var(--white);margin-bottom:6px"><?= $v['title'] ?></div>
         <p style="font-size:12px;color:var(--muted);line-height:1.7;margin:0"><?= $v['desc'] ?></p>
       </div>
@@ -260,14 +283,14 @@ $orgSchema = json_encode([
     <!-- Stats row -->
     <div class="stats-row reveal">
       <?php foreach ([
-          [$totalApps,  'تطبيق مراجَع',   '📱'],
-          [$totalCats,  'تصنيف',            '🗂️'],
-          [$totalBlog,  'مقالة ومراجعة',   '✍️'],
-          [date('Y') - 2023, 'سنوات خبرة', '⭐'],
+          [$totalApps,       'تطبيق مراجَع',  'smartphone'],
+          [$totalCats,       'تصنيف',           'folder'],
+          [$totalBlog,       'مقالة ومراجعة',  'pen'],
+          [date('Y') - 2023, 'سنوات خبرة',     'award'],
       ] as [$num, $lbl, $ic]): ?>
       <div class="stat-cell reveal">
         <span class="stat-cell-num"><?= $num > 0 ? number_format($num) : '1+' ?></span>
-        <div style="font-size:16px;margin-bottom:3px"><?= $ic ?></div>
+        <div style="margin-bottom:4px;color:var(--cyan)"><?= partial_icon($ic, 18) ?></div>
         <div class="stat-cell-label"><?= $lbl ?></div>
       </div>
       <?php endforeach; ?>
@@ -283,14 +306,15 @@ $orgSchema = json_encode([
       <!-- Trust badges -->
       <div class="trust-row">
         <?php foreach ([
-            ['✅ محتوى تحريري موثوق'],
-            ['🔒 روابط مفحوصة وآمنة'],
-            ['📅 تحديث يومي'],
-            ['🌐 محتوى عربي متخصص'],
-            ['⭐ تقييمات حقيقية'],
-        ] as [$t]): ?>
+            ['icon'=>'check-circle', 'text'=>'محتوى تحريري موثوق'],
+            ['icon'=>'lock',         'text'=>'روابط مفحوصة وآمنة'],
+            ['icon'=>'calendar',     'text'=>'تحديث يومي'],
+            ['icon'=>'globe',        'text'=>'محتوى عربي متخصص'],
+            ['icon'=>'award',        'text'=>'تقييمات حقيقية'],
+        ] as $t): ?>
         <div class="trust-item">
-          <span style="font-size:13px;color:var(--muted)"><?= $t ?></span>
+          <span style="color:var(--cyan);line-height:1;flex-shrink:0"><?= partial_icon($t['icon'], 14) ?></span>
+          <span style="font-size:13px;color:var(--muted)"><?= $t['text'] ?></span>
         </div>
         <?php endforeach; ?>
       </div>
