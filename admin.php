@@ -497,7 +497,7 @@ P;
     $data = clean_utf8_deep($data);
 
     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
-        ->execute([trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''), $id]);
+        ->execute([seo_title_clamp(trim($data['seo_title'] ?? '')), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''), $id]);
     echo json_encode(['success'=>true,'name'=>$app['name']], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -1021,7 +1021,7 @@ P;
             if (!$sd) { $result = 'فشل التوليد'; break; }
             $sd = clean_utf8_deep($sd);
             $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
-                ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
+                ->execute([seo_title_clamp(trim($sd['seo_title']??'')), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
             $result = "تم تحديث SEO للتطبيق #{$id} — {$a['name']}";
             break;
 
@@ -1044,7 +1044,7 @@ P;
                 if ($sd) {
                     $sd = clean_utf8_deep($sd);
                     $pdo->prepare("UPDATE apps SET seo_title=?, meta_description=?, keywords=? WHERE id=?")
-                        ->execute([trim($sd['seo_title']??''), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
+                        ->execute([seo_title_clamp(trim($sd['seo_title']??'')), trim($sd['meta_description']??''), trim($sd['keywords']??''), $id]);
                     $done++;
                 }
             }
@@ -1311,7 +1311,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
                 if (!empty($aiData['install_steps'])) $installSteps = array_values((array)$aiData['install_steps']);
                 if (!empty($aiData['faq']))           $faq          = array_values((array)$aiData['faq']);
                 $whatsNew  = $aiData['whats_new']     ?? $whatsNew;
-                $seoTitle  = $aiData['seo_title']     ?? $seoTitle;
+                $seoTitle  = seo_title_clamp($aiData['seo_title']     ?? $seoTitle);
                 $metaDesc  = $aiData['meta_description'] ?? $metaDesc;
                 $keywords  = $aiData['keywords']      ?? $keywords;
             }
@@ -1339,7 +1339,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
                 json_encode($cons,JSON_UNESCAPED_UNICODE),json_encode($installSteps,JSON_UNESCAPED_UNICODE),
                 json_encode($faq,JSON_UNESCAPED_UNICODE),$whatsNew,
                 $playstoreUrl ?: null,$packageName ?: null,4.5,
-                $seoTitle,$metaDesc,$keywords,
+                seo_title_clamp($seoTitle),$metaDesc,$keywords,
             ]);
         $newId = (int)$pdo->lastInsertId();
         echo json_encode(['success'=>true,'id'=>$newId,'name'=>$targetName,
@@ -1561,6 +1561,155 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'file_import_run' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Bulk CSV import — process one row (SSE streaming)
+   Input: POST JSON {name, package_id, playstore_url, category, developer}
+   Output: SSE events: progress(pct,msg), done(success,id,slug), error(msg)
+   Publishes immediately (status='published'), NOT draft.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_csv_one' && is_admin()) {
+    @set_time_limit(180);
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+    if (ob_get_level()) ob_end_clean();
+
+    if (!function_exists('sse_bi')) {
+        function sse_bi(string $event, array $data): void {
+            echo "event: {$event}\ndata: " . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+            if (ob_get_level()) ob_flush();
+            flush();
+        }
+    }
+
+    $input   = json_decode(file_get_contents('php://input'), true) ?? [];
+    $name    = trim($input['name'] ?? '');
+    $pkg     = trim($input['package_id'] ?? '');
+    $psUrl   = trim($input['playstore_url'] ?? '');
+    $catSlug = trim($input['category'] ?? 'apps');
+    $dev     = trim($input['developer'] ?? '');
+
+    if (!$name && !$pkg && !$psUrl) {
+        sse_bi('error', ['msg' => 'بيانات التطبيق غير كافية']); exit;
+    }
+
+    // Derive package_id from playstore_url if not given
+    if (!$pkg && $psUrl && preg_match('#[?&]id=([\w.]+)#', $psUrl, $m)) {
+        $pkg = $m[1];
+    }
+    // Derive playstore_url from package_id if not given
+    if (!$psUrl && $pkg) {
+        $psUrl = "https://play.google.com/store/apps/details?id={$pkg}";
+    }
+
+    // Skip if already exists
+    if ($name) {
+        $ex = $pdo->prepare("SELECT id FROM apps WHERE name=? LIMIT 1");
+        $ex->execute([$name]);
+        if ($exId = $ex->fetchColumn()) {
+            sse_bi('done', ['skipped' => true, 'id' => (int)$exId, 'name' => $name, 'msg' => 'موجود مسبقاً']);
+            exit;
+        }
+    }
+    if ($pkg) {
+        $ex = $pdo->prepare("SELECT id FROM apps WHERE package_name=? LIMIT 1");
+        $ex->execute([$pkg]);
+        if ($exId = $ex->fetchColumn()) {
+            sse_bi('done', ['skipped' => true, 'id' => (int)$exId, 'msg' => 'موجود مسبقاً (package)']);
+            exit;
+        }
+    }
+
+    sse_bi('progress', ['pct' => 5, 'msg' => "🔍 جارٍ جلب بيانات متجر Play…"]);
+
+    // Fetch Play Store metadata
+    $meta = null;
+    if ($psUrl) {
+        $meta = fetch_playstore_meta($psUrl);
+    }
+
+    $finalName = $name ?: ($meta['name'] ?? ($pkg ?: 'app-' . time()));
+    $finalDev  = $dev  ?: ($meta['developer'] ?? '');
+    $finalDesc = $meta['description'] ?? '';
+    $iconUrl   = $meta['icon_url'] ?? null;
+    $version   = $meta['version'] ?? '';
+    $rating    = isset($meta['rating']) ? (float)$meta['rating'] : 4.5;
+
+    sse_bi('progress', ['pct' => 25, 'msg' => "🖼️ جارٍ تحميل الأيقونة…"]);
+
+    $slug = unique_slug($pdo, $finalName);
+    $iconPath = null;
+    if ($iconUrl) {
+        $iconPath = import_remote_icon($iconUrl, $slug);
+    }
+
+    // Category
+    $catId = null;
+    $catRow = $pdo->prepare("SELECT id FROM categories WHERE slug=? LIMIT 1");
+    $catRow->execute([$catSlug]);
+    $catId = $catRow->fetchColumn() ?: null;
+    if (!$catId) {
+        $catRow->execute(['apps']);
+        $catId = $catRow->fetchColumn() ?: null;
+    }
+
+    // Set download URL to APKPure CDN — no local APK storage needed
+    $downloadUrl = null;
+    if ($pkg) {
+        $downloadUrl = "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=arm64-v8a&sv=21";
+    }
+
+    sse_bi('progress', ['pct' => 60, 'msg' => "✍️ إنشاء محتوى SEO…"]);
+
+    // Build SEO fields — minimal but meaningful, no AI call (speed + cost for bulk)
+    $year = date('Y');
+    $seoTitle    = seo_title_clamp("تحميل {$finalName} APK {$year} للأندرويد مجاناً");
+    $metaDesc    = "حمّل {$finalName} APK آخر إصدار {$year} للأندرويد مجاناً برابط مباشر وسريع. " .
+                   ($finalDesc ? mb_substr($finalDesc, 0, 80) . '…' : "تطبيق رائد يستحق التجربة.");
+    $metaDesc    = mb_substr($metaDesc, 0, 160);
+    $keywords    = "تحميل {$finalName}، تنزيل {$finalName}، {$finalName} APK، {$finalName} {$year}، {$finalName} للأندرويد، {$pkg}";
+    $shortDesc   = mb_substr($finalDesc ?: "{$finalName} — تطبيق رائع للأندرويد", 0, 200);
+    $longDesc    = $finalDesc ?: $shortDesc;
+
+    sse_bi('progress', ['pct' => 80, 'msg' => "💾 حفظ التطبيق…"]);
+
+    try {
+        $pdo->prepare("INSERT INTO apps
+            (name,slug,category_id,developer,version,icon_path,short_description,long_description,
+             playstore_url,package_name,rating,download_url,
+             seo_title,meta_description,keywords,status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'published',NOW(),NOW())")
+            ->execute([
+                $finalName, $slug, $catId, $finalDev, $version, $iconPath,
+                $shortDesc, $longDesc,
+                $psUrl ?: null, $pkg ?: null, $rating, $downloadUrl,
+                $seoTitle, $metaDesc, $keywords,
+            ]);
+        $newId = (int)$pdo->lastInsertId();
+
+        // Bump cache version and ping IndexNow
+        try {
+            $pdo->prepare("INSERT INTO settings (key_name,value) VALUES ('cache_version',2) ON DUPLICATE KEY UPDATE value=value+1")->execute();
+        } catch (Throwable $e) {}
+        if ($newId) {
+            $appUrl = app_url($slug);
+            ping_search_engines($pdo, $appUrl, $newId);
+        }
+
+        sse_bi('done', [
+            'success'   => true,
+            'id'        => $newId,
+            'name'      => $finalName,
+            'slug'      => $slug,
+            'has_icon'  => (bool)$iconPath,
+            'published' => true,
+        ]);
+    } catch (Throwable $e) {
+        sse_bi('error', ['msg' => $e->getMessage()]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Suggest N trending app/game names via AI
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'suggest_trending' && is_admin()) {
@@ -1694,7 +1843,7 @@ P;
             json_encode($cons, JSON_UNESCAPED_UNICODE), json_encode($installSteps, JSON_UNESCAPED_UNICODE),
             json_encode($faq, JSON_UNESCAPED_UNICODE), trim($data['whats_new'] ?? ''),
             $playstoreUrl, (float)($data['rating'] ?? 4.5),
-            trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''),
+            seo_title_clamp(trim($data['seo_title'] ?? '')), trim($data['meta_description'] ?? ''), trim($data['keywords'] ?? ''),
         ]);
     $newId = (int)$pdo->lastInsertId();
 
@@ -2280,10 +2429,10 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             $raw = filter_var(trim($_POST['icon_url_import']), FILTER_VALIDATE_URL);
             if ($raw) $iconPath = $raw;
         }
-    } elseif (!empty($_POST['icon_saved_import']) && preg_match('#^uploads/icons/[A-Za-z0-9_\-\.]+\.webp$#', trim($_POST['icon_saved_import']))) {
+    } elseif (!empty($_POST['icon_saved_import']) && preg_match('#^uploads/icons/[^/\\\\<>:"*?|]+\.webp$#u', trim($_POST['icon_saved_import']))) {
         // Icon was already downloaded by fetch_playstore_full and saved server-side — just reference it.
         $iconPath = trim($_POST['icon_saved_import']);
-    } elseif (!empty($_POST['ai_icon_path']) && preg_match('#^uploads/icons/[A-Za-z0-9_\-\.]+\.webp$#', trim($_POST['ai_icon_path']))) {
+    } elseif (!empty($_POST['ai_icon_path']) && preg_match('#^uploads/icons/[^/\\\\<>:"*?|]+\.webp$#u', trim($_POST['ai_icon_path']))) {
         // Icon was generated by AI and already saved server-side — just reference it.
         $iconPath = trim($_POST['ai_icon_path']);
     }
@@ -2388,7 +2537,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
     $d = [
         'name'              => $name,
         'slug'              => $slug,
-        'seo_title'         => trim($_POST['seo_title'] ?? ''),
+        'seo_title'         => seo_title_clamp(trim($_POST['seo_title'] ?? '')),
         'meta_description'  => trim($_POST['meta_description'] ?? ''),
         'keywords'          => trim($_POST['keywords'] ?? ''),
         'short_description' => trim($_POST['short_description'] ?? ''),
@@ -3315,6 +3464,7 @@ $navLinks = [
     'bulk-content'  => ['label'=>'توليد محتوى للتطبيقات', 'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
     'file-import'   => ['label'=>'استيراد من ملف',            'icon'=>'M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
+    'bulk-csv-import' => ['label'=>'استيراد CSV ضخم (50K+)', 'icon'=>'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
@@ -4954,6 +5104,286 @@ elseif ($page === 'file-import'): ?>
     importSt.innerHTML=`<strong style="color:var(--white)">🏁 اكتمل</strong> — تم: ${ok}${skip?' · تخطّي: '+skip:''}${fail?' · فشل: '+fail:''}`;
     importAll.disabled=false;
   });
+})();
+</script>
+
+<?php
+/* ─────────────── BULK CSV IMPORT (50K+) ─────────────── */
+elseif ($page === 'bulk-csv-import'): ?>
+
+<div class="admin-header"><h1>استيراد تطبيقات ضخم — CSV / JSON (50K+)</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    ارفع ملف <strong>CSV</strong> أو <strong>JSON</strong> بقائمة التطبيقات. لكل تطبيق:
+    يجلب النظام بيانات متجر Play تلقائياً، يحمّل الأيقونة، يعيّن رابط التحميل عبر APKPure،
+    ثم <strong style="color:#22c55e">يُنشر مباشرةً</strong> (لا مسودة).<br>
+    <strong>أعمدة CSV المقبولة:</strong>
+    <code style="font-size:11px">name</code> (مطلوب) ·
+    <code style="font-size:11px">package_id</code> ·
+    <code style="font-size:11px">playstore_url</code> ·
+    <code style="font-size:11px">category</code> ·
+    <code style="font-size:11px">developer</code>
+  </p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <a href="#" id="bci-sample-csv" style="font-size:12px;color:var(--accent)">⬇️ تحميل مثال CSV</a>
+    <a href="#" id="bci-sample-json" style="font-size:12px;color:var(--accent)">⬇️ تحميل مثال JSON</a>
+  </div>
+</div>
+
+<!-- Upload zone -->
+<div class="panel" style="margin-bottom:16px" id="bci-upload-panel">
+  <label for="bci-file-input" id="bci-drop-zone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:48px 24px;border:2px dashed var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,background .2s">
+    <svg width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--muted)"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z"/></svg>
+    <div style="text-align:center">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">اسحب ملف CSV/JSON هنا أو انقر</div>
+      <div style="font-size:13px;color:var(--muted)">.csv · .json · .txt · حجم أقصى 50 MB · حتى 50,000 سطر</div>
+    </div>
+  </label>
+  <input type="file" id="bci-file-input" accept=".csv,.json,.txt" style="display:none">
+  <div id="bci-file-name" style="text-align:center;font-size:13px;color:var(--muted);margin-top:12px;display:none"></div>
+</div>
+
+<!-- Controls -->
+<div class="panel" style="margin-bottom:16px" id="bci-controls" style="display:none">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+    <div class="form-group" style="margin:0">
+      <label class="form-label">التصنيف الافتراضي</label>
+      <select id="bci-default-cat" class="form-select" style="width:180px">
+        <option value="apps">تطبيقات (apps)</option>
+        <option value="games">ألعاب (games)</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">تأخير بين كل تطبيق (ثانية)</label>
+      <input type="number" id="bci-delay" class="form-input" value="0.5" min="0" max="10" step="0.1" style="width:120px">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">من السطر</label>
+      <input type="number" id="bci-start-from" class="form-input" value="1" min="1" style="width:100px">
+    </div>
+    <button id="bci-start-btn" class="btn btn-primary">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+      بدء الاستيراد
+    </button>
+    <button id="bci-pause-btn" class="btn" style="display:none">⏸️ إيقاف مؤقت</button>
+    <button id="bci-resume-btn" class="btn btn-primary" style="display:none">▶️ استئناف</button>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="bci-progress-wrap" style="display:none">
+    <div style="height:10px;background:rgba(37,99,235,.1);border-radius:5px;overflow:hidden;margin-bottom:10px">
+      <div id="bci-prog-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:5px;width:0%;transition:width .4s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+      <span id="bci-prog-text" style="color:var(--muted)">جارٍ الاستيراد…</span>
+      <span id="bci-prog-pct" style="font-weight:700">0%</span>
+    </div>
+    <div style="display:flex;gap:16px;font-size:13px;flex-wrap:wrap">
+      <span>الإجمالي: <strong id="bci-cnt-total">0</strong></span>
+      <span style="color:#22c55e">✔ نجح: <strong id="bci-cnt-ok">0</strong></span>
+      <span style="color:var(--muted)">⏭ تخطّي: <strong id="bci-cnt-skip">0</strong></span>
+      <span style="color:#ef4444">✘ فشل: <strong id="bci-cnt-fail">0</strong></span>
+    </div>
+  </div>
+</div>
+
+<!-- Live log -->
+<div id="bci-log-wrap" class="panel" style="display:none">
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px">سجل الاستيراد</div>
+  <div id="bci-log" style="font-family:var(--f-mono);font-size:12px;max-height:360px;overflow-y:auto;line-height:1.8"></div>
+</div>
+
+<script>
+(function(){
+  const dropZone  = document.getElementById('bci-drop-zone');
+  const fileInput = document.getElementById('bci-file-input');
+  const fileName  = document.getElementById('bci-file-name');
+  const controls  = document.getElementById('bci-controls');
+  const startBtn  = document.getElementById('bci-start-btn');
+  const pauseBtn  = document.getElementById('bci-pause-btn');
+  const resumeBtn = document.getElementById('bci-resume-btn');
+  const progWrap  = document.getElementById('bci-progress-wrap');
+  const progBar   = document.getElementById('bci-prog-bar');
+  const progText  = document.getElementById('bci-prog-text');
+  const progPct   = document.getElementById('bci-prog-pct');
+  const cntTotal  = document.getElementById('bci-cnt-total');
+  const cntOk     = document.getElementById('bci-cnt-ok');
+  const cntSkip   = document.getElementById('bci-cnt-skip');
+  const cntFail   = document.getElementById('bci-cnt-fail');
+  const logWrap   = document.getElementById('bci-log-wrap');
+  const log       = document.getElementById('bci-log');
+
+  let rows = [], paused = false, stopped = false, idx = 0, ok=0, skip=0, fail=0;
+
+  function fmtSz(b){return b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function addLog(cls,msg){
+    const row=document.createElement('div');
+    row.innerHTML=`<span style="color:var(--muted);user-select:none">${String(idx).padStart(5,' ')} </span><span class="${cls}">${esc(msg)}</span>`;
+    log.appendChild(row);
+    log.scrollTop=log.scrollHeight;
+  }
+
+  // Drag-and-drop
+  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.style.borderColor='var(--accent)';dropZone.style.background='rgba(37,99,235,.05)';});
+  dropZone.addEventListener('dragleave',()=>{dropZone.style.borderColor='';dropZone.style.background='';});
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.style.borderColor='';dropZone.style.background='';if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
+  fileInput.addEventListener('change',()=>{if(fileInput.files[0])loadFile(fileInput.files[0]);});
+
+  function loadFile(f){
+    fileName.textContent='📄 '+f.name+' ('+fmtSz(f.size)+')';
+    fileName.style.display='block';
+    controls.style.display='block';
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const text=e.target.result;
+      rows=parseFile(f.name,text);
+      progText.textContent=`تم تحليل ${rows.length.toLocaleString()} تطبيق جاهز للاستيراد`;
+      progWrap.style.display='block';
+      cntTotal.textContent=rows.length;
+    };
+    reader.readAsText(f,'UTF-8');
+  }
+
+  function parseFile(fname,text){
+    const ext=fname.split('.').pop().toLowerCase();
+    if(ext==='json'){
+      try{
+        const d=JSON.parse(text);
+        const arr=Array.isArray(d)?d:(d.apps||d.data||d.list||Object.values(d));
+        return arr.filter(r=>r&&(r.name||r.package_id||r.playstore_url));
+      }catch(e){alert('خطأ في تحليل JSON: '+e.message);return [];}
+    }
+    // CSV
+    const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(!lines.length)return[];
+    const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());
+    return lines.slice(1).map(line=>{
+      const vals=line.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$)/g)||line.split(',');
+      const obj={};
+      headers.forEach((h,i)=>{ obj[h]=(vals[i]||'').trim().replace(/^"|"$/g,''); });
+      return obj;
+    }).filter(r=>r.name||r.package_id||r.playstore_url);
+  }
+
+  // Sample download helpers
+  document.getElementById('bci-sample-csv').addEventListener('click',e=>{
+    e.preventDefault();
+    const csv='name,package_id,category,developer\nTikTok,com.zhiliaoapp.musically,entertainment,ByteDance\nWhatsApp,com.whatsapp,social,Meta\nInstagram,com.instagram.android,social,Meta\n';
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='apps-sample.csv';a.click();
+  });
+  document.getElementById('bci-sample-json').addEventListener('click',e=>{
+    e.preventDefault();
+    const json=JSON.stringify({apps:[
+      {name:'TikTok',package_id:'com.zhiliaoapp.musically',category:'entertainment',developer:'ByteDance'},
+      {name:'WhatsApp',package_id:'com.whatsapp',category:'social',developer:'Meta'},
+    ]},null,2);
+    const blob=new Blob([json],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='apps-sample.json';a.click();
+  });
+
+  startBtn.addEventListener('click',()=>{
+    if(!rows.length){alert('الرجاء تحميل ملف أولاً');return;}
+    const startFrom=Math.max(1,parseInt(document.getElementById('bci-start-from').value)||1)-1;
+    idx=startFrom;ok=0;skip=0;fail=0;paused=false;stopped=false;
+    startBtn.style.display='none';
+    pauseBtn.style.display='inline-flex';
+    logWrap.style.display='block';
+    log.innerHTML='';
+    runNext();
+  });
+
+  pauseBtn.addEventListener('click',()=>{
+    paused=true;
+    pauseBtn.style.display='none';
+    resumeBtn.style.display='inline-flex';
+    addLog('style="color:#fbbf24"','⏸️ موقوف مؤقتاً — انقر استئناف للمتابعة');
+  });
+  resumeBtn.addEventListener('click',()=>{
+    paused=false;
+    resumeBtn.style.display='none';
+    pauseBtn.style.display='inline-flex';
+    runNext();
+  });
+
+  async function runNext(){
+    if(stopped||paused)return;
+    if(idx>=rows.length){
+      progBar.style.width='100%';
+      progText.innerHTML=`<strong style="color:var(--white)">🏁 اكتمل الاستيراد</strong>`;
+      progPct.textContent='100%';
+      pauseBtn.style.display='none';
+      startBtn.style.display='inline-flex';
+      startBtn.textContent='بدء من جديد';
+      addLog('style="color:#22c55e;font-weight:bold"',`✅ انتهى — نجح: ${ok} · تخطّي: ${skip} · فشل: ${fail}`);
+      return;
+    }
+    const row=rows[idx];
+    const pct=Math.round(idx/rows.length*100);
+    progBar.style.width=pct+'%';
+    progPct.textContent=pct+'%';
+    progText.textContent=`(${idx+1}/${rows.length}) ${row.name||row.package_id||'…'}`;
+
+    const cat=document.getElementById('bci-default-cat').value;
+    const body=JSON.stringify({
+      name:row.name||'',
+      package_id:row.package_id||row['package']||row['pkg']||'',
+      playstore_url:row.playstore_url||row['ps_url']||'',
+      category:row.category||row.cat||cat,
+      developer:row.developer||row.dev||'',
+    });
+
+    try{
+      await new Promise((resolve,reject)=>{
+        const es=new EventSource('admin.php?ajax=bulk_csv_one',{});
+        // EventSource doesn't support POST — use fetch+SSE pattern via ReadableStream
+        es.close();
+        // Use fetch with streaming response
+        fetch('admin.php?ajax=bulk_csv_one',{method:'POST',body,headers:{'Content-Type':'application/json'}})
+          .then(r=>{
+            const reader=r.body.getReader();
+            const dec=new TextDecoder();
+            let buf='';
+            function read(){
+              reader.read().then(({done,value})=>{
+                if(done){resolve();return;}
+                buf+=dec.decode(value,{stream:true});
+                const parts=buf.split('\n\n');
+                buf=parts.pop();
+                parts.forEach(chunk=>{
+                  const evtMatch=chunk.match(/^event:\s*(\S+)/m);
+                  const dataMatch=chunk.match(/^data:\s*(.+)/m);
+                  if(evtMatch&&dataMatch){
+                    const evt=evtMatch[1];
+                    let d;try{d=JSON.parse(dataMatch[1]);}catch(e){return;}
+                    if(evt==='done'){
+                      if(d.skipped){skip++;addLog('style="color:var(--muted)"',`⏭ تخطّي: ${d.name||'—'} (${d.msg||'موجود'})`);}
+                      else if(d.success){ok++;addLog('style="color:#22c55e"',`✔ ${d.name} — slug: ${d.slug}${d.has_icon?' 🖼️':''}`);}
+                      cntOk.textContent=ok;cntSkip.textContent=skip;
+                    }else if(evt==='error'){
+                      fail++;addLog('style="color:#ef4444"',`✘ ${row.name||'—'}: ${d.msg}`);
+                      cntFail.textContent=fail;
+                    }
+                  }
+                });
+                read();
+              }).catch(reject);
+            }
+            read();
+          }).catch(reject);
+      });
+    }catch(e){
+      fail++;addLog('style="color:#ef4444"',`✘ ${row.name||'—'}: ${e.message}`);
+      cntFail.textContent=fail;
+    }
+
+    idx++;
+    const delay=parseFloat(document.getElementById('bci-delay').value)||0;
+    if(delay>0) await new Promise(r=>setTimeout(r,delay*1000));
+    runNext();
+  }
 })();
 </script>
 

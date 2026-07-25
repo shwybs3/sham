@@ -994,37 +994,130 @@ function evil_unban_ip(PDO $pdo, string $ip): void {
     try { $pdo->prepare("DELETE FROM evil_banned_ips WHERE ip=?")->execute([$ip]); } catch (Throwable $e) {}
 }
 
-// Check if current IP is banned. Calls die() with 403 if banned (unless admin IP or Evil disabled).
+// Check if current IP is banned. Shows CAPTCHA challenge instead of hard 403.
+// If session marker 'evil_captcha_ok' is set (CAPTCHA solved), allows through even if IP is banned.
 function evil_check_ban(PDO $pdo): void {
     if (evil_is_admin_ip()) return;
     if (!evil_is_enabled($pdo, 'ban')) return;
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
     if (!$ip) return;
+
+    // Handle CAPTCHA verification POST from the ban-challenge page
+    if (!empty($_POST['evil_captcha_verify'])) {
+        $solved = false;
+        $type   = $_POST['evil_captcha_type'] ?? '';
+        $token  = $_POST['evil_captcha_token'] ?? '';
+        if ($type === 'turnstile' && $token) {
+            $solved = captcha_verify_turnstile($pdo, $token);
+        } elseif ($type === 'v2' && $token) {
+            $solved = captcha_verify_v2($pdo, $token);
+        } elseif ($type === 'v3' && $token) {
+            $solved = captcha_verify_v3($pdo, $token);
+        }
+        if ($solved) {
+            $_SESSION['evil_captcha_ok'] = time();
+            // Clear the ban for temporary bans (not permanent) as a reward
+            try {
+                $pdo->prepare("DELETE FROM evil_banned_ips WHERE ip=? AND banned_until IS NOT NULL")
+                    ->execute([$ip]);
+            } catch (Throwable $e) {}
+            return; // Allow through
+        }
+        // CAPTCHA failed — fall through and show challenge again
+    }
+
+    // If already passed CAPTCHA in this session (within 2h), allow through
+    if (!empty($_SESSION['evil_captcha_ok']) && (time() - (int)$_SESSION['evil_captcha_ok']) < 7200) {
+        return;
+    }
+
     try {
-        $row = $pdo->prepare("SELECT banned_until FROM evil_banned_ips WHERE ip=? LIMIT 1");
+        $row = $pdo->prepare("SELECT banned_until, reason FROM evil_banned_ips WHERE ip=? LIMIT 1");
         $row->execute([$ip]);
         $r = $row->fetch(PDO::FETCH_ASSOC);
         if (!$r) return;
         $until = $r['banned_until'];
         if ($until !== null && strtotime($until) < time()) {
-            // Expired — clean up silently
             $pdo->prepare("DELETE FROM evil_banned_ips WHERE ip=? AND banned_until IS NOT NULL AND banned_until < NOW()")
                 ->execute([$ip]);
             return;
         }
-        $msg = $until ? 'تم حظر عنوان IP الخاص بك مؤقتاً.' : 'تم حظر عنوان IP الخاص بك.';
+
+        // Determine CAPTCHA type available
+        $captchaType = 'none';
+        if (trim(get_cfg($pdo, 'turnstile_site_key'))) $captchaType = 'turnstile';
+        elseif (trim(get_cfg($pdo, 'recaptcha_v2_site_key'))) $captchaType = 'v2';
+        elseif (trim(get_cfg($pdo, 'recaptcha_v3_site_key'))) $captchaType = 'v3';
+
+        $isPermanent = ($until === null);
+        $untilText = $until ? date('Y/m/d H:i', strtotime($until)) : '';
+        $currentUrl = h(($_SERVER['HTTPS'] ?? '') === 'on' ? 'https' : 'http') . '://' . h($_SERVER['HTTP_HOST'] ?? '') . h($_SERVER['REQUEST_URI'] ?? '/');
+
+        // If no CAPTCHA configured, fall back to informational page
+        if ($captchaType === 'none' || $isPermanent) {
+            http_response_code(403);
+            $msg = $isPermanent ? 'تم حظر عنوان IP الخاص بك بشكل دائم.' : 'تم حظر عنوان IP الخاص بك مؤقتاً.';
+            die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+            <title>محظور</title>
+            <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+            .box{max-width:440px;padding:40px 32px;border:1px solid rgba(239,68,68,.3);border-radius:16px;background:rgba(239,68,68,.05)}
+            h1{color:#ef4444;margin:0 0 12px;font-size:22px}p{color:#94a3b8;margin:0 0 8px;font-size:14px}
+            code{background:#1e293b;color:#38bdf8;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:4px}
+            </style></head><body><div class="box">
+            <h1>🛡️ محظور</h1><p>' . h($msg) . '</p>
+            ' . ($until ? '<p>ينتهي الحظر: <code>' . h($untilText) . '</code></p>' : '') . '
+            </div></body></html>');
+        }
+
+        // Render CAPTCHA challenge page
+        $widgetHtml = captcha_widget_html($pdo, $captchaType, 'ban_bypass');
+        $siteKeyJs = '';
+        if ($captchaType === 'v3') {
+            $siteKeyJs = h(trim(get_cfg($pdo, 'recaptcha_v3_site_key')));
+        }
+
         http_response_code(403);
-        header('Retry-After: 600');
         die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
-        <title>محظور</title>
-        <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
-        .box{max-width:440px;padding:40px 32px;border:1px solid rgba(239,68,68,.3);border-radius:16px;background:rgba(239,68,68,.05)}
-        h1{color:#ef4444;margin:0 0 12px;font-size:22px}p{color:#94a3b8;margin:0 0 8px;font-size:14px}
-        code{background:#1e293b;color:#38bdf8;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:4px}
-        </style></head><body><div class="box">
-        <h1>🛡️ محظور</h1><p>' . h($msg) . '</p>
-        ' . ($until ? '<p>ينتهي الحظر: <code>' . h($until) . '</code></p>' : '') . '
-        </div></body></html>');
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تحقق من هويتك</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+.box{max-width:420px;width:100%;background:#1e293b;border:1px solid rgba(148,163,184,.15);border-radius:20px;padding:40px 32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+h1{color:#f8fafc;font-size:22px;margin:0 0 8px}
+.sub{color:#94a3b8;font-size:14px;margin:0 0 28px;line-height:1.6}
+.captcha-wrap{display:flex;justify-content:center;margin:0 0 20px}
+.cf-turnstile,.g-recaptcha{margin:0 auto}
+.msg{margin-top:12px;color:#f87171;font-size:13px;display:none}
+.icon{font-size:48px;margin:0 0 16px;display:block}
+</style></head>
+<body>
+<div class="box">
+  <span class="icon">🛡️</span>
+  <h1>تحقق من هويتك</h1>
+  <p class="sub">تم رصد نشاط غير عادي من عنوان IP الخاص بك.' . ($untilText ? '<br><small style="color:#64748b">الحظر ينتهي: ' . h($untilText) . '</small>' : '') . '<br>أكمل التحقق للمتابعة.</p>
+  <form method="post" action="' . $currentUrl . '" id="banForm">
+    <input type="hidden" name="evil_captcha_verify" value="1">
+    <input type="hidden" name="evil_captcha_type" value="' . h($captchaType) . '">
+    <input type="hidden" name="evil_captcha_token" id="banCaptchaToken" value="">
+    <div class="captcha-wrap">' . $widgetHtml . '</div>
+    <p class="msg" id="banMsg">فشل التحقق، حاول مجدداً.</p>
+  </form>
+</div>
+<script>
+function onCaptchaSolvedTurnstile(token){document.getElementById("banCaptchaToken").value=token;document.getElementById("banForm").submit();}
+function onCaptchaSolvedV2(token){document.getElementById("banCaptchaToken").value=token;document.getElementById("banForm").submit();}
+' . ($captchaType === 'v3' ? '
+window.addEventListener("load",function(){
+  grecaptcha.ready(function(){
+    grecaptcha.execute("' . $siteKeyJs . '",{action:"ban_bypass"}).then(function(token){
+      document.getElementById("banCaptchaToken").value=token;
+      document.getElementById("banForm").submit();
+    });
+  });
+});' : '') . '
+</script>
+</body></html>');
     } catch (Throwable $e) {}
 }
 
@@ -1991,10 +2084,19 @@ function seo_prompt_standards(): string {
     $year = date('Y');
     return <<<P
 اتبع بدقة معايير SEO التالية عند كتابة الحقول التالية (لا تكتب حقولاً عامة أو مبهمة):
-- seo_title: يبدأ بكلمة "تحميل"، يتضمن اسم التطبيق كاملاً (بالإنجليزية إن كان اسمه إنجليزياً)، ثم "APK" إن كان تطبيق/لعبة أندرويد، ثم "آخر إصدار {$year}"، ثم "للأندرويد مجاناً"، ثم فاصل " | " ثم صياغة ثانية مختصرة تبدأ بـ"تنزيل" واسم التطبيق و"برابط مباشر". مثال على الشكل المطلوب (لا تنسخه، استخدمه كقالب فقط): "تحميل PUBG MOBILE APK آخر إصدار {$year} للأندرويد مجانًا | تنزيل ببجي موبايل برابط مباشر".
+- seo_title: **بحد أقصى صارم 60 حرفاً** (عدّ الحروف قبل الإرسال). يبدأ بـ"تحميل"، ثم اسم التطبيق، ثم "APK"، ثم "{$year} للأندرويد". مثال (55 حرفاً): "تحميل TikTok APK {$year} للأندرويد مجاناً" — لا تتجاوز هذا الطول أبداً.
 - meta_description: يبدأ بفعل أمر مثل "قم بتحميل" أو "حمّل"، يذكر اسم التطبيق ونوعه (لعبة/تطبيق) و"APK" و"آخر إصدار {$year}" و"للأندرويد مجاناً برابط مباشر وسريع"، ثم جملة تسويقية قصيرة عن أبرز مزايا هذا التطبيق تحديداً (وليست عامة). الطول 140-160 حرفاً.
 - keywords: 15 إلى 18 كلمة/عبارة مفتاحية عربية طويلة الذيل مفصولة بفاصلة، تغطي أشكال البحث الشائعة: "تحميل [الاسم]"، "تنزيل [الاسم]"، "[الاسم] APK"، "[الاسم] آخر إصدار"، "تحميل [الاسم] للأندرويد"، "[الاسم] مجاناً"، "تحديث [الاسم]"، "[الاسم] Android"، "تحميل [الاسم] برابط مباشر"، "[الاسم] {$year}" وهكذا — بدون تكرار حرفي لنفس الصياغة، وبمزيج من العربية والإنجليزية عندما يكون اسم التطبيق إنجليزياً معروفاً.
 P;
+}
+
+// Enforce max 60-char seo_title server-side — truncate at word boundary
+function seo_title_clamp(string $t, int $max = 60): string {
+    $t = trim($t);
+    if (mb_strlen($t) <= $max) return $t;
+    $cut = mb_substr($t, 0, $max);
+    $last = mb_strrpos($cut, ' ');
+    return $last > $max * 0.6 ? mb_substr($cut, 0, $last) : $cut;
 }
 
 // Extract the first {...} JSON object from a raw AI response (strips markdown fences).
@@ -2078,10 +2180,22 @@ function csrf_check(): bool {
 
 function slugify(string $t): string {
     $t = trim($t);
-    $t = preg_replace('/\s+/u', '-', $t);
-    $t = preg_replace('/[^\p{Arabic}a-zA-Z0-9\-]/u', '', $t);
+    // Transliterate common Arabic letters to approximate Latin equivalents
+    static $arabic_map = [
+        'أ'=>'a','إ'=>'i','آ'=>'a','ا'=>'a','ب'=>'b','ت'=>'t','ث'=>'th','ج'=>'j','ح'=>'h','خ'=>'kh',
+        'د'=>'d','ذ'=>'dh','ر'=>'r','ز'=>'z','س'=>'s','ش'=>'sh','ص'=>'s','ض'=>'d','ط'=>'t','ظ'=>'z',
+        'ع'=>'a','غ'=>'gh','ف'=>'f','ق'=>'q','ك'=>'k','ل'=>'l','م'=>'m','ن'=>'n','ه'=>'h','و'=>'w',
+        'ي'=>'y','ى'=>'a','ة'=>'h','ء'=>'','ئ'=>'y','ؤ'=>'w','لا'=>'la',
+        // Persian/Urdu extras
+        'پ'=>'p','چ'=>'ch','ژ'=>'zh','گ'=>'g','ک'=>'k','ی'=>'y','ے'=>'e',
+    ];
+    $t = str_replace(array_keys($arabic_map), array_values($arabic_map), $t);
+    // Remove any remaining non-ASCII characters (diacritics, etc.)
+    $t = preg_replace('/[^\x00-\x7F]+/', '-', $t);
+    $t = preg_replace('/\s+/', '-', $t);
+    $t = preg_replace('/[^a-zA-Z0-9\-]/', '', $t);
     $t = preg_replace('/-+/', '-', $t);
-    return mb_strtolower(trim($t, '-')) ?: 'app-' . time();
+    return strtolower(trim($t, '-')) ?: 'app-' . time();
 }
 
 // Route names that must never collide with an app's pretty URL (/{slug}).
@@ -2378,7 +2492,9 @@ function process_icon(array $file, string $slug, PDO $pdo = null): ?string {
     if (!$src) return null;
     $dir = UPLOAD_PATH . '/icons';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
-    $name = $slug . '-' . substr(md5(uniqid()), 0, 6);
+    // Strip non-ASCII from slug so the filename is always safe in HTTP headers and regex checks
+    $safeBase = preg_replace('/[^a-z0-9\-]/i', '', strtolower($slug)) ?: 'icon';
+    $name = $safeBase . '-' . substr(md5(uniqid()), 0, 6);
     [$w, $h] = [imagesx($src), imagesy($src)];
     $s = min($w, $h);
     $dst = imagecreatetruecolor(400, 400);
