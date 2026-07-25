@@ -1952,40 +1952,92 @@ function notify_admin(PDO $pdo, string $subject, string $body): void {
 }
 
 function head_extras(PDO $pdo): string {
-    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: 'example.com';
-    // Google Consent Mode v2 — must fire BEFORE the AdSense/GA script.
-    // Default: deny until the user explicitly accepts via the cookie banner.
-    // The banner JS calls gtag('consent','update',{...}) on accept/decline.
-    $consentMode = '<script>
+    $host     = parse_url(SITE_URL, PHP_URL_HOST) ?: 'example.com';
+    $ga4Id    = trim(get_cfg($pdo, 'ga4_measurement_id', ''));
+    $ogDefImg = trim(get_cfg($pdo, 'og_default_image', ''));
+
+    // ── Google Consent Mode v2 — fires BEFORE any Google script ──────────
+    // Default: deny until visitor explicitly accepts via cookie banner.
+    // banner JS calls gtag('consent','update',{...}) on accept.
+    $out = '<script>
 window.dataLayer=window.dataLayer||[];
 function gtag(){dataLayer.push(arguments);}
 gtag("consent","default",{
-  "ad_storage":"denied",
-  "ad_user_data":"denied",
-  "ad_personalization":"denied",
-  "analytics_storage":"denied",
+  "ad_storage":"denied","ad_user_data":"denied",
+  "ad_personalization":"denied","analytics_storage":"denied",
   "wait_for_update":500
 });
 gtag("set","ads_data_redaction",true);
 gtag("set","url_passthrough",true);
 </script>';
-    return $consentMode . "\n  "
-        . '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n  "
-        . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n  "
-        . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>' . "\n  "
-        . '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>' . "\n  "
-        . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
-        . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
-        . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
-        . '<meta name="theme-color" content="#2563eb">' . "\n  "
-        . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
-        . '<meta name="language" content="ar">' . "\n  "
-        . '<meta property="og:locale" content="ar_AR">' . "\n  "
-        . '<meta property="og:site_name" content="yassota">' . "\n  "
-        . '<meta name="twitter:site" content="@yassota">' . "\n  "
-        . '<meta name="author" content="yassota">' . "\n  "
-        . '<link rel="alternate" hreflang="ar" href="' . h(SITE_URL) . '">' . "\n  "
-        . search_console_meta($pdo);
+
+    // ── Google Analytics 4 ────────────────────────────────────────────────
+    // Configure via Admin → Settings → "Google Analytics 4 Measurement ID".
+    // Must run AFTER Consent Mode default above.
+    if ($ga4Id !== '') {
+        $out .= "\n  " . '<script async src="https://www.googletagmanager.com/gtag/js?id=' . h($ga4Id) . '"></script>'
+              . "\n  " . '<script>gtag("js",new Date());gtag("config","' . h($ga4Id) . '",{"anonymize_ip":true});</script>';
+    }
+
+    // ── Preconnects for Google services ──────────────────────────────────
+    $out .= "\n  " . '<link rel="preconnect" href="https://fonts.googleapis.com">'
+          . "\n  " . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+          . "\n  " . '<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>';
+
+    // ── Google Fonts — non-blocking async load ────────────────────────────
+    // @import inside CSS is parser-blocking and kills Core Web Vitals (LCP/FCP).
+    // The media="print" trick loads the stylesheet asynchronously so the page
+    // renders immediately with system fallback fonts, then swaps to the web
+    // fonts once they arrive. font-display=swap (in the URL) prevents invisible
+    // text during the swap window. A <noscript> fallback keeps fonts working
+    // when JS is disabled.
+    $fontsUrl = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap';
+    $out .= "\n  " . '<link rel="preload" as="style" href="' . $fontsUrl . '">'
+          . "\n  " . '<link rel="stylesheet" href="' . $fontsUrl . '" media="print" onload="this.media=\'all\'">'
+          . "\n  " . '<noscript><link rel="stylesheet" href="' . $fontsUrl . '"></noscript>';
+
+    // ── AdSense auto-ads ──────────────────────────────────────────────────
+    $out .= "\n  " . '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>';
+
+    // ── Site identity & discovery ─────────────────────────────────────────
+    $out .= "\n  " . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">'
+          . "\n  " . '<link rel="manifest" href="' . h(url('manifest.json')) . '">'
+          . "\n  " . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">';
+
+    // ── Global meta ───────────────────────────────────────────────────────
+    $out .= "\n  " . '<meta name="theme-color" content="#2563eb">'
+          . "\n  " . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">'
+          . "\n  " . '<meta name="language" content="ar">'
+          . "\n  " . '<meta property="og:locale" content="ar_AR">'
+          . "\n  " . '<meta property="og:site_name" content="yassota">'
+          . "\n  " . '<meta name="twitter:site" content="@yassota">'
+          . "\n  " . '<meta name="author" content="yassota">'
+          . "\n  " . '<link rel="alternate" hreflang="ar" href="' . h(SITE_URL) . '">'
+          . "\n  " . '<link rel="alternate" hreflang="x-default" href="' . h(SITE_URL) . '">';
+
+    // ── Default OG image (site-wide fallback for pages without their own) ─
+    if ($ogDefImg !== '') {
+        $out .= "\n  " . '<meta property="og:image" content="' . h(url($ogDefImg)) . '">'
+              . "\n  " . '<meta property="og:image:width" content="1200">'
+              . "\n  " . '<meta property="og:image:height" content="630">'
+              . "\n  " . '<meta name="twitter:image" content="' . h(url($ogDefImg)) . '">';
+    }
+
+    // ── Organization schema on every page ────────────────────────────────
+    $orgSchema = json_encode([
+        '@context'     => 'https://schema.org',
+        '@type'        => 'Organization',
+        'name'         => 'yassota',
+        'url'          => SITE_URL,
+        'logo'         => url('favicon.svg'),
+        'description'  => 'دليل تحريري عربي مستقل لمراجعة تطبيقات وألعاب أندرويد',
+        'contactPoint' => ['@type' => 'ContactPoint', 'contactType' => 'customer support', 'url' => url('contact')],
+        'sameAs'       => [],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $out .= "\n  " . '<script type="application/ld+json">' . $orgSchema . '</script>';
+
+    $out .= "\n  " . search_console_meta($pdo);
+    return $out;
 }
 
 function ad_slot(): string {

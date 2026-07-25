@@ -135,25 +135,6 @@ $orgSchema = json_encode([
     <?= ad_slot() ?>
   </div>
 
-  <!-- ── Hero Banner (homepage only) ── -->
-  <?php if (!$search && !$catSlug): ?>
-  <div class="hero-banner reveal">
-    <div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);margin-bottom:10px;text-transform:uppercase">
-      دليل تحريري مستقل — محتوى يومي
-    </div>
-    <h1>اكتشف وراجع أفضل<br>تطبيقات أندرويد</h1>
-    <p>مراجعات احترافية، مقارنات دقيقة، ومعلومات موثوقة لكل تطبيق — yassota دليلك العربي المستقل لاكتشاف عالم تطبيقات Android.</p>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px">
-      <a href="#apps-grid" style="padding:10px 24px;border-radius:50px;background:linear-gradient(135deg,var(--cyan),var(--purple));color:#fff;font-weight:700;font-size:13px;text-decoration:none">
-        استعرض التطبيقات
-      </a>
-      <a href="<?= h(url('blog')) ?>" style="padding:10px 24px;border-radius:50px;border:1.5px solid rgba(6,182,212,.4);color:var(--cyan);font-weight:600;font-size:13px;text-decoration:none">
-        اقرأ المراجعات
-      </a>
-    </div>
-  </div>
-  <?= partial_wave() ?>
-  <?php endif; ?>
 
   <!-- ── Featured Apps Carousel (editor's picks) ── -->
   <?php if (!empty($featuredApps) && !$search && !$catSlug): ?>

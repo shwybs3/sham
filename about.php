@@ -56,9 +56,9 @@ $metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستق�
 
   <!-- ── Stats ── -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" class="reveal">
-    <?php foreach ([[$totalApps,'تطبيق مراجَع','📱'],[$totalCats,'تصنيف','🗂️'],[$totalBlog,'مقالة','✍️']] as [$n,$l,$e]): ?>
+    <?php foreach ([[$totalApps,'تطبيق مراجَع','smartphone'],[$totalCats,'تصنيف','folder'],[$totalBlog,'مقالة','pen']] as [$n,$l,$ic]): ?>
     <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:20px;text-align:center">
-      <div style="font-size:24px;margin-bottom:6px"><?= $e ?></div>
+      <div style="color:var(--cyan);margin-bottom:8px;display:flex;justify-content:center"><?= partial_icon($ic, 24) ?></div>
       <div style="font-family:var(--f-mono);font-size:28px;font-weight:700;color:var(--cyan)"><?= number_format($n) ?></div>
       <div style="font-size:13px;color:var(--muted);margin-top:4px"><?= $l ?></div>
     </div>
@@ -75,7 +75,7 @@ $metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستق�
     </p>
 
     <div style="background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.15);border-radius:12px;padding:18px 20px;margin:20px 0">
-      <div style="font-weight:700;color:var(--white);font-size:14px;margin-bottom:10px">🧭 الأقسام التي نغطيها</div>
+      <div style="font-weight:700;color:var(--white);font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:7px"><?= partial_icon('folder', 16) ?> الأقسام التي نغطيها</div>
       <ul style="margin:0;padding-right:18px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <?php foreach (['تطبيقات الإنتاجية والأعمال','ألعاب أندرويد بجميع أنواعها','تطبيقات التواصل الاجتماعي','أدوات التصوير والتصميم','تطبيقات التعليم والتطوير','برامج الحماية والأمان'] as $item): ?>
         <li style="font-size:13px"><?= h($item) ?></li>

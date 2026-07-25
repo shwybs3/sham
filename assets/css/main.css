@@ -1,7 +1,8 @@
 /* ════════════════════════════════════════════════════
    yassota — white professional theme
+   Fonts loaded asynchronously in head_extras() — no @import here,
+   which was parser-blocking and hurt Core Web Vitals (LCP/FCP).
    ════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 /* ══ Design tokens ══ */
 :root {

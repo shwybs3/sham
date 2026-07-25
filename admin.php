@@ -1777,7 +1777,8 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
               'google_site_verification','bing_site_verification','virustotal_api_key',
               'ai_provider',
               'telegram_bot_token','telegram_channel_id','telegram_channel_url',
-              'indexnow_key','download_countdown_secs','download_custom_ad_code'] as $k) {
+              'indexnow_key','download_countdown_secs','download_custom_ad_code',
+              'ga4_measurement_id','og_default_image'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
@@ -4986,6 +4987,34 @@ elseif ($page === 'settings'): ?>
       <input type="checkbox" name="admin_email_notifications" value="1" <?= get_cfg($pdo,'admin_email_notifications')==='1'?'checked':'' ?>>
       <span>إرسال بريد إلكتروني تلقائي للبريد أعلاه عند وصول رسالة تواصل جديدة أو تعليق جديد بانتظار المراجعة</span>
     </label>
+  </div>
+
+  <div class="panel">
+    <h2>تحليلات الموقع — Google Analytics 4</h2>
+    <p class="form-hint" style="margin-bottom:14px;line-height:1.8">
+      Google Analytics 4 ضروري لقبول AdSense لأنه يُثبت وجود حركة زوار حقيقية.
+      احصل على معرّف القياس من
+      <a href="https://analytics.google.com" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">analytics.google.com</a>
+      → إنشاء موقع → يبدأ بـ <code>G-</code> (مثال: <code>G-XXXXXXXXXX</code>).
+      بعد إضافته الموقع سيُرسل بيانات الزوار تلقائياً مع احترام إعدادات موافقة ملفات تعريف الارتباط.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Google Analytics 4 — Measurement ID</label>
+      <input class="form-input" type="text" name="ga4_measurement_id"
+             value="<?= h(get_cfg($pdo,'ga4_measurement_id')) ?>"
+             placeholder="G-XXXXXXXXXX" dir="ltr" style="font-family:var(--f-mono)">
+      <div class="form-hint">اتركه فارغاً لتعطيل التتبع. لا تضع رمز GTM هنا — هذا الحقل لـ Measurement ID فقط.</div>
+    </div>
+    <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
+      <label class="form-label">صورة OG الافتراضية للموقع (Open Graph Default Image)</label>
+      <input class="form-input" type="text" name="og_default_image"
+             value="<?= h(get_cfg($pdo,'og_default_image')) ?>"
+             placeholder="uploads/og-default.png" dir="ltr">
+      <div class="form-hint">
+        مسار الصورة نسبةً لجذر الموقع — تُستخدم في صفحات بدون صورة خاصة (About، Contact، FAQ…).
+        يُنصح بحجم 1200×630 بيكسل. ارفع الصورة ثم أدخل مسارها هنا.
+      </div>
+    </div>
   </div>
 
   <div class="panel">
