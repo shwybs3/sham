@@ -229,7 +229,7 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
 /* ── One app card, identical everywhere it's used ── */
 function render_app_card(array $app): void { ?>
 <div class="app-card reveal">
-  <a href="<?= h(app_url($app['slug'])) ?>" data-hardnav="1">
+  <a href="<?= h(app_url($app['slug'])) ?>" class="app-card-inner" data-hardnav="1">
     <?php if (!empty($app['icon_path'])): ?>
       <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="app-card-icon" loading="lazy">
     <?php else: ?>
@@ -237,17 +237,19 @@ function render_app_card(array $app): void { ?>
         <?= partial_icon('apps') ?>
       </div>
     <?php endif; ?>
-    <div class="app-card-cat"><?= h($app['cat_name'] ?? 'تطبيق') ?></div>
-    <div class="app-card-name"><?= h($app['name']) ?></div>
-    <?php if (!empty($app['short_description'])): ?>
-    <div class="app-card-desc"><?= h(mb_substr($app['short_description'], 0, 80)) ?><?= mb_strlen($app['short_description']) > 80 ? '…' : '' ?></div>
-    <?php endif; ?>
-    <div class="app-card-meta">
-      <div class="app-card-rating">
-        <?= partial_icon('star') ?>
-        <span><?= h($app['rating']) ?></span>
+    <div class="app-card-body">
+      <div class="app-card-cat"><?= h($app['cat_name'] ?? 'تطبيق') ?></div>
+      <div class="app-card-name"><?= h($app['name']) ?></div>
+      <?php if (!empty($app['short_description'])): ?>
+      <div class="app-card-desc"><?= h(mb_substr($app['short_description'], 0, 80)) ?><?= mb_strlen($app['short_description']) > 80 ? '…' : '' ?></div>
+      <?php endif; ?>
+      <div class="app-card-meta">
+        <div class="app-card-rating">
+          <?= partial_icon('star') ?>
+          <span><?= h($app['rating']) ?></span>
+        </div>
+        <span class="app-card-size"><?= h($app['size_mb'] ? $app['size_mb'] . ' MB' : '') ?></span>
       </div>
-      <span class="app-card-size"><?= h($app['size_mb'] ? $app['size_mb'] . ' MB' : '') ?></span>
     </div>
   </a>
   <a href="<?= h(download_url($app['slug'])) ?>" class="btn-dl-card" data-hardnav="1">

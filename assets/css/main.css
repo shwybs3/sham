@@ -525,6 +525,14 @@ button, input, select, textarea { font-family: inherit; }
   transform: scale(1.08);
   box-shadow: 0 4px 14px rgba(124,58,237,.22);
 }
+.app-card-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  min-height: 0;
+}
 .app-card-img-wrap {
   position: relative;
   padding-top: 60%;
@@ -544,21 +552,34 @@ button, input, select, textarea { font-family: inherit; }
   right: 12px;
 }
 .app-card-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 13px;
-  border: 3px solid var(--surface);
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   object-fit: cover;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   background: var(--surface-2);
   transition: transform .28s cubic-bezier(.34,1.56,.64,1), box-shadow .28s ease;
+  display: block;
+  margin: 16px auto 0;
+}
+.app-card-icon-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px auto 0;
+  color: var(--muted);
 }
 .app-card-body {
-  padding: 20px 12px 14px;
+  padding: 10px 12px 14px;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  text-align: center;
 }
 .app-card-name {
   font-family: var(--f-head);
@@ -587,13 +608,19 @@ button, input, select, textarea { font-family: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.app-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
 .app-card-rating {
   font-size: 11px;
   color: var(--warning);
   display: flex;
   align-items: center;
   gap: 3px;
-  margin-top: 2px;
 }
 .btn-dl-card {
   display: flex;
