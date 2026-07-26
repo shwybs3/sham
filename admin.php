@@ -467,6 +467,7 @@ function build_html_page(array $app): string {
         'applicationCategory' => 'MobileApplication',
         'operatingSystem' => 'Android ' . ($app['android_version'] ?? '5.0') . '+',
         'softwareVersion' => ($app['version'] ?? ''),
+        'datePublished' => !empty($app['release_date']) ? $app['release_date'] : substr($app['created_at'] ?? $today, 0, 10),
         'dateModified' => $today,
         'author'      => ['@type'=>'Organization','name'=>$dev ?: $siteName],
         'offers'      => ['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD'],
@@ -3427,6 +3428,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'install_steps'     => json_encode($installSteps, JSON_UNESCAPED_UNICODE),
         'faq'               => json_encode($faq, JSON_UNESCAPED_UNICODE),
         'badge'             => in_array($_POST['badge'] ?? '', ['','new','updated','hot','choice'], true) ? ($_POST['badge'] ?? '') : '',
+        'release_date'      => !empty($_POST['release_date']) ? $_POST['release_date'] : null,
     ];
 
     if ($isEdit && $appId) {
@@ -4872,6 +4874,11 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <div class="form-group">
         <label class="form-label">الحجم (MB)</label>
         <input class="form-input" id="f-size" type="text" name="size_mb" value="<?= h($app['size_mb']??'') ?>">
+      </div>
+      <div class="form-group">
+        <label class="form-label">تاريخ الإصدار</label>
+        <input class="form-input" type="date" name="release_date" value="<?= h($app['release_date']??'') ?>">
+        <div class="form-hint">يُستخدم في Schema.org (datePublished) — يُحسّن ظهور التطبيق في Google</div>
       </div>
       <div class="form-group">
         <label class="form-label">الترخيص</label>

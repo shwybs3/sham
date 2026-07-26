@@ -192,9 +192,11 @@ $schemaData = [
     ],
     "publisher" => ["@type" => "Organization", "name" => get_cfg($pdo, 'site_name', 'yassota'), "url" => rtrim(SITE_URL, '/')],
 ];
-if ($app['developer']) $schemaData["author"] = ["@type" => "Organization", "name" => $app['developer']];
-if ($app['icon_path']) $schemaData["image"] = media_url($app['icon_path']);
-if ($app['size_mb'])   $schemaData["fileSize"] = $app['size_mb'] . ' MB';
+if ($app['developer'])    $schemaData["author"] = ["@type" => "Organization", "name" => $app['developer']];
+if ($app['icon_path'])    $schemaData["image"] = media_url($app['icon_path']);
+if ($app['size_mb'])      $schemaData["fileSize"] = $app['size_mb'] . ' MB';
+if (!empty($app['release_date'])) $schemaData["datePublished"] = $app['release_date'];
+if (!empty($app['updated_at']))   $schemaData["dateModified"]  = substr($app['updated_at'], 0, 10);
 if ($app['downloads'] > 0) $schemaData["interactionStatistic"] = [
     "@type" => "InteractionCounter",
     "interactionType" => "https://schema.org/DownloadAction",

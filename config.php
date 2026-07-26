@@ -269,6 +269,9 @@ function ensure_schema(PDO $pdo): array {
     // needs_update: flag to track apps that need an update
     if (!in_array('needs_update', $appCols))
         @$pdo->exec("ALTER TABLE apps ADD COLUMN needs_update TINYINT(1) NOT NULL DEFAULT 0");
+    // release_date: official app release date shown in Schema.org datePublished
+    if (!in_array('release_date', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN release_date DATE NULL AFTER updated_at");
 
     // Comments: add ip column if missing
     $commentCols = $pdo->query("SHOW COLUMNS FROM comments")->fetchAll(PDO::FETCH_COLUMN);
