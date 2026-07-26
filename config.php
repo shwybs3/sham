@@ -671,6 +671,26 @@ function ensure_schema(PDO $pdo): array {
         if (!$exists) { $pdo->exec("ALTER TABLE apps ADD COLUMN $col $def"); $log[] = "apps.$col"; }
     }
 
+    // Hosting subdomains table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS subdomains (
+      id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name            VARCHAR(128) NOT NULL,
+      full_domain     VARCHAR(256) NOT NULL,
+      type            ENUM('tools','clone','landing','custom') NOT NULL DEFAULT 'landing',
+      status          ENUM('pending','active','paused') NOT NULL DEFAULT 'pending',
+      site_dir        VARCHAR(512) DEFAULT NULL,
+      ai_content_type VARCHAR(256) DEFAULT NULL,
+      ranking_score   TINYINT UNSIGNED DEFAULT NULL,
+      monthly_searches INT UNSIGNED DEFAULT NULL,
+      competition     ENUM('low','medium','high') DEFAULT NULL,
+      keyword         VARCHAR(256) DEFAULT NULL,
+      indexed_at      DATETIME NULL,
+      created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status),
+      INDEX idx_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'subdomains';
+
     return $log;
 }
 ensure_schema($pdo);

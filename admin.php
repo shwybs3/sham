@@ -4951,6 +4951,127 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ps_bulk_import' && is_admin()) {
     exit;
 }
 
+/* ─────────────── HOSTING MANAGER AJAX ─────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'hosting_keyword_research' && is_admin()) {
+    header('Content-Type: application/json');
+    $keys   = array_filter(array_map('trim', explode(',', get_cfg($pdo,'openrouter_api_key') ?: '')));
+    $apiKey = $keys[array_rand($keys)] ?? '';
+    $model  = get_cfg($pdo,'openrouter_model') ?: 'openai/gpt-4o-mini';
+    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter']); exit; }
+    $sysMsg = 'أنت خبير تحسين محركات البحث (SEO) متخصص في المنافسة المنخفضة وحجم البحث العالي للمواقع العربية. تاريخ اليوم: ' . date('Y-m-d') . '.';
+    $userMsg = <<<PROMPT
+ابحث عن أفضل 10 أفكار لمواقع أدوات الويب باللغة العربية في الوقت الحالي، مقسمة كالتالي:
+- 5 أدوات شائعة جداً (حجم بحث عالي، منافسة متوسطة-عالية) — الناس يبحث عنها كثيراً
+- 5 أدوات نادرة (حجم بحث جيد، منافسة منخفضة جداً أقل من 1٪ — أي يبحث عنها الناس لكن لا يوجد إلا 2-3 مواقع تقدمها)
+
+لكل فكرة أعطني:
+1. اسم الأداة بالعربي والإنجليزي
+2. الكلمة المفتاحية الرئيسية بالعربي
+3. حجم البحث الشهري التقريبي (ارقام واقعية)
+4. مستوى المنافسة: low / medium / high
+5. نسبة نجاح الموقع (من 10) إذا تم إنشاؤه اليوم
+6. slug مقترح للسبدومين (بالإنجليزي، بدون مسافات)
+7. وصف قصير للأداة (جملة واحدة بالعربي)
+
+أعد الجواب بصيغة JSON فقط هكذا:
+{
+  "popular": [
+    {"name_ar":"...","name_en":"...","keyword":"...","monthly_searches":12000,"competition":"medium","score":7,"slug":"...","desc":"..."},
+    ...
+  ],
+  "rare": [
+    {"name_ar":"...","name_en":"...","keyword":"...","monthly_searches":3000,"competition":"low","score":9,"slug":"...","desc":"..."},
+    ...
+  ]
+}
+PROMPT;
+    $resp = ai_call($apiKey, $model, $sysMsg, $userMsg, 2000);
+    if (!$resp) { echo json_encode(['ok'=>false,'error'=>'فشل الاتصال بالذكاء الاصطناعي']); exit; }
+    $json = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($resp));
+    $data = json_decode($json, true);
+    if (!$data || empty($data['popular'])) { echo json_encode(['ok'=>false,'error'=>'تعذّر تحليل الجواب: '.$resp]); exit; }
+    echo json_encode(['ok'=>true,'data'=>$data]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'subdomain_save' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id    = (int)($input['id'] ?? 0);
+    $name  = trim($input['name'] ?? '');
+    $domain = trim($input['full_domain'] ?? '');
+    $type  = in_array($input['type']??'', ['tools','clone','landing','custom']) ? $input['type'] : 'landing';
+    $status = in_array($input['status']??'', ['pending','active','paused']) ? $input['status'] : 'pending';
+    $keyword = trim($input['keyword'] ?? '');
+    $score   = isset($input['ranking_score']) ? (int)$input['ranking_score'] : null;
+    $searches = isset($input['monthly_searches']) ? (int)$input['monthly_searches'] : null;
+    $comp    = in_array($input['competition']??'', ['low','medium','high']) ? $input['competition'] : null;
+    $aiType  = trim($input['ai_content_type'] ?? '');
+    if (!$name || !$domain) { echo json_encode(['ok'=>false,'error'=>'الاسم والنطاق مطلوبان']); exit; }
+    try {
+        if ($id) {
+            $pdo->prepare("UPDATE subdomains SET name=?,full_domain=?,type=?,status=?,keyword=?,ranking_score=?,monthly_searches=?,competition=?,ai_content_type=? WHERE id=?")
+                ->execute([$name,$domain,$type,$status,$keyword,$score,$searches,$comp,$aiType,$id]);
+            echo json_encode(['ok'=>true,'id'=>$id]);
+        } else {
+            $pdo->prepare("INSERT INTO subdomains (name,full_domain,type,status,keyword,ranking_score,monthly_searches,competition,ai_content_type) VALUES (?,?,?,?,?,?,?,?,?)")
+                ->execute([$name,$domain,$type,$status,$keyword,$score,$searches,$comp,$aiType]);
+            echo json_encode(['ok'=>true,'id'=>(int)$pdo->lastInsertId()]);
+        }
+    } catch (\Throwable $e) { echo json_encode(['ok'=>false,'error'=>$e->getMessage()]); }
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'subdomain_delete' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)(json_decode(file_get_contents('php://input'),true)['id'] ?? 0);
+    if ($id) { $pdo->prepare("DELETE FROM subdomains WHERE id=?")->execute([$id]); }
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'subdomain_detect_type' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $subName = trim($input['name'] ?? '');
+    if (!$subName) { echo json_encode(['ok'=>false,'error'=>'اسم السبدومين مطلوب']); exit; }
+    $keys   = array_filter(array_map('trim', explode(',', get_cfg($pdo,'openrouter_api_key') ?: '')));
+    $apiKey = $keys[array_rand($keys)] ?? '';
+    $model  = get_cfg($pdo,'openrouter_model') ?: 'openai/gpt-4o-mini';
+    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter']); exit; }
+    $prompt = "بناءً على اسم الدومين الفرعي التالي: \"$subName\"\nحدد:\n1. نوع المحتوى المناسب له (أداة ويب / متجر تطبيقات / مدونة / خدمات)\n2. عنوان الموقع الاحترافي بالعربي\n3. وصف meta مختصر بالعربي (160 حرف)\n4. 5 أدوات أو خدمات مناسبة لتضمينها\nأعد JSON فقط: {\"content_type\":\"...\",\"title\":\"...\",\"description\":\"...\",\"suggestions\":[\"...\",\"...\",\"...\",\"...\",\"...\"]}";
+    $resp = ai_call($apiKey, $model, 'أنت خبير بناء مواقع ويب.', $prompt, 500);
+    $json = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($resp ?? ''));
+    $data = json_decode($json, true);
+    echo json_encode($data ? ['ok'=>true,'data'=>$data] : ['ok'=>false,'error'=>'تعذّر تحليل الجواب']);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'subdomain_generate_landing' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $slug   = preg_replace('/[^a-z0-9\-]/', '', strtolower($input['slug'] ?? ''));
+    $title  = htmlspecialchars(trim($input['title'] ?? 'yassota - hosting web'), ENT_QUOTES, 'UTF-8');
+    $desc   = htmlspecialchars(trim($input['description'] ?? 'استضافة مواقع ويب احترافية'), ENT_QUOTES, 'UTF-8');
+    $type   = $input['type'] ?? 'default';
+    if (!$slug) { echo json_encode(['ok'=>false,'error'=>'slug مطلوب']); exit; }
+    $dir = __DIR__ . '/hosting/' . $slug;
+    if (!is_dir($dir)) { mkdir($dir, 0755, true); }
+    $html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . $title . '</title><meta name="description" content="' . $desc . '"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:\'Segoe UI\',Tahoma,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:16px;padding:40px;max-width:600px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}h1{font-size:28px;color:#38bdf8;margin-bottom:8px}h2{font-size:16px;color:#94a3b8;margin-bottom:30px}.badge{display:inline-block;background:#0ea5e9;color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;margin-bottom:20px}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:24px 0}.plan{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px}.plan h3{font-size:14px;color:#38bdf8;margin-bottom:6px}.plan p{font-size:12px;color:#64748b}.tg{display:inline-flex;align-items:center;gap:8px;background:#0088cc;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px}.footer{margin-top:30px;font-size:12px;color:#475569}</style></head><body><div class="card"><div class="badge">🚀 قريباً</div><h1>yassota</h1><h2>' . $title . '</h2><p style="color:#64748b;margin-bottom:20px">' . $desc . '</p><div class="plans"><div class="plan"><h3>🆓 مجاني</h3><p>نطاق فرعي مجاني<br>100MB مساحة</p></div><div class="plan"><h3>⚡ مشترك</h3><p>نطاق خاص<br>10GB مساحة</p></div><div class="plan"><h3>🏆 VPS</h3><p>سيرفر مخصص<br>موارد كاملة</p></div></div><a href="https://t.me/layos_he" target="_blank" class="tg">📬 تواصل معنا على تيليجرام</a><div class="footer">© ' . date('Y') . ' yassota — جميع الحقوق محفوظة</div></div></body></html>';
+    file_put_contents($dir . '/index.html', $html);
+    echo json_encode(['ok'=>true,'path'=>'hosting/'.$slug.'/index.html','url'=>get_cfg($pdo,'site_url').'hosting/'.$slug.'/']);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'hosting_toggle_https' && is_admin()) {
+    header('Content-Type: application/json');
+    $current = (int)(get_cfg($pdo,'force_https') ?: 0);
+    $new = $current ? 0 : 1;
+    $pdo->prepare("INSERT INTO settings (cfg_key,cfg_value) VALUES ('force_https',?) ON DUPLICATE KEY UPDATE cfg_value=?")->execute([$new,$new]);
+    echo json_encode(['ok'=>true,'enabled'=>(bool)$new]);
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
@@ -4995,6 +5116,7 @@ $navLinks = [
     'landing-pages' => ['label'=>'صفحات الهبوط (Landing)', 'icon'=>'M4 4h16v4H4V4zm0 7h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'tools-manager' => ['label'=>'أدوات الويب (Subdomains)', 'icon'=>'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
+    'hosting-manager' => ['label'=>'مدير الاستضافة والدومينات', 'icon'=>'M5 12H3l9-9 9 9h-2M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7M9 21V12h6v9'],
     'ad-networks' => ['label'=>'شبكات الإعلانات & AdSense', 'icon'=>'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
@@ -10363,6 +10485,313 @@ function registerAll() {
     setTimeout(next, 1200);
   }
   next();
+}
+</script>
+
+<?php
+/* ─────────────── HOSTING & DOMAIN MANAGER ─────────────── */
+elseif ($page === 'hosting-manager'):
+$httpsEnabled  = (bool)(int)(get_cfg($pdo,'force_https') ?: 0);
+$siteUrl       = rtrim(get_cfg($pdo,'site_url') ?: 'https://yassota.com', '/');
+$baseDomain    = parse_url($siteUrl, PHP_URL_HOST) ?: 'yassota.com';
+$subdomainList = $pdo->query("SELECT * FROM subdomains ORDER BY created_at DESC")->fetchAll();
+?>
+
+<div class="admin-header">
+  <h1>مدير الاستضافة والدومينات</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">
+    إدارة الدومينات الفرعية — إنشاء صفحات الهبوط — بحث عن فرص SEO نادرة
+  </p>
+</div>
+
+<!-- ── HTTPS Toggle ── -->
+<div class="panel" style="margin-bottom:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h3 style="margin:0 0 4px">إجبار HTTPS</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0">
+        <?= $httpsEnabled ? '✅ مُفعَّل — كل روابط HTTP تُحوَّل إلى HTTPS' : '⚠️ غير مُفعَّل — قد يؤثر على ترتيب الموقع وإعلانات AdSense' ?>
+      </p>
+    </div>
+    <button id="https-toggle-btn" onclick="toggleHttps()" class="btn-primary" style="background:<?= $httpsEnabled ? '#ef4444' : '#22c55e' ?>;min-width:150px">
+      <?= $httpsEnabled ? 'إيقاف HTTPS' : 'تفعيل HTTPS' ?>
+    </button>
+  </div>
+</div>
+
+<!-- ── Quick Links ── -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+  <a href="admin.php?page=file-manager" class="panel" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:14px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;flex-shrink:0;color:#3b82f6"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+    <span style="font-weight:600;font-size:14px">مدير الملفات</span>
+  </a>
+  <a href="<?= h($siteUrl) ?>/sitemap.xml" target="_blank" class="panel" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:14px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;flex-shrink:0;color:#10b981"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+    <span style="font-weight:600;font-size:14px">خريطة الموقع</span>
+  </a>
+  <a href="<?= h($siteUrl) ?>" target="_blank" class="panel" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:14px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;flex-shrink:0;color:#f59e0b"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+    <span style="font-weight:600;font-size:14px">الموقع الرئيسي</span>
+  </a>
+  <a href="https://t.me/layos_he" target="_blank" class="panel" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:14px">
+    <svg viewBox="0 0 24 24" fill="#0088cc" style="width:22px;height:22px;flex-shrink:0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.873.75z"/></svg>
+    <span style="font-weight:600;font-size:14px">@layos_he</span>
+  </a>
+</div>
+
+<!-- ── AI Keyword Research ── -->
+<div class="panel" style="margin-bottom:24px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <div>
+      <h3 style="margin:0 0 4px">🔍 بحث ذكي عن فرص SEO</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0">5 أدوات شائعة + 5 أدوات نادرة (منافسة أقل من 1٪) مع نسبة نجاح التصدر</p>
+    </div>
+    <button onclick="doKeywordResearch()" id="kw-btn" class="btn-primary">🤖 ابحث الآن</button>
+  </div>
+  <div id="kw-results"></div>
+</div>
+
+<!-- ── Create Subdomain ── -->
+<div class="panel" style="margin-bottom:24px">
+  <h3 style="margin:0 0 16px">➕ إنشاء دومين فرعي جديد</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div>
+      <label class="form-label">اسم الدومين الفرعي</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="new-sub-name" type="text" class="form-input" placeholder="tools" style="flex:1">
+        <span style="color:var(--muted);white-space:nowrap;font-size:13px">.<?= h($baseDomain) ?></span>
+      </div>
+    </div>
+    <div>
+      <label class="form-label">نوع المحتوى</label>
+      <select id="new-sub-type" class="form-input">
+        <option value="landing">صفحة هبوط (افتراضي)</option>
+        <option value="clone">نسخة yassota</option>
+        <option value="tools">أدوات ويب</option>
+        <option value="custom">مخصص</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">وصف / الكلمة المفتاحية</label>
+      <input id="new-sub-keyword" type="text" class="form-input" placeholder="اختياري — لتحسين SEO">
+    </div>
+    <div>
+      <label class="form-label">الحالة</label>
+      <select id="new-sub-status" class="form-input">
+        <option value="pending">قيد الإعداد</option>
+        <option value="active">مُفعَّل</option>
+      </select>
+    </div>
+  </div>
+  <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+    <button onclick="detectAndCreate()" class="btn-primary">🤖 اكتشاف تلقائي وإنشاء</button>
+    <button onclick="createSubdomainOnly()" class="btn-primary" style="background:var(--accent-muted,#6366f1)">📁 إنشاء بدون AI</button>
+  </div>
+  <div id="sub-create-status" style="margin-top:10px;font-size:13px"></div>
+</div>
+
+<!-- ── Subdomains List ── -->
+<div class="panel" style="margin-bottom:24px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <h3 style="margin:0">📋 الدومينات الفرعية (<?= count($subdomainList) ?>)</h3>
+  </div>
+  <?php if (empty($subdomainList)): ?>
+  <p style="color:var(--muted);text-align:center;padding:30px">لم يتم إنشاء أي دومين فرعي حتى الآن</p>
+  <?php else: ?>
+  <div style="overflow-x:auto">
+    <table class="admin-table" id="subdomain-table">
+      <thead><tr><th>الاسم</th><th>النطاق</th><th>النوع</th><th>الحالة</th><th>نسبة النجاح</th><th>الكلمة المفتاحية</th><th>إجراءات</th></tr></thead>
+      <tbody>
+      <?php foreach ($subdomainList as $sub): ?>
+        <tr data-id="<?= $sub['id'] ?>">
+          <td><?= h($sub['name']) ?></td>
+          <td><a href="<?= h(preg_replace('/^https?:/i','https:',$siteUrl)) ?>" target="_blank" style="color:var(--link)"><?= h($sub['full_domain']) ?></a></td>
+          <td>
+            <?php $typeLabels=['tools'=>'أدوات','clone'=>'نسخة','landing'=>'هبوط','custom'=>'مخصص']; ?>
+            <span style="font-size:12px;background:var(--badge-bg,#e2e8f0);padding:2px 8px;border-radius:20px"><?= $typeLabels[$sub['type']] ?? h($sub['type']) ?></span>
+          </td>
+          <td>
+            <?php $stC=['pending'=>'#f59e0b','active'=>'#22c55e','paused'=>'#ef4444']; $stL=['pending'=>'معلق','active'=>'نشط','paused'=>'متوقف']; ?>
+            <span style="color:<?= $stC[$sub['status']] ?? '#94a3b8' ?>;font-weight:600;font-size:13px"><?= $stL[$sub['status']] ?? h($sub['status']) ?></span>
+          </td>
+          <td><?= $sub['ranking_score'] ? '<span style="font-weight:700;color:#3b82f6">' . (int)$sub['ranking_score'] . '/10</span>' : '—' ?></td>
+          <td style="font-size:12px;color:var(--muted)"><?= h($sub['keyword'] ?: '—') ?></td>
+          <td>
+            <button onclick="generateLanding(<?= $sub['id'] ?>, '<?= h(addslashes($sub['name'])) ?>')" class="btn-sm" title="إنشاء صفحة هبوط">📄</button>
+            <button onclick="deleteSub(<?= $sub['id'] ?>)" class="btn-sm" style="background:#ef4444;color:#fff;margin-right:4px" title="حذف">🗑️</button>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
+</div>
+
+<!-- ── InfinityFree Guide ── -->
+<div class="panel" style="margin-bottom:24px">
+  <h3 style="margin:0 0 16px">🌐 دليل ربط دومينات مجانية من InfinityFree</h3>
+  <div style="display:grid;gap:12px">
+    <div style="background:var(--surface-alt,#f8fafc);border-radius:10px;padding:16px;border:1px solid var(--border)">
+      <h4 style="color:#3b82f6;margin:0 0 10px">الخطوة 1 — إنشاء حساب مجاني</h4>
+      <ol style="color:var(--muted);font-size:13px;padding-right:20px;line-height:1.9">
+        <li>سجّل مجاناً على <strong>infinityfree.com</strong></li>
+        <li>اضغط على "Create Account" واختر خطة المجانية</li>
+        <li>ستحصل على دومين فرعي مجاني مثل <code>yourname.rf.gd</code> أو <code>yourname.epizy.com</code></li>
+      </ol>
+    </div>
+    <div style="background:var(--surface-alt,#f8fafc);border-radius:10px;padding:16px;border:1px solid var(--border)">
+      <h4 style="color:#3b82f6;margin:0 0 10px">الخطوة 2 — ربط دومين خارجي (اختياري)</h4>
+      <ol style="color:var(--muted);font-size:13px;padding-right:20px;line-height:1.9">
+        <li>من لوحة InfinityFree اذهب إلى <strong>Addon Domains</strong></li>
+        <li>أدخل الدومين المراد ربطه</li>
+        <li>انسخ سيرفرات الأسماء (Nameservers) المعطاة</li>
+        <li>من مسجّل الدومين حدّث NS إلى القيم أعلاه</li>
+        <li>انتظر 24-48 ساعة للانتشار</li>
+      </ol>
+    </div>
+    <div style="background:var(--surface-alt,#f8fafc);border-radius:10px;padding:16px;border:1px solid var(--border)">
+      <h4 style="color:#3b82f6;margin:0 0 10px">الخطوة 3 — رفع ملفات الموقع</h4>
+      <ol style="color:var(--muted);font-size:13px;padding-right:20px;line-height:1.9">
+        <li>من لوحة InfinityFree اذهب إلى <strong>File Manager → htdocs</strong></li>
+        <li>ارفع ملفات موقعك أو استخدم FTP</li>
+        <li>بيانات FTP: <strong>Host:</strong> ftpupload.net — <strong>Port:</strong> 21</li>
+        <li>المستخدم وكلمة المرور من لوحة التحكم تحت "FTP Details"</li>
+      </ol>
+    </div>
+    <div style="background:var(--surface-alt,#f8fafc);border-radius:10px;padding:16px;border:1px solid var(--border)">
+      <h4 style="color:#10b981;margin:0 0 10px">💡 بدائل مجانية أخرى</h4>
+      <ul style="color:var(--muted);font-size:13px;padding-right:20px;line-height:1.9">
+        <li><strong>000webhost (Hostinger)</strong> — 300MB مجانية، PHP + MySQL</li>
+        <li><strong>Netlify</strong> — مثالي للمواقع الثابتة، HTTPS تلقائي</li>
+        <li><strong>GitHub Pages</strong> — مجاني دائماً، مناسب للصفحات الثابتة</li>
+        <li><strong>Vercel</strong> — نطاقات مجانية <code>*.vercel.app</code></li>
+        <li><strong>Freenom</strong> — نطاقات مجانية .tk .ml .ga .cf .gq</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleHttps() {
+  var btn = document.getElementById('https-toggle-btn');
+  btn.disabled = true; btn.textContent = '...';
+  fetch('admin.php?ajax=hosting_toggle_https', {method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.ok) location.reload();
+      else { btn.disabled=false; btn.textContent='خطأ!'; }
+    }).catch(function(){ btn.disabled=false; btn.textContent='خطأ!'; });
+}
+
+function doKeywordResearch() {
+  var btn = document.getElementById('kw-btn');
+  var res = document.getElementById('kw-results');
+  btn.disabled = true; btn.textContent = '⏳ جاري البحث...';
+  res.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">يُحلّل الذكاء الاصطناعي فرص السوق...</p>';
+  fetch('admin.php?ajax=hosting_keyword_research', {method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      btn.disabled=false; btn.textContent='🤖 ابحث الآن';
+      if (!d.ok) { res.innerHTML='<p style="color:#ef4444">'+d.error+'</p>'; return; }
+      var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+      html += renderKwGroup('🔥 أدوات شائعة (منافسة متوسطة)', d.data.popular, '#f59e0b');
+      html += renderKwGroup('💎 فرص نادرة (منافسة 1٪ فقط)', d.data.rare, '#22c55e');
+      html += '</div>';
+      res.innerHTML = html;
+    }).catch(function(){ btn.disabled=false; btn.textContent='🤖 ابحث الآن'; res.innerHTML='<p style="color:#ef4444">فشل الاتصال</p>'; });
+}
+
+function renderKwGroup(title, items, color) {
+  if (!items || !items.length) return '';
+  var html = '<div><h4 style="color:'+color+';margin:0 0 12px;font-size:14px">'+title+'</h4><div style="display:flex;flex-direction:column;gap:10px">';
+  items.forEach(function(item) {
+    var scoreColor = item.score>=8?'#22c55e':item.score>=6?'#f59e0b':'#ef4444';
+    html += '<div style="background:var(--surface-alt,#f8fafc);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html += '<strong style="font-size:14px">'+item.name_ar+'</strong>';
+    html += '<span style="font-size:22px;font-weight:800;color:'+scoreColor+'">'+item.score+'/10</span>';
+    html += '</div>';
+    html += '<p style="color:var(--muted);font-size:12px;margin:0 0 8px">'+item.desc+'</p>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px">';
+    html += '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px">🔍 '+item.monthly_searches.toLocaleString()+'/شهر</span>';
+    html += '<span style="background:'+(item.competition==='low'?'#dcfce7':'item.competition==="medium"?"#fef9c3":"#fee2e2")+';color:'+(item.competition==='low'?'#166534':'item.competition==="medium"?"#92400e":"#991b1b")+';padding:2px 8px;border-radius:10px">'+(item.competition==='low'?'منافسة منخفضة':item.competition==='medium'?'منافسة متوسطة':'منافسة عالية')+'</span>';
+    html += '<button onclick="prefillSubdomain(\''+item.slug+'\',\''+item.keyword+'\')" style="background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:2px 10px;cursor:pointer;font-size:11px">+ إنشاء</button>';
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function prefillSubdomain(slug, keyword) {
+  document.getElementById('new-sub-name').value = slug;
+  document.getElementById('new-sub-keyword').value = keyword;
+  document.getElementById('new-sub-type').value = 'tools';
+  document.getElementById('new-sub-name').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function detectAndCreate() {
+  var name = document.getElementById('new-sub-name').value.trim();
+  var status = document.getElementById('sub-create-status');
+  if (!name) { status.style.color='#ef4444'; status.textContent='أدخل اسم الدومين الفرعي أولاً'; return; }
+  status.style.color='var(--muted)'; status.textContent='⏳ الذكاء الاصطناعي يحلّل نوع المحتوى...';
+  fetch('admin.php?ajax=subdomain_detect_type', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (!d.ok || !d.data) { status.style.color='#ef4444'; status.textContent='فشل الاكتشاف التلقائي'; return; }
+      var data = d.data;
+      status.textContent = '✅ نوع المحتوى: '+data.content_type+' — جاري الإنشاء...';
+      saveSub(name, data.content_type, data.title, data.description);
+    }).catch(function(){ status.style.color='#ef4444'; status.textContent='فشل الاتصال'; });
+}
+
+function createSubdomainOnly() {
+  var name = document.getElementById('new-sub-name').value.trim();
+  var status = document.getElementById('sub-create-status');
+  if (!name) { status.style.color='#ef4444'; status.textContent='أدخل اسم الدومين الفرعي أولاً'; return; }
+  saveSub(name, null, 'yassota - hosting web', 'استضافة مواقع ويب احترافية');
+}
+
+function saveSub(name, aiType, title, desc) {
+  var type    = document.getElementById('new-sub-type').value;
+  var keyword = document.getElementById('new-sub-keyword').value.trim();
+  var subStatus = document.getElementById('new-sub-status').value;
+  var domain  = name + '.<?= h($baseDomain) ?>';
+  var status  = document.getElementById('sub-create-status');
+  fetch('admin.php?ajax=subdomain_save', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,full_domain:domain,type:type,status:subStatus,keyword:keyword,ai_content_type:aiType})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (!d.ok) { status.style.color='#ef4444'; status.textContent='خطأ: '+(d.error||''); return; }
+      generateLandingPage(name, title, desc, d.id, status);
+    }).catch(function(){ status.style.color='#ef4444'; status.textContent='فشل الحفظ'; });
+}
+
+function generateLandingPage(name, title, desc, id, statusEl) {
+  fetch('admin.php?ajax=subdomain_generate_landing', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:name,title:title||'yassota - hosting web',description:desc||''})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.ok) {
+        if (statusEl) { statusEl.style.color='#22c55e'; statusEl.textContent='✅ تم الإنشاء! المسار: '+d.path; }
+        setTimeout(function(){ location.reload(); }, 1500);
+      } else {
+        if (statusEl) { statusEl.style.color='#f59e0b'; statusEl.textContent='تم الحفظ لكن فشل إنشاء الملف: '+(d.error||''); }
+      }
+    }).catch(function(){ if (statusEl) { statusEl.style.color='#22c55e'; statusEl.textContent='تم الحفظ ✓'; } setTimeout(function(){ location.reload(); }, 1200); });
+}
+
+function generateLanding(id, name) {
+  var title = prompt('عنوان الصفحة:', 'yassota - '+name+' hosting');
+  if (title === null) return;
+  var desc  = prompt('وصف الصفحة:', 'استضافة مواقع ويب احترافية');
+  if (desc === null) return;
+  generateLandingPage(name, title, desc, id, null);
+}
+
+function deleteSub(id) {
+  if (!confirm('هل أنت متأكد من حذف هذا الدومين؟')) return;
+  fetch('admin.php?ajax=subdomain_delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+    .then(function(r){return r.json();})
+    .then(function(d){ if (d.ok) { var row=document.querySelector('[data-id="'+id+'"]'); if(row)row.remove(); } });
 }
 </script>
 
