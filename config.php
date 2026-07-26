@@ -572,6 +572,35 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'captcha_challenges';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS landing_pages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      app_id INT NOT NULL,
+      lang ENUM('ar','en') NOT NULL DEFAULT 'ar',
+      title VARCHAR(220),
+      meta_description VARCHAR(400),
+      file_path VARCHAR(500),
+      page_url VARCHAR(600),
+      subdomain_url VARCHAR(600),
+      indexed TINYINT(1) NOT NULL DEFAULT 0,
+      indexed_at DATETIME NULL,
+      adsense_pub_id VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_app_lang (app_id, lang),
+      INDEX idx_app (app_id),
+      INDEX idx_indexed (indexed)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'landing_pages';
+
+    // Additive columns for apps table
+    foreach ([
+        ['subdomain_created', "TINYINT(1) NOT NULL DEFAULT 0"],
+        ['subdomain_url',     "VARCHAR(300) NULL"],
+    ] as [$col, $def]) {
+        $exists = $pdo->query("SHOW COLUMNS FROM apps LIKE '$col'")->rowCount();
+        if (!$exists) { $pdo->exec("ALTER TABLE apps ADD COLUMN $col $def"); $log[] = "apps.$col"; }
+    }
+
     return $log;
 }
 ensure_schema($pdo);
@@ -2016,7 +2045,7 @@ function telegram_api(PDO $pdo, string $method, array $body): array {
    - Tries sendPhoto first (shows icon) then falls back to sendMessage.
    - Uses AI to write the caption if configured, otherwise builds it manually.
    - Silently returns on failure so it never breaks the save flow.            */
-function telegram_notify_new_app(PDO $pdo, array $app): void {
+function telegram_notify_new_app(PDO $pdo, array $app, array $landingUrls = []): void {
     if (get_cfg($pdo, 'telegram_enabled', '0') !== '1') return;
     if (!get_cfg($pdo, 'telegram_bot_token') || !get_cfg($pdo, 'telegram_channel_id')) return;
 
@@ -2025,31 +2054,33 @@ function telegram_notify_new_app(PDO $pdo, array $app): void {
     $version   = $app['version']           ?? '';
     $sizeMb    = $app['size_mb']           ?? '';
     $developer = $app['developer']         ?? '';
-    $pkg       = $app['package_name']      ?? '';
-    $features  = array_slice(array_filter(json_decode($app['features'] ?? '[]', true) ?: []), 0, 5);
 
-    // Build caption instantly from stored data — never call the AI API here
-    // because this function runs synchronously during the save request and an
-    // AI call would block the admin browser for 15-30 seconds.
-    $lines = ["🆕 <b>{$name}</b> متاح الآن على yassota!"];
-    if ($shortDesc) $lines[] = "\n{$shortDesc}";
-    if ($features)  $lines[] = "\n✨ <b>المميزات:</b>\n" . implode("\n", array_map(fn($f) => "• {$f}", $features));
+    // Compact message: name + short summary only
+    $text = "<b>🆕 {$name}</b>";
+    if ($shortDesc) $text .= "\n{$shortDesc}";
     $meta = array_filter([
         $developer ? "👨‍💻 {$developer}" : '',
-        $version   ? "🔖 v{$version}"   : '',
-        $sizeMb    ? "📦 {$sizeMb} MB"  : '',
-        $pkg       ? "📦 {$pkg}"        : '',
+        $version   ? "🔖 v{$version}" : '',
+        $sizeMb    ? "📦 {$sizeMb} MB" : '',
     ]);
-    if ($meta) $lines[] = "\n" . implode('  ·  ', $meta);
+    if ($meta) $text .= "\n" . implode(' · ', $meta);
 
-    $text = implode('', $lines);
     // Telegram caption limit is 1024 chars
     if (mb_strlen($text) > 1020) $text = mb_substr($text, 0, 1020) . '…';
 
     $buttons = [[
-        ['text' => '📥 تحميل التطبيق',  'url' => download_url($app['slug'])],
-        ['text' => '📄 صفحة التطبيق',   'url' => app_url($app['slug'])],
+        ['text' => '📥 تحميل',  'url' => download_url($app['slug'])],
+        ['text' => '📄 عرض',   'url' => app_url($app['slug'])],
     ]];
+
+    // Add landing page buttons if available
+    if (!empty($landingUrls['ar'])) {
+        $buttons[] = [['text' => '🌐 صفحة العربية', 'url' => $landingUrls['ar']]];
+    }
+    if (!empty($landingUrls['en'])) {
+        $buttons[] = [['text' => '🌐 English Page', 'url' => $landingUrls['en']]];
+    }
+
     $markup = ['inline_keyboard' => $buttons];
 
     // Try sendPhoto if we have an icon
@@ -2070,6 +2101,441 @@ function telegram_notify_new_app(PDO $pdo, array $app): void {
         'parse_mode'   => 'HTML',
         'reply_markup' => $markup,
     ]);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LANDING PAGES — auto-generated EN + AR HTML on every app publish.
+   Each page is a self-contained HTML file stored under landing/{lang}/{slug}/
+   and served via .htaccess rewrite.  Pings IndexNow and sends compact
+   Telegram notification with professional inline-keyboard buttons.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/** Build the standalone HTML for one landing page (one language). */
+function landing_page_html(PDO $pdo, array $app, string $lang, string $pageUrl): string {
+    $siteUrl  = rtrim(SITE_URL, '/');
+    $dlUrl    = download_url($app['slug']);
+    $appPageUrl = app_url($app['slug']);
+    $iconUrl  = !empty($app['icon_path']) ? rtrim($siteUrl, '/') . '/' . ltrim($app['icon_path'], '/') : '';
+    $adsense  = get_cfg($pdo, 'adsense_publisher_id', '');
+    $tgUrl    = get_cfg($pdo, 'telegram_channel_url', '');
+    $siteName = get_cfg($pdo, 'site_name', 'yassota');
+
+    // Language-specific content
+    if ($lang === 'en') {
+        $htmlLang  = 'en';
+        $dir       = 'ltr';
+        $homeBtnTxt = 'Home';
+        $title     = landing_en_title($app);
+        $desc      = landing_en_desc($app);
+        $dlBtnTxt  = 'Download ' . htmlspecialchars($app['name'], ENT_QUOTES) . ' APK';
+        $appBtnTxt = 'App Page';
+        $heading   = 'Download ' . htmlspecialchars($app['name'], ENT_QUOTES) . ' for Android';
+        $sub       = 'Fast, free, safe APK download';
+        $installTitle  = 'How to Install APK on Android';
+        $installSteps  = [
+            ['Download', 'Tap the download button below to get the APK file'],
+            ['Allow',    'Go to Settings → Security → Enable "Unknown sources"'],
+            ['Install',  'Open the downloaded file from your Downloads folder'],
+            ['Enjoy',    'Launch the app from your home screen and enjoy!'],
+        ];
+        $relatedLabel = 'Similar Apps You May Like';
+        $tgBtnTxt  = 'Follow on Telegram';
+        $metaLang  = 'en-US';
+    } else {
+        $htmlLang  = 'ar';
+        $dir       = 'rtl';
+        $homeBtnTxt = 'الرئيسية';
+        $title     = landing_ar_title($app);
+        $desc      = landing_ar_desc($app);
+        $dlBtnTxt  = 'تحميل ' . htmlspecialchars($app['name'], ENT_QUOTES) . ' APK';
+        $appBtnTxt = 'صفحة التطبيق';
+        $heading   = 'تحميل ' . htmlspecialchars($app['name'], ENT_QUOTES) . ' للأندرويد';
+        $sub       = 'تحميل مجاني وآمن بصيغة APK';
+        $installTitle  = 'كيفية تثبيت APK على أندرويد';
+        $installSteps  = [
+            ['تحميل الملف',      'اضغط زر التحميل أدناه للحصول على ملف APK'],
+            ['السماح بالتثبيت', 'الإعدادات ← الأمان ← فعّل "مصادر غير معروفة"'],
+            ['فتح ملف APK',      'افتح الملف المُحمَّل من مجلد التنزيلات'],
+            ['الاستمتاع',        'افتح التطبيق من الشاشة الرئيسية وتمتع!'],
+        ];
+        $relatedLabel = 'تطبيقات مشابهة';
+        $tgBtnTxt  = 'تابعنا على تيليجرام';
+        $metaLang  = 'ar';
+    }
+
+    $version  = htmlspecialchars($app['version']           ?? '', ENT_QUOTES);
+    $sizeMb   = htmlspecialchars($app['size_mb']           ?? '', ENT_QUOTES);
+    $developer = htmlspecialchars($app['developer']        ?? '', ENT_QUOTES);
+    $shortDesc = htmlspecialchars($app['short_description'] ?? '', ENT_QUOTES);
+    $rating   = !empty($app['rating']) ? number_format((float)$app['rating'], 1) : '4.5';
+    $downloads = !empty($app['downloads']) && $app['downloads'] > 0 ? number_format($app['downloads']) . '+' : '';
+    $canonical = htmlspecialchars($pageUrl, ENT_QUOTES);
+    $appNameH  = htmlspecialchars($app['name'], ENT_QUOTES);
+    $titleH    = htmlspecialchars($title, ENT_QUOTES);
+    $descH     = htmlspecialchars($desc, ENT_QUOTES);
+    $dlUrlH    = htmlspecialchars($dlUrl, ENT_QUOTES);
+    $appPageH  = htmlspecialchars($appPageUrl, ENT_QUOTES);
+    $iconH     = htmlspecialchars($iconUrl, ENT_QUOTES);
+    $siteH     = htmlspecialchars($siteName, ENT_QUOTES);
+
+    $schemaRating = !empty($app['rating_count']) && $app['rating_count'] > 0
+        ? '"aggregateRating":{"@type":"AggregateRating","ratingValue":"' . $rating . '","reviewCount":"' . (int)$app['rating_count'] . '"},' : '';
+
+    $adsenseBlock = '';
+    if ($adsense) {
+        $adsenseBlock = '<ins class="adsbygoogle" style="display:block;text-align:center" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="' . htmlspecialchars($adsense, ENT_QUOTES) . '" data-ad-slot=""></ins><script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>';
+    }
+
+    $steps_html = '';
+    foreach ($installSteps as $i => [$sTitle, $sDesc]) {
+        $n = $i + 1;
+        $steps_html .= "<div class='lp-step'><div class='lp-step-num'>{$n}</div><div class='lp-step-body'><strong>" . htmlspecialchars($sTitle, ENT_QUOTES) . "</strong><p>" . htmlspecialchars($sDesc, ENT_QUOTES) . "</p></div></div>";
+    }
+
+    $iconHtml = $iconUrl
+        ? "<img src='{$iconH}' alt='{$appNameH}' class='lp-icon' loading='eager'>"
+        : "<div class='lp-icon-ph'><svg width='38' height='38' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,.4)' stroke-width='1.5'><rect x='5' y='2' width='14' height='20' rx='3'/><path d='M9 7h6M9 11h6M9 15h4'/></svg></div>";
+
+    $versionChip = $version ? "<span class='lp-chip'>v{$version}</span>" : '';
+    $sizeChip = $sizeMb ? "<span class='lp-chip'>{$sizeMb} MB</span>" : '';
+    $downloadChip = $downloads ? "<span class='lp-chip'>{$downloads}</span>" : '';
+
+    $tg_btn = $tgUrl ? "<a href='" . htmlspecialchars($tgUrl, ENT_QUOTES) . "' class='lp-tg-btn' target='_blank' rel='noopener nofollow'>
+      <svg width='20' height='20' viewBox='0 0 24 24' fill='currentColor'><path d='M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z'/></svg>
+      {$tgBtnTxt}</a>" : '';
+
+    $adsense_script = $adsense ? "<script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={$adsense}' crossorigin='anonymous'></script>" : '';
+
+    $cssUrl = rtrim($siteUrl, '/') . '/' . asset_url('assets/css/main.css');
+    $mainJsUrl = rtrim($siteUrl, '/') . '/' . asset_url('assets/js/main.js');
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="{$htmlLang}" dir="{$dir}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>{$titleH}</title>
+<meta name="description" content="{$descH}">
+<meta name="language" content="{$metaLang}">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="{$canonical}">
+<meta property="og:title" content="{$titleH}">
+<meta property="og:description" content="{$descH}">
+<meta property="og:url" content="{$canonical}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{$siteH}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{$titleH}">
+<meta name="twitter:description" content="{$descH}">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"{$appNameH}","applicationCategory":"AndroidApplication","operatingSystem":"Android","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},{$schemaRating}"url":"{$appPageH}"}</script>
+<link rel="stylesheet" href="{$cssUrl}">
+{$adsense_script}
+<style>
+.lp-wrap{max-width:860px;margin:0 auto;padding:24px 16px 80px;display:flex;flex-direction:column;gap:20px}
+.lp-hero{background:linear-gradient(135deg,#0c1e36 0%,#1a3a6e 100%);border-radius:20px;padding:28px 24px;display:flex;align-items:center;gap:20px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(12,30,54,.3)}
+.lp-hero::before{content:'';position:absolute;top:-60px;left:-60px;width:220px;height:220px;border-radius:50%;background:rgba(14,165,233,.07);pointer-events:none}
+.lp-icon{width:88px;height:88px;border-radius:20px;object-fit:cover;border:2px solid rgba(255,255,255,.15);box-shadow:0 6px 20px rgba(0,0,0,.3);flex-shrink:0}
+.lp-icon-ph{width:88px;height:88px;border-radius:20px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lp-hero-body{flex:1;min-width:0}
+.lp-hero-title{font-size:22px;font-weight:900;color:#fff;margin:0 0 8px;line-height:1.2}
+.lp-hero-sub{font-size:13px;color:rgba(255,255,255,.55);margin:0 0 10px}
+.lp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.lp-chip{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(14,165,233,.15);border:1px solid rgba(14,165,233,.25);color:#7dd3fc}
+.lp-btn-dl{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:18px 24px;border-radius:50px;font-size:17px;font-weight:800;background:linear-gradient(135deg,#0ea5e9,#7c3aed);color:#fff;text-decoration:none;box-shadow:0 8px 28px rgba(14,165,233,.35);animation:glow 2.2s ease-in-out infinite;transition:transform .2s,box-shadow .2s}
+.lp-btn-dl:hover{transform:translateY(-2px);box-shadow:0 12px 38px rgba(14,165,233,.55);color:#fff}
+@keyframes glow{0%,100%{box-shadow:0 8px 28px rgba(14,165,233,.3)}50%{box-shadow:0 8px 42px rgba(14,165,233,.6)}}
+.lp-panel{background:var(--surface,#fff);border:1px solid var(--border-c,#e2e8f0);border-radius:18px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.lp-panel-head{padding:13px 18px;font-size:13px;font-weight:700;color:var(--text,#0f172a);border-bottom:1px solid var(--border-c,#e2e8f0);background:var(--surface-2,#f8fafc);display:flex;align-items:center;gap:8px}
+.lp-panel-body{padding:16px 18px}
+.lp-step{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border-c,#e2e8f0)}
+.lp-step:last-child{border-bottom:none}
+.lp-step-num{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,rgba(14,165,233,.15),rgba(124,58,237,.15));border:2px solid rgba(14,165,233,.25);color:#0ea5e9;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.lp-step-body strong{font-size:13px;font-weight:700;color:var(--text,#0f172a);display:block;margin-bottom:3px}
+.lp-step-body p{font-size:12px;color:var(--muted,#64748b);margin:0}
+.lp-tg-btn{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 24px;background:rgba(42,171,238,.06);border:1.5px solid rgba(42,171,238,.25);border-radius:18px;color:#2AABEE;font-size:14px;font-weight:700;text-decoration:none;transition:background .2s}
+.lp-tg-btn:hover{background:rgba(42,171,238,.12);color:#2AABEE}
+.lp-app-link{display:flex;align-items:center;gap:8px;color:var(--muted,#64748b);font-size:12px;text-decoration:none;padding:12px 18px;background:var(--surface,#fff);border:1px solid var(--border-c,#e2e8f0);border-radius:12px;justify-content:center;transition:border-color .2s}
+.lp-app-link:hover{border-color:#0ea5e9;color:#0ea5e9}
+.lp-install{background:var(--surface,#fff);border:1px solid var(--border-c,#e2e8f0);border-radius:18px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.lp-install-title{font-size:15px;font-weight:800;color:var(--text,#0f172a);padding:16px 18px 0;margin:0;display:flex;align-items:center;gap:10px}
+.lp-install-title::before{content:'';display:block;width:4px;height:20px;background:linear-gradient(180deg,#0ea5e9,#7c3aed);border-radius:2px}
+.ad-zone{min-height:90px;text-align:center}
+@media(max-width:500px){.lp-hero{flex-direction:column;text-align:center}.lp-chips{justify-content:center}}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <a href="{$siteH}" class="logo">{$siteH}</a>
+  <nav class="header-nav">
+    <a href="{$siteUrl}">{$homeBtnTxt}</a>
+    <a href="{$appPageH}">← {$appBtnTxt}</a>
+  </nav>
+</header>
+
+<div class="lp-wrap">
+  <div class="lp-hero">
+    {$iconHtml}
+    <div class="lp-hero-body">
+      <h1 class="lp-hero-title">{$heading}</h1>
+      <p class="lp-hero-sub">{$sub}</p>
+      <div class="lp-chips">
+        {$versionChip}
+        {$sizeChip}
+        {$downloadChip}
+        <span class='lp-chip'>Android</span>
+        <span class='lp-chip'>⭐ {$rating}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ad-zone">{$adsenseBlock}</div>
+
+  <a href="{$dlUrlH}" class="lp-btn-dl" data-hardnav="1" target="_blank" rel="noopener nofollow">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    {$dlBtnTxt}
+  </a>
+
+  <div class="lp-install">
+    <h2 class="lp-install-title">{$installTitle}</h2>
+    {$steps_html}
+  </div>
+
+  {$tg_btn}
+
+  <div class="ad-zone">{$adsenseBlock}</div>
+
+  <a href="{$appPageH}" class="lp-app-link">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+    {$appBtnTxt} — {$appNameH}
+  </a>
+</div>
+
+<script src="{$mainJsUrl}" defer></script>
+</body>
+</html>
+HTML;
+}
+
+function landing_en_title(array $app): string {
+    $name = $app['name'] ?? 'App';
+    $v    = $app['version'] ? ' v' . $app['version'] : '';
+    return "Download {$name}{$v} APK for Android — Free";
+}
+
+function landing_en_desc(array $app): string {
+    $name = $app['name'] ?? 'App';
+    $dev  = $app['developer'] ? "by {$app['developer']}. " : '';
+    $desc = $app['short_description'] ?? '';
+    $size = $app['size_mb'] ? " Size: {$app['size_mb']} MB." : '';
+    return "Download {$name} APK for Android free. {$dev}{$desc}{$size} Fast, safe & ad-free download from yassota.";
+}
+
+function landing_ar_title(array $app): string {
+    $name = $app['name'] ?? 'تطبيق';
+    $v    = $app['version'] ? ' v' . $app['version'] : '';
+    return "تحميل {$name}{$v} APK للأندرويد — مجاناً";
+}
+
+function landing_ar_desc(array $app): string {
+    $name = $app['name'] ?? 'التطبيق';
+    $dev  = $app['developer'] ? "بواسطة {$app['developer']}. " : '';
+    $desc = $app['short_description'] ?? '';
+    $size = $app['size_mb'] ? " الحجم: {$app['size_mb']} MB." : '';
+    return "تحميل {$name} APK للأندرويد مجاناً وبأمان. {$dev}{$desc}{$size} تحميل سريع وآمن من yassota.";
+}
+
+/**
+ * Generate and write EN + AR landing pages for an app.
+ * Returns ['ar_url'=>string, 'en_url'=>string] on success.
+ */
+function generate_landing_pages(PDO $pdo, array $app): array {
+    $slug    = $app['slug'] ?? '';
+    $appId   = (int)($app['id'] ?? 0);
+    if (!$slug || !$appId) return [];
+
+    $siteUrl = rtrim(SITE_URL, '/');
+    $base    = rtrim(__DIR__, '/');
+    $result  = [];
+
+    foreach (['ar', 'en'] as $lang) {
+        $dir = "{$base}/landing/{$lang}/{$slug}";
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+
+        $pageUrl  = "{$siteUrl}/landing/{$lang}/{$slug}/";
+        $html     = landing_page_html($pdo, $app, $lang, $pageUrl);
+        $file     = "{$dir}/index.html";
+
+        if (@file_put_contents($file, $html) !== false) {
+            $result[$lang] = $pageUrl;
+            $title = $lang === 'en' ? landing_en_title($app) : landing_ar_title($app);
+            $desc  = $lang === 'en' ? landing_en_desc($app)  : landing_ar_desc($app);
+
+            $pdo->prepare("INSERT INTO landing_pages (app_id,lang,title,meta_description,file_path,page_url,indexed)
+                VALUES (?,?,?,?,?,?,0)
+                ON DUPLICATE KEY UPDATE title=VALUES(title),meta_description=VALUES(meta_description),
+                file_path=VALUES(file_path),page_url=VALUES(page_url),indexed=0,updated_at=NOW()")
+                ->execute([$appId, $lang, $title, $desc, $file, $pageUrl]);
+
+            ping_search_engines($pdo, $pageUrl);
+
+            // Mark as indexed optimistically (IndexNow submitted)
+            $pdo->prepare("UPDATE landing_pages SET indexed=1,indexed_at=NOW() WHERE app_id=? AND lang=?")
+                ->execute([$appId, $lang]);
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * cPanel UAPI subdomain creation.
+ * Requires admin settings: cpanel_api_url, cpanel_user, cpanel_api_token, cpanel_docroot_base.
+ * Returns ['ok'=>bool, 'error'=>?string, 'subdomain_url'=>?string].
+ */
+function cpanel_create_subdomain(PDO $pdo, array $app): array {
+    $slug      = $app['slug'] ?? '';
+    if (!$slug) return ['ok'=>false,'error'=>'No slug'];
+
+    $apiUrl    = rtrim(get_cfg($pdo, 'cpanel_api_url',   ''), '/');
+    $user      = get_cfg($pdo, 'cpanel_user',       '');
+    $token     = get_cfg($pdo, 'cpanel_api_token',  '');
+    $docBase   = rtrim(get_cfg($pdo, 'cpanel_docroot_base', ''), '/');
+
+    if (!$apiUrl || !$user || !$token) return ['ok'=>false,'error'=>'cPanel غير مُكوَّن (تحقق من الإعدادات)'];
+
+    // Sub-domain name: slug-apk (max 40 chars, alphanum + hyphen)
+    $subName = preg_replace('/[^a-z0-9\-]/', '-', strtolower($slug)) . '-apk';
+    $subName = substr($subName, 0, 40);
+    $siteHost = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
+    $subDomain = $subName . '.' . $siteHost;
+    $subUrl    = 'https://' . $subDomain . '/';
+
+    // 1. Create the subdomain via cPanel UAPI
+    $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'domain'     => $subName,
+            'rootdomain' => $siteHost,
+            'dir'        => $docBase ? "{$docBase}/{$subName}" : "public_html/{$subName}",
+        ]),
+    ]);
+    $res = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) return ['ok'=>false,'error'=>"cURL: {$err}"];
+    $data = json_decode((string)$res, true);
+    if (!($data['status'] ?? false)) {
+        $msg = $data['errors'][0] ?? ($data['message'] ?? 'cPanel API error');
+        // If subdomain already exists, that's fine — continue to write files
+        if (!str_contains(strtolower((string)$msg), 'already') &&
+            !str_contains(strtolower((string)$msg), 'exist')) {
+            return ['ok'=>false,'error'=>$msg];
+        }
+    }
+
+    // 2. Write the landing HTML to the subdomain's docroot
+    $docRoot = $docBase ? "{$docBase}/{$subName}" : null;
+    if ($docRoot) {
+        if (!is_dir($docRoot)) @mkdir($docRoot, 0755, true);
+        $html = landing_page_html($pdo, $app, 'ar', $subUrl);
+        @file_put_contents("{$docRoot}/index.html", $html);
+    }
+
+    // 3. Ping IndexNow for the subdomain URL
+    ping_search_engines($pdo, $subUrl);
+
+    // 4. Store in DB
+    $pdo->prepare("UPDATE apps SET subdomain_created=1,subdomain_url=? WHERE id=?")
+        ->execute([$subUrl, (int)$app['id']]);
+    $pdo->prepare("UPDATE landing_pages SET subdomain_url=? WHERE app_id=?")
+        ->execute([$subUrl, (int)$app['id']]);
+
+    return ['ok'=>true,'subdomain_url'=>$subUrl];
+}
+
+/**
+ * Google Indexing API: submit URLs for immediate indexing.
+ * Requires: google_indexing_json setting (base64-encoded service account JSON)
+ * and google_indexing_type setting ('URL_UPDATED' or 'URL_DELETED').
+ */
+function google_indexing_request(PDO $pdo, array $urls = []): void {
+    $encoded = get_cfg($pdo, 'google_indexing_json', '');
+    $type = get_cfg($pdo, 'google_indexing_type', 'URL_UPDATED');
+    if (!$encoded || empty($urls)) return;
+
+    try {
+        $json = json_decode(base64_decode($encoded, true), true);
+        if (!$json || !($json['type'] ?? false) || ($json['type'] !== 'service_account')) {
+            return;
+        }
+        $projectId = $json['project_id'] ?? '';
+        $clientEmail = $json['client_email'] ?? '';
+        $privateKey = $json['private_key'] ?? '';
+        if (!$projectId || !$clientEmail || !$privateKey) return;
+
+        // JWT token for service account (RS256)
+        $now = time();
+        $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+        $payload = json_encode([
+            'iss' => $clientEmail,
+            'scope' => 'https://www.googleapis.com/auth/indexing',
+            'aud' => 'https://oauth2.googleapis.com/token',
+            'exp' => $now + 3600,
+            'iat' => $now,
+        ]);
+
+        $headerB64 = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
+        $payloadB64 = rtrim(strtr(base64_encode($payload), '+/', '-_'), '=');
+        $msgToSign = $headerB64 . '.' . $payloadB64;
+
+        $signature = '';
+        openssl_sign($msgToSign, $signature, $privateKey, 'sha256');
+        $signatureB64 = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
+        $jwtEncoded = $msgToSign . '.' . $signatureB64;
+
+        $ch = curl_init('https://oauth2.googleapis.com/token');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwtEncoded,
+            ]),
+        ]);
+        $tokenRes = curl_exec($ch);
+        curl_close($ch);
+        $tokenData = json_decode($tokenRes, true);
+        $token = $tokenData['access_token'] ?? '';
+        if (!$token) return;
+
+        // Submit each URL
+        foreach ($urls as $url) {
+            if (!$url) continue;
+            $ch = curl_init('https://indexing.googleapis.com/v3/urlNotifications:publish');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'url' => $url,
+                    'type' => $type,
+                ]),
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+    } catch (Exception $e) {
+        // Silently ignore errors — indexing is best-effort, should not break the flow
+    }
 }
 
 // Trims and collapses 3+ consecutive blank lines down to a single blank

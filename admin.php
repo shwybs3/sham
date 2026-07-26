@@ -3126,8 +3126,22 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
               'auto_translate_langs',
               'recaptcha_v2_site_key','recaptcha_v2_secret',
               'recaptcha_v3_site_key','recaptcha_v3_secret',
-              'turnstile_site_key','turnstile_secret_key'] as $k) {
+              'turnstile_site_key','turnstile_secret_key',
+              'cpanel_api_url','cpanel_user','cpanel_api_token','cpanel_docroot_base',
+              'google_indexing_type'] as $k) {
         if (isset($_POST[$k])) set_cfg($pdo, $k, trim($_POST[$k]));
+    }
+
+    // Google Indexing JSON — if provided, encode to base64
+    if (!empty($_POST['google_indexing_json'])) {
+        $json = trim($_POST['google_indexing_json']);
+        // Only encode if it looks like raw JSON (starts with { or [), not base64
+        if (preg_match('/^[\{\[]/', $json)) {
+            $encoded = base64_encode($json);
+            set_cfg($pdo, 'google_indexing_json', $encoded);
+        } else {
+            set_cfg($pdo, 'google_indexing_json', $json);
+        }
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
     set_cfg($pdo, 'admin_email_notifications',   isset($_POST['admin_email_notifications'])   ? '1' : '0');
@@ -3456,8 +3470,13 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             $translateLangs = array_filter(array_map('trim', explode(',', get_cfg($pdo,'auto_translate_langs',''))));
             register_shutdown_function(function() use ($pdo, $notifyApp, $translateLangs) {
                 if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-                telegram_notify_new_app($pdo, $notifyApp);
+                $landingUrls = generate_landing_pages($pdo, $notifyApp);
+                if (get_cfg($pdo, 'cpanel_api_token', '')) {
+                    cpanel_create_subdomain($pdo, $notifyApp);
+                }
+                telegram_notify_new_app($pdo, $notifyApp, $landingUrls);
                 ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
+                google_indexing_request($pdo, array_values($landingUrls));
                 // Auto-translate into configured languages if app has no parent (is original)
                 if ($translateLangs && empty($notifyApp['parent_id'])) {
                     foreach ($translateLangs as $lang) {
@@ -3487,8 +3506,13 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             $translateLangs = array_filter(array_map('trim', explode(',', get_cfg($pdo,'auto_translate_langs',''))));
             register_shutdown_function(function() use ($pdo, $notifyApp, $translateLangs) {
                 if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
-                telegram_notify_new_app($pdo, $notifyApp);
+                $landingUrls = generate_landing_pages($pdo, $notifyApp);
+                if (get_cfg($pdo, 'cpanel_api_token', '')) {
+                    cpanel_create_subdomain($pdo, $notifyApp);
+                }
+                telegram_notify_new_app($pdo, $notifyApp, $landingUrls);
                 ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
+                google_indexing_request($pdo, array_values($landingUrls));
                 if ($translateLangs && empty($notifyApp['parent_id'])) {
                     foreach ($translateLangs as $lang) {
                         translate_app($pdo, $notifyApp, $lang);
@@ -4412,6 +4436,7 @@ $navLinks = [
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'seo-preview' => ['label'=>'معاينة نتائج Google', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'],
     'html-pages'  => ['label'=>'صفحات HTML للفهرسة', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
+    'landing-pages' => ['label'=>'صفحات الهبوط (Landing)', 'icon'=>'M4 4h16v4H4V4zm0 7h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
@@ -4611,11 +4636,44 @@ elseif ($page === 'apps'):
   <h1>التطبيقات</h1>
   <a href="admin.php?page=add-app" class="btn-save">+ إضافة تطبيق</a>
 </div>
-<form method="get" action="admin.php" class="admin-search-row">
-  <input type="hidden" name="page" value="apps">
-  <input class="form-input" type="text" name="q" placeholder="بحث بالاسم..." value="<?= h($search) ?>">
-  <button type="submit" class="btn-save" style="padding:11px 24px">بحث</button>
-</form>
+<div class="admin-search-row" style="gap:8px">
+  <input class="form-input" id="apps-search" type="text" placeholder="بحث فوري بالاسم أو المطور..." value="<?= h($search) ?>" oninput="filterAppsTable(this.value)">
+  <select class="form-input" id="apps-dev-filter" onchange="filterAppsTable(document.getElementById('apps-search').value)" style="min-width:140px;max-width:200px">
+    <option value="">كل المطورين</option>
+    <?php
+    $devList = array_unique(array_filter(array_column($appsList, 'developer')));
+    sort($devList);
+    foreach ($devList as $dv): ?>
+    <option value="<?= h(strtolower($dv)) ?>" <?= strtolower($app['developer'] ?? '') === strtolower($dv) ? 'selected' : '' ?>><?= h($dv) ?></option>
+    <?php endforeach; ?>
+  </select>
+  <select class="form-input" id="apps-status-filter" onchange="filterAppsTable(document.getElementById('apps-search').value)" style="min-width:110px;max-width:140px">
+    <option value="">كل الحالات</option>
+    <option value="published">منشور</option>
+    <option value="draft">مسودة</option>
+  </select>
+</div>
+<script>
+function filterAppsTable(q) {
+  q = (q || '').trim().toLowerCase();
+  var devF = (document.getElementById('apps-dev-filter').value || '').trim();
+  var stF  = (document.getElementById('apps-status-filter').value || '').trim();
+  var rows = document.querySelectorAll('#apps-tbody tr[data-name]');
+  var shown = 0;
+  rows.forEach(function(row) {
+    var name   = (row.dataset.name   || '').toLowerCase();
+    var dev    = (row.dataset.dev    || '').toLowerCase();
+    var status = (row.dataset.status || '').toLowerCase();
+    var match = (!q || name.includes(q) || dev.includes(q))
+             && (!devF || dev === devF)
+             && (!stF  || status === stF);
+    row.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  var empty = document.getElementById('apps-empty');
+  if (empty) empty.style.display = shown === 0 ? '' : 'none';
+}
+</script>
 
 <div class="panel" style="padding:0;overflow:hidden">
 <table class="admin-table responsive-cards">
@@ -4626,9 +4684,9 @@ elseif ($page === 'apps'):
       <th>مشاهدات</th><th>تحميلات</th><th>الحالة</th><th>إجراءات</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody id="apps-tbody">
   <?php foreach ($appsList as $a): ?>
-  <tr>
+  <tr data-name="<?= h(strtolower($a['name'])) ?>" data-dev="<?= h(strtolower($a['developer'] ?? '')) ?>" data-status="<?= h($a['status']) ?>">
     <td class="td-thumb">
       <?php if ($a['icon_path']): ?>
         <img src="<?= h(media_url($a['icon_path'])) ?>" class="app-thumb" alt="">
@@ -4665,7 +4723,8 @@ elseif ($page === 'apps'):
     </td>
   </tr>
   <?php endforeach; ?>
-  <?php if (!$appsList): ?><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">لا توجد تطبيقات</td></tr><?php endif; ?>
+  <?php if (!$appsList): ?><tr id="apps-empty"><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">لا توجد تطبيقات</td></tr><?php endif; ?>
+  <?php if ($appsList): ?><tr id="apps-empty" style="display:none"><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">لا نتائج مطابقة</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>
@@ -7758,6 +7817,68 @@ function toggleSettingDetail(btn){
     </div>
   </div>
 
+  <div class="panel">
+    <h2>إعدادات cPanel <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      اتصل بـ cPanel عبر API لإنشاء نطاقات فرعية تلقائياً لكل تطبيق منشور (مثل: app-name-apk.example.com).
+      احصل على بيانات الاتصال من لوحة تحكم cPanel.
+    </p>
+    <div class="form-group">
+      <label class="form-label">رابط cPanel API (مثل: https://example.com:2083)</label>
+      <input class="form-input" type="text" name="cpanel_api_url" value="<?= h(get_cfg($pdo,'cpanel_api_url')) ?>" placeholder="https://example.com:2083" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">اسم حساب cPanel</label>
+      <input class="form-input" type="text" name="cpanel_user" value="<?= h(get_cfg($pdo,'cpanel_user')) ?>" placeholder="username" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">رمز الوصول API (API Token) — وليس كلمة المرور</label>
+      <input class="form-input" type="password" name="cpanel_api_token" value="<?= h(get_cfg($pdo,'cpanel_api_token')) ?>" placeholder="cpanel_api_token_..." dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">أنشئ رمز من cPanel: Account → API Tokens → Create Token. لا تستخدم كلمة المرور مباشرة.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">مسار public_html في cPanel (اختياري)</label>
+      <input class="form-input" type="text" name="cpanel_docroot_base" value="<?= h(get_cfg($pdo,'cpanel_docroot_base')) ?>" placeholder="/home/username/public_html" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">المسار الكامل لـ public_html على السيرفر. إذا تركته فارغاً سيستخدم public_html/{subdomain_name}</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Google Indexing API <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      فهرسة فورية لصفحات التطبيقات والنطاقات الفرعية على محرك بحث Google دون انتظار الزحف الطبيعي.
+      متطلب: حساب Google Cloud مع تفعيل Google Indexing API وحسابات الخدمة.
+    </p>
+    <div class="form-group">
+      <label class="form-label">ملف JSON لحساب الخدمة (Service Account) — مشفّر بـ Base64</label>
+      <textarea class="form-textarea" name="google_indexing_json" rows="3" placeholder="ألصق محتوى ملف JSON الكامل هنا..." dir="ltr" style="font-family:var(--f-mono);font-size:11px;color:var(--muted)"><?php
+        $existing = get_cfg($pdo, 'google_indexing_json', '');
+        echo $existing ? '••• (مشفّر — اتركه كما هو أو الصق ملف جديد)' : '';
+      ?></textarea>
+      <div class="form-hint">
+        1. اذهب إلى Google Cloud Console → Service Accounts<br>
+        2. أنشئ حساب خدمة جديد<br>
+        3. أضف مفتاح JSON<br>
+        4. انسخ محتوى الملف الكامل ثم شفّره بـ Base64 (<a href="https://www.base64encode.org" target="_blank" style="color:var(--cyan)">base64encode.org</a>)<br>
+        5. الصق النتيجة أعلاه
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">نوع طلب الفهرسة</label>
+      <div style="display:flex;gap:16px;margin-top:8px">
+        <?php $indexingType = get_cfg($pdo, 'google_indexing_type', 'URL_UPDATED'); ?>
+        <label style="display:flex;gap:8px;cursor:pointer">
+          <input type="radio" name="google_indexing_type" value="URL_UPDATED" <?= $indexingType === 'URL_UPDATED' ? 'checked' : '' ?>>
+          <span>URL_UPDATED (تطبيق منشور أو محدّث)</span>
+        </label>
+        <label style="display:flex;gap:8px;cursor:pointer">
+          <input type="radio" name="google_indexing_type" value="URL_DELETED" <?= $indexingType === 'URL_DELETED' ? 'checked' : '' ?>>
+          <span>URL_DELETED (تطبيق محذوف)</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
   <button type="submit" class="btn-save">حفظ الإعدادات</button>
 </form>
 
@@ -8131,6 +8252,74 @@ function startBulkGen(){
   };
 }
 </script>
+
+<?php
+/* ─────────────── LANDING PAGES MANAGEMENT ─────────────── */
+elseif ($page === 'landing-pages'):
+    $pages = $pdo->query("SELECT lp.*,a.name as app_name,a.slug FROM landing_pages lp JOIN apps a ON lp.app_id=a.id ORDER BY lp.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $arPages = array_filter($pages, fn($p) => ($p['lang'] ?? '') === 'ar');
+    $enPages = array_filter($pages, fn($p) => ($p['lang'] ?? '') === 'en');
+?>
+<div class="admin-header">
+  <h1>صفحات الهبوط (Landing Pages)</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">صفحات HTML مستقلة تُنشأ تلقائياً عند نشر أي تطبيق بصيغتين: عربية وإنجليزية</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px">
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:#2563eb"><?= count($arPages) ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات عربية</div>
+  </div>
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:#8b5cf6"><?= count($enPages) ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات إنجليزية</div>
+  </div>
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:<?= array_sum(array_column($pages,'indexed')) > 0 ? '#22c55e' : '#f59e0b' ?>"><?= array_sum(array_column($pages,'indexed')) ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">مفهرسة</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-bottom:16px">القائمة الكاملة</h2>
+  <table class="admin-table" style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="border-bottom:2px solid var(--border-c)">
+        <th style="text-align:right;padding:12px">التطبيق</th>
+        <th style="text-align:center;padding:12px">اللغة</th>
+        <th style="text-align:center;padding:12px;font-size:12px">الفهرسة</th>
+        <th style="text-align:center;padding:12px;font-size:12px">التاريخ</th>
+        <th style="text-align:center;padding:12px">إجراءات</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php if (!$pages): ?>
+      <tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted)">لا توجد صفحات هبوط حتى الآن — ستُنشأ تلقائياً عند نشر تطبيق</td></tr>
+      <?php else: ?>
+        <?php foreach ($pages as $p): ?>
+        <tr style="border-bottom:1px solid var(--border-c)">
+          <td style="padding:12px"><?= h($p['app_name'] ?? '') ?></td>
+          <td style="padding:12px;text-align:center;font-size:12px"><?= $p['lang'] === 'ar' ? '🇸🇦 العربية' : '🇬🇧 English' ?></td>
+          <td style="padding:12px;text-align:center;font-size:12px">
+            <?php if ($p['indexed']): ?>
+              <span style="color:#22c55e">✓ نعم</span>
+            <?php else: ?>
+              <span style="color:#f59e0b">⏳ بانتظار</span>
+            <?php endif; ?>
+          </td>
+          <td style="padding:12px;text-align:center;font-size:12px;color:var(--muted)"><?= date('Y-m-d', strtotime($p['created_at'] ?? '')) ?></td>
+          <td style="padding:12px;text-align:center">
+            <a href="<?= h($p['page_url'] ?? '') ?>" target="_blank" title="عرض الصفحة" style="display:inline-block;padding:4px 8px;background:rgba(6,182,212,.1);border-radius:6px;color:var(--cyan);font-size:11px;margin-left:4px">🔗 عرض</a>
+            <?php if (!empty($p['subdomain_url'])): ?>
+              <a href="<?= h($p['subdomain_url']) ?>" target="_blank" title="الدومين الفرعي" style="display:inline-block;padding:4px 8px;background:rgba(124,58,237,.1);border-radius:6px;color:#a78bfa;font-size:11px">🌐 فرعي</a>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      <?php endif; ?>
+    </tbody>
+  </table>
+</div>
 
 <?php
 /* ─────────────── SERVER CONNECTION MANAGER ─────────────── */

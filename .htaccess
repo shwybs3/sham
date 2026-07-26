@@ -116,6 +116,11 @@ ErrorDocument 404 /404.php
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
 
+  # Landing pages: /landing/{lang}/{slug}/ -> landing/{lang}/{slug}/index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^landing/([a-z]{2})/([^/]+)/?$ landing/$1/$2/index.html [L]
+
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

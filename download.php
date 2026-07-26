@@ -86,7 +86,7 @@ if ($hasLocalApk && empty($url)) {
 
 $screenshots = json_decode($app['screenshots'] ?? '[]', true) ?: [];
 $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
-$countdownSecs = max(3, min(30, (int)(get_cfg($pdo, 'download_countdown_secs', '7') ?: 7)));
+$countdownSecs = max(3, min(30, (int)(get_cfg($pdo, 'download_countdown_secs', '12') ?: 12)));
 $customAdCode  = get_cfg($pdo, 'download_custom_ad_code', '');
 
 // Related apps (same category)
@@ -320,7 +320,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
         </div>
 
         <?php if ($dlCaptchaType !== 'none'): ?>
-        <div id="dl-captcha-wrap" style="display:none;margin:18px 0 10px;text-align:center">
+        <div id="dl-captcha-wrap" class="dl-cap-hidden" aria-hidden="true">
           <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             حل التحقق أدناه لبدء التحميل
@@ -344,16 +344,16 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
         <?php endif; ?>
 
         <?php $manualUrl = $hasLocalApk ? h(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : h($url); ?>
-        <a id="btn-manual" href="<?= $manualUrl ?>" class="dlp-btn-download hidden"
+        <a id="btn-manual" href="<?= $manualUrl ?>" class="dlp-btn-download dl-btn-hidden"
            <?= $hasLocalApk ? 'download' : '' ?> data-hardnav="1"
-           aria-disabled="true" style="pointer-events:none;opacity:.45">
+           tabindex="-1" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
             <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
           </svg>
           <?= $hasLocalApk ? 'تحميل APK مباشرةً' : 'اضغط هنا لبدء التحميل' ?>
         </a>
-        <p class="dlp-manual-hint" id="manual-label" style="display:none">
+        <p class="dlp-manual-hint dl-btn-hidden" id="manual-label">
           لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
         </p>
 
@@ -563,25 +563,47 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
     <div class="dlp-install-steps">
       <div class="dlp-install-step">
         <div class="dlp-install-num">1</div>
-        <div class="dlp-install-icon">📲</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
         <h3>تحميل الملف</h3>
         <p>اضغط زر التحميل وانتظر انتهاء العدّ التنازلي لبدء التحميل تلقائياً</p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">2</div>
-        <div class="dlp-install-icon">⚙️</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
         <h3>السماح بالتثبيت</h3>
         <p>الإعدادات ← الأمان ← فعّل "تثبيت تطبيقات من مصادر غير معروفة"</p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">3</div>
-        <div class="dlp-install-icon">📦</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="3"/>
+            <path d="M9 10h6M9 14h4"/>
+            <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
         <h3>فتح ملف APK</h3>
         <p>افتح الملف المُحمَّل من مجلد التنزيلات واضغط على "تثبيت"</p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">4</div>
-        <div class="dlp-install-icon">🎉</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="16 8 11 14 8 11"/>
+          </svg>
+        </div>
         <h3>الاستمتاع بالتطبيق</h3>
         <p>افتح التطبيق من الشاشة الرئيسية أو قائمة التطبيقات وتمتع!</p>
       </div>
@@ -679,26 +701,22 @@ function triggerDownload() {
   }
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
-  // Enable and reveal manual button
+  // Reveal manual button without scrolling the page
   setTimeout(function() {
     if (btnManual) {
-      btnManual.classList.remove('hidden');
-      btnManual.style.pointerEvents = '';
-      btnManual.style.opacity = '';
-      btnManual.removeAttribute('aria-disabled');
-      btnManual.scrollIntoView({behavior:'smooth', block:'center'});
+      btnManual.classList.remove('dl-btn-hidden');
+      btnManual.removeAttribute('tabindex');
+      btnManual.removeAttribute('aria-hidden');
     }
-    if (manualLbl) manualLbl.style.display = 'block';
-  }, 1800);
+    if (manualLbl) manualLbl.classList.remove('dl-btn-hidden');
+  }, 1400);
 }
 
-// Called when any CAPTCHA widget fires its callback — immediately unlock the download,
-// then verify server-side in the background for logging purposes only (non-blocking).
+// Called when any CAPTCHA widget fires its callback
 function dlCaptchaUnlock(token, type) {
   dlCaptchaSolved = true;
-  if (captchaWrap) captchaWrap.style.display = 'none';
+  if (captchaWrap) captchaWrap.classList.add('dl-cap-hidden');
   triggerDownload();
-  // Background server verify — result doesn't block the user
   fetch(dlCaptchaVerifyUrl, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -738,15 +756,15 @@ function tick() {
 
     if (!dlCaptchaSolved) {
       // Show CAPTCHA — user must solve before download fires
-      if (captchaWrap) captchaWrap.style.display = 'block';
-      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
+      if (captchaWrap) {
+        captchaWrap.classList.remove('dl-cap-hidden');
+        captchaWrap.removeAttribute('aria-hidden');
+      }
       <?php if ($dlCaptchaType === 'v3'): ?>
-      // v3: keep button visible — user must click it, then v3 runs silently on click
-      // Do NOT auto-hide the button or auto-run v3 here
       if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ اضغط زر التحقق أدناه لبدء التحميل</strong>';
+      <?php else: ?>
+      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
       <?php endif; ?>
-      // Also show the (still-disabled) button so user sees it exists
-      if (btnManual) { btnManual.classList.remove('hidden'); }
     } else {
       // No captcha required — download immediately
       triggerDownload();

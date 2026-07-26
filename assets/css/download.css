@@ -233,7 +233,28 @@
   transition: width 1s linear;
 }
 
-/* Download button */
+/* CAPTCHA wrap — smooth reveal, always in layout flow */
+.dl-cap-hidden {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: max-height .5s ease, opacity .4s ease;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#dl-captcha-wrap {
+  margin: 18px 0 10px;
+  text-align: center;
+  transition: max-height .5s ease, opacity .4s ease;
+}
+#dl-captcha-wrap:not(.dl-cap-hidden) {
+  max-height: 200px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Download button — smooth reveal */
 .dlp-btn-download {
   display: inline-flex; align-items: center; justify-content: center; gap: 12px;
   width: 100%; max-width: 380px;
@@ -244,20 +265,39 @@
   color: #fff; border: none; cursor: pointer;
   box-shadow: 0 8px 28px rgba(14,165,233,.35);
   text-decoration: none;
-  transition: transform .2s, box-shadow .2s;
+  transition: transform .2s, box-shadow .2s, opacity .4s ease, max-height .5s ease;
   animation: glow-pulse 2.2s ease-in-out infinite;
+  overflow: hidden;
+}
+.dlp-btn-download.dl-btn-hidden,
+.dlp-manual-hint.dl-btn-hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  animation: none;
+}
+.dlp-btn-download:not(.dl-btn-hidden) {
+  max-height: 100px;
+  opacity: 1;
 }
 .dlp-btn-download:hover {
   transform: translateY(-2px) scale(1.02);
   box-shadow: 0 12px 38px rgba(14,165,233,.55);
   color: #fff;
 }
-.dlp-btn-download.hidden { display: none; }
 @keyframes glow-pulse {
   0%,100% { box-shadow: 0 8px 28px rgba(14,165,233,.3); }
   50%      { box-shadow: 0 8px 42px rgba(14,165,233,.6); }
 }
-.dlp-manual-hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+.dlp-manual-hint {
+  font-size: 12px; color: var(--muted); margin-top: 12px;
+  transition: opacity .4s ease, max-height .5s ease;
+  overflow: hidden;
+}
+.dlp-manual-hint:not(.dl-btn-hidden) { max-height: 40px; opacity: 1; }
 
 /* No-link state */
 .dlp-no-link {
@@ -444,7 +484,16 @@
   border: 2px solid rgba(14,165,233,.2);
   color: var(--cyan);
 }
-.dlp-install-icon { font-size: 30px; line-height: 1; }
+.dlp-install-icon {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, rgba(14,165,233,.12), rgba(124,58,237,.12));
+  border: 1.5px solid rgba(14,165,233,.2);
+  border-radius: 14px;
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+.dlp-install-icon svg { width: 24px; height: 24px; }
 .dlp-install-step h3 {
   font-family: var(--f-head);
   font-size: 13px; font-weight: 700; color: var(--text);
