@@ -2562,7 +2562,7 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 
     // Auto-manage IndexNow key file — create new, delete old on key change
     $newIndexNowKey = get_cfg($pdo, 'indexnow_key', '');
-    if ($newIndexNowKey && preg_match('/^[a-zA-Z0-9\-_]{6,128}$/', $newIndexNowKey)) {
+    if ($newIndexNowKey && preg_match('/^[a-zA-Z0-9]{8,128}$/', $newIndexNowKey)) {
         $keyFile = __DIR__ . '/' . $newIndexNowKey . '.txt';
         if (!file_exists($keyFile)) {
             file_put_contents($keyFile, $newIndexNowKey);
@@ -3982,6 +3982,27 @@ elseif ($page === 'apps'):
 
 <?php
 /* ─────────────── ADD / EDIT APP ─────────────── */
+// SEO field quality helpers (used only inside this block, defined once)
+function seoBarColor(int $len, int $good_min, int $good_max): string {
+    if ($len === 0) return '#6b7280';
+    if ($len < $good_min * 0.6) return '#ef4444';
+    if ($len < $good_min) return '#f59e0b';
+    return '#22c55e';
+}
+function seoTitleHint(int $len): string {
+    if ($len === 0) return 'أدخل عنوان SEO — الطول المثالي 50–60 حرفاً';
+    if ($len < 30)  return '⚠ قصير جداً — محركات البحث تفضّل 50–60 حرفاً';
+    if ($len < 50)  return '🟡 مقبول — الطول المثالي بين 50 و60 حرفاً';
+    if ($len <= 60) return '✅ ممتاز — طول مثالي لمحركات البحث';
+    return '🔴 تجاوز الحد (60 حرفاً) — سيُقطع في نتائج البحث';
+}
+function seoDescHint(int $len): string {
+    if ($len === 0) return 'أدخل وصف Meta Description — الطول المثالي 120–160 حرفاً';
+    if ($len < 50)  return '⚠ قصير جداً — محركات البحث تفضّل 120–160 حرفاً';
+    if ($len < 120) return '🟡 مقبول — الطول المثالي بين 120 و160 حرفاً';
+    if ($len <= 160) return '✅ ممتاز — طول مثالي لمحركات البحث';
+    return '🔴 تجاوز الحد (160 حرفاً) — سيُقطع في نتائج البحث';
+}
 elseif ($page === 'add-app' || $page === 'edit-app'):
   $app = $editApp;
   $isEdit = $page === 'edit-app' && $app;
@@ -4049,8 +4070,13 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     <h2>المعلومات الأساسية</h2>
     <div class="form-grid">
       <div class="form-group full">
-        <label class="form-label">اسم التطبيق *</label>
-        <input class="form-input" id="f-name" type="text" name="name" value="<?= h($app['name']??'') ?>" required>
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>اسم التطبيق *</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums"><span id="nm-used"><?= mb_strlen($app['name']??'','UTF-8') ?></span> / 70</span>
+        </label>
+        <input class="form-input" id="f-name" type="text" name="name"
+               value="<?= h($app['name']??'') ?>" required maxlength="70"
+               oninput="simpleCounter(this,'nm-used')">
       </div>
       <div class="form-group full">
         <label class="form-label">رابط الصفحة (Slug)</label>
@@ -4063,30 +4089,86 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
         </span>
       </div>
       <div class="form-group">
-        <label class="form-label">SEO Title</label>
-        <input class="form-input" id="f-seo-title" type="text" name="seo_title" value="<?= h($app['seo_title']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span id="seo-title-icon" class="seo-quality-icon" title="جودة عنوان SEO">
+              <svg id="sti-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
+            عنوان SEO Title
+          </span>
+          <span id="seo-title-counter" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em">
+            <span id="sti-used"><?= mb_strlen($app['seo_title']??'','UTF-8') ?></span> / 60
+          </span>
+        </label>
+        <input class="form-input" id="f-seo-title" type="text" name="seo_title"
+               value="<?= h($app['seo_title']??'') ?>" maxlength="60"
+               oninput="seoCounter(this,'sti','60',50,60)">
+        <div style="height:3px;border-radius:2px;background:var(--border-c);margin-top:5px;overflow:hidden">
+          <div id="sti-bar" style="height:100%;transition:width .2s,background .2s;border-radius:2px;
+            width:<?= min(100,round(mb_strlen($app['seo_title']??'','UTF-8')/60*100)) ?>%;
+            background:<?= seoBarColor(mb_strlen($app['seo_title']??'','UTF-8'),50,60) ?>"></div>
+        </div>
+        <div id="sti-hint" class="form-hint" style="margin-top:4px"><?= seoTitleHint(mb_strlen($app['seo_title']??'','UTF-8')) ?></div>
       </div>
       <div class="form-group">
-        <label class="form-label">الكلمات المفتاحية</label>
-        <input class="form-input" id="f-keywords" type="text" name="keywords" value="<?= h($app['keywords']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>الكلمات المفتاحية</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
+            <span id="kw-used"><?= mb_strlen($app['keywords']??'','UTF-8') ?></span> / 255
+          </span>
+        </label>
+        <input class="form-input" id="f-keywords" type="text" name="keywords"
+               value="<?= h($app['keywords']??'') ?>" maxlength="255"
+               oninput="simpleCounter(this,'kw-used')">
       </div>
       <div class="form-group full">
-        <label class="form-label">Meta Description</label>
-        <input class="form-input" id="f-meta-desc" type="text" name="meta_description" value="<?= h($app['meta_description']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="display:flex;align-items:center;gap:6px">
+            <span id="seo-desc-icon" class="seo-quality-icon" title="جودة وصف Meta Description">
+              <svg id="sdi-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </span>
+            Meta Description
+          </span>
+          <span id="seo-desc-counter" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
+            <span id="sdi-used"><?= mb_strlen($app['meta_description']??'','UTF-8') ?></span> / 160
+          </span>
+        </label>
+        <input class="form-input" id="f-meta-desc" type="text" name="meta_description"
+               value="<?= h($app['meta_description']??'') ?>" maxlength="160"
+               oninput="seoCounter(this,'sdi','160',120,160)">
+        <div style="height:3px;border-radius:2px;background:var(--border-c);margin-top:5px;overflow:hidden">
+          <div id="sdi-bar" style="height:100%;transition:width .2s,background .2s;border-radius:2px;
+            width:<?= min(100,round(mb_strlen($app['meta_description']??'','UTF-8')/160*100)) ?>%;
+            background:<?= seoBarColor(mb_strlen($app['meta_description']??'','UTF-8'),120,160) ?>"></div>
+        </div>
+        <div id="sdi-hint" class="form-hint" style="margin-top:4px"><?= seoDescHint(mb_strlen($app['meta_description']??'','UTF-8')) ?></div>
       </div>
       <div class="form-group full">
-        <label class="form-label">وصف قصير</label>
-        <input class="form-input" id="f-short-desc" type="text" name="short_description" value="<?= h($app['short_description']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>وصف قصير</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
+            <span id="sd-used"><?= mb_strlen($app['short_description']??'','UTF-8') ?></span> / 200
+          </span>
+        </label>
+        <input class="form-input" id="f-short-desc" type="text" name="short_description"
+               value="<?= h($app['short_description']??'') ?>" maxlength="200"
+               oninput="simpleCounter(this,'sd-used')">
       </div>
       <div class="form-group full">
-        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
-          <span>وصف مطوّل <span id="desc-word-count" style="color:var(--muted);font-weight:400"></span></span>
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="display:flex;align-items:center;gap:8px">
+            وصف مطوّل
+            <span id="desc-word-count" style="color:var(--muted);font-weight:400;font-size:12px"></span>
+            <span id="ld-used-badge" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)"><span id="ld-chars">0</span> حرف</span>
+          </span>
           <button type="button" id="btn-continue-desc" class="add-item-btn" style="margin:0;padding:6px 14px;font-size:12px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m-7-7h14"/></svg>
             متابعة الكتابة (+٦٠٠ كلمة)
           </button>
         </label>
-        <textarea class="form-textarea" id="f-long-desc" name="long_description" rows="8"><?= h($app['long_description']??'') ?></textarea>
+        <textarea class="form-textarea" id="f-long-desc" name="long_description" rows="8"
+                  oninput="ldCounter(this)"><?= h($app['long_description']??'') ?></textarea>
+        <div id="ld-quality-hint" class="form-hint" style="margin-top:4px"></div>
         <div class="form-hint" id="continue-desc-status"></div>
       </div>
     </div>
@@ -4097,12 +4179,22 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     <h2>البيانات التقنية</h2>
     <div class="form-grid">
       <div class="form-group">
-        <label class="form-label">المطور</label>
-        <input class="form-input" id="f-developer" type="text" name="developer" value="<?= h($app['developer']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>المطور</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums"><span id="dev-used"><?= mb_strlen($app['developer']??'','UTF-8') ?></span> / 100</span>
+        </label>
+        <input class="form-input" id="f-developer" type="text" name="developer"
+               value="<?= h($app['developer']??'') ?>" maxlength="100"
+               oninput="simpleCounter(this,'dev-used')">
       </div>
       <div class="form-group">
-        <label class="form-label">الإصدار الحالي</label>
-        <input class="form-input" id="f-version" type="text" name="version" value="<?= h($app['version']??'') ?>">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>الإصدار الحالي</span>
+          <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums"><span id="ver-used"><?= mb_strlen($app['version']??'','UTF-8') ?></span> / 30</span>
+        </label>
+        <input class="form-input" id="f-version" type="text" name="version"
+               value="<?= h($app['version']??'') ?>" maxlength="30"
+               oninput="simpleCounter(this,'ver-used')">
       </div>
       <div class="form-group">
         <label class="form-label">إصدار Google Play</label>
@@ -6796,14 +6888,36 @@ function toggleSettingDetail(btn){
       اطّلع على الشرح الكامل من <a href="https://www.indexnow.org/documentation" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">indexnow.org</a>.
     </p>
     <div class="form-group">
-      <label class="form-label">مفتاح IndexNow (API Key)</label>
-      <input class="form-input" type="text" id="indexnow_key" name="indexnow_key" value="<?= h(get_cfg($pdo,'indexnow_key')) ?>" placeholder="مثال: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
-      <div class="form-hint">
-        <strong>كيف تحصل على مفتاح؟</strong> — اصنع مفتاحاً عشوائياً بنفسك: أي نص 20 إلى 128 حرفاً من الأحرف والأرقام والشرطة (مثال: <code>yassota-<?= substr(md5(uniqid()), 0, 20) ?></code>).
-        بعد الحفظ تُنشئ لك الصفحة ملف <code><?php $ik = get_cfg($pdo,'indexnow_key'); echo h($ik ?: 'مفتاحك') ?>.txt</code> في جذر الموقع تلقائياً (يُرسله IndexNow لمحركات البحث كإثبات ملكية).
-        اقرأ الشرح الكامل بـ <a href="https://www.indexnow.org/documentation" target="_blank" style="color:var(--cyan)">indexnow.org/documentation</a>
-        | <a href="https://www.bing.com/indexnow" target="_blank" style="color:var(--cyan)">Bing IndexNow</a>.
+      <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span>مفتاح IndexNow (API Key)</span>
+        <span id="inkey-status" style="font-size:11px;font-weight:600"></span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <input class="form-input" type="text" id="indexnow_key" name="indexnow_key"
+               value="<?= h(get_cfg($pdo,'indexnow_key')) ?>"
+               placeholder="مثال: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+               dir="ltr" style="font-family:var(--f-mono);font-size:12px;flex:1"
+               oninput="validateInKey(this)">
+        <button type="button" onclick="generateInKey()"
+                style="padding:0 14px;border-radius:8px;border:1px solid var(--border-c);background:var(--surface-3);color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          🔑 توليد مفتاح
+        </button>
       </div>
+      <div class="form-hint" style="margin-top:6px">
+        <strong style="color:var(--danger)">⚠ مهم:</strong> المفتاح يجب أن يحتوي على <strong>أحرف إنجليزية وأرقام فقط</strong>
+        (<code>A-Z a-z 0-9</code>) — لا شرطة، لا رمز خاص، لا مسافات — بطول <strong>8 إلى 128 حرفاً</strong>.
+        أي رمز آخر يُسبب خطأ 422 من خوادم IndexNow.
+        بعد الحفظ، سيُنشئ الموقع ملف <code><?php $ik = get_cfg($pdo,'indexnow_key'); echo h($ik ?: 'مفتاحك') ?>.txt</code> في جذر الموقع تلقائياً.
+      </div>
+      <?php
+      $curInKey = get_cfg($pdo,'indexnow_key','');
+      if ($curInKey && !preg_match('/^[a-zA-Z0-9]{8,128}$/', $curInKey)): ?>
+      <div style="margin-top:8px;padding:10px 14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:12px;color:#ef4444;direction:rtl">
+        🔴 المفتاح الحالي (<code dir="ltr"><?= h(mb_substr($curInKey,0,20).'...') ?></code>) يحتوي على رموز غير مسموحة.
+        هذا هو سبب خطأ 422 في سجل الفهرسة.
+        <strong>اضغط "توليد مفتاح" للحصول على مفتاح صحيح جديد، ثم احفظ الإعدادات.</strong>
+      </div>
+      <?php endif; ?>
       <?= $tip(
         'IndexNow يُخبر Bing وYandex وغيرها فورياً عند نشر أي تطبيق بدل انتظار زحف العناكب. لا تحتاج حساباً خارجياً — تصنع المفتاح بنفسك.',
         '<p style="margin-bottom:9px"><strong style="color:var(--white)">كيف يعمل IndexNow؟</strong><br>بدلاً من انتظار Google/Bing لاكتشاف محتواك الجديد (قد يأخذ أياماً أو أسابيع)، IndexNow يُرسل إشعاراً فورياً لمحركات البحث قائلاً "هذه الصفحة تغيّرت — افحصها الآن". النتيجة: فهرسة أسرع بكثير.</p>
@@ -9149,6 +9263,140 @@ async function clearOldLogs(){
     };
   } catch(e){}
 })();
+</script>
+
+<script>
+/* ─── SEO field counters + quality indicators ─── */
+var SEO_COLORS = {red:'#ef4444', yellow:'#f59e0b', green:'#22c55e', grey:'#6b7280'};
+var SEO_ICONS = {
+  ok:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  warn:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  bad: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+  neu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+};
+var TITLE_HINTS = [
+  [0,0,'أدخل عنوان SEO — الطول المثالي 50–60 حرفاً'],
+  [1,29,'⚠ قصير جداً — محركات البحث تفضّل 50–60 حرفاً'],
+  [30,49,'🟡 مقبول — الطول المثالي بين 50 و60 حرفاً'],
+  [50,60,'✅ ممتاز — طول مثالي لمحركات البحث']
+];
+var DESC_HINTS = [
+  [0,0,'أدخل Meta Description — الطول المثالي 120–160 حرفاً'],
+  [1,49,'⚠ قصير جداً — محركات البحث تفضّل 120–160 حرفاً'],
+  [50,119,'🟡 مقبول — الطول المثالي بين 120 و160 حرفاً'],
+  [120,160,'✅ ممتاز — طول مثالي لمحركات البحث']
+];
+
+function getHint(len, hints) {
+  for (var i = hints.length-1; i >= 0; i--) {
+    if (len >= hints[i][0]) return hints[i][2];
+  }
+  return hints[0][2];
+}
+
+function seoColor(len, gMin, gMax) {
+  if (len === 0) return SEO_COLORS.grey;
+  if (len < gMin * 0.5) return SEO_COLORS.red;
+  if (len < gMin) return SEO_COLORS.yellow;
+  return SEO_COLORS.green;
+}
+
+function seoIcon(len, gMin) {
+  if (len === 0) return SEO_ICONS.neu;
+  if (len < gMin * 0.5) return SEO_ICONS.bad;
+  if (len < gMin) return SEO_ICONS.warn;
+  return SEO_ICONS.ok;
+}
+
+function seoCounter(el, pfx, max, gMin, gMax) {
+  var len = [...el.value].length; // Unicode-safe
+  var used = document.getElementById(pfx+'-used');
+  var bar  = document.getElementById(pfx+'-bar');
+  var hint = document.getElementById(pfx+'-hint');
+  var icon = document.getElementById(pfx.replace('-','')+'icon') || document.getElementById(pfx+'-icon-wrap');
+  var iconSvg = icon ? icon.querySelector('svg') : null;
+  var counter = document.getElementById(pfx.split('-')[0]+'-counter') || null;
+  // Find icon wrapper by the id pattern
+  var iconWrap = document.getElementById('seo-title-icon') || document.getElementById('seo-desc-icon');
+  // Resolve by prefix
+  if (pfx === 'sti') iconWrap = document.getElementById('seo-title-icon');
+  if (pfx === 'sdi') iconWrap = document.getElementById('seo-desc-icon');
+
+  if (used) used.textContent = len;
+  if (bar) {
+    bar.style.width = Math.min(100, len/gMax*100)+'%';
+    bar.style.background = seoColor(len, gMin, gMax);
+  }
+  if (hint) hint.textContent = pfx==='sti' ? getHint(len,TITLE_HINTS) : getHint(len,DESC_HINTS);
+  if (iconWrap) iconWrap.innerHTML = seoIcon(len, gMin);
+
+  // Color the counter text
+  var cnt = pfx==='sti' ? document.getElementById('seo-title-counter') : document.getElementById('seo-desc-counter');
+  if (cnt) cnt.style.color = seoColor(len, gMin, gMax);
+}
+
+function simpleCounter(el, spanId) {
+  var span = document.getElementById(spanId);
+  if (span) span.textContent = [...el.value].length;
+}
+
+function ldCounter(el) {
+  var len   = [...el.value].length;
+  var chars = document.getElementById('ld-chars');
+  var hint  = document.getElementById('ld-quality-hint');
+  var badge = document.getElementById('ld-used-badge');
+  if (chars) chars.textContent = len.toLocaleString('ar');
+  if (badge) badge.style.color = len < 300 ? '#f59e0b' : len >= 800 ? '#22c55e' : '#94a3b8';
+  if (hint) {
+    if (len === 0) hint.textContent = '';
+    else if (len < 300) hint.textContent = '⚠ الوصف قصير جداً — 300 حرف على الأقل لتحسين الفهرسة';
+    else if (len < 600) hint.textContent = '🟡 جيد — الوصف الطويل (600+ حرف) يُحسّن الفهرسة أكثر';
+    else if (len < 1500) hint.textContent = '✅ جيد — الوصف المثالي 1500 حرف فأكثر';
+    else hint.textContent = '✅ ممتاز — وصف تفصيلي يساعد على الفهرسة القوية';
+  }
+}
+
+// IndexNow key validation in settings
+function validateInKey(el) {
+  var v = el.value.trim();
+  var st = document.getElementById('inkey-status');
+  if (!st) return;
+  if (!v) { st.textContent = ''; el.style.borderColor=''; return; }
+  var ok = /^[a-zA-Z0-9]{8,128}$/.test(v);
+  if (ok) {
+    st.innerHTML = '<span style="color:#22c55e">✅ مفتاح صحيح</span>';
+    el.style.borderColor = '#22c55e';
+  } else {
+    st.innerHTML = '<span style="color:#ef4444">❌ مفتاح غير صالح — أحرف وأرقام فقط (8-128)</span>';
+    el.style.borderColor = '#ef4444';
+  }
+}
+function generateInKey() {
+  var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  var key = '';
+  var arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  arr.forEach(function(b){ key += chars[b % chars.length]; });
+  var el = document.getElementById('indexnow_key');
+  if (el) { el.value = key; validateInKey(el); }
+}
+
+// Init all counters on page load
+document.addEventListener('DOMContentLoaded', function(){
+  var el;
+  // SEO title
+  el = document.getElementById('f-seo-title');
+  if (el) seoCounter(el, 'sti', '60', 50, 60);
+  // Meta desc
+  el = document.getElementById('f-meta-desc');
+  if (el) seoCounter(el, 'sdi', '160', 120, 160);
+  // Long desc
+  el = document.getElementById('f-long-desc');
+  if (el) ldCounter(el);
+  // IndexNow key
+  el = document.getElementById('indexnow_key');
+  if (el && el.value) validateInKey(el);
+});
 </script>
 </body>
 </html>
