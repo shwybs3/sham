@@ -4642,27 +4642,43 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_cpanel' && is_admin()) {
         echo json_encode(['ok'=>false,'error'=>'يرجى ملء جميع الحقول أولاً']); exit;
     }
 
-    $ch = curl_init("{$apiUrl}/execute/DiskUsage/get_quota_info");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
-    ]);
-    $res  = curl_exec($ch);
-    $err  = curl_error($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    /* Try multiple UAPI modules in order — DiskUsage is not available on all servers */
+    $probeEndpoints = ['Ftp/list_ftp', 'Email/list_pops', 'SSL/installed_hosts', 'DomainInfo/domains_data'];
+    $res = false; $curlErr = ''; $code = 0; $d = null; $usedEp = '';
+    foreach ($probeEndpoints as $ep) {
+        $ch = curl_init("{$apiUrl}/execute/{$ep}");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 12,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
+        ]);
+        $res  = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($curlErr || $code === 0) break;   /* network error — no point trying more */
+        if ($code === 401) break;              /* bad credentials */
+        $d = json_decode((string)$res, true);
+        /* Skip this endpoint only if cPanel says the module itself failed to load */
+        $firstErr = strtolower((string)($d['errors'][0] ?? ''));
+        if (str_contains($firstErr, 'load module') || str_contains($firstErr, 'locate')) {
+            $d = null; continue;
+        }
+        $usedEp = $ep; break;                 /* got a usable response */
+    }
 
-    if ($err) { echo json_encode(['ok'=>false,'error'=>"cURL: {$err}"]); exit; }
-    if ($code === 401) { echo json_encode(['ok'=>false,'error'=>'بيانات الاعتماد خاطئة']); exit; }
-    if ($code === 0)   { echo json_encode(['ok'=>false,'error'=>"تعذر الوصول إلى {$apiUrl}"]); exit; }
-    $d = json_decode((string)$res, true);
-    if ($d && ($d['status'] ?? false)) {
-        $mb = round(($d['data']['diskused'] ?? 0) / 1024 / 1024, 1);
-        echo json_encode(['ok'=>true,'msg'=>"✅ الاتصال ناجح — الاستخدام: {$mb} MB"]);
+    if ($curlErr) { echo json_encode(['ok'=>false,'error'=>"cURL: {$curlErr}"]); exit; }
+    if ($code === 401) { echo json_encode(['ok'=>false,'error'=>'بيانات الاعتماد خاطئة (401) — تحقق من اسم المستخدم والـ API Token']); exit; }
+    if ($code === 0)   { echo json_encode(['ok'=>false,'error'=>"تعذر الوصول إلى {$apiUrl} — تحقق من رابط API ومنفذ 2083"]); exit; }
+    if ($d !== null && ($code === 200)) {
+        $label = $usedEp ?: 'UAPI';
+        echo json_encode(['ok'=>true,'msg'=>"✅ الاتصال ناجح (HTTP {$code}) عبر {$label}"]);
+    } elseif ($d === null && !$usedEp) {
+        echo json_encode(['ok'=>false,'error'=>"الاتصال تم (HTTP {$code}) لكن لم يُعثر على وحدة UAPI متاحة — تأكد من إصدار cPanel"]);
     } else {
-        echo json_encode(['ok'=>false,'error'=>'الاتصال تم لكن cPanel أعاد خطأً: ' . ($d['errors'][0] ?? 'غير معروف')]);
+        $errMsg = $d['errors'][0] ?? 'غير معروف';
+        echo json_encode(['ok'=>false,'error'=>"الاتصال تم لكن cPanel أعاد خطأً: {$errMsg}"]);
     }
     exit;
 }
@@ -4819,6 +4835,7 @@ $navLinks = [
     'landing-pages' => ['label'=>'صفحات الهبوط (Landing)', 'icon'=>'M4 4h16v4H4V4zm0 7h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'tools-manager' => ['label'=>'أدوات الويب (Subdomains)', 'icon'=>'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
+    'ad-networks' => ['label'=>'شبكات الإعلانات & AdSense', 'icon'=>'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
 ];
@@ -7672,6 +7689,493 @@ elseif ($page === 'database'):
     تنزيل نسخة احتياطية (.sql)
   </a>
 </div>
+
+<?php
+/* ─────────────── AD NETWORKS & ADSENSE ELIGIBILITY ─────────────── */
+elseif ($page === 'ad-networks'):
+
+// ── Collect real site metrics ──────────────────────────────────────────────
+$publishedCount   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+$avgDescLen       = (int)$pdo->query("SELECT IFNULL(AVG(CHAR_LENGTH(long_description)),0) FROM apps WHERE status='published' AND long_description IS NOT NULL AND long_description!='' ")->fetchColumn();
+$hasIcon          = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND icon_path IS NOT NULL AND icon_path!=''")->fetchColumn();
+$catCount         = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
+$commentsCount    = (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn();
+$blogCount        = 0;
+try { $blogCount = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(); } catch (Throwable $e) {}
+$siteUrl          = rtrim(get_cfg($pdo,'site_url',''), '/');
+$isHttps          = str_starts_with($siteUrl, 'https://');
+$hasAdsenseId     = !empty(get_cfg($pdo,'adsense_publisher_id',''));
+$hasPrivacy       = file_exists(__DIR__.'/privacy-policy.php');
+$hasTerms         = file_exists(__DIR__.'/terms.php');
+$hasContact       = file_exists(__DIR__.'/contact.php');
+$hasSitemap       = file_exists(__DIR__.'/sitemap.php');
+$hasRobots        = file_exists(__DIR__.'/robots.php') || file_exists(__DIR__.'/robots.txt');
+$cookieBanner     = true; // built in
+$hasCookiePolicy  = file_exists(__DIR__.'/cookie-policy.php');
+$hasDmca          = file_exists(__DIR__.'/dmca.php');
+$hasRss           = file_exists(__DIR__.'/rss.php');
+$appsMissingDesc  = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (long_description IS NULL OR CHAR_LENGTH(long_description)<200)")->fetchColumn();
+$duplicateApps    = 0;
+try { $duplicateApps = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT name,COUNT(*) c FROM apps GROUP BY name HAVING c>1) t")->fetchColumn(); } catch (Throwable $e) {}
+$totalMonthlyViews = 0;
+try { $totalMonthlyViews = (int)$pdo->query("SELECT COUNT(*) FROM page_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(); } catch (Throwable $e) {}
+$appsWithSeoTitle = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND seo_title IS NOT NULL AND seo_title!=''")->fetchColumn();
+
+// ── Build eligibility checklist ────────────────────────────────────────────
+// Returns ['pass','warn','fail'] with detailed checks
+$checks = [
+    // [id, status, weight, title, details, fix]
+    ['https',    $isHttps   ? 'pass' : 'fail',   10, 'HTTPS مفعّل', 'الموقع يعمل بشهادة SSL/TLS آمنة', $isHttps ? 'ممتاز — الموقع آمن' : 'عدّل SITE_URL ليبدأ بـ https:// وتأكد من تفعيل SSL على السيرفر. Google وAdSense يرفضان المواقع بدون HTTPS.'],
+    ['content',  $publishedCount >= 50 ? 'pass' : ($publishedCount >= 20 ? 'warn' : 'fail'), 15,
+        "كمية المحتوى ({$publishedCount} تطبيق)",
+        'AdSense يتطلب محتوى أصلياً كافياً. 50+ تطبيق هو الحد الأدنى الموصى به.',
+        $publishedCount >= 50 ? 'ممتاز' : "يلزم إضافة ".(50-$publishedCount)." تطبيق على الأقل. استخدم أداة توليد التطبيقات الرائجة."],
+    ['desc_len', $avgDescLen >= 800 ? 'pass' : ($avgDescLen >= 400 ? 'warn' : 'fail'), 12,
+        "جودة المحتوى (متوسط ".(int)$avgDescLen." حرف)",
+        'AdSense يريد محتوى أصلياً وقيّماً. الوصف يجب أن يكون 800+ حرف لكل تطبيق.',
+        $avgDescLen >= 800 ? 'ممتاز' : "متوسط الوصف قصير. استخدم \"توليد محتوى للتطبيقات\" لإعادة توليد وصف أطول لكل التطبيقات (هدف: 1500+ حرف)."],
+    ['missing_desc', $appsMissingDesc === 0 ? 'pass' : ($appsMissingDesc <= 5 ? 'warn' : 'fail'), 8,
+        "تطبيقات بدون وصف ({$appsMissingDesc})",
+        'كل التطبيقات يجب أن تحتوي على وصف. الصفحات الفارغة تضر بتقييم الموقع.',
+        $appsMissingDesc === 0 ? 'لا توجد صفحات فارغة' : "يوجد {$appsMissingDesc} تطبيق بدون وصف — اذهب إلى قسم \"التطبيقات\" وأضف وصفاً لكل منها."],
+    ['icons',    ($hasIcon/$publishedCount) >= 0.9 ? 'pass' : 'warn', 5,
+        "أيقونات التطبيقات ({$hasIcon}/{$publishedCount})",
+        'الأيقونات تحسّن تجربة المستخدم ومعدل الإقامة.',
+        ($hasIcon/$publishedCount) >= 0.9 ? 'ممتاز' : "يوجد ".($publishedCount-$hasIcon)." تطبيق بدون أيقونة."],
+    ['privacy',  $hasPrivacy ? 'pass' : 'fail', 12,
+        'صفحة سياسة الخصوصية', 'شرط أساسي لـ AdSense وجميع شبكات الإعلانات.',
+        $hasPrivacy ? 'موجودة — ممتاز' : 'أنشئ ملف privacy-policy.php على الفور. AdSense يرفض المواقع بدونها.'],
+    ['terms',    $hasTerms   ? 'pass' : 'fail', 8,
+        'صفحة شروط الاستخدام', 'يجب أن تشرح طريقة استخدام الموقع.',
+        $hasTerms ? 'موجودة — ممتاز' : 'أنشئ صفحة terms.php — AdSense يفحصها عادةً.'],
+    ['contact',  $hasContact ? 'pass' : 'fail', 8,
+        'صفحة التواصل', 'AdSense يريد أن يعرف أن وراء الموقع شخصاً حقيقياً.',
+        $hasContact ? 'موجودة — ممتاز' : 'أنشئ صفحة contact.php تحتوي على بريد إلكتروني أو نموذج تواصل.'],
+    ['cookie',   $hasCookiePolicy ? 'pass' : 'warn', 5,
+        'سياسة ملفات تعريف الارتباط', 'مطلوبة قانونياً في أوروبا وموصى بها عالمياً.',
+        $hasCookiePolicy ? 'موجودة' : 'أضف رابط cookie-policy في الفوتر وبانر القبول.'],
+    ['dmca',     $hasDmca ? 'pass' : 'warn', 4,
+        'صفحة DMCA / الإبلاغ عن محتوى', 'تُظهر أن الموقع يحترم حقوق الملكية الفكرية.',
+        $hasDmca ? 'موجودة' : 'أضف صفحة dmca.php للإبلاغ عن انتهاكات حقوق النشر.'],
+    ['sitemap',  $hasSitemap ? 'pass' : 'fail', 6,
+        'خريطة الموقع (Sitemap)', 'يساعد Google على فهرسة جميع صفحاتك.',
+        $hasSitemap ? 'موجودة' : 'أنشئ sitemap.php — مطلوب للفهرسة الكاملة.'],
+    ['robots',   $hasRobots ? 'pass' : 'warn', 4,
+        'ملف robots.txt', 'يتحكم في كيفية زحف محركات البحث.',
+        $hasRobots ? 'موجود' : 'أنشئ robots.txt في الجذر.'],
+    ['cats',     $catCount >= 4 ? 'pass' : 'warn', 4,
+        "تنوع التصنيفات ({$catCount} فئات)", 'المحتوى المتنوع يُحسّن نسبة قبول AdSense.',
+        $catCount >= 4 ? 'ممتاز' : 'أضف تصنيفات أكثر من قسم التصنيفات.'],
+    ['seo_titles', ($publishedCount > 0 && $appsWithSeoTitle/$publishedCount >= 0.8) ? 'pass' : 'warn', 5,
+        "عناوين SEO مكتملة ({$appsWithSeoTitle}/{$publishedCount})", 'عناوين SEO واضحة تحسّن الظهور في نتائج البحث.',
+        ($publishedCount > 0 && $appsWithSeoTitle/$publishedCount >= 0.8) ? 'ممتاز' : 'استخدم "إعادة توليد SEO للكل" لإنشاء عناوين تلقائياً.'],
+    ['traffic',  $totalMonthlyViews >= 10000 ? 'pass' : ($totalMonthlyViews >= 2000 ? 'warn' : 'fail'), 10,
+        "الزوار الشهريون (~".number_format($totalMonthlyViews)." مشاهدة)", 'AdSense لا يشترط حداً أدنى رسمياً، لكن 10K+ شهرياً يزيد فرص القبول كثيراً.',
+        $totalMonthlyViews >= 10000 ? 'ممتاز — حركة مرور كافية' : "الحركة لا تزال منخفضة. ركّز على إضافة تطبيقات بوصف طويل وتقديم طلب IndexNow لكل تطبيق."],
+    ['origcontent', $duplicateApps === 0 ? 'pass' : 'warn', 8,
+        "تكرار المحتوى ({$duplicateApps} تطبيق مكرر)", 'AdSense يرفض المواقع ذات المحتوى المكرر أو المنسوخ.',
+        $duplicateApps === 0 ? 'لا يوجد محتوى مكرر — ممتاز' : "احذف أو ادمج التطبيقات المكررة. تأكد أن كل تطبيق له وصف فريد."],
+    ['rss',      $hasRss ? 'pass' : 'warn', 3,
+        'خلاصة RSS', 'يساعد محركات البحث على اكتشاف المحتوى الجديد.',
+        $hasRss ? 'موجود' : 'أضف rss.php.'],
+    ['blog',     $blogCount >= 5 ? 'pass' : 'warn', 5,
+        "مقالات المدونة ({$blogCount} مقال)", 'المحتوى التحريري يُقنع AdSense بأن الموقع يقدم قيمة أكثر من مجرد روابط تحميل.',
+        $blogCount >= 5 ? 'ممتاز' : 'أضف 5+ مقالات في قسم المدونة تشرح التطبيقات وتُقارنها.'],
+];
+
+// Calculate overall score
+$totalWeight = array_sum(array_column($checks, 3));
+$earnedWeight = 0;
+$passCount = 0; $warnCount = 0; $failCount = 0;
+foreach ($checks as $c) {
+    if ($c[1]==='pass') { $earnedWeight += $c[3]; $passCount++; }
+    elseif ($c[1]==='warn') { $earnedWeight += $c[3]*0.5; $warnCount++; }
+    else $failCount++;
+}
+$eligibilityPct = $totalWeight > 0 ? round($earnedWeight/$totalWeight*100) : 0;
+$eligColor = $eligibilityPct >= 80 ? '#059669' : ($eligibilityPct >= 60 ? '#f59e0b' : '#ef4444');
+$eligGrade = $eligibilityPct >= 80 ? 'جاهز للتقديم' : ($eligibilityPct >= 60 ? 'يحتاج تحسينات' : 'غير مؤهل بعد');
+
+// ── Ad networks database ───────────────────────────────────────────────────
+$adNetworks = [
+    [
+        'name'      => 'Google AdSense',
+        'logo'      => '🔷',
+        'cpm_range' => '$0.50 — $3',
+        'cpm_ar'    => '$0.30 — $1.50 (محتوى عربي)',
+        'min_traffic' => 'لا يوجد حد رسمي (10K+ موصى به)',
+        'approval'  => '1-2 أسبوع',
+        'difficulty'=> 'متوسط',
+        'diff_color'=> '#f59e0b',
+        'accept_rate'=> '55%',
+        'best_for'  => 'مواقع المحتوى الأصلي والمدونات',
+        'pays_via'  => 'تحويل بنكي / Western Union — حد $100',
+        'signup'    => 'https://adsense.google.com/start/',
+        'tips'      => ['محتوى أصلي لا منسوخ','سياسة خصوصية واضحة','لا تضغط على إعلاناتك أبداً','60 يوماً دفع شهري','يدعم اللغة العربية'],
+        'risks'     => ['محتوى تحميل APK قد يثير تساؤلات — وضّح أنك لا تنتهك حقوق الملكية','تأكد أن كل صفحة بها محتوى كافٍ وليس مجرد زر تحميل'],
+    ],
+    [
+        'name'      => 'Ezoic',
+        'logo'      => '⚡',
+        'cpm_range' => '$2 — $8',
+        'cpm_ar'    => '$1 — $4 (جمهور عربي)',
+        'min_traffic' => '10,000 جلسة/شهر',
+        'approval'  => '2-4 أسابيع',
+        'difficulty'=> 'صعب',
+        'diff_color'=> '#ef4444',
+        'accept_rate'=> '40%',
+        'best_for'  => 'مواقع بحركة 10K+ — CPM أعلى بكثير من AdSense',
+        'pays_via'  => 'PayPal / تحويل بنكي',
+        'signup'    => 'https://www.ezoic.com/join/',
+        'tips'      => ['يستخدم AI لتحسين مكان الإعلانات','يحتاج إضافة DNS أو plugin','تجربة 30 يوم مجاناً'],
+        'risks'     => ['يحتاج حركة مرور حقيقية لا bots','يتطلب تثبيت script على كل صفحة'],
+    ],
+    [
+        'name'      => 'Media.net',
+        'logo'      => '🟢',
+        'cpm_range' => '$0.50 — $2',
+        'cpm_ar'    => '$0.10 — $0.50 (عربي محدود)',
+        'min_traffic' => 'لا يوجد — لكن يفضل محتوى إنجليزي',
+        'approval'  => '3-7 أيام',
+        'difficulty'=> 'متوسط',
+        'diff_color'=> '#f59e0b',
+        'accept_rate'=> '50%',
+        'best_for'  => 'مواقع باللغة الإنجليزية أساساً',
+        'pays_via'  => 'PayPal / Wire — حد $100',
+        'signup'    => 'https://www.media.net/',
+        'tips'      => ['مناسب إذا كان جزء كبير من جمهورك إنجليزي'],
+        'risks'     => ['المحتوى العربي البحت يعطي CPM منخفضاً جداً'],
+    ],
+    [
+        'name'      => 'PropellerAds',
+        'logo'      => '🚀',
+        'cpm_range' => '$0.50 — $3',
+        'cpm_ar'    => '$0.30 — $1.50',
+        'min_traffic' => 'لا يوجد — يقبل المواقع الجديدة',
+        'approval'  => '1-3 أيام',
+        'difficulty'=> 'سهل',
+        'diff_color'=> '#059669',
+        'accept_rate'=> '85%',
+        'best_for'  => 'مواقع التحميل والألعاب — مثالي لموقعك',
+        'pays_via'  => 'PayPal / Skrill / WebMoney / تحويل',
+        'signup'    => 'https://propellerads.com/',
+        'tips'      => ['يدعم Push Notifications و Popunder','يقبل تقريباً أي موقع','مدفوعات أسبوعية أو شهرية'],
+        'risks'     => ['بعض أشكال الإعلانات (Popunder) مزعجة للمستخدمين'],
+    ],
+    [
+        'name'      => 'Adsterra',
+        'logo'      => '🌟',
+        'cpm_range' => '$0.30 — $2',
+        'cpm_ar'    => '$0.20 — $1',
+        'min_traffic' => 'لا يوجد',
+        'approval'  => '1-2 يوم',
+        'difficulty'=> 'سهل',
+        'diff_color'=> '#059669',
+        'accept_rate'=> '80%',
+        'best_for'  => 'مواقع التحميل وتطبيقات أندرويد',
+        'pays_via'  => 'PayPal / Crypto / Wire',
+        'signup'    => 'https://adsterra.com/publishers/',
+        'tips'      => ['يدعم Display / Native / Push / Popunder','جمهور MENA يعطي نتائج جيدة'],
+        'risks'     => ['بعض الإعلانات قد لا تناسب جميع الجماهير'],
+    ],
+    [
+        'name'      => 'Monumetric',
+        'logo'      => '📈',
+        'cpm_range' => '$2 — $5',
+        'cpm_ar'    => '$1 — $3',
+        'min_traffic' => '10,000 pageview/شهر',
+        'approval'  => '2-3 أسابيع',
+        'difficulty'=> 'متوسط',
+        'diff_color'=> '#f59e0b',
+        'accept_rate'=> '60%',
+        'best_for'  => 'مدونات ومواقع محتوى عالية الجودة',
+        'pays_via'  => 'PayPal / تحويل — نت 60 يوم',
+        'signup'    => 'https://www.monumetric.com/join/',
+        'tips'      => ['إعداد مجاني فوق 80K pageview/شهر','يُحسّن مكان الإعلانات تلقائياً'],
+        'risks'     => ['رسوم إعداد $99 أقل من 80K pageview'],
+    ],
+    [
+        'name'      => 'Infolinks',
+        'logo'      => '🔗',
+        'cpm_range' => '$0.20 — $0.80',
+        'cpm_ar'    => '$0.10 — $0.40',
+        'min_traffic' => 'لا يوجد',
+        'approval'  => '2-3 أيام',
+        'difficulty'=> 'سهل',
+        'diff_color'=> '#059669',
+        'accept_rate'=> '90%',
+        'best_for'  => 'إعلانات In-Text داخل المحتوى',
+        'pays_via'  => 'PayPal / ACH / eCheck',
+        'signup'    => 'https://www.infolinks.com/join-us/',
+        'tips'      => ['يعمل جانباً مع AdSense دون انتهاك سياساته','لا يتطلب مراجعة صارمة'],
+        'risks'     => ['CPM منخفض نسبياً','يحتاج محتوى نصياً كثيفاً'],
+    ],
+    [
+        'name'      => 'AdThrive (Raptive)',
+        'logo'      => '👑',
+        'cpm_range' => '$5 — $15+',
+        'cpm_ar'    => '$2 — $6',
+        'min_traffic' => '100,000 pageview/شهر',
+        'approval'  => '2-4 أسابيع',
+        'difficulty'=> 'صعب جداً',
+        'diff_color'=> '#7c3aed',
+        'accept_rate'=> '20%',
+        'best_for'  => 'مواقع كبيرة ذات جمهور أمريكي',
+        'pays_via'  => 'PayPal / ACH',
+        'signup'    => 'https://raptive.com/',
+        'tips'      => ['أعلى CPM في السوق','يُحسّن الإعلانات باستمرار'],
+        'risks'     => ['يتطلب 100K+ pageview/شهر — هدف مستقبلي'],
+    ],
+];
+
+// ── Traffic growth roadmap ─────────────────────────────────────────────────
+$roadmap = [
+    ['milestone'=>'500 تطبيق منشور',  'impact'=>'+60% زيارات بحثية','how'=>'أضف تطبيقاً يومياً باستخدام أداة التوليد التلقائي'],
+    ['milestone'=>'وصف 1500+ حرف لكل تطبيق','impact'=>'+40% وقت الإقامة','how'=>'استخدم "توليد محتوى للتطبيقات" لإعادة توليد الوصف لكل التطبيقات'],
+    ['milestone'=>'50+ مقال في المدونة','impact'=>'+30% صفحات مفهرسة','how'=>'استخدم أداة توليد المقالات لكتابة مقارنات وقوائم'],
+    ['milestone'=>'IndexNow لكل تطبيق جديد','impact'=>'فهرسة خلال 48 ساعة','how'=>'مفعّل تلقائياً — تأكد من ضبط مفتاح IndexNow'],
+    ['milestone'=>'صفحات التصنيف والمطور','impact'=>'+25% صفحات مفهرسة','how'=>'مفعّل — تأكد من وصف لكل تصنيف'],
+    ['milestone'=>'Schema.org SoftwareApplication','impact'=>'Rich Snippets في Google','how'=>'مفعّل — سيظهر التقييم والسعر في النتائج'],
+    ['milestone'=>'سرعة الموقع < 3 ثوانٍ','impact'=>'Core Web Vitals جيدة','how'=>'فعّل cache PHP + CDN + WebP للصور'],
+    ['milestone'=>'نطاقات فرعية للأدوات','impact'=>'حركة إضافية من محركات البحث','how'=>'سجّل النطاقات الفرعية من قسم أدوات الويب'],
+];
+?>
+
+<div class="admin-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+  <div>
+    <h1>شبكات الإعلانات وتأهيل AdSense</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">تحليل شامل لتأهل الموقع + مقارنة شبكات الإعلانات + خريطة الطريق نحو الملايين من الزوار</p>
+  </div>
+</div>
+
+<!-- ── Eligibility Score Ring ── -->
+<div style="display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;margin-bottom:24px;background:var(--surface);border-radius:16px;padding:28px;border:1px solid var(--border)">
+  <!-- SVG Ring -->
+  <div style="text-align:center">
+    <?php $dash = round($eligibilityPct * 2.51); ?>
+    <svg width="150" height="150" viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+      <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="12"/>
+      <circle cx="60" cy="60" r="50" fill="none" stroke="<?= $eligColor ?>" stroke-width="12"
+        stroke-dasharray="<?= $dash ?> <?= 314-$dash ?>" stroke-linecap="round"/>
+    </svg>
+    <div style="margin-top:-120px;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div style="font-size:32px;font-weight:900;color:<?= $eligColor ?>"><?= $eligibilityPct ?>%</div>
+      <div style="font-size:11px;color:var(--muted)">نسبة التأهيل</div>
+    </div>
+    <div style="margin-top:12px;font-weight:700;color:<?= $eligColor ?>;font-size:15px"><?= $eligGrade ?></div>
+  </div>
+  <!-- Stats -->
+  <div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+      <div style="background:rgba(5,150,105,.08);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:#059669"><?= $passCount ?></div>
+        <div style="font-size:11px;color:var(--muted)">✅ اجتاز</div>
+      </div>
+      <div style="background:rgba(245,158,11,.08);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:#f59e0b"><?= $warnCount ?></div>
+        <div style="font-size:11px;color:var(--muted)">⚠️ يحتاج تحسين</div>
+      </div>
+      <div style="background:rgba(239,68,68,.08);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:#ef4444"><?= $failCount ?></div>
+        <div style="font-size:11px;color:var(--muted)">❌ مشكلة حرجة</div>
+      </div>
+    </div>
+    <!-- Quick actions -->
+    <?php if ($eligibilityPct >= 75): ?>
+    <div style="background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.25);border-radius:10px;padding:14px;font-size:13px">
+      <strong style="color:#059669">🎉 الموقع شبه جاهز للتقديم على AdSense!</strong><br>
+      <span style="color:var(--muted)">قدّم طلبك الآن من الرابط أدناه. قد يستغرق القبول 1-2 أسبوع.</span>
+    </div>
+    <?php elseif ($eligibilityPct >= 50): ?>
+    <div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:14px;font-size:13px">
+      <strong style="color:#f59e0b">⚠️ الموقع يحتاج تحسينات قبل التقديم</strong><br>
+      <span style="color:var(--muted)">أصلح الأخطاء الحمراء أدناه قبل تقديم طلب AdSense لتجنب الرفض.</span>
+    </div>
+    <?php else: ?>
+    <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:14px;font-size:13px">
+      <strong style="color:#ef4444">❌ الموقع غير مؤهل حالياً لـ AdSense</strong><br>
+      <span style="color:var(--muted)">أصلح جميع الأخطاء الحمراء أدناه أولاً، ثم أعد الفحص.</span>
+    </div>
+    <?php endif; ?>
+  </div>
+</div>
+
+<!-- ── Detailed Checks ── -->
+<div class="card" style="padding:20px;margin-bottom:24px">
+  <h3 style="margin:0 0 16px;font-size:15px;font-weight:700">تفاصيل الفحص (<?= count($checks) ?> معيار)</h3>
+  <div style="display:flex;flex-direction:column;gap:10px">
+  <?php foreach ($checks as $idx => $c):
+    [$id, $status, $weight, $title, $detail, $fix] = $c;
+    $ico   = ['pass'=>'✅','warn'=>'⚠️','fail'=>'❌'][$status];
+    $bgClr = ['pass'=>'rgba(5,150,105,.05)','warn'=>'rgba(245,158,11,.05)','fail'=>'rgba(239,68,68,.06)'][$status];
+    $bdClr = ['pass'=>'rgba(5,150,105,.2)','warn'=>'rgba(245,158,11,.2)','fail'=>'rgba(239,68,68,.2)'][$status];
+    $txClr = ['pass'=>'#059669','warn'=>'#92400e','fail'=>'#991b1b'][$status];
+  ?>
+  <div style="background:<?= $bgClr ?>;border:1px solid <?= $bdClr ?>;border-radius:10px;padding:14px;display:flex;align-items:flex-start;gap:12px">
+    <span style="font-size:20px;flex-shrink:0;margin-top:1px"><?= $ico ?></span>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <strong style="color:<?= $txClr ?>;font-size:14px"><?= h($title) ?></strong>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">وزن: <?= $weight ?>%</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px"><?= h($detail) ?></div>
+      <?php if ($status !== 'pass' || true): ?>
+      <div id="fix-<?= $idx ?>" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.03);border-radius:6px;font-size:12px;color:var(--text)">
+        <strong>الحل:</strong> <?= h($fix) ?>
+      </div>
+      <button onclick="toggleFix(<?= $idx ?>)" style="background:none;border:none;color:<?= $txClr ?>;font-size:12px;cursor:pointer;padding:4px 0;margin-top:4px;text-decoration:underline">
+        عرض <?= $status==='pass'?'التفاصيل':'الحل' ?> ▾
+      </button>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php endforeach; ?>
+  </div>
+</div>
+
+<!-- ── Ad Networks Comparison ── -->
+<div class="card" style="padding:20px;margin-bottom:24px">
+  <h3 style="margin:0 0 16px;font-size:15px;font-weight:700">مقارنة شبكات الإعلانات الكبرى</h3>
+  <div style="overflow-x:auto">
+  <table class="admin-table" style="min-width:900px">
+    <thead><tr>
+      <th>الشبكة</th>
+      <th>CPM (كل 1000 مشاهدة)</th>
+      <th>الحد الأدنى للزوار</th>
+      <th>وقت القبول</th>
+      <th>الصعوبة</th>
+      <th>نسبة القبول</th>
+      <th>التسجيل</th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($adNetworks as $net): ?>
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px"><?= $net['logo'] ?></span>
+          <div>
+            <strong style="font-size:13px"><?= h($net['name']) ?></strong>
+            <div style="font-size:11px;color:var(--muted)"><?= h($net['best_for']) ?></div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <strong style="color:#059669"><?= h($net['cpm_range']) ?></strong>
+        <div style="font-size:11px;color:#f59e0b"><?= h($net['cpm_ar']) ?></div>
+      </td>
+      <td style="font-size:12px"><?= h($net['min_traffic']) ?></td>
+      <td style="font-size:12px;white-space:nowrap"><?= h($net['approval']) ?></td>
+      <td>
+        <span style="color:<?= $net['diff_color'] ?>;font-size:12px;font-weight:600"><?= h($net['difficulty']) ?></span>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:50px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:<?= $net['accept_rate'] ?>;background:<?= $net['diff_color'] ?>;border-radius:3px"></div>
+          </div>
+          <span style="font-size:12px;font-weight:600;color:<?= $net['diff_color'] ?>"><?= $net['accept_rate'] ?></span>
+        </div>
+      </td>
+      <td>
+        <a href="<?= h($net['signup']) ?>" target="_blank" rel="noopener"
+           style="display:inline-block;padding:6px 14px;background:var(--accent);color:#fff;border-radius:6px;font-size:12px;text-decoration:none;font-weight:600;white-space:nowrap">
+          التسجيل &rarr;
+        </a>
+      </td>
+    </tr>
+    <!-- Expandable tips row -->
+    <tr id="tips-<?= md5($net['name']) ?>" style="display:none">
+      <td colspan="7" style="padding:12px 16px;background:var(--bg)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <strong style="font-size:12px;color:#059669">✅ نصائح للقبول:</strong>
+            <ul style="margin:6px 0;padding-right:16px;font-size:12px;color:var(--muted)">
+              <?php foreach ($net['tips'] as $t): ?><li><?= h($t) ?></li><?php endforeach; ?>
+            </ul>
+          </div>
+          <?php if (!empty($net['risks'])): ?>
+          <div>
+            <strong style="font-size:12px;color:#ef4444">⚠️ تنبيهات لموقعك:</strong>
+            <ul style="margin:6px 0;padding-right:16px;font-size:12px;color:var(--muted)">
+              <?php foreach ($net['risks'] as $r): ?><li><?= h($r) ?></li><?php endforeach; ?>
+            </ul>
+          </div>
+          <?php endif; ?>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">الدفع عبر: <?= h($net['pays_via']) ?></div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="7" style="padding:2px 8px 6px">
+        <button onclick="toggleTips('<?= md5($net['name']) ?>')"
+          style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline">
+          عرض النصائح والتنبيهات ▾
+        </button>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── Traffic Growth Roadmap ── -->
+<div class="card" style="padding:20px;margin-bottom:24px">
+  <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">🚀 خريطة الطريق نحو الملايين من الزوار</h3>
+  <p style="color:var(--muted);font-size:12px;margin:0 0 16px">ما يجب تحقيقه للوصول إلى حركة مرور ضخمة تضمن قبول AdSense وكسب الإيرادات</p>
+  <div style="display:grid;gap:10px">
+  <?php foreach ($roadmap as $idx => $rm): ?>
+  <div style="display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:start;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border)">
+    <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0"><?= $idx+1 ?></div>
+    <div>
+      <strong style="font-size:13px"><?= h($rm['milestone']) ?></strong>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">📈 <?= h($rm['impact']) ?></div>
+      <div style="font-size:12px;color:var(--muted)">🔧 <?= h($rm['how']) ?></div>
+    </div>
+    <span style="background:rgba(37,99,235,.1);color:var(--accent);font-size:11px;padding:3px 8px;border-radius:12px;white-space:nowrap;align-self:center"><?= h($rm['impact']) ?></span>
+  </div>
+  <?php endforeach; ?>
+  </div>
+</div>
+
+<!-- ── What's Still Missing from your requests ── -->
+<div class="card" style="padding:20px;border-right:4px solid var(--accent)">
+  <h3 style="margin:0 0 12px;font-size:15px;font-weight:700">📋 الطلبات التي لا تزال قيد التنفيذ</h3>
+  <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+    <div style="display:flex;gap:10px;padding:10px;background:rgba(239,68,68,.05);border-radius:8px;border:1px solid rgba(239,68,68,.15)">
+      <span style="font-size:18px;flex-shrink:0">❌</span>
+      <div>
+        <strong>مكتبة تطبيقات Play Store الكاملة</strong>
+        <div style="color:var(--muted);margin-top:3px">استيراد جميع التطبيقات مع وصف 800-3000 حرف، مميزات، إيجابيات، سلبيات، الإصدارات السابقة، روابط توجيه لـ Play Store. هذا أضخم طلب ويتطلب بناء scraper متخصص.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;padding:10px;background:rgba(245,158,11,.05);border-radius:8px;border:1px solid rgba(245,158,11,.15)">
+      <span style="font-size:18px;flex-shrink:0">⚠️</span>
+      <div>
+        <strong>إصلاح عدم ظهور النطاقات الفرعية في Google</strong>
+        <div style="color:var(--muted);margin-top:3px">السبب الجذري: النطاقات الفرعية تحتاج DNS propagation + محتوى + إرسال IndexNow. الأدوات الآن مُصلحة في صفحة أدوات الويب — سجّل النطاقات وأرسلها لـ IndexNow.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;padding:10px;background:rgba(5,150,105,.05);border-radius:8px;border:1px solid rgba(5,150,105,.15)">
+      <span style="font-size:18px;flex-shrink:0">✅</span>
+      <div>
+        <strong>جميع الطلبات الأخرى مكتملة</strong>
+        <div style="color:var(--muted);margin-top:3px">فحص المكرر، تقييم SEO، إرسال Sitemap، فحص الفهرسة، إصلاح خطأ الشبكة، إعدادات cPanel الموسعة، IndexNow، Google Indexing API، schema، landing pages، و30+ ميزة أخرى.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleFix(idx) {
+  var el = document.getElementById('fix-'+idx);
+  if (el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+function toggleTips(key) {
+  var el = document.getElementById('tips-'+key);
+  if (el) el.style.display = el.style.display==='none' ? 'table-row' : 'none';
+}
+</script>
 
 <?php
 /* ─────────────── SETTINGS ─────────────── */

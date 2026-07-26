@@ -38,28 +38,92 @@ try {
     );
 } catch (PDOException $e) {
     http_response_code(503);
-    $dbErr = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
     @file_put_contents(__DIR__ . '/db-error.log', '[' . date('Y-m-d H:i:s') . '] ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+    /* Maintenance countdown duration in minutes (shown to visitors) */
+    $maint_minutes = defined('MAINTENANCE_MINUTES') ? (int)MAINTENANCE_MINUTES : 15;
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>فشل الاتصال بقاعدة البيانات</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9}
-    .box{max-width:680px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
-    h1{color:#dc2626;font-size:20px;margin:0 0 6px} p.sub{color:#64748b;font-size:13px;margin:0 0 20px}
-    ol{padding-inline-start:20px;font-size:14px} li{margin-bottom:10px}
-    code{background:#f1f4f9;color:#2563eb;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
-    .err{margin-top:22px;background:#f1f4f9;border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#b91c1c;direction:ltr;text-align:left;word-break:break-all}
-    </style></head><body><div class="box">
-    <h1>تعذر الاتصال بقاعدة البيانات</h1>
-    <p class="sub">اتبع الخطوات التالية للحل:</p>
-    <ol>
-    <li>تأكد من صحة بيانات config.php: DB_HOST و DB_NAME و DB_USER و DB_PASS.</li>
-    <li>تأكد أن قاعدة البيانات تم إنشاؤها فعلياً من لوحة الاستضافة.</li>
-    <li>تأكد أن المستخدم مرتبط بقاعدة البيانات بكل الصلاحيات.</li>
-    <li>بعض الاستضافات تتطلب DB_HOST غير localhost — راجع لوحة الاستضافة.</li>
-    <li>لا حاجة لاستيراد أي ملف SQL يدوياً — الجداول تُنشأ تلقائياً بمجرد صحة الاتصال.</li>
-    </ol>
-    <div class="err">' . $dbErr . '</div></div></body></html>');
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الموقع قيد الصيانة</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);
+  font-family:Tahoma,"Segoe UI",Arial,sans-serif;color:#e2e8f0;padding:20px}
+.card{background:rgba(255,255,255,.05);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.1);border-radius:24px;
+  padding:52px 40px;max-width:520px;width:100%;text-align:center;
+  box-shadow:0 32px 64px rgba(0,0,0,.4)}
+.gear-wrap{margin-bottom:28px;position:relative;display:inline-block}
+.gear{width:72px;height:72px;color:#38bdf8;animation:spin 4s linear infinite}
+.gear2{width:40px;height:40px;color:#818cf8;animation:spin 3s linear infinite reverse;
+  position:absolute;bottom:-4px;right:-8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:26px;font-weight:700;color:#f8fafc;margin-bottom:10px;letter-spacing:-.5px}
+.sub{font-size:15px;color:#94a3b8;margin-bottom:36px;line-height:1.7}
+.timer-label{font-size:12px;text-transform:uppercase;letter-spacing:2px;
+  color:#64748b;margin-bottom:12px}
+.timer{display:flex;gap:12px;justify-content:center;margin-bottom:36px}
+.unit{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);
+  border-radius:12px;padding:14px 18px;min-width:72px}
+.unit .num{font-size:32px;font-weight:700;color:#38bdf8;font-variant-numeric:tabular-nums;
+  display:block;line-height:1}
+.unit .lbl{font-size:11px;color:#64748b;display:block;margin-top:4px}
+.sep{font-size:28px;color:#38bdf8;align-self:center;opacity:.6}
+.bar-wrap{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-bottom:28px}
+.bar{height:100%;background:linear-gradient(90deg,#38bdf8,#818cf8);
+  border-radius:2px;width:100%;animation:shrink ' . ($maint_minutes * 60) . 's linear forwards}
+@keyframes shrink{to{width:0%}}
+.done-msg{display:none;color:#4ade80;font-weight:600;font-size:15px;margin-bottom:20px}
+.refresh-btn{display:inline-block;margin-top:4px;padding:12px 28px;
+  background:linear-gradient(135deg,#38bdf8,#818cf8);color:#0f172a;
+  font-weight:700;font-size:14px;border-radius:10px;text-decoration:none;
+  border:none;cursor:pointer;transition:opacity .2s}
+.refresh-btn:hover{opacity:.85}
+footer{margin-top:28px;font-size:12px;color:#475569}
+</style></head><body>
+<div class="card">
+  <div class="gear-wrap">
+    <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+    <svg class="gear2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+  </div>
+  <h1>الموقع قيد الصيانة</h1>
+  <p class="sub">نعمل على تحديثات وتحسينات لتقديم تجربة أفضل.<br>سنعود قريباً، شكراً لصبرك.</p>
+  <div class="timer-label">الوقت المتبقي للعودة</div>
+  <div class="timer">
+    <div class="unit"><span class="num" id="th">00</span><span class="lbl">ساعة</span></div>
+    <div class="sep">:</div>
+    <div class="unit"><span class="num" id="tm">00</span><span class="lbl">دقيقة</span></div>
+    <div class="sep">:</div>
+    <div class="unit"><span class="num" id="ts">00</span><span class="lbl">ثانية</span></div>
+  </div>
+  <div class="bar-wrap"><div class="bar"></div></div>
+  <p class="done-msg" id="done-msg">⏱ انتهى الوقت — جارٍ التحديث…</p>
+  <button class="refresh-btn" onclick="location.reload()">تحديث الصفحة</button>
+  <footer>إذا استمرت المشكلة، يرجى التواصل مع الدعم الفني.</footer>
+</div>
+<script>
+var end = Date.now() + ' . ($maint_minutes * 60) . ' * 1000;
+function tick() {
+  var rem = Math.max(0, Math.floor((end - Date.now()) / 1000));
+  var h = Math.floor(rem / 3600), m = Math.floor((rem % 3600) / 60), s = rem % 60;
+  document.getElementById("th").textContent = String(h).padStart(2,"0");
+  document.getElementById("tm").textContent = String(m).padStart(2,"0");
+  document.getElementById("ts").textContent = String(s).padStart(2,"0");
+  if (rem <= 0) {
+    document.getElementById("done-msg").style.display = "block";
+    setTimeout(function(){ location.reload(); }, 3000);
+    return;
+  }
+  setTimeout(tick, 1000);
+}
+tick();
+</script>
+</body></html>');
 }
 
 if (session_status() === PHP_SESSION_NONE) session_start();
