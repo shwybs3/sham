@@ -47,6 +47,14 @@
   --bg-light:     #f8fafc;
   --navy-700:     #f1f5f9;
   --navy-900:     #0f172a;
+  /* Extra aliases used in some admin sections */
+  --card-bg:      #ffffff;
+  --hover-bg:     #f1f5f9;
+  --text-muted:   #64748b;
+  --surface-alt:  #f1f5f9;
+  --primary:      #2563eb;
+  --primary-light:#eff6ff;
+  --shadow:       0 4px 16px rgba(15,23,42,.09), 0 2px 6px rgba(15,23,42,.05);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

@@ -8490,7 +8490,7 @@ elseif ($page === 'landing-pages'):
 
 <!-- Edit modal -->
 <div id="lp-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeLpModal()">
-  <div style="background:var(--bg-card);border:1px solid var(--border-c);border-radius:18px;padding:28px;width:min(600px,95vw);max-height:90vh;overflow-y:auto">
+  <div style="background:var(--surface);border:1px solid var(--border-c);border-radius:18px;padding:28px;width:min(600px,95vw);max-height:90vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <h3 style="margin:0">تعديل صفحة الهبوط</h3>
       <button onclick="closeLpModal()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">×</button>
