@@ -38,7 +38,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate' && is_admin()) {
 
 {$seoStandards}
 
-- long_description: وصف أصلي احترافي 600-900 كلمة على الأقل (وليس فقرة قصيرة)، عدة فقرات تغطي: نظرة عامة على التطبيق، أبرز الميزات بالتفصيل، لمن يناسب هذا التطبيق، وأسلوب طبيعي يخدم SEO دون حشو كلمات. (يمكن للأدمن توسيعه لاحقاً حتى 1500-3000 كلمة بزر "متابعة الكتابة").
+- long_description: وصف أصلي احترافي لا يقل عن 1500 كلمة (مطلوب هذا الحد الأدنى لمحركات البحث)، عدة فقرات تغطي: نظرة عامة شاملة على التطبيق، أبرز الميزات بالتفصيل، من يستفيد من هذا التطبيق، طريقة الاستخدام، مقارنة بالبدائل، نصائح وتجارب المستخدمين، وأسلوب طبيعي يخدم SEO دون حشو كلمات. اجعل النص غنياً بالتفاصيل الحقيقية والمفيدة.
 
 أعد JSON صالح فقط بدون أي نص آخر أو Markdown:
 {
@@ -6278,7 +6278,7 @@ elseif ($page === 'bulk-content'):
                 CHAR_LENGTH(COALESCE(long_description,'')) AS ld_len,
                 CHAR_LENGTH(COALESCE(short_description,'')) AS sd_len
          FROM apps
-         WHERE CHAR_LENGTH(COALESCE(long_description,'')) < 300
+         WHERE CHAR_LENGTH(COALESCE(long_description,'')) < 3000
             OR CHAR_LENGTH(COALESCE(short_description,'')) < 20
          ORDER BY status='published' DESC, name ASC
          LIMIT 200"
@@ -6295,8 +6295,8 @@ elseif ($page === 'bulk-content'):
 
 <div class="panel" style="margin-bottom:16px">
   <p style="color:var(--muted);font-size:13px;line-height:1.9">
-    يعرض هذا القسم التطبيقات التي يقل وصفها القصير عن 20 حرفاً أو وصفها الطويل عن 300 حرف.
-    اضغط <strong style="color:var(--cyan)">توليد الكل</strong> لإعادة توليد المحتوى تلقائياً بالذكاء الاصطناعي لجميعها، أو <strong style="color:var(--cyan)">توليد</strong> لتطبيق واحد.
+    يعرض هذا القسم التطبيقات التي وصفها الطويل أقل من 3000 حرف (≈ 600 كلمة) — الهدف 1500-3000 كلمة لكل تطبيق لتحسين الظهور في محركات البحث.
+    اضغط <strong style="color:var(--cyan)">توليد الكل</strong> لإعادة توليد المحتوى تلقائياً بالذكاء الاصطناعي لجميعها، أو <strong style="color:var(--cyan)">توليد</strong> لتطبيق واحد. بعد التوليد استخدم زر <strong>"متابعة الكتابة +600 كلمة"</strong> داخل تعديل التطبيق للوصول إلى 3000 كلمة.
     يتم الحفظ في قاعدة البيانات مباشرةً دون المساس بالروابط أو الأيقونات أو حالة النشر.
   </p>
 </div>

@@ -3279,8 +3279,8 @@ function unique_slug(PDO $pdo, string $base, int $excludeId = 0): string {
     return $slug;
 }
 
-// Pretty-URL helpers: yassota.com/{slug} and yassota.com/{slug}/download
-function app_url(string $slug): string { return url(rawurlencode($slug)); }
+//* Pretty-URL helpers: yassota.com/{slug}/apk and yassota.com/{slug}/download */
+function app_url(string $slug): string { return url(rawurlencode($slug) . '/apk'); }
 function download_url(string $slug, int $mirror = 1): string {
     return url(rawurlencode($slug) . '/download') . ($mirror > 1 ? '?m=' . $mirror : '');
 }

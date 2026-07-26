@@ -116,6 +116,12 @@ ErrorDocument 404 /404.php
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
 
+  # Pretty URLs: /{app-slug}/apk -> app.php?slug={app-slug}
+  # Supports URLs like yassota.com/capcut/apk (better for "download apk" search queries)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/apk/?$ app.php?slug=$1 [L,QSA]
+
   # Landing pages: /landing/{lang}/{slug}/ -> landing/{lang}/{slug}/index.html
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

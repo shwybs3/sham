@@ -53,6 +53,16 @@ if (!$app) {
     exit;
 }
 
+// Canonical redirect: /{slug} → /{slug}/apk (301) so every app has one URL.
+// Skip when: POST request, ?preview=1, already at /apk path, or query string present.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['preview']) && empty($_SERVER['QUERY_STRING'])) {
+    $uri = $_SERVER['REQUEST_URI'];
+    if (!preg_match('#/apk/?$#', $uri)) {
+        header('Location: ' . app_url($slug), true, 301);
+        exit;
+    }
+}
+
 // Cacheable on GET only (a comment POST must render fresh, never be cached).
 // The view counter is intentionally NOT incremented here — that would mean
 // repeat visitors within the cache TTL are never counted. Instead a small
