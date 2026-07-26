@@ -250,7 +250,7 @@ function render_app_card(array $app): void { ?>
       <span class="app-card-size"><?= h($app['size_mb'] ? $app['size_mb'] . ' MB' : '') ?></span>
     </div>
   </a>
-  <a href="<?= h(app_url($app['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
+  <a href="<?= h(download_url($app['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
     <?= partial_icon('download') ?> تحميل
   </a>
 </div>

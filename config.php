@@ -2001,13 +2001,13 @@ function ai_text(PDO $pdo, string $prompt): array {
     // OpenRouter path
     $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
     if (!$keys) return ['ok' => false, 'content' => null, 'error' => 'لم يتم إضافة مفتاح OpenRouter بعد.'];
-    $primary  = get_cfg($pdo, 'openrouter_model', 'meta-llama/llama-3.1-8b-instruct:free');
-    $fallback = get_cfg($pdo, 'openrouter_fallback', 'google/gemma-2-9b-it:free');
+    $primary  = get_cfg($pdo, 'openrouter_model', 'openrouter/free');
+    $fallback = get_cfg($pdo, 'openrouter_fallback', 'meta-llama/llama-3.3-70b-instruct:free');
     $autoRotate = get_cfg($pdo, 'openrouter_auto_rotate', '1') === '1';
     $models = array_values(array_unique(array_filter([$primary, $fallback])));
     if ($autoRotate) $models = array_values(array_unique(array_merge($models, openrouter_default_free_models())));
     $models = ai_filter_text_models($models);
-    if (!$models) $models = ['meta-llama/llama-3.1-8b-instruct:free'];
+    if (!$models) $models = ['openrouter/free'];
     $r = openrouter_call_rotating($keys, $models, $prompt);
     if (!$r['ok']) return ['ok' => false, 'content' => null, 'error' => openrouter_diagnose_trace($r['trace'])];
     return ['ok' => true, 'content' => $r['content'], 'error' => null];
