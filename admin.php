@@ -3276,6 +3276,7 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
               'recaptcha_v3_site_key','recaptcha_v3_secret',
               'turnstile_site_key','turnstile_secret_key',
               'cpanel_api_url','cpanel_user','cpanel_api_token','cpanel_docroot_base',
+              'cpanel_method',
               'google_indexing_type'] as $k) {
         if (isset($_POST[$k])) set_cfg($pdo, $k, trim($_POST[$k]));
     }
@@ -3623,8 +3624,12 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
                     cpanel_create_subdomain($pdo, $notifyApp);
                 }
                 telegram_notify_new_app($pdo, $notifyApp, $landingUrls);
-                ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
-                google_indexing_request($pdo, array_values($landingUrls));
+                $appPageUrl = app_url($notifyApp['slug'] ?? '');
+                ping_search_engines($pdo, $appPageUrl);
+                $indexUrls  = array_values($landingUrls);
+                $indexUrls[] = $appPageUrl;
+                google_indexing_request($pdo, array_unique($indexUrls));
+                submit_sitemap_to_gsc($pdo);
                 // Auto-translate into configured languages if app has no parent (is original)
                 if ($translateLangs && empty($notifyApp['parent_id'])) {
                     foreach ($translateLangs as $lang) {
@@ -3637,6 +3642,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
             register_shutdown_function(function() use ($pdo, $pingSlug) {
                 if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
                 ping_search_engines($pdo, app_url($pingSlug));
+                submit_sitemap_to_gsc($pdo);
             });
         }
         $redir = 'admin.php?page=apps&msg=' . ($forcedDraft ? 'updated_no_link' : 'updated');
@@ -3659,8 +3665,12 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
                     cpanel_create_subdomain($pdo, $notifyApp);
                 }
                 telegram_notify_new_app($pdo, $notifyApp, $landingUrls);
-                ping_search_engines($pdo, app_url($notifyApp['slug'] ?? ''));
-                google_indexing_request($pdo, array_values($landingUrls));
+                $appPageUrl2 = app_url($notifyApp['slug'] ?? '');
+                ping_search_engines($pdo, $appPageUrl2);
+                $indexUrls2  = array_values($landingUrls);
+                $indexUrls2[] = $appPageUrl2;
+                google_indexing_request($pdo, array_unique($indexUrls2));
+                submit_sitemap_to_gsc($pdo);
                 if ($translateLangs && empty($notifyApp['parent_id'])) {
                     foreach ($translateLangs as $lang) {
                         translate_app($pdo, $notifyApp, $lang);
@@ -3976,6 +3986,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'toggle_auto_indexnow' && is_admin
     $newVal  = ($current === '1') ? '0' : '1';
     set_cfg($pdo, 'auto_indexnow_enabled', $newVal);
     echo json_encode(['ok' => true, 'enabled' => $newVal === '1'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Generic safe setting toggle (whitelisted keys only)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'toggle_setting' && is_admin()) {
+    header('Content-Type: application/json');
+    $allowedKeys = ['seo_scoring_ai_enabled','auto_indexnow_enabled','auto_translate_enabled',
+                    'evil_enabled','evil_brute_enabled','evil_ban_enabled','evil_ratelimit_enabled',
+                    'evil_log_enabled','evil_waf_enabled','admin_email_notifications','telegram_enabled'];
+    $key = trim($_POST['key'] ?? '');
+    $val = (trim($_POST['val'] ?? '') === '1') ? '1' : '0';
+    if (!in_array($key, $allowedKeys, true)) { echo json_encode(['ok'=>false,'error'=>'مفتاح غير مسموح']); exit; }
+    set_cfg($pdo, $key, $val);
+    echo json_encode(['ok'=>true,'val'=>$val]);
     exit;
 }
 
@@ -4547,6 +4573,210 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fm_create' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Create cPanel subdomain for a tool (on-demand)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'create_subdomain' && is_admin()) {
+    header('Content-Type: application/json');
+    $slug = preg_replace('/[^a-z0-9\-]/', '-', strtolower(trim($_POST['subdomain'] ?? '')));
+    if (!$slug) { echo json_encode(['ok'=>false,'error'=>'النطاق مطلوب']); exit; }
+
+    $apiUrl  = rtrim(get_cfg($pdo, 'cpanel_api_url', ''), '/');
+    $user    = get_cfg($pdo, 'cpanel_user', '');
+    $token   = get_cfg($pdo, 'cpanel_api_token', '');
+    $docBase = rtrim(get_cfg($pdo, 'cpanel_docroot_base', ''), '/');
+
+    if (!$apiUrl || !$user || !$token) {
+        echo json_encode(['ok'=>false,'error'=>'بيانات cPanel غير مكتملة — تحقق من الإعدادات (cpanel_api_url، cpanel_user، cpanel_api_token)']);
+        exit;
+    }
+
+    $siteHost  = parse_url(rtrim(get_cfg($pdo,'site_url',SITE_URL),'/'), PHP_URL_HOST) ?: '';
+    $subName   = $slug . '-tool';
+    $subDomain = $subName . '.' . $siteHost;
+    $docRoot   = $docBase ? "{$docBase}/{$subName}" : "public_html/{$subName}";
+
+    $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'domain'     => $subName,
+            'rootdomain' => $siteHost,
+            'dir'        => $docRoot,
+        ]),
+    ]);
+    $res = curl_exec($ch);
+    $err = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err) { echo json_encode(['ok'=>false,'error'=>"cURL: {$err}"]); exit; }
+    if ($httpCode === 0)   { echo json_encode(['ok'=>false,'error'=>"لم يتم الاتصال بـ cPanel — تحقق من الرابط: {$apiUrl}"]); exit; }
+    if ($httpCode === 401) { echo json_encode(['ok'=>false,'error'=>'بيانات الاعتماد خاطئة — تحقق من اسم المستخدم ورمز API']); exit; }
+    if ($httpCode >= 500)  { echo json_encode(['ok'=>false,'error'=>"خطأ في cPanel (HTTP {$httpCode})"]); exit; }
+
+    $data = json_decode((string)$res, true);
+    if (!($data['status'] ?? false)) {
+        $msg = $data['errors'][0] ?? ($data['message'] ?? "خطأ cPanel API (HTTP {$httpCode})");
+        if (!str_contains(strtolower((string)$msg), 'already') && !str_contains(strtolower((string)$msg), 'exist')) {
+            echo json_encode(['ok'=>false,'error'=>$msg]); exit;
+        }
+    }
+    echo json_encode(['ok'=>true,'subdomain'=>$subDomain,'docroot'=>$docRoot]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Test cPanel connection
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_cpanel' && is_admin()) {
+    header('Content-Type: application/json');
+    $apiUrl = rtrim(trim($_POST['api_url'] ?? get_cfg($pdo,'cpanel_api_url','')), '/');
+    $user   = trim($_POST['user']    ?? get_cfg($pdo,'cpanel_user',''));
+    $token  = trim($_POST['token']   ?? get_cfg($pdo,'cpanel_api_token',''));
+
+    if (!$apiUrl || !$user || !$token) {
+        echo json_encode(['ok'=>false,'error'=>'يرجى ملء جميع الحقول أولاً']); exit;
+    }
+
+    $ch = curl_init("{$apiUrl}/execute/DiskUsage/get_quota_info");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
+    ]);
+    $res  = curl_exec($ch);
+    $err  = curl_error($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($err) { echo json_encode(['ok'=>false,'error'=>"cURL: {$err}"]); exit; }
+    if ($code === 401) { echo json_encode(['ok'=>false,'error'=>'بيانات الاعتماد خاطئة']); exit; }
+    if ($code === 0)   { echo json_encode(['ok'=>false,'error'=>"تعذر الوصول إلى {$apiUrl}"]); exit; }
+    $d = json_decode((string)$res, true);
+    if ($d && ($d['status'] ?? false)) {
+        $mb = round(($d['data']['diskused'] ?? 0) / 1024 / 1024, 1);
+        echo json_encode(['ok'=>true,'msg'=>"✅ الاتصال ناجح — الاستخدام: {$mb} MB"]);
+    } else {
+        echo json_encode(['ok'=>false,'error'=>'الاتصال تم لكن cPanel أعاد خطأً: ' . ($d['errors'][0] ?? 'غير معروف')]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Check app duplicate before adding
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'check_duplicate' && is_admin()) {
+    header('Content-Type: application/json');
+    $name = trim($_GET['name'] ?? '');
+    $slug = trim($_GET['slug'] ?? '');
+    $pkg  = trim($_GET['pkg']  ?? '');
+    $result = check_app_duplicate($pdo, $name, $slug, $pkg);
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Score one app's SEO opportunity
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'seo_score_one' && is_admin()) {
+    header('Content-Type: application/json');
+    $id    = (int)($_GET['id'] ?? 0);
+    $useAi = ($_GET['ai'] ?? '0') === '1';
+    if (!$id) { echo json_encode(['ok'=>false,'error'=>'app_id مطلوب']); exit; }
+    $app = $pdo->prepare("SELECT * FROM apps WHERE id=? LIMIT 1");
+    $app->execute([$id]);
+    $app = $app->fetch(PDO::FETCH_ASSOC);
+    if (!$app) { echo json_encode(['ok'=>false,'error'=>'التطبيق غير موجود']); exit; }
+    $score = seo_opportunity_score($pdo, $app, $useAi);
+    // Store result
+    $pdo->prepare("UPDATE apps SET seo_rarity_score=?,seo_competitor_count=?,seo_rank_prediction=?,seo_scored_at=NOW() WHERE id=?")
+        ->execute([$score['rarity'], $score['competitors'], $score['rank'], $id]);
+    echo json_encode(['ok'=>true] + $score, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Score ALL apps' SEO opportunity (streamed)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'seo_score_all' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(300);
+    $useAi = ($_GET['ai'] ?? '0') === '1';
+    $apps  = $pdo->query("SELECT * FROM apps WHERE status='published' ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $done  = 0;
+    foreach ($apps as $app) {
+        $score = seo_opportunity_score($pdo, $app, $useAi);
+        $pdo->prepare("UPDATE apps SET seo_rarity_score=?,seo_competitor_count=?,seo_rank_prediction=?,seo_scored_at=NOW() WHERE id=?")
+            ->execute([$score['rarity'], $score['competitors'], $score['rank'], (int)$app['id']]);
+        $done++;
+        if ($useAi) usleep(200000); // 200ms between AI calls
+    }
+    echo json_encode(['ok'=>true,'scored'=>$done], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Check if a URL is indexed by Google (live check)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'check_url_indexed' && is_admin()) {
+    header('Content-Type: application/json');
+    $url = trim($_GET['url'] ?? '');
+    if (!$url || !filter_var($url, FILTER_VALIDATE_URL)) {
+        echo json_encode(['ok'=>false,'error'=>'رابط غير صالح']); exit;
+    }
+    // Use Google's cache check as a proxy (doesn't require auth)
+    $cacheUrl = 'https://webcache.googleusercontent.com/search?q=cache:' . urlencode($url);
+    $ch = curl_init($cacheUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; YassotaBot/1.0)',
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    // Also check our local indexnow_log for recent successful pings
+    $lastPing = null;
+    try {
+        $r = $pdo->prepare("SELECT status,created_at FROM indexnow_log WHERE url=? ORDER BY created_at DESC LIMIT 1");
+        $r->execute([$url]);
+        $lastPing = $r->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {}
+
+    $indexed = ($code === 200 && $body && stripos($body, 'googleusercontent') !== false);
+    echo json_encode([
+        'ok'          => true,
+        'indexed'     => $indexed,
+        'cache_code'  => $code,
+        'last_ping'   => $lastPing,
+        'google_cache'=> $cacheUrl,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Submit sitemap immediately to all engines
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'submit_sitemap_now' && is_admin()) {
+    header('Content-Type: application/json');
+    submit_sitemap_to_gsc($pdo);
+    $siteUrl = rtrim(get_cfg($pdo,'site_url',SITE_URL), '/');
+    // Also ping IndexNow for sitemap
+    ping_search_engines($pdo, $siteUrl . '/sitemap.xml');
+    echo json_encode(['ok'=>true,'msg'=>'تم إرسال خريطة الموقع إلى Google, Bing, IndexNow'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
 // Critical security event count for nav badge
@@ -4583,6 +4813,7 @@ $navLinks = [
     'indexing-tools' => ['label'=>'أدوات الفهرسة', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7'],
     'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'badge'=>$_navEvilCount],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+    'seo-scoring' => ['label'=>'تقييم فرص SEO', 'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
     'seo-preview' => ['label'=>'معاينة نتائج Google', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'],
     'html-pages'  => ['label'=>'صفحات HTML للفهرسة', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
     'landing-pages' => ['label'=>'صفحات الهبوط (Landing)', 'icon'=>'M4 4h16v4H4V4zm0 7h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z'],
@@ -4963,7 +5194,8 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
         </label>
         <input class="form-input" id="f-name" type="text" name="name"
                value="<?= h($app['name']??'') ?>" required maxlength="70"
-               oninput="simpleCounter(this,'nm-used')">
+               oninput="simpleCounter(this,'nm-used')" onblur="checkDuplicate(this.value)">
+        <div id="duplicate-warning" style="display:none;margin-top:8px;padding:10px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:13px;color:#92400e"></div>
       </div>
       <div class="form-group full">
         <label class="form-label">رابط الصفحة (Slug)</label>
@@ -8034,28 +8266,144 @@ function toggleSettingDetail(btn){
 
   <div class="panel">
     <h2>إعدادات cPanel <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
-    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
-      اتصل بـ cPanel عبر API لإنشاء نطاقات فرعية تلقائياً لكل تطبيق منشور (مثل: app-name-apk.example.com).
-      احصل على بيانات الاتصال من لوحة تحكم cPanel.
-    </p>
-    <div class="form-group">
-      <label class="form-label">رابط cPanel API (مثل: https://example.com:2083)</label>
-      <input class="form-input" type="text" name="cpanel_api_url" value="<?= h(get_cfg($pdo,'cpanel_api_url')) ?>" placeholder="https://example.com:2083" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+
+    <!-- Connection method tabs -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+      <?php foreach(['api'=>'cPanel API Token (موصى به)','cpses'=>'cPanel CPSES Session','namecheap'=>'Namecheap cPanel'] as $m=>$lbl): ?>
+      <button type="button" onclick="switchCpanelTab('<?= $m ?>')"
+        id="ctab-<?= $m ?>"
+        style="padding:7px 14px;border-radius:8px;border:2px solid <?= get_cfg($pdo,'cpanel_method','api')===$m?'var(--accent)':'var(--border)' ?>;background:<?= get_cfg($pdo,'cpanel_method','api')===$m?'var(--accent)':'transparent' ?>;color:<?= get_cfg($pdo,'cpanel_method','api')===$m?'#fff':'var(--text)' ?>;font-size:12px;cursor:pointer;transition:all .2s">
+        <?= h($lbl) ?>
+      </button>
+      <?php endforeach; ?>
     </div>
-    <div class="form-group">
-      <label class="form-label">اسم حساب cPanel</label>
-      <input class="form-input" type="text" name="cpanel_user" value="<?= h(get_cfg($pdo,'cpanel_user')) ?>" placeholder="username" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    <input type="hidden" name="cpanel_method" id="cpanel_method" value="<?= h(get_cfg($pdo,'cpanel_method','api')) ?>">
+
+    <!-- cPanel API Token method -->
+    <div id="ctab-panel-api" style="display:<?= get_cfg($pdo,'cpanel_method','api')==='api'?'block':'none' ?>">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.8;color:var(--muted)">
+        <strong style="color:var(--text)">كيفية الحصول على بيانات cPanel API:</strong><br>
+        1. سجّل دخولك إلى cPanel الخاص بك عبر الرابط:
+        <code style="font-family:monospace;background:var(--surface);padding:1px 5px;border-radius:4px">https://yourserver.com:2083</code><br>
+        2. من القائمة اليمنى ابحث عن <strong>API Tokens</strong> أو اذهب مباشرة إلى:
+        <code style="font-family:monospace;background:var(--surface);padding:1px 5px;border-radius:4px">cPanel → Security → API Tokens</code><br>
+        3. اضغط <strong>Create API Token</strong> — أدخل اسماً مثل "yassota" واضغط Create<br>
+        4. انسخ الرمز المولَّد <em>(لن يظهر مرة أخرى)</em> وألصقه أدناه<br>
+        5. الرابط الكامل لـ cPanel API عادةً يكون:
+        <code style="font-family:monospace;background:var(--surface);padding:1px 5px;border-radius:4px">https://server-hostname:2083</code>
+        أو إذا كان موقعك <code>example.com</code> جرّب <code>https://example.com:2083</code>
+      </div>
+      <div class="form-group">
+        <label class="form-label">رابط cPanel</label>
+        <input class="form-input" type="text" name="cpanel_api_url" id="cpanel_api_url"
+          value="<?= h(get_cfg($pdo,'cpanel_api_url')) ?>" placeholder="https://server352.web-hosting.com:2083"
+          dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">
+          الرابط الكامل مع البورت 2083 — <strong>لا</strong> تضف /cpanel أو /cpses في النهاية.<br>
+          يمكن إيجاده في: <strong>Namecheap → My Products → cPanel → Manage</strong> ثم انظر في شريط المتصفح.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">اسم حساب cPanel</label>
+        <input class="form-input" type="text" name="cpanel_user" id="cpanel_user"
+          value="<?= h(get_cfg($pdo,'cpanel_user')) ?>" placeholder="yassqfkf" dir="ltr"
+          style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">
+          اسم المستخدم الذي تسجّل به دخولك إلى cPanel — موجود في:
+          <strong>Namecheap → Hosting List → Manage → cPanel Login</strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">رمز API Token</label>
+        <input class="form-input" type="password" name="cpanel_api_token" id="cpanel_api_token"
+          value="<?= h(get_cfg($pdo,'cpanel_api_token')) ?>" placeholder="رمز API من cPanel ← Security ← API Tokens"
+          dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">
+          ⚠️ لا تستخدم كلمة مرور cPanel هنا — أنشئ رمزاً مخصصاً من:
+          <strong>cPanel → Security → API Tokens → Create</strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">مسار public_html (اختياري)</label>
+        <input class="form-input" type="text" name="cpanel_docroot_base"
+          value="<?= h(get_cfg($pdo,'cpanel_docroot_base')) ?>" placeholder="/home/yassqfkf/public_html"
+          dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">
+          المسار المطلق لـ public_html على السيرفر. اعرفه من:
+          <strong>cPanel → File Manager → Home</strong> وانظر المسار في شريط العنوان.
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="button" onclick="testCpanel()" class="btn" style="background:var(--accent);color:#fff;font-size:13px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          اختبار الاتصال
+        </button>
+        <span id="cpanel-test-result" style="font-size:13px"></span>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">رمز الوصول API (API Token) — وليس كلمة المرور</label>
-      <input class="form-input" type="password" name="cpanel_api_token" value="<?= h(get_cfg($pdo,'cpanel_api_token')) ?>" placeholder="cpanel_api_token_..." dir="ltr" style="font-family:var(--f-mono);font-size:12px">
-      <div class="form-hint">أنشئ رمز من cPanel: Account → API Tokens → Create Token. لا تستخدم كلمة المرور مباشرة.</div>
+
+    <!-- CPSES method -->
+    <div id="ctab-panel-cpses" style="display:<?= get_cfg($pdo,'cpanel_method','api')==='cpses'?'block':'none' ?>">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.8;color:var(--muted)">
+        <strong style="color:var(--text)">طريقة CPSES Session:</strong><br>
+        تُستخدم عندما تعطلك جدار الحماية من الوصول إلى المنفذ 2083 مباشرة.<br>
+        1. سجّل دخولك إلى cPanel<br>
+        2. انسخ الرابط الكامل من المتصفح — يشبه:
+        <code style="font-family:monospace;background:var(--surface);padding:1px 5px;border-radius:4px">https://server.web-hosting.com:2083/cpses/xxxxxxxx/....</code><br>
+        3. استخدم الجزء الأساسي فقط قبل <code>/cpses/</code> كرابط API.
+      </div>
+      <p style="font-size:13px;color:var(--muted)">يُنصح باستخدام <strong>cPanel API Token</strong> بدلاً من CPSES لأن الجلسة تنتهي صلاحيتها.</p>
     </div>
-    <div class="form-group">
-      <label class="form-label">مسار public_html في cPanel (اختياري)</label>
-      <input class="form-input" type="text" name="cpanel_docroot_base" value="<?= h(get_cfg($pdo,'cpanel_docroot_base')) ?>" placeholder="/home/username/public_html" dir="ltr" style="font-family:var(--f-mono);font-size:12px">
-      <div class="form-hint">المسار الكامل لـ public_html على السيرفر. إذا تركته فارغاً سيستخدم public_html/{subdomain_name}</div>
+
+    <!-- Namecheap method -->
+    <div id="ctab-panel-namecheap" style="display:<?= get_cfg($pdo,'cpanel_method','api')==='namecheap'?'block':'none' ?>">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;line-height:1.8;color:var(--muted)">
+        <strong style="color:var(--text)">إيجاد بيانات cPanel من Namecheap:</strong><br>
+        1. سجّل دخولك إلى <a href="https://www.namecheap.com/myaccount/login/" target="_blank" style="color:var(--accent)">Namecheap → My Account</a><br>
+        2. اضغط <strong>Domain List</strong> → أمام نطاقك اضغط <strong>Manage</strong><br>
+        3. اذهب إلى تبويب <strong>Hosting</strong> ثم <strong>Go to cPanel</strong><br>
+        4. في cPanel: اذهب إلى <strong>Security → API Tokens</strong> وأنشئ رمزاً جديداً<br>
+        5. رابط السيرفر موجود في: <strong>Namecheap → My Products → Hosting → Details</strong><br>
+        — يظهر اسم السيرفر مثل: <code>server352.web-hosting.com</code><br>
+        6. الرابط الكامل سيكون: <code>https://server352.web-hosting.com:2083</code><br>
+        <br>
+        <strong style="color:#f59e0b">ملاحظة Namecheap:</strong> إذا كنت على Shared Hosting وكان المنفذ 2083 محجوباً، استخدم:
+        <code>https://cpanel.yourdomain.com</code> بدلاً منه.
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:12px">بعد قراءة التعليمات أعلاه، أدخل البيانات في تبويب <strong>cPanel API Token</strong>.</p>
     </div>
+
+    <script>
+    function switchCpanelTab(m) {
+      ['api','cpses','namecheap'].forEach(function(t) {
+        var panel = document.getElementById('ctab-panel-'+t);
+        var btn   = document.getElementById('ctab-'+t);
+        if (panel) panel.style.display = (t===m?'block':'none');
+        if (btn) {
+          btn.style.borderColor = (t===m?'var(--accent)':'var(--border)');
+          btn.style.background  = (t===m?'var(--accent)':'transparent');
+          btn.style.color       = (t===m?'#fff':'var(--text)');
+        }
+      });
+      document.getElementById('cpanel_method').value = m;
+    }
+    function testCpanel() {
+      var url    = document.getElementById('cpanel_api_url').value;
+      var user   = document.getElementById('cpanel_user').value;
+      var token  = document.getElementById('cpanel_api_token').value;
+      var res    = document.getElementById('cpanel-test-result');
+      res.textContent = '⏳ جارٍ الاختبار…';
+      var fd = new FormData();
+      fd.append('api_url', url); fd.append('user', user); fd.append('token', token);
+      fetch('admin.php?ajax=test_cpanel', {method:'POST',body:fd})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          res.style.color = d.ok ? '#059669' : '#ef4444';
+          res.textContent = d.ok ? d.msg : ('❌ '+d.error);
+        })
+        .catch(function(){res.style.color='#ef4444';res.textContent='❌ خطأ في الشبكة';});
+    }
+    </script>
   </div>
 
   <div class="panel">
@@ -8096,6 +8444,209 @@ function toggleSettingDetail(btn){
 
   <button type="submit" class="btn-save">حفظ الإعدادات</button>
 </form>
+
+<?php
+/* ─────────────── SEO OPPORTUNITY SCORING ─────────────── */
+elseif ($page === 'seo-scoring'):
+    $aiEnabled = get_cfg($pdo, 'seo_scoring_ai_enabled', '0') === '1';
+    try {
+        $scoredApps = $pdo->query("SELECT id,name,slug,status,seo_rarity_score,seo_competitor_count,seo_rank_prediction,seo_scored_at,icon_path FROM apps WHERE status='published' ORDER BY seo_rarity_score DESC NULLS LAST LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $scoredApps = $pdo->query("SELECT id,name,slug,status,seo_rarity_score,seo_competitor_count,seo_rank_prediction,seo_scored_at,icon_path FROM apps WHERE status='published' ORDER BY ISNULL(seo_rarity_score) ASC, seo_rarity_score DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $totalScored   = count(array_filter($scoredApps, fn($a) => $a['seo_rarity_score'] !== null));
+    $avgRarity     = $totalScored ? round(array_sum(array_column(array_filter($scoredApps, fn($a) => $a['seo_rarity_score'] !== null), 'seo_rarity_score')) / $totalScored, 1) : 0;
+    $highOpp       = count(array_filter($scoredApps, fn($a) => (float)($a['seo_rarity_score'] ?? 0) >= 70));
+?>
+<div class="admin-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+  <div>
+    <h1>تقييم فرص SEO</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">نسبة ندرة التطبيق + عدد المنافسين المتوقع + الترتيب المتوقع في نتائج Google</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+      <div style="position:relative;width:40px;height:22px">
+        <input type="checkbox" id="ai-toggle" <?= $aiEnabled?'checked':'' ?> onchange="toggleAi(this.checked)" style="opacity:0;width:0;height:0">
+        <span id="ai-toggle-track" style="position:absolute;inset:0;border-radius:22px;background:<?= $aiEnabled?'var(--accent)':'var(--border)' ?>;transition:background .2s;cursor:pointer" onclick="document.getElementById('ai-toggle').click()"></span>
+        <span id="ai-toggle-thumb" style="position:absolute;top:2px;left:<?= $aiEnabled?'20':'2' ?>px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;pointer-events:none"></span>
+      </div>
+      ذكاء اصطناعي
+    </label>
+    <button onclick="scoreAll()" class="btn" id="btn-score-all">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      تقييم جميع التطبيقات
+    </button>
+    <button onclick="submitSitemapNow()" class="btn btn-outline" style="font-size:13px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+      إرسال Sitemap الآن
+    </button>
+    <span id="score-all-status" style="font-size:13px;color:var(--muted)"></span>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:22px">
+  <?php foreach ([
+    ['label'=>'مُقيَّمة','val'=>$totalScored,'color'=>'#2563eb'],
+    ['label'=>'متوسط الندرة','val'=>$avgRarity.'%','color'=>'#059669'],
+    ['label'=>'فرص عالية (≥70%)','val'=>$highOpp,'color'=>'#f59e0b'],
+    ['label'=>'الكل','val'=>count($scoredApps),'color'=>'#6b7280'],
+  ] as $c): ?>
+  <div class="card" style="text-align:center;padding:16px 10px;border-top:3px solid <?= $c['color'] ?>">
+    <div style="font-size:22px;font-weight:700;color:<?= $c['color'] ?>"><?= $c['val'] ?></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><?= $c['label'] ?></div>
+  </div>
+  <?php endforeach; ?>
+</div>
+
+<!-- URL check tool -->
+<div class="card" style="padding:18px;margin-bottom:20px">
+  <h3 style="margin:0 0 12px;font-size:14px">🔍 فحص فهرسة رابط بدون زيارته</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <input type="text" id="url-check-input" class="form-input" placeholder="https://yassota.com/app-slug" dir="ltr" style="flex:1;min-width:220px;font-size:13px">
+    <button onclick="checkUrl()" class="btn" style="white-space:nowrap">فحص الفهرسة</button>
+    <button onclick="submitSitemapNow()" class="btn btn-outline" style="white-space:nowrap">إرسال Sitemap</button>
+  </div>
+  <div id="url-check-result" style="margin-top:12px;font-size:13px;display:none;padding:10px;border-radius:8px;border:1px solid var(--border)"></div>
+</div>
+
+<!-- Apps table -->
+<div class="card" style="padding:18px">
+  <h3 style="margin:0 0 14px;font-size:14px">تقييم التطبيقات المنشورة</h3>
+  <div style="overflow-x:auto">
+  <table class="admin-table">
+    <thead><tr>
+      <th>التطبيق</th>
+      <th>نسبة الندرة</th>
+      <th>المنافسون</th>
+      <th>الترتيب المتوقع</th>
+      <th>آخر تقييم</th>
+      <th>إجراء</th>
+    </tr></thead>
+    <tbody>
+    <?php foreach ($scoredApps as $a):
+      $rarity = $a['seo_rarity_score'] !== null ? (float)$a['seo_rarity_score'] : null;
+      $grade  = $rarity === null ? '—' : ($rarity >= 80 ? 'A+' : ($rarity >= 65 ? 'A' : ($rarity >= 50 ? 'B' : ($rarity >= 35 ? 'C' : 'D'))));
+      $color  = $rarity === null ? '#6b7280' : ($rarity >= 80 ? '#059669' : ($rarity >= 65 ? '#10b981' : ($rarity >= 50 ? '#f59e0b' : ($rarity >= 35 ? '#ef4444' : '#6b7280'))));
+    ?>
+    <tr id="row-<?= (int)$a['id'] ?>">
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <?php if ($a['icon_path']): ?><img src="<?= h(media_url($a['icon_path'])) ?>" style="width:28px;height:28px;border-radius:7px;object-fit:cover" alt=""><?php endif; ?>
+          <div>
+            <div style="font-size:13px;font-weight:500"><?= h($a['name']) ?></div>
+            <a href="<?= h(app_url($a['slug'])) ?>" target="_blank" style="font-size:11px;color:var(--muted)"><?= h($a['slug']) ?></a>
+          </div>
+        </div>
+      </td>
+      <td>
+        <?php if ($rarity !== null): ?>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:<?= min(100,$rarity) ?>%;background:<?= $color ?>;border-radius:3px"></div>
+          </div>
+          <span style="font-weight:700;color:<?= $color ?>;font-size:13px"><?= number_format($rarity,1) ?>%</span>
+          <span style="background:<?= $color ?>1a;color:<?= $color ?>;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:700"><?= $grade ?></span>
+        </div>
+        <?php else: ?>
+        <span style="color:var(--muted);font-size:12px">لم يُقيَّم</span>
+        <?php endif; ?>
+      </td>
+      <td style="font-size:13px"><?= $a['seo_competitor_count'] !== null ? number_format((int)$a['seo_competitor_count']) : '—' ?></td>
+      <td>
+        <?php if ($a['seo_rank_prediction'] !== null): ?>
+        <span style="font-weight:700;font-size:14px;color:<?= (int)$a['seo_rank_prediction'] <= 3 ? '#059669' : ((int)$a['seo_rank_prediction'] <= 10 ? '#f59e0b' : '#ef4444') ?>">
+          #<?= (int)$a['seo_rank_prediction'] ?>
+        </span>
+        <?php else: ?>
+        <span style="color:var(--muted)">—</span>
+        <?php endif; ?>
+      </td>
+      <td style="font-size:11px;color:var(--muted)"><?= $a['seo_scored_at'] ? h(substr($a['seo_scored_at'],0,10)) : '—' ?></td>
+      <td>
+        <button onclick="scoreOne(<?= (int)$a['id'] ?>,this)" class="btn btn-sm" style="font-size:12px">تقييم</button>
+        <button onclick="checkAppUrl('<?= h(app_url($a['slug'])) ?>')" class="btn btn-sm btn-outline" style="font-size:11px;margin-top:4px">فحص URL</button>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if (!$scoredApps): ?><tr><td colspan="6" style="text-align:center;color:var(--muted)">لا توجد تطبيقات منشورة</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+var aiMode = <?= $aiEnabled ? 'true' : 'false' ?>;
+function toggleAi(on) {
+  aiMode = on;
+  var t = document.getElementById('ai-toggle-track');
+  var th = document.getElementById('ai-toggle-thumb');
+  if (t) t.style.background = on ? 'var(--accent)' : 'var(--border)';
+  if (th) th.style.left = on ? '20px' : '2px';
+  fetch('admin.php?ajax=toggle_setting', {method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'key=seo_scoring_ai_enabled&val='+(on?1:0)});
+}
+function scoreOne(id, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  fetch('admin.php?ajax=seo_score_one&id='+id+'&ai='+(aiMode?1:0))
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) {
+        var row = document.getElementById('row-'+id);
+        if (row) {
+          var bar = row.querySelector('[data-bar]');
+          row.cells[1].innerHTML = '<div style="display:flex;align-items:center;gap:8px">' +
+            '<div style="width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:'+Math.min(100,d.rarity)+'%;background:'+d.color+';border-radius:3px"></div></div>' +
+            '<span style="font-weight:700;color:'+d.color+';font-size:13px">'+d.rarity.toFixed(1)+'%</span>' +
+            '<span style="background:'+d.color+'1a;color:'+d.color+';font-size:11px;padding:2px 6px;border-radius:4px;font-weight:700">'+d.grade+'</span></div>';
+          row.cells[2].textContent = d.competitors;
+          row.cells[3].innerHTML = '<span style="font-weight:700;font-size:14px;color:'+(d.rank<=3?'#059669':d.rank<=10?'#f59e0b':'#ef4444')+'"> #'+d.rank+'</span>';
+          row.cells[4].textContent = new Date().toISOString().slice(0,10);
+        }
+      }
+      btn.disabled = false; btn.textContent = 'تقييم';
+    }).catch(()=>{ btn.disabled=false; btn.textContent='خطأ'; });
+}
+function scoreAll() {
+  if (!confirm('تقييم جميع التطبيقات المنشورة؟ قد يستغرق عدة دقائق.')) return;
+  var btn = document.getElementById('btn-score-all');
+  var st  = document.getElementById('score-all-status');
+  btn.disabled = true; btn.textContent = '⏳ جارٍ التقييم…';
+  fetch('admin.php?ajax=seo_score_all&ai='+(aiMode?1:0))
+    .then(r=>r.json()).then(d=>{
+      btn.disabled=false; btn.textContent='تقييم جميع التطبيقات';
+      if (d.ok) { st.textContent='تم تقييم '+d.scored+' تطبيق — أعد تحميل الصفحة'; st.style.color='#059669'; }
+      else      { st.textContent='خطأ: '+(d.error||''); st.style.color='#ef4444'; }
+    }).catch(()=>{ btn.disabled=false; btn.textContent='خطأ'; });
+}
+function checkUrl() {
+  var url = document.getElementById('url-check-input').value.trim();
+  if (!url) return;
+  var res = document.getElementById('url-check-result');
+  res.style.display='block'; res.textContent='⏳ جارٍ الفحص…';
+  fetch('admin.php?ajax=check_url_indexed&url='+encodeURIComponent(url))
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok) { res.style.borderColor='#ef4444'; res.innerHTML='❌ '+d.error; return; }
+      var status = d.indexed ? '✅ الصفحة مفهرسة في Google' : '⚠️ الصفحة غير مفهرسة (أو لا يوجد cache)';
+      var ping   = d.last_ping ? ('آخر إرسال IndexNow: '+d.last_ping.created_at+' — حالة: '+d.last_ping.status) : 'لم يُرسَل لـ IndexNow بعد';
+      res.style.borderColor = d.indexed ? '#059669' : '#f59e0b';
+      res.innerHTML = '<strong>'+status+'</strong><br><span style="font-size:12px;color:var(--muted)">'+ping+'</span>' +
+        (d.google_cache?'<br><a href="'+d.google_cache+'" target="_blank" style="font-size:12px;color:var(--accent)">عرض Cache Google</a>':'');
+    }).catch(()=>{ res.innerHTML='❌ خطأ في الشبكة'; });
+}
+function checkAppUrl(url) {
+  document.getElementById('url-check-input').value = url;
+  document.getElementById('url-check-result').style.display='none';
+  checkUrl();
+}
+function submitSitemapNow() {
+  fetch('admin.php?ajax=submit_sitemap_now')
+    .then(r=>r.json()).then(d=>{
+      alert(d.ok ? d.msg : ('خطأ: '+d.error));
+    });
+}
+</script>
 
 <?php
 /* ─────────────── AI ASSISTANT ─────────────── */
@@ -8858,9 +9409,8 @@ function registerSub(slug) {
   btn.textContent = '…';
   st.textContent = '';
   var fd = new FormData();
-  fd.append('ajax','create_subdomain');
   fd.append('subdomain', slug);
-  fetch('admin.php', {method:'POST', body:fd})
+  fetch('admin.php?ajax=create_subdomain', {method:'POST', body:fd})
     .then(function(r){return r.json();})
     .then(function(d){
       if (d.ok) {
@@ -9628,7 +10178,18 @@ try {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
       إرسال كل التطبيقات إلى IndexNow
     </button>
+    <button onclick="submitSitemapNow(this)" class="btn btn-outline" style="font-size:13px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      إرسال Sitemap الآن
+    </button>
     <span id="ping-all-status" style="font-size:13px;color:var(--text-muted)"></span>
+  </div>
+  <!-- URL check -->
+  <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:13px;font-weight:500;white-space:nowrap">فحص فهرسة URL:</span>
+    <input type="text" id="monitor-url-check" class="form-input" placeholder="https://yassota.com/app-slug" dir="ltr" style="flex:1;min-width:200px;font-size:13px">
+    <button onclick="monitorCheckUrl()" class="btn btn-sm" style="white-space:nowrap">فحص</button>
+    <span id="monitor-url-result" style="font-size:12px"></span>
   </div>
 </div>
 
@@ -9711,6 +10272,27 @@ function pingAll(btn) {
       else { btn.textContent = '❌ خطأ'; }
       setTimeout(()=>{ btn.disabled=false; btn.textContent='إرسال كل التطبيقات إلى IndexNow'; if(st) st.textContent=''; }, 5000);
     });
+}
+function submitSitemapNow(btn) {
+  if (btn) { btn.disabled=true; btn.textContent='⏳ جارٍ الإرسال…'; }
+  fetch('admin.php?ajax=submit_sitemap_now')
+    .then(r=>r.json()).then(d=>{
+      var st = document.getElementById('ping-all-status');
+      if (st) { st.textContent = d.ok ? d.msg : ('خطأ: '+d.error); st.style.color = d.ok?'#059669':'#ef4444'; }
+      if (btn) { btn.disabled=false; btn.textContent='إرسال Sitemap الآن'; }
+    }).catch(()=>{ if(btn){btn.disabled=false;btn.textContent='خطأ';} });
+}
+function monitorCheckUrl() {
+  var url = document.getElementById('monitor-url-check').value.trim();
+  var res = document.getElementById('monitor-url-result');
+  if (!url) return;
+  res.textContent = '⏳ جارٍ الفحص…'; res.style.color='';
+  fetch('admin.php?ajax=check_url_indexed&url='+encodeURIComponent(url))
+    .then(r=>r.json()).then(d=>{
+      if (!d.ok) { res.textContent='❌ '+d.error; res.style.color='#ef4444'; return; }
+      res.textContent = d.indexed ? '✅ مفهرسة' : '⚠️ غير مفهرسة';
+      res.style.color = d.indexed ? '#059669' : '#f59e0b';
+    }).catch(()=>{ res.textContent='❌ خطأ'; res.style.color='#ef4444'; });
 }
 </script>
 <?php endif; ?>
@@ -10793,6 +11375,29 @@ function seoCounter(el, pfx, max, gMin, gMax) {
 function simpleCounter(el, spanId) {
   var span = document.getElementById(spanId);
   if (span) span.textContent = [...el.value].length;
+}
+
+var _dupTimer = null;
+function checkDuplicate(name) {
+  if (!name || name.length < 2) return;
+  clearTimeout(_dupTimer);
+  _dupTimer = setTimeout(function() {
+    var warn = document.getElementById('duplicate-warning');
+    if (!warn) return;
+    fetch('admin.php?ajax=check_duplicate&name='+encodeURIComponent(name))
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if (d.duplicate && d.apps && d.apps.length > 0) {
+          var links = d.apps.map(function(a){
+            return '<a href="admin.php?page=edit-app&id='+a.id+'" style="color:#92400e;font-weight:600" target="_blank">'+a.name+'</a> ('+a.status+')';
+          }).join('، ');
+          warn.style.display='block';
+          warn.innerHTML = '⚠️ تطبيق مكرر محتمل: '+links;
+        } else {
+          warn.style.display='none';
+        }
+      }).catch(function(){});
+  }, 600);
 }
 
 function ldCounter(el) {

@@ -378,8 +378,14 @@ function ensure_schema(PDO $pdo): array {
             'badge'            => "ENUM('','new','updated','hot','choice') NOT NULL DEFAULT ''",
             'last_indexed_at'  => "DATETIME NULL",
             'index_status'     => "ENUM('pending','indexed','error') NOT NULL DEFAULT 'pending'",
-            'permissions'      => "TEXT NULL",
+            'permissions'        => "TEXT NULL",
             'certificate_sha256' => "VARCHAR(120) NULL",
+            'seo_rarity_score'   => "DECIMAL(5,2) NULL",
+            'seo_competitor_count' => "INT UNSIGNED NULL",
+            'seo_rank_prediction'  => "TINYINT UNSIGNED NULL",
+            'seo_scored_at'      => "DATETIME NULL",
+            'subdomain_created'  => "TINYINT(1) NOT NULL DEFAULT 0",
+            'subdomain_url'      => "VARCHAR(600) NULL",
         ],
         'categories' => [
             'description' => "MEDIUMTEXT NULL AFTER icon_svg",
@@ -2536,6 +2542,147 @@ function google_indexing_request(PDO $pdo, array $urls = []): void {
     } catch (Exception $e) {
         // Silently ignore errors — indexing is best-effort, should not break the flow
     }
+}
+
+/**
+ * Check if an app already exists in the DB (duplicate detection).
+ * Returns ['duplicate'=>bool, 'apps'=>[...matched rows...]].
+ */
+function check_app_duplicate(PDO $pdo, string $name, string $slug = '', string $package = ''): array {
+    $found = [];
+    $name  = trim($name);
+    $slug  = trim($slug);
+    $pkg   = trim($package);
+
+    // Exact name match (any lang)
+    if ($name) {
+        $s = $pdo->prepare("SELECT id,name,slug,status,lang_code FROM apps WHERE name=? LIMIT 5");
+        $s->execute([$name]);
+        $found = array_merge($found, $s->fetchAll(PDO::FETCH_ASSOC));
+    }
+    // Slug match
+    if ($slug) {
+        $s = $pdo->prepare("SELECT id,name,slug,status,lang_code FROM apps WHERE slug=? LIMIT 5");
+        $s->execute([$slug]);
+        $found = array_merge($found, $s->fetchAll(PDO::FETCH_ASSOC));
+    }
+    // Package name match
+    if ($pkg) {
+        $s = $pdo->prepare("SELECT id,name,slug,status,lang_code FROM apps WHERE package_name=? LIMIT 5");
+        $s->execute([$pkg]);
+        $found = array_merge($found, $s->fetchAll(PDO::FETCH_ASSOC));
+    }
+    // Fuzzy: similar name (LIKE with transliterated Arabic-English combinations)
+    if ($name && count($found) === 0) {
+        $pattern = '%' . $name . '%';
+        $s = $pdo->prepare("SELECT id,name,slug,status,lang_code FROM apps WHERE name LIKE ? LIMIT 3");
+        $s->execute([$pattern]);
+        $found = array_merge($found, $s->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    // Dedupe by id
+    $seen = []; $unique = [];
+    foreach ($found as $row) {
+        if (!isset($seen[$row['id']])) { $seen[$row['id']] = true; $unique[] = $row; }
+    }
+    return ['duplicate' => count($unique) > 0, 'apps' => $unique];
+}
+
+/**
+ * Compute an SEO opportunity score for an app (0-100 rarity; lower competitor count = rarer).
+ * With $useAi=true: asks OpenRouter for an enriched estimate.
+ * Returns ['rarity'=>float,'competitors'=>int,'rank'=>int,'grade'=>string,'breakdown'=>[...]].
+ */
+function seo_opportunity_score(PDO $pdo, array $app, bool $useAi = false): array {
+    $name = $app['name'] ?? '';
+    $cat  = $app['category_id'] ?? 0;
+
+    // ── Non-AI scoring ──────────────────────────────────────────────
+    $rarity      = 50.0;  // base
+    $competitors = 500;   // rough estimate
+    $breakdown   = [];
+
+    // 1. Name specificity (longer = rarer)
+    $nameLen = mb_strlen($name);
+    if ($nameLen >= 15) { $rarity += 15; $competitors -= 200; $breakdown[] = 'اسم طويل ومحدد (+15)'; }
+    elseif ($nameLen >= 8) { $rarity += 7; $competitors -= 100; $breakdown[] = 'اسم متوسط (+7)'; }
+
+    // 2. Unique in our DB — fewer similar apps = rarer niche
+    $similar = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE category_id=" . (int)$cat)->fetchColumn();
+    if ($similar <= 5)       { $rarity += 20; $competitors -= 300; $breakdown[] = 'فئة نادرة في قاعدة البيانات (+20)'; }
+    elseif ($similar <= 20)  { $rarity += 10; $competitors -= 150; $breakdown[] = 'فئة متوسطة الكثافة (+10)'; }
+    else                     { $rarity -= 5;  $competitors += 200; $breakdown[] = 'فئة مزدحمة (-5)'; }
+
+    // 3. Content depth
+    $ldLen = mb_strlen($app['long_description'] ?? '');
+    if ($ldLen >= 1500)      { $rarity += 10; $competitors -= 100; $breakdown[] = 'وصف مفصّل (+10)'; }
+    elseif ($ldLen >= 500)   { $rarity += 5;  $competitors -= 50;  $breakdown[] = 'وصف متوسط (+5)'; }
+    else                     { $rarity -= 10; $competitors += 100;  $breakdown[] = 'وصف قصير (-10)'; }
+
+    // 4. Has features/pros/cons
+    $hasMeta = !empty($app['features']) && !empty($app['pros']) && !empty($app['cons']);
+    if ($hasMeta)            { $rarity += 8; $competitors -= 80; $breakdown[] = 'يحتوي مميزات وإيجابيات وسلبيات (+8)'; }
+
+    // 5. Has schema / SEO title
+    if (!empty($app['seo_title']) && !empty($app['meta_description'])) {
+        $rarity += 5; $competitors -= 50; $breakdown[] = 'SEO title & description مكتملان (+5)';
+    }
+
+    // 6. Has icon
+    if (!empty($app['icon_path']))  { $rarity += 2; $breakdown[] = 'أيقونة موجودة (+2)'; }
+
+    // Clamp
+    $rarity      = max(0.0, min(99.99, $rarity));
+    $competitors = max(5, $competitors);
+
+    // Rank prediction (1-20 based on rarity)
+    $rank = (int)ceil((100 - $rarity) / 5);
+    $rank = max(1, min(20, $rank));
+
+    // ── AI enrichment ────────────────────────────────────────────────
+    if ($useAi && !empty($app['name'])) {
+        $prompt = "أنت خبير SEO. قيّم فرصة التصدر في نتائج البحث العربية لهذا التطبيق:\n" .
+            "الاسم: {$name}\nالوصف: " . mb_substr($app['short_description'] ?? '', 0, 200) . "\n\n" .
+            "أعد JSON فقط بدون أي نص إضافي:\n" .
+            "{\"rarity\":85.5,\"competitors\":120,\"rank\":3,\"notes\":\"سبب قصير\"}\n" .
+            "rarity: 0-99.99 (كلما ارتفع = أندر وأسهل للتصدر)\n" .
+            "competitors: عدد المواقع المنافسة التقريبي\n" .
+            "rank: الترتيب المتوقع (1=الأول)";
+        $ai = ai_text($pdo, $prompt);
+        if ($ai['ok'] && $ai['content']) {
+            $d = ai_extract_json($ai['content']);
+            if ($d && isset($d['rarity'])) {
+                $rarity      = max(0.0, min(99.99, (float)$d['rarity']));
+                $competitors = max(1, (int)($d['competitors'] ?? $competitors));
+                $rank        = max(1, min(20, (int)($d['rank'] ?? $rank)));
+                if (!empty($d['notes'])) $breakdown[] = 'تقييم الذكاء الاصطناعي: ' . $d['notes'];
+            }
+        }
+    }
+
+    $grade = $rarity >= 80 ? 'A+' : ($rarity >= 65 ? 'A' : ($rarity >= 50 ? 'B' : ($rarity >= 35 ? 'C' : 'D')));
+    $color = $rarity >= 80 ? '#059669' : ($rarity >= 65 ? '#10b981' : ($rarity >= 50 ? '#f59e0b' : ($rarity >= 35 ? '#ef4444' : '#6b7280')));
+
+    return compact('rarity','competitors','rank','grade','color','breakdown');
+}
+
+/**
+ * Submit the sitemap.xml URL to Google Search Console via the sitemap submission API.
+ * Best-effort — errors are silently ignored.
+ */
+function submit_sitemap_to_gsc(PDO $pdo): void {
+    $siteUrl = rtrim(get_cfg($pdo, 'site_url', ''), '/');
+    if (!$siteUrl) return;
+    $sitemapUrl = urlencode($siteUrl . '/sitemap.xml');
+
+    // Google Search Console doesn't have a public REST API for sitemap submission
+    // without OAuth; we ping via the legacy URL as a fallback best-effort.
+    // Also ping via IndexNow for Bing/Yandex, which is already handled in ping_search_engines().
+    @file_get_contents(
+        "https://www.google.com/ping?sitemap={$sitemapUrl}",
+        false,
+        stream_context_create(['http'=>['timeout'=>5,'ignore_errors'=>true]])
+    );
 }
 
 // Trims and collapses 3+ consecutive blank lines down to a single blank
