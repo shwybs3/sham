@@ -710,10 +710,17 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_tld (tld),
       INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    // Additive migration: add doc_root if missing
+    // Additive migrations for domains table
     $domainsCols = array_column($pdo->query("SHOW COLUMNS FROM domains")->fetchAll(PDO::FETCH_ASSOC), 'Field');
-    if (!in_array('doc_root', $domainsCols)) {
-        $pdo->exec("ALTER TABLE domains ADD COLUMN doc_root VARCHAR(255) DEFAULT NULL AFTER notes");
+    foreach ([
+        'doc_root'      => "VARCHAR(255) DEFAULT NULL AFTER notes",
+        'site_mode'     => "ENUM('redirect','mirror','category','standalone') NOT NULL DEFAULT 'redirect' AFTER status",
+        'category_slug' => "VARCHAR(64) DEFAULT NULL AFTER site_mode",
+    ] as $col => $def) {
+        if (!in_array($col, $domainsCols)) {
+            $pdo->exec("ALTER TABLE domains ADD COLUMN $col $def");
+            $log[] = "domains.$col";
+        }
     }
     $log[] = 'domains';
 
@@ -3262,6 +3269,28 @@ function detect_lang_from_subdomain(): ?string {
     $valid = ['en','ru','fr','de','es','tr','id','pt','ur','hi','zh','ja','ko','it','nl','fa','bn','th','vi'];
     $cached = in_array($sub, $valid, true) ? $sub : null;
     return $cached;
+}
+
+/* ══════════════════════════════════════════════════
+   Multi-site domain detection.
+   When a request arrives on a host other than the main
+   SITE_URL host, look it up in the domains table.
+   Returns the row (with site_mode, category_slug, etc.)
+   or null when not found / on the main domain.
+   Result is cached per request — safe to call repeatedly.
+   ══════════════════════════════════════════════════ */
+function detect_multisite_domain(PDO $pdo): ?array {
+    static $result = false;
+    if ($result !== false) return $result;
+    $host     = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
+    $mainHost = strtolower(parse_url(SITE_URL, PHP_URL_HOST) ?: '');
+    if (!$host || $host === $mainHost) { $result = null; return null; }
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM domains WHERE full_domain=? LIMIT 1");
+        $stmt->execute([$host]);
+        $result = $stmt->fetch() ?: null;
+    } catch (\Throwable $e) { $result = null; }
+    return $result;
 }
 
 /* Returns the URL for a given language subdomain.

@@ -29,6 +29,18 @@ if (!empty($_GET['page'])) {
     }
 }
 
+/* ── Multi-site routing ── */
+$_multisite = detect_multisite_domain($pdo);
+if ($_multisite) {
+    $siteMode = $_multisite['site_mode'] ?? 'redirect';
+    if ($siteMode === 'redirect') {
+        header('Location: ' . SITE_URL, true, 301); exit;
+    }
+    if ($siteMode === 'category' && !empty($_multisite['category_slug'])) {
+        $_GET['cat'] = $_multisite['category_slug'];
+    }
+}
+
 /* ── Data ── */
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -36,7 +48,7 @@ $offset  = ($page - 1) * $perPage;
 $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
 
-$cacheable = ($search === '' && !detect_lang_from_subdomain());
+$cacheable = ($search === '' && !detect_lang_from_subdomain() && !$_multisite);
 if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
