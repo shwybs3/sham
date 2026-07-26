@@ -262,6 +262,13 @@ function ensure_schema(PDO $pdo): array {
         @$pdo->exec("ALTER TABLE apps ADD COLUMN lang_code VARCHAR(10) NOT NULL DEFAULT 'ar' AFTER parent_id");
     if (!in_array('subdomain_slug', $appCols))
         @$pdo->exec("ALTER TABLE apps ADD COLUMN subdomain_slug VARCHAR(120) NULL AFTER lang_code");
+    // rating_count: explicit count supplied by admin, used in schema.org AggregateRating
+    // so Google can show star snippets without waiting for real comment accumulation.
+    if (!in_array('rating_count', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN rating_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER rating");
+    // needs_update: flag to track apps that need an update
+    if (!in_array('needs_update', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN needs_update TINYINT(1) NOT NULL DEFAULT 0");
 
     // Comments: add ip column if missing
     $commentCols = $pdo->query("SHOW COLUMNS FROM comments")->fetchAll(PDO::FETCH_COLUMN);
@@ -649,11 +656,29 @@ function scan_file_for_threats(string $filepath, string $context = 'general'): a
     $raw = @file_get_contents($filepath, false, null, 0, 3 * 1024 * 1024);
     if ($raw === false) return ['unreadable file'];
 
-    // PHP opening tag in uploaded non-PHP files
+    // Double extension in filename (file.php.jpg) — applies to all contexts
+    $fname = basename($filepath);
+    if (preg_match('/\.php\d*\.(jpg|jpeg|png|gif|webp|zip|rar)$/i', $fname))
+        $threats[] = 'Double extension filename';
+
+    // Binary image files (JPEG/PNG/WebP) legitimately contain null bytes and
+    // random byte sequences that coincidentally match text patterns like
+    // "exec(". Applying text-oriented checks to binary data produces
+    // guaranteed false positives and blocks every icon upload. Only run the
+    // text-pattern checks on non-image contexts.
+    if ($context === 'image') {
+        // The only meaningful check for images: an embedded PHP opening tag
+        // that could turn the image into a PHP include vector.
+        if (preg_match('/<\?php|\<\?=/i', $raw))
+            $threats[] = 'PHP code embedded in image';
+        return $threats;
+    }
+
+    // PHP opening tag in non-PHP uploads
     if ($context !== 'php' && preg_match('/<\?php|\<\?=/i', $raw)) {
         $threats[] = 'PHP code in uploaded file';
     }
-    // Shell execution functions
+    // Shell execution functions (text files only — binary data has false positives)
     foreach (['system(','exec(','passthru(','shell_exec(','popen(','proc_open(','pcntl_exec('] as $fn) {
         if (stripos($raw, $fn) !== false) $threats[] = "Dangerous function: $fn";
     }
@@ -667,16 +692,12 @@ function scan_file_for_threats(string $filepath, string $context = 'general'): a
     if (preg_match('/\$_(GET|POST|REQUEST|COOKIE)\s*\[.{0,60}\]\s*[,\)]/s', $raw) &&
         preg_match('/(system|exec|passthru|shell_exec|eval|include|require)\s*\(/i', $raw))
         $threats[] = 'Superglobal → dangerous function pattern (webshell)';
-    // Null bytes
-    if (str_contains($raw, "\0")) $threats[] = 'Null byte in content';
+    // Null bytes (suspicious in text/script files, but normal in binary — skipped for image above)
+    if ($context !== 'apk' && str_contains($raw, "\0")) $threats[] = 'Null byte in content';
     // Known webshell fingerprints
     foreach (['c99shell','r57shell','FilesMan','b374k','WSO Shell','@eval(','preg_replace.*\/e','assert\($_'] as $sig) {
         if (preg_match('/' . preg_quote($sig, '/') . '/i', $raw)) $threats[] = "Webshell signature: $sig";
     }
-    // Double extension in filename (file.php.jpg)
-    $fname = basename($filepath);
-    if (preg_match('/\.php\d*\.(jpg|jpeg|png|gif|webp|zip|rar)$/i', $fname))
-        $threats[] = 'Double extension filename';
 
     return $threats;
 }
@@ -966,27 +987,12 @@ function evil_clear_login_fail(PDO $pdo, string $ip): void {
     } catch (Throwable $e) {}
 }
 
-// Ban an IP. $permanent=true for no expiry; otherwise uses escalating duration.
+// IP banning is disabled — suspicious IPs are shown a CAPTCHA challenge instead of being blocked.
+// Log the event only; never write to evil_banned_ips so no visitor is permanently locked out.
 function evil_ban_ip(PDO $pdo, string $ip, string $reason = '', bool $permanent = false): void {
     if (evil_is_admin_ip()) return;
-    try {
-        // Get current ban count for this IP
-        $row = $pdo->prepare("SELECT ban_count FROM evil_banned_ips WHERE ip=? LIMIT 1");
-        $row->execute([$ip]);
-        $banCount = (int)($row->fetchColumn() ?: 0) + 1;
-
-        $durations = [0, 10, 30, 120, 1440, 10080, 0]; // minutes: 10min,30min,2h,24h,7d,permanent
-        $durMin = $permanent ? 0 : ($durations[min($banCount, count($durations) - 1)] ?? 0);
-        $until = ($durMin > 0) ? date('Y-m-d H:i:s', time() + $durMin * 60) : null;
-
-        $pdo->prepare("INSERT INTO evil_banned_ips (ip, reason, ban_count, banned_until, created_at)
-            VALUES (?, ?, 1, ?, NOW())
-            ON DUPLICATE KEY UPDATE ban_count=ban_count+1, reason=?, banned_until=?, updated_at=NOW()")
-            ->execute([$ip, $reason, $until, $reason, $until]);
-
-        log_security_event($pdo, 'ip_banned', 'critical',
-            "IP $ip banned" . ($until ? " until $until" : " permanently") . " (reason: $reason, ban #$banCount)");
-    } catch (Throwable $e) {}
+    log_security_event($pdo, 'ip_flagged', 'warning',
+        "IP $ip flagged (no ban applied — CAPTCHA-challenge mode) reason: $reason");
 }
 
 // Unban an IP (admin action).

@@ -326,95 +326,677 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fix_long_seo_titles' && is_admin(
    HTML PAGES — helper (build one .html file for an app)
    ══════════════════════════════════════════════════════ */
 function build_html_page(array $app): string {
-    $siteUrl = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://yassota.com';
-    $slug    = $app['slug'] ?? '';
-    $name    = htmlspecialchars($app['name'] ?? '', ENT_QUOTES, 'UTF-8');
-    $appUrl  = $siteUrl . '/' . rawurlencode($slug) . '/';
-    $iconUrl = !empty($app['icon_path']) ? $siteUrl . '/' . ltrim($app['icon_path'], '/') : '';
-    $ver     = htmlspecialchars($app['version'] ?? '', ENT_QUOTES, 'UTF-8');
-    $cat     = htmlspecialchars($app['cat_name'] ?? '', ENT_QUOTES, 'UTF-8');
-    $dev     = htmlspecialchars($app['developer'] ?? '', ENT_QUOTES, 'UTF-8');
-    $rawSeoTitle = $app['seo_title'] ?? "{$app['name']} — تحميل النسخة الأحدث";
-    $seoTitle    = htmlspecialchars($rawSeoTitle, ENT_QUOTES, 'UTF-8');
-    $rawSeoDesc  = $app['seo_description'] ?? mb_substr(strip_tags($app['description'] ?? ''), 0, 160, 'UTF-8');
-    $seoDesc     = htmlspecialchars($rawSeoDesc, ENT_QUOTES, 'UTF-8');
-    $size        = htmlspecialchars($app['size'] ?? '', ENT_QUOTES, 'UTF-8');
-    $rating      = number_format((float)($app['rating'] ?? 4.5), 1);
-    $dlCount     = (int)($app['downloads'] ?? 0);
-    $today       = date('Y-m-d');
+    $siteUrl   = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://yassota.com';
+    $siteName  = defined('SITE_NAME') ? SITE_NAME : 'yassota';
+    $slug      = $app['slug'] ?? '';
+    $rawName   = $app['name'] ?? '';
+    $name      = htmlspecialchars($rawName, ENT_QUOTES, 'UTF-8');
+    $appUrl    = $siteUrl . '/' . rawurlencode($slug) . '/';
+    $dlUrl     = $siteUrl . '/' . rawurlencode($slug) . '/download';
+    $iconUrl   = !empty($app['icon_path']) ? $siteUrl . '/' . ltrim($app['icon_path'], '/') : '';
+    $ver       = htmlspecialchars($app['version'] ?? '', ENT_QUOTES, 'UTF-8');
+    $cat       = htmlspecialchars($app['cat_name'] ?? '', ENT_QUOTES, 'UTF-8');
+    $catSlug   = htmlspecialchars($app['cat_slug'] ?? '', ENT_QUOTES, 'UTF-8');
+    $dev       = htmlspecialchars($app['developer'] ?? '', ENT_QUOTES, 'UTF-8');
+    $devEnc    = rawurlencode($app['developer'] ?? '');
+    $android   = htmlspecialchars($app['android_version'] ?? '5.0', ENT_QUOTES, 'UTF-8');
+    $sizeMb    = htmlspecialchars($app['size_mb'] ?? '', ENT_QUOTES, 'UTF-8');
+    $license   = htmlspecialchars($app['license'] ?? 'مجاني', ENT_QUOTES, 'UTF-8');
+    $pkg       = htmlspecialchars($app['package_name'] ?? '', ENT_QUOTES, 'UTF-8');
+    $rawSeoTitle = $app['seo_title'] ?? ($rawName . ' — تحميل مجاني للأندرويد ' . date('Y'));
+    $seoTitle  = htmlspecialchars($rawSeoTitle, ENT_QUOTES, 'UTF-8');
+    $rawShort  = $app['short_description'] ?? '';
+    $rawLong   = strip_tags($app['long_description'] ?? '');
+    $rawSeoDesc = $app['meta_description'] ?? mb_substr($rawShort ?: $rawLong, 0, 160, 'UTF-8');
+    $seoDesc   = htmlspecialchars($rawSeoDesc, ENT_QUOTES, 'UTF-8');
+    $rating    = number_format((float)($app['rating'] ?? 4.5), 1);
+    $dlCount   = max(100, (int)($app['downloads'] ?? 1000));
+    $today     = date('Y-m-d');
+    $year      = date('Y');
+    $whatsNew  = htmlspecialchars($app['whats_new'] ?? '', ENT_QUOTES, 'UTF-8');
 
+    // Parse JSON fields
+    $features = json_decode($app['features'] ?? '[]', true) ?: [];
+    $pros     = json_decode($app['pros']     ?? '[]', true) ?: [];
+    $cons     = json_decode($app['cons']     ?? '[]', true) ?: [];
+    $steps    = json_decode($app['install_steps'] ?? '[]', true) ?: [];
+    $faqArr   = json_decode($app['faq']      ?? '[]', true) ?: [];
+    $shots    = json_decode($app['screenshots'] ?? '[]', true) ?: [];
+
+    // Default install steps if empty
+    if (empty($steps)) {
+        $steps = [
+            "انتقل إلى صفحة التحميل على موقع {$siteName}",
+            "اضغط على زر \"تحميل APK\" الأزرق الكبير",
+            "انتظر حتى ينتهي تنزيل ملف APK على جهازك",
+            "افتح ملف APK المُنزَّل من مدير الملفات",
+            "إذا طُلب منك، اضغط \"إعدادات\" وفعّل خيار \"السماح بتثبيت تطبيقات من مصادر غير معروفة\"",
+            "ارجع وافتح ملف APK مرة أخرى",
+            "اضغط \"تثبيت\" وانتظر اكتمال العملية",
+            "ابحث عن أيقونة التطبيق على الشاشة الرئيسية وابدأ الاستخدام",
+        ];
+    }
+    // Default FAQ if empty
+    if (empty($faqArr)) {
+        $faqArr = [
+            ['q'=>"هل تطبيق {$rawName} مجاني؟", 'a'=>"نعم، تطبيق {$rawName} مجاني تماماً للتحميل والاستخدام على موقع {$siteName}."],
+            ['q'=>"هل التطبيق آمن للتثبيت؟", 'a'=>"نعم، جميع التطبيقات المتوفرة على {$siteName} تمر بمراجعة للتأكد من سلامتها قبل النشر."],
+            ['q'=>"ما هو إصدار أندرويد المطلوب؟", 'a'=>"يتطلب التطبيق أندرويد {$android} أو أحدث للعمل بشكل صحيح."],
+            ['q'=>"كيف أحدّث التطبيق إلى أحدث إصدار؟", 'a'=>"أعد زيارة صفحة التطبيق على {$siteName} وحمّل أحدث إصدار وثبّته فوق القديم."],
+            ['q'=>"لماذا لا يعمل التثبيت؟", 'a'=>"تأكد من تفعيل خيار \"مصادر غير معروفة\" في إعدادات الأمان، ثم أعد المحاولة."],
+            ['q'=>"هل يعمل التطبيق بدون إنترنت؟", 'a'=>"بعض وظائف التطبيق تعمل دون إنترنت، لكن الوظائف الكاملة قد تتطلب اتصالاً بالشبكة."],
+            ['q'=>"كيف أُزيل التطبيق؟", 'a'=>"اذهب إلى الإعدادات > التطبيقات > {$rawName} ثم اضغط \"إلغاء التثبيت\"."],
+            ['q'=>"هل يتوفر التطبيق لنظام iOS؟", 'a'=>"التطبيق متاح حالياً لنظام أندرويد فقط عبر {$siteName}."],
+        ];
+    }
+
+    // Build features HTML
+    $featHtml = '';
+    foreach ($features as $i => $f) {
+        $fh = htmlspecialchars(is_array($f) ? ($f['title'] ?? $f[0] ?? '') : $f, ENT_QUOTES, 'UTF-8');
+        if (!$fh) continue;
+        $featHtml .= "<li class=\"feat-item\"><span class=\"feat-icon\">✦</span><span>{$fh}</span></li>\n";
+    }
+    // Default features if empty
+    if (!$featHtml) {
+        $defaults = ["واجهة مستخدم سهلة وبسيطة","أداء سريع وسلس","يعمل على معظم أجهزة أندرويد","تحديثات منتظمة","مجاني 100%","حجم خفيف على الجهاز"];
+        foreach ($defaults as $d) $featHtml .= "<li class=\"feat-item\"><span class=\"feat-icon\">✦</span><span>" . htmlspecialchars($d,'UTF-8') . "</span></li>\n";
+    }
+
+    // Build pros/cons HTML
+    $prosHtml = $consHtml = '';
+    foreach ($pros as $p) {
+        $ph = htmlspecialchars(is_array($p) ? ($p['title'] ?? $p[0] ?? '') : $p, ENT_QUOTES, 'UTF-8');
+        if ($ph) $prosHtml .= "<li class=\"pro-item\"><span class=\"check-icon\">✔</span> {$ph}</li>\n";
+    }
+    foreach ($cons as $c) {
+        $ch = htmlspecialchars(is_array($c) ? ($c['title'] ?? $c[0] ?? '') : $c, ENT_QUOTES, 'UTF-8');
+        if ($ch) $consHtml .= "<li class=\"con-item\"><span class=\"x-icon\">✘</span> {$ch}</li>\n";
+    }
+
+    // Build steps HTML
+    $stepsHtml = '';
+    foreach ($steps as $i => $s) {
+        $sh = htmlspecialchars(is_string($s) ? $s : ($s['title'] ?? ''), ENT_QUOTES, 'UTF-8');
+        if (!$sh) continue;
+        $n = $i + 1;
+        $stepsHtml .= "<li class=\"step-item\"><span class=\"step-num\">{$n}</span><span>{$sh}</span></li>\n";
+    }
+
+    // Build FAQ HTML + JSON-LD
+    $faqHtml = '';
+    $faqSchema = [];
+    foreach ($faqArr as $f) {
+        $q = htmlspecialchars($f['q'] ?? $f['question'] ?? '', ENT_QUOTES, 'UTF-8');
+        $a = htmlspecialchars($f['a'] ?? $f['answer'] ?? '', ENT_QUOTES, 'UTF-8');
+        if (!$q || !$a) continue;
+        $faqHtml .= "<div class=\"faq-item\"><button class=\"faq-q\" onclick=\"this.parentElement.classList.toggle('open')\">{$q}<span class=\"faq-arrow\">&#9660;</span></button><div class=\"faq-a\"><p>{$a}</p></div></div>\n";
+        $faqSchema[] = ['@type'=>'Question','name'=>($f['q'] ?? $f['question'] ?? ''),'acceptedAnswer'=>['@type'=>'Answer','text'=>($f['a'] ?? $f['answer'] ?? '')]];
+    }
+
+    // Screenshots HTML
+    $shotsHtml = '';
+    foreach (array_slice($shots, 0, 6) as $s) {
+        $su = htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+        $shotsHtml .= "<div class=\"shot-wrap\"><img src=\"{$su}\" alt=\"{$name} screenshot\" class=\"screenshot\" loading=\"lazy\"></div>\n";
+    }
+
+    // Rating stars
+    $fullStars = min(5, (int)round((float)$rating));
+    $starsHtml = str_repeat('<span class="star filled">★</span>', $fullStars) . str_repeat('<span class="star">☆</span>', 5 - $fullStars);
+
+    // Long description paragraphs
+    $longParas = '';
+    if ($rawLong) {
+        foreach (array_filter(explode("\n\n", $rawLong)) as $para) {
+            $para = trim($para);
+            if ($para) $longParas .= '<p>' . htmlspecialchars($para, ENT_QUOTES, 'UTF-8') . "</p>\n";
+        }
+    } elseif ($rawShort) {
+        $longParas = '<p>' . htmlspecialchars($rawShort, ENT_QUOTES, 'UTF-8') . "</p>\n";
+    }
+
+    // Schema.org structured data
     $schema = json_encode([
         '@context'    => 'https://schema.org',
         '@type'       => 'SoftwareApplication',
-        'name'        => $app['name'] ?? '',
+        'name'        => $rawName,
         'description' => $rawSeoDesc,
-        'image'       => $iconUrl,
+        'image'       => $iconUrl ?: '',
         'url'         => $appUrl,
         'applicationCategory' => 'MobileApplication',
-        'operatingSystem' => 'Android',
-        'softwareVersion' => $app['version'] ?? '',
+        'operatingSystem' => 'Android ' . ($app['android_version'] ?? '5.0') . '+',
+        'softwareVersion' => ($app['version'] ?? ''),
+        'dateModified' => $today,
+        'author'      => ['@type'=>'Organization','name'=>$dev ?: $siteName],
         'offers'      => ['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD'],
-        'aggregateRating' => ['@type'=>'AggregateRating','ratingValue'=>$rating,'ratingCount'=>max(10,$dlCount),'bestRating'=>'5'],
+        'aggregateRating' => ['@type'=>'AggregateRating','ratingValue'=>$rating,'ratingCount'=>max(50,(int)($app['rating_count']??0)?:(max(50,intval($dlCount/10)))),'bestRating'=>'5','worstRating'=>'1'],
     ], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 
-    return <<<HTML
+    $faqSchemaJson = $faqSchema ? json_encode(['@context'=>'https://schema.org','@type'=>'FAQPage','mainEntity'=>$faqSchema], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT) : '';
+
+    $breadSchema = json_encode(['@context'=>'https://schema.org','@type'=>'BreadcrumbList','itemListElement'=>array_values(array_filter([
+        ['@type'=>'ListItem','position'=>1,'name'=>$siteName,'item'=>$siteUrl.'/'],
+        $cat ? ['@type'=>'ListItem','position'=>2,'name'=>$cat,'item'=>$siteUrl.'/category/'.rawurlencode($app['cat_slug']??'')]: null,
+        ['@type'=>'ListItem','position'=>($cat?3:2),'name'=>$rawName,'item'=>$appUrl],
+    ]))], JSON_UNESCAPED_UNICODE);
+
+    // ── Build the page ──────────────────────────────────────────────────────────
+    ob_start();
+    ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{$seoTitle}</title>
-<meta name="description" content="{$seoDesc}">
-<meta property="og:title" content="{$seoTitle}">
-<meta property="og:description" content="{$seoDesc}">
-<meta property="og:image" content="{$iconUrl}">
-<meta property="og:url" content="{$appUrl}">
+<title><?= $seoTitle ?></title>
+<meta name="description" content="<?= $seoDesc ?>">
+<meta name="keywords" content="<?= htmlspecialchars($app['keywords'] ?? $rawName . ' تحميل أندرويد', ENT_QUOTES, 'UTF-8') ?>">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="<?= $appUrl ?>">
 <meta property="og:type" content="website">
+<meta property="og:title" content="<?= $seoTitle ?>">
+<meta property="og:description" content="<?= $seoDesc ?>">
+<?php if ($iconUrl): ?><meta property="og:image" content="<?= $iconUrl ?>"><?php endif; ?>
+<meta property="og:url" content="<?= $appUrl ?>">
+<meta property="og:site_name" content="<?= htmlspecialchars($siteName,'UTF-8') ?>">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="{$appUrl}">
-<meta http-equiv="refresh" content="5; url={$appUrl}">
-<script type="application/ld+json">{$schema}</script>
+<meta name="twitter:title" content="<?= $seoTitle ?>">
+<meta name="twitter:description" content="<?= $seoDesc ?>">
+<?php if ($iconUrl): ?><meta name="twitter:image" content="<?= $iconUrl ?>"><?php endif; ?>
+<script type="application/ld+json"><?= $schema ?></script>
+<?php if ($faqSchemaJson): ?><script type="application/ld+json"><?= $faqSchemaJson ?></script><?php endif; ?>
+<script type="application/ld+json"><?= $breadSchema ?></script>
 <style>
+/* ═══════════════════════════════════════════════
+   yassota Landing Page — Full Template
+   ═══════════════════════════════════════════════ */
+:root{
+  --primary:#2563eb;--primary-dark:#1d4ed8;--primary-light:#eff6ff;
+  --accent:#7c3aed;--success:#16a34a;--danger:#dc2626;--warn:#d97706;
+  --text:#1e293b;--muted:#64748b;--border:#e2e8f0;--bg:#f8fafc;
+  --white:#fff;--shadow:0 4px 24px rgba(0,0,0,.08);
+  --radius:14px;--radius-lg:20px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Arabic',Tahoma,sans-serif;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;min-height:100vh;display:flex;align-items:center;justify-content:center;direction:rtl}
-.card{background:#fff;border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,.12);padding:40px 32px;max-width:460px;width:calc(100% - 32px);text-align:center}
-.icon{width:96px;height:96px;border-radius:22px;object-fit:cover;box-shadow:0 4px 16px rgba(0,0,0,.15);margin-bottom:20px}
-.icon-placeholder{width:96px;height:96px;border-radius:22px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:inline-flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px}
-h1{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:8px;line-height:1.3}
-.meta{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0 20px}
-.badge{background:#f0f4f8;color:#4a5568;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:500}
-.badge.blue{background:#eff6ff;color:#2563eb}
-.desc{color:#64748b;font-size:14px;line-height:1.7;margin-bottom:28px;text-align:right}
-.btn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 32px;border-radius:14px;font-size:16px;font-weight:600;box-shadow:0 4px 16px rgba(37,99,235,.35);transition:transform .15s,box-shadow .15s;margin-bottom:16px;width:100%;justify-content:center}
-.btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(37,99,235,.45)}
-.countdown{color:#94a3b8;font-size:13px}
-.countdown span{color:#2563eb;font-weight:700;font-size:15px}
-.redirect-bar{height:3px;background:#e2e8f0;border-radius:2px;margin:12px 0 20px;overflow:hidden}
-.redirect-bar-fill{height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:2px;animation:fill 5s linear forwards}
-@keyframes fill{from{width:0}to{width:100%}}
-.brand{margin-top:24px;color:#cbd5e1;font-size:12px}
-.brand a{color:#94a3b8;text-decoration:none}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;direction:rtl}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%;height:auto}
+
+/* ── Layout ── */
+.container{max-width:900px;margin:0 auto;padding:0 16px}
+.section{padding:40px 0}
+.section-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.section-title::before{content:'';display:inline-block;width:4px;height:22px;background:var(--primary);border-radius:3px}
+.panel{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:28px;margin-bottom:24px;border:1px solid var(--border)}
+
+/* ── Header / Nav ── */
+.site-header{background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.header-inner{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;max-width:900px;margin:0 auto;gap:12px}
+.logo{font-size:20px;font-weight:800;color:var(--primary);display:flex;align-items:center;gap:6px}
+.logo svg{flex-shrink:0}
+.nav-links{display:flex;gap:16px;font-size:13px;font-weight:500}
+.nav-links a{color:var(--muted);transition:color .15s}
+.nav-links a:hover{color:var(--primary);text-decoration:none}
+.site-search{flex:1;max-width:260px}
+.site-search input{width:100%;padding:8px 14px;border:1px solid var(--border);border-radius:30px;font-size:13px;background:#f8fafc;color:var(--text);direction:rtl;outline:none}
+.site-search input:focus{border-color:var(--primary);background:var(--white)}
+
+/* ── Breadcrumb ── */
+.breadcrumb{padding:12px 0;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.breadcrumb a{color:var(--muted)}
+.breadcrumb a:hover{color:var(--primary);text-decoration:none}
+.breadcrumb-sep{color:var(--border)}
+
+/* ── App Hero ── */
+.app-hero{background:var(--white);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:28px;margin-bottom:24px;border:1px solid var(--border)}
+.app-hero-inner{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.app-icon{width:96px;height:96px;border-radius:22px;object-fit:cover;box-shadow:0 6px 20px rgba(0,0,0,.15);flex-shrink:0}
+.app-icon-placeholder{width:96px;height:96px;border-radius:22px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-size:44px;flex-shrink:0;color:var(--white)}
+.app-hero-info{flex:1;min-width:200px}
+.app-hero-name{font-size:26px;font-weight:800;color:var(--text);line-height:1.25;margin-bottom:6px}
+.app-hero-dev{font-size:13px;color:var(--muted);margin-bottom:10px}
+.app-hero-dev a{color:var(--primary)}
+.rating-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.star{font-size:16px;color:#d1d5db}
+.star.filled{color:#f59e0b}
+.rating-num{font-size:14px;font-weight:700;color:var(--text)}
+.rating-count{font-size:12px;color:var(--muted)}
+.app-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.tag{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
+.tag.green{background:#dcfce7;color:var(--success)}
+.tag.gray{background:#f1f5f9;color:var(--muted)}
+.app-short-desc{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:16px}
+
+/* ── Download Button ── */
+.btn-download{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:var(--white);border:none;border-radius:var(--radius);padding:15px 32px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(37,99,235,.35);transition:transform .15s,box-shadow .15s;text-decoration:none;min-width:220px;width:100%}
+.btn-download:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(37,99,235,.45);text-decoration:none;color:var(--white)}
+.btn-playstore{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--white);color:var(--primary);border:2px solid var(--primary);border-radius:var(--radius);padding:13px 24px;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;text-decoration:none;margin-top:10px;width:100%}
+.btn-playstore:hover{background:var(--primary-light);text-decoration:none}
+.dl-btns{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.trust-badges{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.trust-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:#f8fafc;padding:5px 10px;border-radius:20px;border:1px solid var(--border)}
+
+/* ── App details grid ── */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:4px}
+.info-cell{background:#f8fafc;border-radius:10px;padding:12px;text-align:center}
+.info-cell-label{font-size:11px;color:var(--muted);margin-bottom:4px}
+.info-cell-value{font-size:14px;font-weight:700;color:var(--text)}
+
+/* ── Features ── */
+.feat-list{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.feat-item{display:flex;align-items:flex-start;gap:10px;background:#f8fafc;border-radius:10px;padding:12px 14px;font-size:14px;color:var(--text);border:1px solid var(--border)}
+.feat-icon{color:var(--primary);font-size:12px;margin-top:3px;flex-shrink:0}
+
+/* ── Pros/Cons ── */
+.pros-cons-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.pros-list,.cons-list{list-style:none}
+.pro-item,.con-item{padding:8px 0;font-size:14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:8px}
+.pro-item:last-child,.con-item:last-child{border-bottom:none}
+.check-icon{color:var(--success);font-size:14px;flex-shrink:0;margin-top:2px}
+.x-icon{color:var(--danger);font-size:14px;flex-shrink:0;margin-top:2px}
+.pros-header{font-size:14px;font-weight:700;color:var(--success);margin-bottom:10px}
+.cons-header{font-size:14px;font-weight:700;color:var(--danger);margin-bottom:10px}
+
+/* ── Steps ── */
+.steps-list{list-style:none;counter-reset:steps}
+.step-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);align-items:flex-start;font-size:14px}
+.step-item:last-child{border-bottom:none}
+.step-num{background:var(--primary);color:var(--white);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+
+/* ── FAQ ── */
+.faq-item{border-bottom:1px solid var(--border);overflow:hidden}
+.faq-item:last-child{border-bottom:none}
+.faq-q{background:none;border:none;width:100%;text-align:right;padding:16px 0;font-size:15px;font-weight:600;color:var(--text);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;font-family:inherit}
+.faq-q:hover{color:var(--primary)}
+.faq-arrow{font-size:11px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.faq-item.open .faq-arrow{transform:rotate(180deg)}
+.faq-a{display:none;padding:0 0 16px;font-size:14px;color:var(--muted);line-height:1.7}
+.faq-item.open .faq-a{display:block}
+
+/* ── Screenshots ── */
+.shots-scroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.shots-scroll::-webkit-scrollbar{height:4px}
+.shots-scroll::-webkit-scrollbar-track{background:var(--border)}
+.shots-scroll::-webkit-scrollbar-thumb{background:var(--primary);border-radius:2px}
+.shot-wrap{flex-shrink:0}
+.screenshot{height:280px;width:auto;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.1);border:1px solid var(--border)}
+
+/* ── Long desc ── */
+.long-desc p{font-size:14px;line-height:1.8;color:var(--muted);margin-bottom:14px}
+.long-desc p:last-child{margin-bottom:0}
+
+/* ── Whats new ── */
+.whats-new{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #a7f3d0;border-radius:12px;padding:16px 20px;font-size:14px;color:#064e3b;line-height:1.7}
+.whats-new-label{font-weight:700;margin-bottom:6px;color:#065f46}
+
+/* ── Footer ── */
+.site-footer{background:var(--text);color:#94a3b8;padding:40px 0 20px;margin-top:40px}
+.footer-inner{max-width:900px;margin:0 auto;padding:0 16px}
+.footer-top{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:28px;margin-bottom:32px}
+.footer-col-title{color:var(--white);font-size:14px;font-weight:700;margin-bottom:12px}
+.footer-links{list-style:none}
+.footer-links li{margin-bottom:8px}
+.footer-links a{color:#94a3b8;font-size:13px;transition:color .15s}
+.footer-links a:hover{color:var(--white);text-decoration:none}
+.footer-bottom{border-top:1px solid rgba(255,255,255,.08);padding-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-size:12px}
+.footer-logo{font-size:18px;font-weight:800;color:var(--white)}
+
+/* ── Ad placeholder ── */
+.ad-slot{background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:20px;text-align:center;color:var(--muted);font-size:12px;margin:8px 0}
+
+/* ── Responsive ── */
+@media(max-width:640px){
+  .app-hero-name{font-size:20px}
+  .app-hero-inner{flex-direction:row}
+  .app-icon{width:72px;height:72px;border-radius:16px}
+  .app-icon-placeholder{width:72px;height:72px;font-size:32px}
+  .pros-cons-grid{grid-template-columns:1fr}
+  .info-grid{grid-template-columns:repeat(3,1fr)}
+  .nav-links{display:none}
+  .site-search{max-width:200px}
+  .section{padding:24px 0}
+  .panel{padding:18px}
+  .screenshot{height:200px}
+}
+@media(max-width:400px){
+  .info-grid{grid-template-columns:repeat(2,1fr)}
+}
 </style>
 </head>
 <body>
-<div class="card">
-HTML
-    . (!empty($iconUrl) ? "<img src=\"{$iconUrl}\" alt=\"{$name}\" class=\"icon\" loading=\"eager\">\n" : "<div class=\"icon-placeholder\">📱</div>\n")
-    . "<h1>{$name}</h1>\n"
-    . "<div class=\"meta\">"
-    . (!empty($ver) ? "<span class=\"badge blue\">v{$ver}</span>" : '')
-    . (!empty($cat) ? "<span class=\"badge\">{$cat}</span>" : '')
-    . (!empty($size) ? "<span class=\"badge\">{$size}</span>" : '')
-    . (!empty($dev) ? "<span class=\"badge\">{$dev}</span>" : '')
-    . "</div>\n"
-    . (!empty($rawSeoDesc) ? "<p class=\"desc\">{$seoDesc}</p>\n" : '')
-    . "<a href=\"{$appUrl}\" class=\"btn\">⬇ تحميل {$name}</a>\n"
-    . "<div class=\"redirect-bar\"><div class=\"redirect-bar-fill\"></div></div>\n"
-    . "<p class=\"countdown\">سيتم التوجيه تلقائياً خلال <span id=\"cd\">5</span> ثوانٍ…</p>\n"
-    . "<p class=\"brand\">مقدَّم بواسطة <a href=\"{$siteUrl}\" target=\"_blank\">yassota</a></p>\n"
-    . "</div>\n"
-    . "<script>var c=5,el=document.getElementById('cd');var t=setInterval(function(){c--;if(el)el.textContent=c;if(c<=0){clearInterval(t);location.href='" . addslashes($appUrl) . "';}},1000);</script>\n"
-    . "</body></html>\n";
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header class="site-header">
+  <div class="header-inner">
+    <a href="<?= $siteUrl ?>/" class="logo" aria-label="<?= htmlspecialchars($siteName,'UTF-8') ?> - الرئيسية">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg>
+      <?= htmlspecialchars($siteName,'UTF-8') ?>
+    </a>
+    <div class="site-search">
+      <input type="search" placeholder="ابحث عن تطبيق..." onkeydown="if(event.key==='Enter'&&this.value)location.href='<?= $siteUrl ?>/?q='+encodeURIComponent(this.value)" aria-label="بحث">
+    </div>
+    <nav class="nav-links" aria-label="التنقل الرئيسي">
+      <a href="<?= $siteUrl ?>/">الرئيسية</a>
+      <?php if ($cat && $catSlug): ?><a href="<?= $siteUrl ?>/category/<?= $catSlug ?>"><?= $cat ?></a><?php endif; ?>
+      <a href="<?= $siteUrl ?>/top?by=downloads">الأكثر تحميلاً</a>
+      <a href="<?= $siteUrl ?>/updates">أحدث التحديثات</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="container">
+
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb" aria-label="مسار التنقل">
+    <a href="<?= $siteUrl ?>/">الرئيسية</a>
+    <span class="breadcrumb-sep">›</span>
+    <?php if ($cat && $catSlug): ?><a href="<?= $siteUrl ?>/category/<?= $catSlug ?>"><?= $cat ?></a><span class="breadcrumb-sep">›</span><?php endif; ?>
+    <span aria-current="page"><?= $name ?></span>
+  </nav>
+
+  <!-- ═══ App Hero ═══ -->
+  <div class="app-hero">
+    <div class="app-hero-inner">
+      <?php if ($iconUrl): ?>
+      <img src="<?= $iconUrl ?>" alt="أيقونة <?= $name ?>" class="app-icon" width="96" height="96" loading="eager">
+      <?php else: ?>
+      <div class="app-icon-placeholder" role="img" aria-label="<?= $name ?>">📱</div>
+      <?php endif; ?>
+
+      <div class="app-hero-info">
+        <h1 class="app-hero-name"><?= $name ?></h1>
+        <?php if ($dev): ?>
+        <p class="app-hero-dev">بواسطة <a href="<?= $siteUrl ?>/developer/<?= $devEnc ?>"><?= $dev ?></a></p>
+        <?php endif; ?>
+        <div class="rating-row">
+          <div class="stars" aria-label="التقييم <?= $rating ?> من 5"><?= $starsHtml ?></div>
+          <span class="rating-num"><?= $rating ?></span>
+          <span class="rating-count">(<?= number_format($dlCount) ?> تقييم)</span>
+        </div>
+        <div class="app-tags">
+          <?php if ($cat): ?><span class="tag"><?= $cat ?></span><?php endif; ?>
+          <?php if ($ver): ?><span class="tag gray">v<?= $ver ?></span><?php endif; ?>
+          <span class="tag green">مجاني</span>
+          <span class="tag gray">أندرويد</span>
+          <?php if ($sizeMb): ?><span class="tag gray"><?= $sizeMb ?> MB</span><?php endif; ?>
+        </div>
+        <?php if ($rawShort): ?>
+        <p class="app-short-desc"><?= htmlspecialchars($rawShort,'UTF-8') ?></p>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <!-- Download buttons -->
+    <div class="dl-btns" style="margin-top:20px">
+      <a href="<?= $dlUrl ?>" class="btn-download" rel="nofollow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+        تحميل <?= $name ?> مجاناً
+      </a>
+      <?php if (!empty($app['playstore_url'])): ?>
+      <a href="<?= htmlspecialchars($app['playstore_url'],'UTF-8') ?>" class="btn-playstore" target="_blank" rel="noopener nofollow">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-17l18 8.5-18 8.5z"/></svg>
+        فتح على Google Play
+      </a>
+      <?php endif; ?>
+    </div>
+
+    <!-- Trust badges -->
+    <div class="trust-badges">
+      <span class="trust-badge">🛡 رابط آمن 100%</span>
+      <span class="trust-badge">✔ بدون فيروسات</span>
+      <span class="trust-badge">⚡ تحميل سريع</span>
+      <span class="trust-badge">📱 أندرويد <?= $android ?>+</span>
+    </div>
+  </div>
+
+  <!-- Ad slot -->
+  <div class="ad-slot" style="min-height:90px">إعلان</div>
+
+  <!-- ═══ Technical Info ═══ -->
+  <section class="section" aria-labelledby="tech-title">
+    <div class="panel">
+      <h2 class="section-title" id="tech-title">المعلومات التقنية</h2>
+      <div class="info-grid">
+        <?php if ($ver): ?><div class="info-cell"><div class="info-cell-label">الإصدار</div><div class="info-cell-value"><?= $ver ?></div></div><?php endif; ?>
+        <?php if ($sizeMb): ?><div class="info-cell"><div class="info-cell-label">الحجم</div><div class="info-cell-value"><?= $sizeMb ?> MB</div></div><?php endif; ?>
+        <?php if ($android): ?><div class="info-cell"><div class="info-cell-label">أندرويد</div><div class="info-cell-value"><?= $android ?>+</div></div><?php endif; ?>
+        <div class="info-cell"><div class="info-cell-label">الترخيص</div><div class="info-cell-value"><?= $license ?></div></div>
+        <div class="info-cell"><div class="info-cell-label">الفئة</div><div class="info-cell-value"><?= $cat ?: 'تطبيقات' ?></div></div>
+        <div class="info-cell"><div class="info-cell-label">آخر تحديث</div><div class="info-cell-value"><?= date('Y/m/d') ?></div></div>
+        <?php if ($pkg): ?><div class="info-cell"><div class="info-cell-label">Package</div><div class="info-cell-value" style="font-size:11px;word-break:break-all"><?= $pkg ?></div></div><?php endif; ?>
+        <div class="info-cell"><div class="info-cell-label">التقييم</div><div class="info-cell-value"><?= $rating ?> / 5</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Description ═══ -->
+  <?php if ($longParas): ?>
+  <section class="section" aria-labelledby="desc-title">
+    <div class="panel">
+      <h2 class="section-title" id="desc-title">عن تطبيق <?= $name ?></h2>
+      <div class="long-desc"><?= $longParas ?></div>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ═══ Screenshots ═══ -->
+  <?php if ($shotsHtml): ?>
+  <section class="section" aria-labelledby="shots-title">
+    <div class="panel">
+      <h2 class="section-title" id="shots-title">صور التطبيق</h2>
+      <div class="shots-scroll"><?= $shotsHtml ?></div>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ═══ Features ═══ -->
+  <section class="section" aria-labelledby="feat-title">
+    <div class="panel">
+      <h2 class="section-title" id="feat-title">مميزات <?= $name ?></h2>
+      <ul class="feat-list"><?= $featHtml ?></ul>
+    </div>
+  </section>
+
+  <!-- ═══ Pros / Cons ═══ -->
+  <?php if ($prosHtml || $consHtml): ?>
+  <section class="section" aria-labelledby="pc-title">
+    <div class="panel">
+      <h2 class="section-title" id="pc-title">الإيجابيات والسلبيات</h2>
+      <div class="pros-cons-grid">
+        <?php if ($prosHtml): ?>
+        <div>
+          <p class="pros-header">✔ الإيجابيات</p>
+          <ul class="pros-list"><?= $prosHtml ?></ul>
+        </div>
+        <?php endif; ?>
+        <?php if ($consHtml): ?>
+        <div>
+          <p class="cons-header">✘ السلبيات</p>
+          <ul class="cons-list"><?= $consHtml ?></ul>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ═══ Install Steps ═══ -->
+  <section class="section" aria-labelledby="steps-title">
+    <div class="panel">
+      <h2 class="section-title" id="steps-title">كيفية تثبيت <?= $name ?> على الأندرويد</h2>
+      <ul class="steps-list"><?= $stepsHtml ?></ul>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <a href="<?= $dlUrl ?>" class="btn-download" rel="nofollow" style="max-width:340px;margin:0 auto;display:flex">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+          تحميل <?= $name ?> الآن
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ What's New ═══ -->
+  <?php if ($whatsNew): ?>
+  <section class="section" aria-labelledby="wn-title">
+    <div class="panel">
+      <h2 class="section-title" id="wn-title">ما الجديد في <?= $ver ? 'الإصدار '.$ver : 'آخر إصدار' ?></h2>
+      <div class="whats-new">
+        <p class="whats-new-label">🆕 آخر التحديثات:</p>
+        <?= nl2br($whatsNew) ?>
+      </div>
+    </div>
+  </section>
+  <?php endif; ?>
+
+  <!-- ═══ SEO Content Section 1 ═══ -->
+  <section class="section" aria-labelledby="seo1-title">
+    <div class="panel">
+      <h2 class="section-title" id="seo1-title">لماذا تختار <?= $name ?>؟</h2>
+      <div class="long-desc">
+        <p>تطبيق <strong><?= $name ?></strong> هو أحد أفضل التطبيقات في فئة <?= $cat ?: 'التطبيقات' ?> لنظام أندرويد. يوفر التطبيق تجربة مستخدم استثنائية مع واجهة سلسة وأداء سريع يناسب مختلف أجهزة أندرويد بدءاً من الإصدار <?= $android ?>.</p>
+        <p>يتميز <?= $name ?> بكونه مجانياً بالكامل، ويمكن تحميله بسهولة من موقع <?= htmlspecialchars($siteName,'UTF-8') ?> دون الحاجة إلى أي رسوم أو اشتراكات. التطبيق متوافق مع أحدث إصدارات أندرويد ويحصل على تحديثات منتظمة لضمان أفضل أداء وأمان.</p>
+        <p>الإصدار الحالي <?= $ver ? 'v'.$ver : '' ?> يأتي بتحسينات ملحوظة على الأداء والاستقرار، مع إضافة ميزات جديدة استجابةً لتعليقات المستخدمين. تجد على هذه الصفحة كل ما تحتاجه لتحميل وتثبيت التطبيق بشكل صحيح.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FAQ ═══ -->
+  <section class="section" aria-labelledby="faq-title">
+    <div class="panel">
+      <h2 class="section-title" id="faq-title">أسئلة شائعة حول <?= $name ?></h2>
+      <div class="faq-list" role="list"><?= $faqHtml ?></div>
+    </div>
+  </section>
+
+  <!-- ═══ SEO Content Section 2 ═══ -->
+  <section class="section" aria-labelledby="seo2-title">
+    <div class="panel">
+      <h2 class="section-title" id="seo2-title">متطلبات تشغيل <?= $name ?></h2>
+      <div class="long-desc">
+        <p>قبل تحميل تطبيق <?= $name ?>، تأكد من أن جهازك يستوفي المتطلبات التالية للحصول على أفضل تجربة:</p>
+        <ul style="list-style:disc;padding-right:20px;color:var(--muted);font-size:14px;line-height:2">
+          <li>نظام تشغيل أندرويد <?= $android ?> أو أحدث</li>
+          <?php if ($sizeMb): ?><li>مساحة تخزين حرة <?= $sizeMb ?> ميغابايت على الأقل</li><?php endif; ?>
+          <li>اتصال بالإنترنت (عند التحميل الأول)</li>
+          <li>السماح بتثبيت التطبيقات من مصادر غير معروفة (عند التثبيت من APK)</li>
+          <?php if ($dev): ?><li>المطور: <?= $dev ?></li><?php endif; ?>
+          <?php if ($pkg): ?><li>اسم الحزمة: <code><?= $pkg ?></code></li><?php endif; ?>
+        </ul>
+        <p style="margin-top:14px">إذا كان جهازك يستوفي هذه المتطلبات، يمكنك البدء في تحميل التطبيق بضغطة واحدة من الزر أعلاه.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SEO Content Section 3 — Detailed Guide ═══ -->
+  <section class="section" aria-labelledby="guide-title">
+    <div class="panel">
+      <h2 class="section-title" id="guide-title">دليل تفصيلي: كيفية تحميل وتثبيت <?= $name ?></h2>
+      <div class="long-desc">
+        <h3 style="font-size:16px;font-weight:700;margin:0 0 10px;color:var(--text)">الخطوة 1: التحضير</h3>
+        <p>قبل تحميل تطبيق <?= $name ?>، افتح إعدادات هاتفك واذهب إلى "الأمان" أو "الخصوصية". ابحث عن خيار "مصادر غير معروفة" أو "تثبيت تطبيقات غير معروفة" وقم بتفعيله. هذا الإعداد ضروري لتثبيت أي تطبيق من خارج متجر Google Play.</p>
+
+        <h3 style="font-size:16px;font-weight:700;margin:14px 0 10px;color:var(--text)">الخطوة 2: تحميل ملف APK</h3>
+        <p>اضغط على زر "تحميل <?= $name ?>" أعلاه. سيبدأ تحميل ملف APK تلقائياً على جهازك. قد تستغرق عملية التحميل بضع ثوانٍ إلى دقيقة بحسب سرعة اتصالك بالإنترنت. حجم الملف <?= $sizeMb ? $sizeMb.' MB' : 'خفيف' ?> وهو مثالي حتى للاتصالات الأبطأ.</p>
+
+        <h3 style="font-size:16px;font-weight:700;margin:14px 0 10px;color:var(--text)">الخطوة 3: التثبيت</h3>
+        <p>بعد اكتمال التحميل، ستجد إشعاراً في شريط الإشعارات. اضغط عليه لفتح ملف APK، أو انتقل إلى مجلد "التنزيلات" في مدير الملفات وافتح الملف من هناك. سيظهر مربع حوار التثبيت — اضغط "تثبيت" وانتظر ثوانٍ حتى تكتمل العملية.</p>
+
+        <h3 style="font-size:16px;font-weight:700;margin:14px 0 10px;color:var(--text)">الخطوة 4: تشغيل التطبيق</h3>
+        <p>بعد اكتمال التثبيت، ستجد أيقونة <?= $name ?> على شاشتك الرئيسية أو في قائمة التطبيقات. اضغط عليها لبدء الاستخدام. إذا طُلب منك منح أذونات للتطبيق، اقرأها بعناية واضغط "موافق" على الأذونات الضرورية.</p>
+
+        <h3 style="font-size:16px;font-weight:700;margin:14px 0 10px;color:var(--text)">نصائح مهمة</h3>
+        <p>• احرص دائماً على تحميل التطبيق من المصادر الموثوقة مثل <?= htmlspecialchars($siteName,'UTF-8') ?>.</p>
+        <p>• إذا واجهت مشكلة في التثبيت، حاول مسح ذاكرة التخزين المؤقت لمتجر Google Play ثم أعد المحاولة.</p>
+        <p>• تحقق دورياً من وجود تحديثات جديدة لضمان الحصول على أحدث الميزات وإصلاحات الأمان.</p>
+        <p>• في حال واجهت مشكلة في التثبيت على جهازك تحديداً، تأكد من أن نظام تشغيل أندرويد لديك يعادل <?= $android ?> أو أحدث.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Download CTA ═══ -->
+  <section class="section">
+    <div style="background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:var(--radius-lg);padding:36px;text-align:center;color:var(--white)">
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:10px">حمّل <?= $name ?> الآن مجاناً!</h2>
+      <p style="opacity:.9;font-size:14px;margin-bottom:22px">أحدث إصدار <?= $ver ? 'v'.$ver : '' ?> — <?= number_format($dlCount) ?> تحميل</p>
+      <a href="<?= $dlUrl ?>" class="btn-download" rel="nofollow" style="background:var(--white);color:var(--primary);max-width:300px;margin:0 auto;display:inline-flex;box-shadow:0 6px 20px rgba(0,0,0,.2)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+        تحميل مجاني
+      </a>
+    </div>
+  </section>
+
+  <!-- Ad slot 2 -->
+  <div class="ad-slot" style="min-height:90px">إعلان</div>
+
+</main>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<footer class="site-footer" role="contentinfo">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <div class="footer-col-title"><?= htmlspecialchars($siteName,'UTF-8') ?></div>
+        <p style="font-size:13px;line-height:1.7;max-width:220px">موقع عربي متخصص في تحميل تطبيقات وألعاب أندرويد مجاناً وبأمان تام.</p>
+      </div>
+      <div>
+        <div class="footer-col-title">روابط سريعة</div>
+        <ul class="footer-links">
+          <li><a href="<?= $siteUrl ?>/">الرئيسية</a></li>
+          <li><a href="<?= $siteUrl ?>/top?by=downloads">الأكثر تحميلاً</a></li>
+          <li><a href="<?= $siteUrl ?>/updates">آخر التحديثات</a></li>
+          <li><a href="<?= $siteUrl ?>/blog">المدونة</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-title">معلومات</div>
+        <ul class="footer-links">
+          <li><a href="<?= $siteUrl ?>/about">من نحن</a></li>
+          <li><a href="<?= $siteUrl ?>/contact">اتصل بنا</a></li>
+          <li><a href="<?= $siteUrl ?>/privacy-policy">سياسة الخصوصية</a></li>
+          <li><a href="<?= $siteUrl ?>/terms">شروط الاستخدام</a></li>
+          <li><a href="<?= $siteUrl ?>/dmca">DMCA</a></li>
+        </ul>
+      </div>
+      <?php if ($cat && $catSlug): ?>
+      <div>
+        <div class="footer-col-title">تصفح <?= $cat ?></div>
+        <ul class="footer-links">
+          <li><a href="<?= $siteUrl ?>/category/<?= $catSlug ?>">كل تطبيقات <?= $cat ?></a></li>
+          <li><a href="<?= $siteUrl ?>/top?by=downloads">الأكثر تحميلاً</a></li>
+          <li><a href="<?= $siteUrl ?>/updates">آخر الإصدارات</a></li>
+          <?php if ($dev && $devEnc): ?><li><a href="<?= $siteUrl ?>/developer/<?= $devEnc ?>">تطبيقات <?= $dev ?></a></li><?php endif; ?>
+        </ul>
+      </div>
+      <?php endif; ?>
+    </div>
+    <div class="footer-bottom">
+      <a href="<?= $siteUrl ?>/" class="footer-logo"><?= htmlspecialchars($siteName,'UTF-8') ?></a>
+      <p>&copy; <?= $year ?> <?= htmlspecialchars($siteName,'UTF-8') ?> — جميع الحقوق محفوظة</p>
+      <p><a href="<?= $appUrl ?>" style="color:#64748b">صفحة <?= $name ?></a></p>
+    </div>
+  </div>
+</footer>
+
+<script>
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var item=this.parentElement;
+    item.classList.toggle('open');
+  });
+});
+// Smooth anchor scroll for header links
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+  a.addEventListener('click',function(e){e.preventDefault();var t=document.querySelector(this.getAttribute('href'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});});
+});
+</script>
+</body>
+</html>
+<?php
+    return ob_get_clean();
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2824,6 +3406,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'package_name'      => trim($_POST['package_name'] ?? ''),
         'category_id'       => ($_POST['category_id'] ?? '') ?: null,
         'rating'            => (float)($_POST['rating'] ?? 4.5),
+        'rating_count'      => max(0, (int)($_POST['rating_count'] ?? 0)),
         'download_url'      => $downloadUrl,
         'mirror2_url'       => trim($_POST['mirror2_url'] ?? ''),
         'mirror3_url'       => trim($_POST['mirror3_url'] ?? ''),
@@ -3471,74 +4054,151 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_translate' && is_admin()) {
    AJAX: Play Store — enhanced import (screenshots + AI-fill)
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'fetch_playstore_full' && is_admin()) {
-    @set_time_limit(120);
+    @set_time_limit(180);
+    // Buffer all output so a PHP warning/notice can't corrupt the JSON response
+    ob_start();
     header('Content-Type: application/json');
-    $input = json_decode(file_get_contents('php://input'), true);
-    $src   = trim($input['url'] ?? '');
-    if (!$src || !preg_match('#^https://play\.google\.com/store/apps/details#', $src)) {
-        echo json_encode(['success'=>false,'error'=>'رابط Play Store غير صالح']); exit;
-    }
-    $meta = fetch_playstore_meta($src);
-    if (!$meta) { echo json_encode(['success'=>false,'error'=>'لم يتم العثور على بيانات من Play Store']); exit; }
-
-    // Download and save screenshots
-    $savedScreenshots = [];
-    $ssDir = UPLOAD_PATH . '/screenshots';
-    if (!is_dir($ssDir)) @mkdir($ssDir, 0755, true);
-    foreach (($meta['screenshot_urls'] ?? []) as $ssUrl) {
-        if (count($savedScreenshots) >= 6) break;
-        $ch = curl_init($ssUrl . '=w720-h1280-rw');
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>true]);
-        $bin = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-        if ($code === 200 && strlen($bin) > 1000) {
-            $fname = 'ps_' . md5($ssUrl) . '.webp';
-            $fpath = "$ssDir/$fname";
-            if (!file_exists($fpath)) file_put_contents($fpath, $bin);
-            $savedScreenshots[] = 'uploads/screenshots/' . $fname;
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $src   = trim($input['url'] ?? '');
+        if (!$src || !preg_match('#^https://play\.google\.com/store/apps/details#', $src)) {
+            ob_end_clean(); echo json_encode(['success'=>false,'error'=>'رابط Play Store غير صالح']); exit;
         }
-    }
 
-    // Download icon
-    $savedIcon = null;
-    if ($meta['icon_url']) {
-        $ch = curl_init($meta['icon_url'] . '=w512-h512-rw');
-        curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_FOLLOWLOCATION=>true]);
-        $bin = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-        if ($code === 200 && strlen($bin) > 500) {
-            $tmp = tempnam(sys_get_temp_dir(), 'psicn');
-            file_put_contents($tmp, $bin);
-            $fakeName = slugify($meta['name'] ?? 'app');
-            $fakeFile = ['tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>strlen($bin)];
-            $savedIcon = process_icon($fakeFile, $fakeName);
-            @unlink($tmp);
+        // Fetch with a realistic browser UA + Accept-Language to reduce Google anti-bot blocks
+        $psHeaders = [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language: ar-SA,ar;q=0.9,en;q=0.8',
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Cache-Control: no-cache',
+        ];
+        $ch = curl_init($src);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER => $psHeaders, CURLOPT_ENCODING => 'gzip, deflate',
+        ]);
+        $html = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if (!$html || $code !== 200) {
+            ob_end_clean();
+            $errMsg = $curlErr ? "خطأ اتصال: $curlErr" : "Google Play أعاد كود $code — قد تكون Google تمنع الوصول من هذا الخادم مؤقتاً. جرّب مجدداً أو أدخل البيانات يدوياً.";
+            echo json_encode(['success'=>false,'error'=>$errMsg]);
+            exit;
         }
-    }
 
-    // AI-generate pros/cons/whats_new/install_steps from description
-    $aiData = [];
-    if (!empty($meta['long_description'])) {
-        $prompt = 'أنت خبير تطبيقات. بناءً على الوصف التالي لتطبيق أندرويد اسمه "' . ($meta['name'] ?? 'تطبيق') . '"، أنشئ المحتوى التالي بالعربية واحترافية ضمن JSON صالح فقط:
+        // Extract og: meta tags the way fetch_playstore_meta does
+        $meta_fn = function(string $prop) use ($html): ?string {
+            if (preg_match('#<meta[^>]+property=["\']' . preg_quote($prop,'#') . '["\'][^>]+content=["\']([^"\']*)["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES,'UTF-8');
+            if (preg_match('#<meta[^>]+content=["\']([^"\']*)["\'][^>]+property=["\']' . preg_quote($prop,'#') . '["\']#i', $html, $m)) return html_entity_decode($m[1], ENT_QUOTES,'UTF-8');
+            return null;
+        };
+        $title = $meta_fn('og:title');
+        $desc  = $meta_fn('og:description');
+        $image = $meta_fn('og:image');
+
+        if (!$title && !$desc) {
+            ob_end_clean();
+            echo json_encode(['success'=>false,'error'=>'لم يتم العثور على بيانات التطبيق في الصفحة — قد تحتاج رابطاً مباشراً مثل: https://play.google.com/store/apps/details?id=com.example']);
+            exit;
+        }
+
+        $pkg = null;
+        if (preg_match('#[?&]id=([a-zA-Z0-9_.]+)#', $src, $m)) $pkg = $m[1];
+        if ($title) $title = trim(preg_replace('/\s*[-–]\s*(Apps on Google Play|تطبيقات على Google Play).*$/i', '', $title));
+        $developer = null;
+        if (preg_match('#/store/apps/developer\?id=[^"\']*["\'][^>]*>([^<]{2,60})</a>#u', $html, $m))
+            $developer = html_entity_decode(trim($m[1]), ENT_QUOTES,'UTF-8');
+        if (!$developer && preg_match('#"author"\s*:\s*\{\s*"@type"\s*:\s*"[^"]*"\s*,\s*"name"\s*:\s*"([^"]+)"#', $html, $m))
+            $developer = html_entity_decode($m[1], ENT_QUOTES,'UTF-8');
+        $version = null;
+        if (preg_match('#"softwareVersion"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+        if (!$version && preg_match('#"currentVersionName"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+        $androidReq = null;
+        if (preg_match('#"operatingSystem"\s*:\s*"([^"]{1,40})"#', $html, $m)) $androidReq = $m[1];
+        $screenshots = [];
+        if (preg_match_all('#\["(https://play-lh\.googleusercontent\.com/[^"]{20,})",[^]]*\[\d+,\d+\]#', $html, $ms)) {
+            foreach (array_unique($ms[1]) as $su) { if (count($screenshots) >= 6) break; $screenshots[] = $su; }
+        }
+        $meta = [
+            'name'              => $title,
+            'short_description' => $desc ? mb_substr($desc, 0, 300) : null,
+            'long_description'  => $desc,
+            'icon_url'          => $image,
+            'package_name'      => $pkg,
+            'playstore_url'     => $src,
+            'developer'         => $developer,
+            'version'           => $version,
+            'android_version'   => $androidReq,
+            'screenshot_urls'   => $screenshots,
+        ];
+
+        // Download and save screenshots
+        $savedScreenshots = [];
+        $ssDir = UPLOAD_PATH . '/screenshots';
+        if (!is_dir($ssDir)) @mkdir($ssDir, 0755, true);
+        foreach ($screenshots as $ssUrl) {
+            if (count($savedScreenshots) >= 6) break;
+            $ch2 = curl_init($ssUrl . '=w720-h1280-rw');
+            curl_setopt_array($ch2, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>true]);
+            $bin2 = curl_exec($ch2); $code2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE); curl_close($ch2);
+            if ($code2 === 200 && strlen($bin2) > 1000) {
+                $fname = 'ps_' . md5($ssUrl) . '.webp';
+                $fpath = "$ssDir/$fname";
+                if (!file_exists($fpath)) file_put_contents($fpath, $bin2);
+                $savedScreenshots[] = 'uploads/screenshots/' . $fname;
+            }
+        }
+
+        // Download icon
+        $savedIcon = null;
+        if ($image) {
+            $ch3 = curl_init($image . '=w512-h512-rw');
+            curl_setopt_array($ch3,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>true]);
+            $bin3 = curl_exec($ch3); $code3 = curl_getinfo($ch3, CURLINFO_HTTP_CODE); curl_close($ch3);
+            if ($code3 === 200 && strlen($bin3) > 500) {
+                $tmp = tempnam(sys_get_temp_dir(), 'psicn');
+                file_put_contents($tmp, $bin3);
+                $fakeName = slugify($meta['name'] ?? 'app');
+                $fakeFile = ['tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>strlen($bin3)];
+                $savedIcon = process_icon($fakeFile, $fakeName);
+                @unlink($tmp);
+            }
+        }
+
+        // AI-generate pros/cons/features/install_steps from description
+        $aiData = [];
+        if (!empty($meta['long_description'])) {
+            $aiPrompt = 'أنت خبير تطبيقات. بناءً على الوصف التالي لتطبيق أندرويد اسمه "' . ($meta['name'] ?? 'تطبيق') . '"، أنشئ المحتوى التالي بالعربية واحترافية ضمن JSON صالح فقط:
 {"pros":["إيجابية","إيجابية","إيجابية","إيجابية","إيجابية"],"cons":["سلبية","سلبية"],"whats_new":"ما الجديد في هذا التحديث","install_steps":["خطوة 1","خطوة 2","خطوة 3"],"features":["ميزة 1","ميزة 2","ميزة 3","ميزة 4","ميزة 5"]}
 
 الوصف:
 ' . mb_substr($meta['long_description'] ?? '', 0, 1500);
-        $raw = ai_text($pdo, $prompt, 1200, 45);
-        if ($raw) $aiData = ai_extract_json($raw) ?: [];
-    }
+            $rawAi = ai_text($pdo, $aiPrompt, 1200, 45);
+            if ($rawAi) $aiData = ai_extract_json($rawAi) ?: [];
+        }
 
-    $siteName = preg_replace('/[^a-z0-9]/i', '', get_cfg($pdo,'site_name','yassota'));
-    echo json_encode(array_merge($meta, [
-        'success'       => true,
-        'screenshots'   => $savedScreenshots,
-        'icon_path'     => $savedIcon,
-        'pros'          => $aiData['pros'] ?? [],
-        'cons'          => $aiData['cons'] ?? [],
-        'whats_new'     => $aiData['whats_new'] ?? '',
-        'install_steps' => $aiData['install_steps'] ?? [],
-        'features'      => $aiData['features'] ?? [],
-        'apk_brand_hint'=> strtolower($siteName) . '-' . slugify($meta['name'] ?? 'app') . '.apk',
-        'note'          => 'تم استيراد الأيقونة والصور والبيانات الكاملة من Play Store. رابط التحميل المباشر يحتاج إضافة يدوية.',
-    ]), JSON_UNESCAPED_UNICODE);
+        $siteName = preg_replace('/[^a-z0-9]/i', '', get_cfg($pdo,'site_name','yassota'));
+        $response = array_merge($meta, [
+            'success'        => true,
+            'screenshots'    => $savedScreenshots,
+            'icon_path'      => $savedIcon,
+            'pros'           => $aiData['pros'] ?? [],
+            'cons'           => $aiData['cons'] ?? [],
+            'whats_new'      => $aiData['whats_new'] ?? '',
+            'install_steps'  => $aiData['install_steps'] ?? [],
+            'features'       => $aiData['features'] ?? [],
+            'apk_brand_hint' => strtolower($siteName) . '-' . slugify($meta['name'] ?? 'app') . '.apk',
+            'note'           => 'تم استيراد الأيقونة والصور والبيانات الكاملة من Play Store. رابط التحميل المباشر يحتاج إضافة يدوية.',
+        ]);
+        ob_end_clean();
+        echo json_encode($response, JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        ob_end_clean();
+        echo json_encode(['success'=>false,'error'=>'خطأ داخلي: ' . $e->getMessage()]);
+    }
     exit;
 }
 
@@ -4231,8 +4891,18 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">التقييم</label>
+        <label class="form-label">التقييم (من 5)</label>
         <input class="form-input" id="f-rating" type="number" step="0.1" min="1" max="5" name="rating" value="<?= h($app['rating']??'4.5') ?>">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px">
+          عدد التقييمات
+          <span style="font-size:11px;color:var(--muted);font-weight:400" title="Google يعرض نجوم في نتائج البحث عند توفر هذا الحقل (يُنصح 50+)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+        </label>
+        <input class="form-input" type="number" min="0" name="rating_count" value="<?= h((int)($app['rating_count']??0)) ?>" placeholder="0 = يحسب تلقائياً">
+        <div class="form-hint">يظهر بجانب النجوم في نتائج Google — اتركه 0 للحساب التلقائي من التحميلات</div>
       </div>
       <div class="form-group full">
         <label class="form-label">ما الجديد في هذا الإصدار</label>

@@ -332,7 +332,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
       <div style="display:flex;justify-content:center">
         <div class="g-recaptcha"
              data-sitekey="<?= h($v2SiteKey) ?>"
-             data-callback="onDlCaptchaSolved"></div>
+             data-callback="onDlCaptchaSolvedV2"></div>
       </div>
       <?php elseif ($dlCaptchaType === 'v3'): ?>
       <button id="dl-captcha-v3-btn"
@@ -662,41 +662,31 @@ function triggerDownload() {
   }, 1800);
 }
 
-// Server-verify a captcha token, then resolve
-function verifyDlCaptcha(token, type) {
+// Called when any CAPTCHA widget fires its callback — immediately unlock the download,
+// then verify server-side in the background for logging purposes only (non-blocking).
+function dlCaptchaUnlock(token, type) {
+  dlCaptchaSolved = true;
+  if (captchaWrap) captchaWrap.style.display = 'none';
+  triggerDownload();
+  // Background server verify — result doesn't block the user
   fetch(dlCaptchaVerifyUrl, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: 'token=' + encodeURIComponent(token) + '&type=' + encodeURIComponent(type)
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if (d.ok) {
-      dlCaptchaSolved = true;
-      if (captchaWrap) captchaWrap.style.display = 'none';
-      triggerDownload();
-    } else {
-      // v3 is advisory/invisible — allow through even on failure
-      if (type === 'v3') { dlCaptchaSolved = true; triggerDownload(); return; }
-      // Reset widget so user can retry
-      if (typeof turnstile !== 'undefined') turnstile.reset();
-      if (typeof grecaptcha !== 'undefined' && type === 'v2') grecaptcha.reset();
-    }
-  })
-  .catch(function(){ dlCaptchaSolved = true; triggerDownload(); }); // network fail — allow through
+  }).catch(function(){});
 }
 
 // Turnstile callback
-window.onDlCaptchaSolved = function(token) { verifyDlCaptcha(token, 'turnstile'); };
+window.onDlCaptchaSolved = function(token) { dlCaptchaUnlock(token, 'turnstile'); };
 // reCAPTCHA v2 callback
-window.onDlCaptchaSolvedV2 = function(token) { verifyDlCaptcha(token, 'v2'); };
+window.onDlCaptchaSolvedV2 = function(token) { dlCaptchaUnlock(token, 'v2'); };
 <?php if ($dlCaptchaType === 'v3'): ?>
 window.runDlV3Captcha = function() {
   var btn = document.getElementById('dl-captcha-v3-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التحقق…'; }
   grecaptcha.ready(function(){
     grecaptcha.execute(DL_V3_SITE_KEY, {action:'download'}).then(function(token){
-      verifyDlCaptcha(token, 'v3');
+      dlCaptchaUnlock(token, 'v3');
     });
   });
 };

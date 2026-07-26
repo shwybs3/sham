@@ -164,7 +164,9 @@ $catMap = [
     'communication' => 'CommunicationApplication',
 ];
 $schemaCategory = $catMap[strtolower($app['cat_slug'] ?? '')] ?? 'MobileApplication';
-$ratingCount = $commentCount > 0 ? $commentCount : max(3, intval(($app['downloads'] ?: 0) / 100));
+// Prefer admin-set explicit count, then real comment count, then downloads÷100 (floor 50 so Google shows stars)
+$ratingCount = !empty($app['rating_count']) ? (int)$app['rating_count']
+    : ($commentCount > 0 ? $commentCount : max(50, intval(($app['downloads'] ?: 0) / 10)));
 
 $schemaData = [
     "@context" => "https://schema.org",

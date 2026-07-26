@@ -19,7 +19,8 @@ Disallow: /config.php
 # Uploaded cache fragments — internal only
 Disallow: /uploads/.cache/
 
-# AJAX / internal API endpoints — no standalone crawl value
+# Internal AJAX / tracking endpoints — no standalone crawl value
+# (These are XHR endpoints called by JS, not content pages)
 Disallow: /search-suggest.php
 Disallow: /comment-form.php
 Disallow: /track-view.php
@@ -28,14 +29,14 @@ Disallow: /track-view.php
 Disallow: /?q=
 Disallow: /*?q=
 
-# Pagination duplicates — keep paginated index pages out; app detail pages are fine
-# (Googlebot can still discover them via the sitemap and internal links)
+# Pagination duplicates — content pages are fine, just limit paginated index
 Disallow: /?page=
 
-# Legacy .php direct access — site uses clean URLs, .php are redirected
+# Direct PHP file access — site uses clean URLs via .htaccess rewrites.
+# Note: /download.php is intentionally NOT blocked so Googlebot can follow
+# download clean URLs (/app-slug/download) which rewrite to it.
 Disallow: /index.php
 Disallow: /app.php
-Disallow: /download.php
 
 # ── AdsBot — Google requires a separate rule for ad crawlers ─────────────────
 User-agent: AdsBot-Google

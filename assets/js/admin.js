@@ -450,10 +450,13 @@ document.addEventListener('DOMContentLoaded', () => {
         fillFromPs('cons-list', 'cons', data.cons);
         fillFromPs('steps-list', 'install_steps', data.install_steps);
 
-        // Icon — prefer locally saved path, fall back to remote URL
+        // Icon — prefer locally saved path (served from our host), fall back to remote Play Store URL
         if (data.icon_path) {
           const preview = document.getElementById('icon-preview');
-          if (preview) { preview.src = data.icon_path; preview.style.display = 'block'; }
+          // icon_path is a relative server path like "uploads/icons/app-abc123.webp"
+          // Prefix with site root so the preview src is absolute
+          const iconSrc = data.icon_path.startsWith('http') ? data.icon_path : '/' + data.icon_path;
+          if (preview) { preview.src = iconSrc; preview.style.display = 'block'; }
           let hidden = document.querySelector('[name=icon_saved_import]');
           if (!hidden) { hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='icon_saved_import'; document.querySelector('form').appendChild(hidden); }
           hidden.value = data.icon_path;
