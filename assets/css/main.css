@@ -70,8 +70,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
 body {
+  font-family: 'Tajawal', sans-serif;
   font-family: var(--f-body);
+  background: #f4f7fb;
   background: var(--bg);
+  color: #0f172a;
   color: var(--text);
   direction: rtl;
   line-height: 1.65;
@@ -346,7 +349,7 @@ button, input, select, textarea { font-family: inherit; }
 /* Dark overlay behind the drawer */
 .mobile-nav-overlay {
   position: fixed;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   z-index: 400;
   background: rgba(15,23,42,.45);
   display: none;
@@ -505,7 +508,7 @@ button, input, select, textarea { font-family: inherit; }
 .app-card::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, rgba(124,58,237,.04), rgba(14,165,233,.04));
   opacity: 0;
@@ -530,7 +533,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 .app-card-img-wrap img {
   position: absolute;
-  inset: 0;
+  top:0;right:0;bottom:0;left:0;
   width: 100%;
   height: 100%;
   object-fit: cover;

@@ -89,4 +89,17 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   }
   ?>
 
+  <!-- Web Tools (subdomains — included here for reference; each subdomain has its own sitemap) -->
+  <?php
+  $toolSlugs = ['compress','resize','qr','pass','colors','encode','words','whatsapp','write','hashtag'];
+  $toolsDomain = defined('SITE_URL') ? SITE_URL : '';
+  foreach ($toolSlugs as $ts) {
+      echo "  <url>\n";
+      echo "    <loc>" . $toolsDomain . "/tools/" . $ts . "/</loc>\n";
+      echo "    <changefreq>monthly</changefreq>\n";
+      echo "    <priority>0.7</priority>\n";
+      echo "  </url>\n";
+  }
+  ?>
+
 </urlset>

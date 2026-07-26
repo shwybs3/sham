@@ -693,8 +693,10 @@ function wave(): string {
     window._dlMidStart = start;
     // Auto-trigger when scrolled into view
     if('IntersectionObserver' in window){
-      var obs = new IntersectionObserver(function(e){ if(e[0].isIntersecting){ start(); obs.disconnect(); }},{threshold:0.2});
+      var obs = new IntersectionObserver(function(e){ if(e[0]&&e[0].isIntersecting){ start(); obs.disconnect(); }},{threshold:0.2});
       obs.observe(btn);
+    } else {
+      setTimeout(start, 800);
     }
   })();
   </script>
@@ -896,19 +898,24 @@ function wave(): string {
           btn2.disabled = false;
           btn2.style.cssText = 'display:inline-flex;align-items:center;gap:12px;padding:15px 36px;border-radius:50px;font-family:var(--f-head);font-size:17px;font-weight:900;border:none;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:all .3s;box-shadow:0 6px 20px rgba(37,99,235,.28);min-width:260px;justify-content:center';
           if (labelEl) labelEl.textContent = 'اضغط هنا للتحميل';
+          var btn2Fired = false;
           btn2.addEventListener('click', function(){
+            if (btn2Fired) return; btn2Fired = true;
             var href = btn2.getAttribute('data-href');
             if (href) { window.location.href = href; }
-          }, {once:true});
+          });
         }
       }, 1000);
     }
     // Auto-start when element enters viewport
     if ('IntersectionObserver' in window) {
       var obs = new IntersectionObserver(function(entries){
-        if (entries[0].isIntersecting) { startCountdown(); obs.disconnect(); }
+        if (entries[0] && entries[0].isIntersecting) { startCountdown(); obs.disconnect(); }
       }, {threshold:0.1});
       obs.observe(btn2);
+    } else {
+      // Fallback for browsers without IntersectionObserver (Opera Mini, old Firefox)
+      setTimeout(startCountdown, 800);
     }
     // Also trigger from Button 1 click
     window._dlBtn2Countdown = startCountdown;

@@ -14,15 +14,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ── Comment form: fetched fresh per visitor instead of being baked into
-     app.php's shared page cache, so the CSRF token always matches the
-     actual visitor's own session. ── */
-  const commentSlot = document.getElementById('comment-form-slot');
+  /* ── Comment form: fetched fresh per visitor (CSRF token must be per-session) ── */
+  var commentSlot = document.getElementById('comment-form-slot');
   if (commentSlot) {
-    fetch('comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug))
-      .then(r => r.ok ? r.text() : Promise.reject())
-      .then(html => { commentSlot.innerHTML = html; })
-      .catch(() => { commentSlot.innerHTML = '<p style="color:var(--danger);font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
+    if (typeof fetch !== 'undefined') {
+      fetch('comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''))
+        .then(function(r){ return r.ok ? r.text() : Promise.reject(); })
+        .then(function(html){ commentSlot.innerHTML = html; })
+        .catch(function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
+    } else {
+      // Fallback for very old browsers without fetch
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''));
+      xhr.onload = function(){ if (xhr.status === 200) commentSlot.innerHTML = xhr.responseText; };
+      xhr.onerror = function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم.</p>'; };
+      xhr.send();
+    }
   }
 
   /* ── Ad zones: stay hidden (zero space) until AdSense actually fills the
@@ -249,28 +256,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ── Smooth card hover ripple ── */
-  document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(el => {
+  document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(function(el) {
     el.addEventListener('click', function (e) {
-      const ripple = document.createElement('span');
-      const rect = this.getBoundingClientRect();
-      ripple.style.cssText = `
-        position:absolute;border-radius:50%;
-        width:100px;height:100px;
-        top:${e.clientY - rect.top - 50}px;
-        left:${e.clientX - rect.left - 50}px;
-        background:rgba(37,99,235,.12);
-        transform:scale(0);
-        animation:ripple .5s ease forwards;
-        pointer-events:none;
-      `;
+      var ripple = document.createElement('span');
+      var rect = this.getBoundingClientRect();
+      ripple.style.cssText = 'position:absolute;border-radius:50%;width:100px;height:100px;top:' + (e.clientY - rect.top - 50) + 'px;left:' + (e.clientX - rect.left - 50) + 'px;background:rgba(37,99,235,.12);transform:scale(0);animation:ripple .5s ease forwards;pointer-events:none';
       if (getComputedStyle(this).position === 'static') this.style.position = 'relative';
       this.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 500);
+      setTimeout(function(){ if (ripple.parentNode) ripple.parentNode.removeChild(ripple); }, 500);
     });
   });
-});
 
-/* Global ripple keyframe */
-const style = document.createElement('style');
-style.textContent = '@keyframes ripple{to{transform:scale(4);opacity:0}}';
-document.head.appendChild(style);
+  /* Ripple keyframe */
+  var rippleStyle = document.createElement('style');
+  rippleStyle.textContent = '@keyframes ripple{to{transform:scale(4);opacity:0}}';
+  if (document.head) document.head.appendChild(rippleStyle);
+});

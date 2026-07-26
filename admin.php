@@ -4587,6 +4587,7 @@ $navLinks = [
     'html-pages'  => ['label'=>'صفحات HTML للفهرسة', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
     'landing-pages' => ['label'=>'صفحات الهبوط (Landing)', 'icon'=>'M4 4h16v4H4V4zm0 7h16v7a2 2 0 01-2 2H6a2 2 0 01-2-2v-7z'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
+    'tools-manager' => ['label'=>'أدوات الويب (Subdomains)', 'icon'=>'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
 ];
@@ -8767,6 +8768,133 @@ function addResultRow(r) {
     : '<td>—</td>';
   tr.innerHTML = `<td style="font-family:monospace;font-size:12px">${r.pkg}</td><td>${r.name || '—'}</td>${statusCell}${linkCell}`;
   tbody.appendChild(tr);
+}
+</script>
+
+<?php
+/* ─────────────── WEB TOOLS SUBDOMAIN MANAGER ─────────────── */
+elseif ($page === 'tools-manager'):
+$webTools = [
+  ['slug'=>'compress','name'=>'ضاغط الصور','desc'=>'ضغط JPG/PNG/WebP وتحويلها إلى WebP'],
+  ['slug'=>'resize',  'name'=>'تغيير حجم الصورة','desc'=>'تغيير أبعاد الصور مع الحفاظ على الجودة'],
+  ['slug'=>'qr',      'name'=>'مولّد QR Code','desc'=>'توليد رموز QR من أي نص أو رابط'],
+  ['slug'=>'pass',    'name'=>'مولّد كلمات المرور','desc'=>'كلمات مرور قوية وآمنة'],
+  ['slug'=>'colors',  'name'=>'منتقي الألوان','desc'=>'لوحة ألوان متناسقة مع HEX/RGB/HSL'],
+  ['slug'=>'encode',  'name'=>'مشفّر Base64/URL','desc'=>'تشفير وفك تشفير النصوص وحساب Hash'],
+  ['slug'=>'words',   'name'=>'عدّاد الكلمات','desc'=>'تحليل النصوص العربية إحصائياً'],
+  ['slug'=>'whatsapp','name'=>'روابط واتساب','desc'=>'إنشاء روابط واتساب مباشرة بدون حفظ'],
+  ['slug'=>'write',   'name'=>'كاتب المحتوى AI','desc'=>'توليد محتوى عربي بالذكاء الاصطناعي'],
+  ['slug'=>'hashtag', 'name'=>'مولّد الهاشتاق AI','desc'=>'هاشتاقات إنستغرام وتيك توك بالذكاء الاصطناعي'],
+];
+$siteUrl = rtrim(get_cfg($pdo,'site_url') ?: 'https://yassota.com', '/');
+$domain  = parse_url($siteUrl, PHP_URL_HOST) ?: 'yassota.com';
+$docRoot = rtrim(get_cfg($pdo,'server_doc_root') ?: '/home/'.get_cfg($pdo,'cpanel_user').'/public_html', '/');
+?>
+
+<div class="admin-header">
+  <h1>أدوات الويب (Subdomains)</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">إدارة أدوات الويب المثبّتة على نطاقات فرعية — تأكد من ضبط بيانات cPanel في الإعدادات أولاً</p>
+</div>
+
+<div class="panel" style="margin-bottom:20px">
+  <h3 style="margin:0 0 16px;font-size:15px">إعدادات النطاق</h3>
+  <div style="background:var(--bg);border-radius:8px;padding:14px;font-size:13px">
+    <div>النطاق الرئيسي: <strong><?= htmlspecialchars($domain) ?></strong></div>
+    <div style="margin-top:4px">الدليل الجذري: <code style="font-family:monospace;font-size:12px"><?= htmlspecialchars($docRoot) ?></code></div>
+    <div style="margin-top:8px;color:var(--muted)">كل أداة ستكون على نطاق فرعي: <strong>slug.<?= htmlspecialchars($domain) ?></strong> تُشير إلى <code style="font-family:monospace;font-size:12px"><?= htmlspecialchars($docRoot) ?>/tools/slug/</code></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0;font-size:15px">قائمة الأدوات (<?= count($webTools) ?> أدوات)</h3>
+    <button class="btn" onclick="registerAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+      تسجيل جميع النطاقات الفرعية
+    </button>
+  </div>
+
+  <div style="overflow-x:auto">
+    <table class="admin-table" style="min-width:600px">
+      <thead><tr>
+        <th>الأداة</th>
+        <th>النطاق الفرعي</th>
+        <th>المسار</th>
+        <th>الإجراء</th>
+      </tr></thead>
+      <tbody>
+        <?php foreach ($webTools as $t): $sub = $t['slug'].'.'.$domain; ?>
+        <tr id="tr-<?= $t['slug'] ?>">
+          <td>
+            <strong><?= htmlspecialchars($t['name']) ?></strong>
+            <div style="font-size:11px;color:var(--muted)"><?= htmlspecialchars($t['desc']) ?></div>
+          </td>
+          <td>
+            <a href="https://<?= htmlspecialchars($sub) ?>/" target="_blank" style="color:var(--accent);font-family:monospace;font-size:13px">
+              <?= htmlspecialchars($sub) ?>
+            </a>
+          </td>
+          <td><code style="font-family:monospace;font-size:11px;color:var(--muted)">/tools/<?= htmlspecialchars($t['slug']) ?>/</code></td>
+          <td>
+            <button class="btn btn-sm" onclick="registerSub('<?= $t['slug'] ?>')" id="btn-<?= $t['slug'] ?>">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              تسجيل النطاق
+            </button>
+            <span id="status-<?= $t['slug'] ?>" style="font-size:12px;margin-right:8px"></span>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <div id="reg-log" style="margin-top:16px;font-size:12px;font-family:monospace;background:var(--bg);border-radius:8px;padding:12px;display:none;max-height:200px;overflow-y:auto;white-space:pre-wrap"></div>
+</div>
+
+<script>
+function registerSub(slug) {
+  var btn = document.getElementById('btn-'+slug);
+  var st  = document.getElementById('status-'+slug);
+  btn.disabled = true;
+  btn.textContent = '…';
+  st.textContent = '';
+  var fd = new FormData();
+  fd.append('ajax','create_subdomain');
+  fd.append('subdomain', slug);
+  fetch('admin.php', {method:'POST', body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.ok) {
+        btn.style.background = '#22c55e';
+        btn.textContent = '✓ مُسجَّل';
+        st.style.color = '#22c55e';
+        st.textContent = 'نجح';
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'إعادة المحاولة';
+        st.style.color = '#ef4444';
+        st.textContent = d.error || 'فشل';
+      }
+      var log = document.getElementById('reg-log');
+      log.style.display = 'block';
+      log.textContent += '['+slug+'] ' + JSON.stringify(d) + '\n';
+    })
+    .catch(function(e){
+      btn.disabled = false;
+      btn.textContent = 'إعادة المحاولة';
+      st.style.color = '#ef4444';
+      st.textContent = 'خطأ في الشبكة';
+    });
+}
+function registerAll() {
+  var slugs = <?= json_encode(array_column($webTools, 'slug')) ?>;
+  var i = 0;
+  function next() {
+    if (i >= slugs.length) return;
+    registerSub(slugs[i]);
+    i++;
+    setTimeout(next, 1200);
+  }
+  next();
 }
 </script>
 
