@@ -4473,6 +4473,34 @@ $navLinks = [
 <?php if ($error): ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
 
 <?php
+/* ─── SEO field quality helpers (needed by add-app/edit-app form) ─── */
+if (!function_exists('seoBarColor')) {
+    function seoBarColor(int $len, int $good_min, int $good_max): string {
+        if ($len === 0) return '#6b7280';
+        if ($len < $good_min * 0.6) return '#ef4444';
+        if ($len < $good_min) return '#f59e0b';
+        return '#22c55e';
+    }
+}
+if (!function_exists('seoTitleHint')) {
+    function seoTitleHint(int $len): string {
+        if ($len === 0) return 'أدخل عنوان SEO — الطول المثالي 50–60 حرفاً';
+        if ($len < 30)  return '⚠ قصير جداً — محركات البحث تفضّل 50–60 حرفاً';
+        if ($len < 50)  return '🟡 مقبول — الطول المثالي بين 50 و60 حرفاً';
+        if ($len <= 60) return '✅ ممتاز — طول مثالي لمحركات البحث';
+        return '🔴 تجاوز الحد (60 حرفاً) — سيُقطع في نتائج البحث';
+    }
+}
+if (!function_exists('seoDescHint')) {
+    function seoDescHint(int $len): string {
+        if ($len === 0) return 'أدخل وصف Meta Description — الطول المثالي 120–160 حرفاً';
+        if ($len < 50)  return '⚠ قصير جداً — محركات البحث تفضّل 120–160 حرفاً';
+        if ($len < 120) return '🟡 مقبول — الطول المثالي بين 120 و160 حرفاً';
+        if ($len <= 160) return '✅ ممتاز — طول مثالي لمحركات البحث';
+        return '🔴 تجاوز الحد (160 حرفاً) — سيُقطع في نتائج البحث';
+    }
+}
+
 /* ─────────────── DASHBOARD ─────────────── */
 if ($page === 'dashboard'): ?>
 
@@ -4644,27 +4672,6 @@ elseif ($page === 'apps'):
 
 <?php
 /* ─────────────── ADD / EDIT APP ─────────────── */
-// SEO field quality helpers (used only inside this block, defined once)
-function seoBarColor(int $len, int $good_min, int $good_max): string {
-    if ($len === 0) return '#6b7280';
-    if ($len < $good_min * 0.6) return '#ef4444';
-    if ($len < $good_min) return '#f59e0b';
-    return '#22c55e';
-}
-function seoTitleHint(int $len): string {
-    if ($len === 0) return 'أدخل عنوان SEO — الطول المثالي 50–60 حرفاً';
-    if ($len < 30)  return '⚠ قصير جداً — محركات البحث تفضّل 50–60 حرفاً';
-    if ($len < 50)  return '🟡 مقبول — الطول المثالي بين 50 و60 حرفاً';
-    if ($len <= 60) return '✅ ممتاز — طول مثالي لمحركات البحث';
-    return '🔴 تجاوز الحد (60 حرفاً) — سيُقطع في نتائج البحث';
-}
-function seoDescHint(int $len): string {
-    if ($len === 0) return 'أدخل وصف Meta Description — الطول المثالي 120–160 حرفاً';
-    if ($len < 50)  return '⚠ قصير جداً — محركات البحث تفضّل 120–160 حرفاً';
-    if ($len < 120) return '🟡 مقبول — الطول المثالي بين 120 و160 حرفاً';
-    if ($len <= 160) return '✅ ممتاز — طول مثالي لمحركات البحث';
-    return '🔴 تجاوز الحد (160 حرفاً) — سيُقطع في نتائج البحث';
-}
 elseif ($page === 'add-app' || $page === 'edit-app'):
   $app = $editApp;
   $isEdit = $page === 'edit-app' && $app;
