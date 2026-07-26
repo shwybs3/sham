@@ -3276,7 +3276,8 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
               'recaptcha_v3_site_key','recaptcha_v3_secret',
               'turnstile_site_key','turnstile_secret_key',
               'cpanel_api_url','cpanel_user','cpanel_api_token','cpanel_docroot_base',
-              'cpanel_method',
+              'cpanel_method','server_ip',
+              'namecheap_api_user','namecheap_api_key','namecheap_client_ip',
               'google_indexing_type'] as $k) {
         if (isset($_POST[$k])) set_cfg($pdo, $k, trim($_POST[$k]));
     }
@@ -5432,56 +5433,118 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_site_settings' && is_admin
 }
 
 /* ══════════════════════════════════════════════════════
-   AJAX: cPanel — add addon domain to the server
+   AJAX: cPanel — smart addon domain add with fallback
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'cpanel_addon_domain' && is_admin()) {
     header('Content-Type: application/json');
-    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
-    $domain = trim($input['domain'] ?? '');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $domain  = strtolower(trim($input['domain'] ?? ''));
     $docRoot = trim($input['doc_root'] ?? '');
     if (!$domain) { echo json_encode(['ok'=>false,'error'=>'النطاق مطلوب']); exit; }
 
-    $apiUrl  = rtrim(get_cfg($pdo,'cpanel_url',''), '/') ?: 'https://localhost:2083';
-    $token   = get_cfg($pdo,'cpanel_api_token','');
-    $user    = get_cfg($pdo,'cpanel_user','');
+    $apiUrl = rtrim(get_cfg($pdo,'cpanel_url',''), '/') ?: 'https://localhost:2083';
+    $token  = get_cfg($pdo,'cpanel_api_token','');
+    $user   = get_cfg($pdo,'cpanel_user','');
     if (!$token || !$user) { echo json_encode(['ok'=>false,'error'=>'أدخل بيانات cPanel في الإعدادات (cpanel_url, cpanel_api_token, cpanel_user)']); exit; }
 
-    // If no docroot given, use public_html subdirectory named after the domain
-    if (!$docRoot) $docRoot = 'public_html/' . preg_replace('/[^a-z0-9\-\.]/', '', strtolower($domain));
+    if (!$docRoot) $docRoot = 'public_html/' . preg_replace('/[^a-z0-9\-\.]/', '', $domain);
+    $hdrs  = ["Authorization: cpanel {$user}:{$token}"];
+    $steps = [];
 
+    // Step 1: Check if domain is already added
+    $ch = curl_init("{$apiUrl}/execute/AddonDomain/list_addeddomains?regex=" . urlencode("^{$domain}$"));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_HTTPHEADER=>$hdrs]);
+    $listData = @json_decode(curl_exec($ch), true);
+    curl_close($ch);
+
+    $alreadyExists = false;
+    foreach ($listData['data'] ?? [] as $d) {
+        if (strtolower($d['domain'] ?? '') === $domain) { $alreadyExists = true; break; }
+    }
+
+    if ($alreadyExists) {
+        $steps[] = ['step'=>'check','status'=>'info','msg'=>'النطاق موجود بالفعل في cPanel'];
+        $pdo->prepare("UPDATE domains SET status='active', doc_root=? WHERE full_domain=?")->execute([$docRoot, $domain]);
+        echo json_encode(['ok'=>true,'already_exists'=>true,'steps'=>$steps,'doc_root'=>$docRoot,'msg'=>'النطاق مضاف مسبقاً في cPanel']);
+        exit;
+    }
+    $steps[] = ['step'=>'check','status'=>'ok','msg'=>'النطاق غير مضاف — جارٍ الإضافة'];
+
+    // Step 2: Try to add the addon domain
     $ch = curl_init("{$apiUrl}/execute/AddonDomain/addaddondomain");
     curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER => ["Authorization: cpanel {$user}:{$token}"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query([
-            'newdomain'       => $domain,
-            'subdomain'       => explode('.', $domain)[0],
-            'dir'             => $docRoot,
+        CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>30,
+        CURLOPT_SSL_VERIFYPEER=>false, CURLOPT_HTTPHEADER=>$hdrs,
+        CURLOPT_POST=>true,
+        CURLOPT_POSTFIELDS=>http_build_query(['newdomain'=>$domain,'subdomain'=>explode('.',$domain)[0],'dir'=>$docRoot]),
+    ]);
+    $addRes   = curl_exec($ch);
+    $addCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $addCurlErr = curl_error($ch);
+    curl_close($ch);
+
+    $addData   = @json_decode($addRes, true);
+    $addStatus = (int)($addData['status'] ?? 0);
+    $addReason = $addData['result'][0]['reason'] ?? ($addData['errors'][0] ?? '');
+
+    if (!$addCurlErr && stripos($addReason, 'exist') !== false) {
+        $steps[] = ['step'=>'add_addon','status'=>'info','msg'=>"النطاق موجود مسبقاً: {$addReason}"];
+        $pdo->prepare("UPDATE domains SET status='active', doc_root=? WHERE full_domain=?")->execute([$docRoot, $domain]);
+        echo json_encode(['ok'=>true,'already_exists'=>true,'steps'=>$steps,'doc_root'=>$docRoot,'msg'=>'النطاق مضاف مسبقاً']);
+        exit;
+    }
+
+    if (!$addCurlErr && ($addStatus === 1 || $addCode === 200)) {
+        $steps[] = ['step'=>'add_addon','status'=>'ok','msg'=>'تم إضافة النطاق إلى cPanel: ' . ($addReason ?: 'نجح')];
+        $svrRoot = rtrim(get_cfg($pdo,'server_doc_root',''), '/');
+        $absRoot = $svrRoot ? "{$svrRoot}/{$docRoot}" : $docRoot;
+        $pdo->prepare("UPDATE domains SET status='active', doc_root=? WHERE full_domain=?")->execute([$absRoot, $domain]);
+        echo json_encode(['ok'=>true,'steps'=>$steps,'doc_root'=>$docRoot,'msg'=>$addReason ?: 'تم الإضافة بنجاح']);
+        exit;
+    }
+
+    $steps[] = ['step'=>'add_addon','status'=>'error','msg'=>'فشل الإضافة: ' . ($addCurlErr ?: $addReason ?: 'خطأ غير معروف')];
+
+    // DNS diagnostic
+    $serverIp = get_cfg($pdo,'server_ip','');
+    if ($serverIp) {
+        $domainIp = @gethostbyname($domain);
+        if ($domainIp && $domainIp !== $domain) {
+            $steps[] = ['step'=>'dns_check','status'=>($domainIp===$serverIp?'ok':'warning'),
+                'msg'=>$domainIp===$serverIp ? "DNS يشير بالفعل إلى سيرفرك ({$serverIp})" : "DNS يشير إلى {$domainIp} وليس {$serverIp} — أضف A Record أولاً"];
+        } else {
+            $steps[] = ['step'=>'dns_check','status'=>'warning','msg'=>"لا توجد سجلات DNS — أضف A Record يشير إلى {$serverIp}"];
+        }
+    }
+
+    // Fallback: try creating as a subdomain of the hosting account
+    $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>20,
+        CURLOPT_SSL_VERIFYPEER=>false, CURLOPT_HTTPHEADER=>$hdrs,
+        CURLOPT_POST=>true,
+        CURLOPT_POSTFIELDS=>http_build_query([
+            'domain'=>explode('.',$domain)[0],
+            'rootdomain'=>implode('.', array_slice(explode('.',$domain),1)),
+            'dir'=>$docRoot,
         ]),
     ]);
-    $res  = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err  = curl_error($ch);
+    $subData = @json_decode(curl_exec($ch), true);
     curl_close($ch);
-    if ($err) { echo json_encode(['ok'=>false,'error'=>$err]); exit; }
 
-    $data = @json_decode($res, true);
-    if (($data['status'] ?? 0) == 1 || $code === 200) {
-        // Mark domain as active + store docroot in domains table if it exists
-        $pdo->prepare("UPDATE domains SET status='active', doc_root=? WHERE full_domain=?")
-            ->execute([($svrRoot = rtrim(get_cfg($pdo,'server_doc_root',''), '/')) . '/' . $docRoot, $domain]);
-        echo json_encode(['ok'=>true,'doc_root'=>$docRoot,'msg'=>$data['result'][0]['reason'] ?? 'تم إضافة الدومين بنجاح']);
-    } else {
-        $reason = $data['result'][0]['reason'] ?? ($data['errors'][0] ?? 'خطأ غير معروف');
-        echo json_encode(['ok'=>false,'error'=>$reason,'raw'=>$res]);
+    if ((int)($subData['status'] ?? 0) === 1) {
+        $steps[] = ['step'=>'fallback_subdomain','status'=>'ok','msg'=>'تم إضافة النطاق كـ subdomain بديلاً'];
+        $pdo->prepare("UPDATE domains SET status='active', doc_root=? WHERE full_domain=?")->execute([$docRoot, $domain]);
+        echo json_encode(['ok'=>true,'fallback'=>'subdomain','steps'=>$steps,'doc_root'=>$docRoot,'msg'=>'تم الإضافة (عبر subdomain fallback)']);
+        exit;
     }
+    $steps[] = ['step'=>'fallback_subdomain','status'=>'error','msg'=>'الإضافة كـ subdomain فشلت أيضاً — تأكد من صلاحيات API'];
+    echo json_encode(['ok'=>false,'steps'=>$steps,'error'=>$addCurlErr ?: $addReason ?: 'تعذرت إضافة النطاق — تأكد من DNS وصلاحيات cPanel API']);
     exit;
 }
 
 /* ══════════════════════════════════════════════════════
-   AJAX: cPanel — install Let's Encrypt SSL on a domain
+   AJAX: cPanel — smart SSL install with full fallback chain
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'cpanel_ssl_install' && is_admin()) {
     header('Content-Type: application/json');
@@ -5494,42 +5557,389 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'cpanel_ssl_install' && is_admin()
     $user   = get_cfg($pdo,'cpanel_user','');
     if (!$token || !$user) { echo json_encode(['ok'=>false,'error'=>'أدخل بيانات cPanel في الإعدادات']); exit; }
 
-    // Try cPanel LetsEncrypt plugin first, fall back to AutoSSL
-    $endpoints = [
-        "{$apiUrl}/execute/SSL/install_ssl",
-        "{$apiUrl}/execute/LetsEncrypt/install",
-        "{$apiUrl}/execute/LetsEncrypt/request_ssl_for_domain",
-    ];
-    $result = null;
-    foreach ($endpoints as $ep) {
-        $ch = curl_init($ep);
+    $hdrs  = ["Authorization: cpanel {$user}:{$token}"];
+    $steps = [];
+
+    // Helper: single cPanel UAPI call
+    $cpCall = function(string $ep, array $params=[], string $method='POST') use ($apiUrl, $hdrs): array {
+        $url = "{$apiUrl}/execute/{$ep}";
+        if ($method==='GET' && $params) $url .= '?' . http_build_query($params);
+        $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => ["Authorization: cpanel {$user}:{$token}"],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query(['domain' => $domain]),
+            CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>30,
+            CURLOPT_SSL_VERIFYPEER=>false, CURLOPT_HTTPHEADER=>$hdrs,
+            CURLOPT_POST=>($method==='POST'),
+            CURLOPT_POSTFIELDS=>($method==='POST' ? http_build_query($params) : ''),
         ]);
-        $res  = curl_exec($ch);
+        $raw = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
         curl_close($ch);
-        $data = @json_decode($res, true);
-        if (($data['status'] ?? 0) == 1 || $code === 200) {
-            $result = ['ok'=>true,'endpoint'=>$ep,'msg'=>$data['result'][0]['reason'] ?? 'SSL مثبَّت بنجاح']; break;
-        }
-        $result = ['ok'=>false,'error'=>$data['result'][0]['reason'] ?? $data['errors'][0] ?? 'فشل التثبيت','ep'=>$ep];
+        return ['d'=>@json_decode($raw,true),'code'=>$code,'err'=>$err];
+    };
+
+    // Step 1: Check if SSL is already installed
+    $ck = $cpCall('SSL/installed_host', ['domain'=>$domain], 'GET');
+    if ((int)($ck['d']['status'] ?? 0) === 1) {
+        $expiry = $ck['d']['data']['not_after'] ?? '';
+        $steps[] = ['step'=>'check_existing','status'=>'ok','msg'=>'SSL مثبَّت بالفعل' . ($expiry?" (ينتهي: {$expiry})":'')];
+        echo json_encode(['ok'=>true,'already_installed'=>true,'steps'=>$steps,'msg'=>'SSL مثبَّت بالفعل']);
+        exit;
     }
-    // Trigger AutoSSL as a secondary safety net
-    $ch2 = curl_init("{$apiUrl}/execute/SSL/start_autossl_check");
-    curl_setopt_array($ch2, [
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER => ["Authorization: cpanel {$user}:{$token}"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query(['domain' => $domain]),
+    $steps[] = ['step'=>'check_existing','status'=>'info','msg'=>'لا توجد شهادة — جارٍ طلب شهادة جديدة'];
+
+    // Step 2: LetsEncrypt/request_ssl_for_domain (correct first attempt)
+    $le1 = $cpCall('LetsEncrypt/request_ssl_for_domain', ['domain'=>$domain,'wildcard'=>0]);
+    if ((int)($le1['d']['status'] ?? 0) === 1) {
+        $steps[] = ['step'=>'le_request','status'=>'ok','msg'=>'تم طلب شهادة Let\'s Encrypt — جارٍ التحقق'];
+        sleep(6);
+        $vf = $cpCall('SSL/installed_host', ['domain'=>$domain], 'GET');
+        if ((int)($vf['d']['status'] ?? 0) === 1) {
+            $steps[] = ['step'=>'verify','status'=>'ok','msg'=>'✅ SSL مثبَّت وفعّال'];
+            echo json_encode(['ok'=>true,'steps'=>$steps,'msg'=>'تم تفعيل HTTPS بنجاح عبر Let\'s Encrypt']);
+            exit;
+        }
+        $steps[] = ['step'=>'verify','status'=>'info','msg'=>'الطلب مقبول — الشهادة قد تستغرق 2-3 دقائق للاكتمال'];
+        echo json_encode(['ok'=>true,'pending'=>true,'steps'=>$steps,'msg'=>'طُلبت الشهادة — تحقق من حالة SSL خلال دقيقتين']);
+        exit;
+    }
+    $steps[] = ['step'=>'le_request','status'=>'warning','msg'=>'LetsEncrypt/request_ssl_for_domain: ' . ($le1['d']['result'][0]['reason'] ?? ($le1['d']['errors'][0] ?? 'غير متاح'))];
+
+    // Step 3: LetsEncrypt/install (older endpoint)
+    $le2 = $cpCall('LetsEncrypt/install', ['domain'=>$domain]);
+    if ((int)($le2['d']['status'] ?? 0) === 1) {
+        $steps[] = ['step'=>'le_install','status'=>'ok','msg'=>'تم تثبيت SSL عبر LetsEncrypt/install'];
+        echo json_encode(['ok'=>true,'steps'=>$steps,'msg'=>'تم تفعيل HTTPS بنجاح']);
+        exit;
+    }
+    $steps[] = ['step'=>'le_install','status'=>'warning','msg'=>'LetsEncrypt/install: ' . ($le2['d']['result'][0]['reason'] ?? ($le2['d']['errors'][0] ?? 'غير متاح'))];
+
+    // Step 4: AutoSSL trigger + polling
+    $auto = $cpCall('SSL/start_autossl_check', ['domain'=>$domain]);
+    if ((int)($auto['d']['status'] ?? 0) === 1) {
+        $steps[] = ['step'=>'autossl_trigger','status'=>'ok','msg'=>'تم تشغيل AutoSSL — جارٍ انتظار النتيجة (حتى 90 ثانية)'];
+        $pollStart = time();
+        $sslReady  = false;
+        while (time() - $pollStart < 90) {
+            sleep(8);
+            $queue = $cpCall('SSL/get_autossl_pending_queue', [], 'GET');
+            $stillPending = false;
+            foreach ($queue['d']['data'] ?? [] as $qi) {
+                if (strtolower($qi['domain'] ?? '') === strtolower($domain)) { $stillPending = true; break; }
+            }
+            if (!$stillPending) {
+                sleep(4);
+                $vf2 = $cpCall('SSL/installed_host', ['domain'=>$domain], 'GET');
+                if ((int)($vf2['d']['status'] ?? 0) === 1) { $sslReady = true; break; }
+                break;
+            }
+        }
+        if ($sslReady) {
+            $steps[] = ['step'=>'autossl_verify','status'=>'ok','msg'=>'✅ SSL مثبَّت بنجاح عبر AutoSSL'];
+            echo json_encode(['ok'=>true,'steps'=>$steps,'msg'=>'تم تفعيل HTTPS بنجاح عبر AutoSSL']);
+            exit;
+        }
+        $steps[] = ['step'=>'autossl_verify','status'=>'info','msg'=>'AutoSSL قيد التشغيل — تحقق لاحقاً عبر زر "حالة SSL"'];
+        echo json_encode(['ok'=>true,'pending'=>true,'steps'=>$steps,'msg'=>'AutoSSL نشط — راجع حالة SSL خلال دقيقتين']);
+        exit;
+    }
+    $steps[] = ['step'=>'autossl_trigger','status'=>'error','msg'=>'AutoSSL: ' . ($auto['d']['result'][0]['reason'] ?? ($auto['d']['errors'][0] ?? 'خطأ'))];
+
+    // Step 5: WHM API fallback (for reseller accounts)
+    $whmUrl  = preg_replace('/:208[03]/', ':2087', $apiUrl);
+    $ch5 = curl_init("{$whmUrl}/json-api/installssl?api.version=1");
+    curl_setopt_array($ch5, [
+        CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>20, CURLOPT_SSL_VERIFYPEER=>false,
+        CURLOPT_HTTPHEADER=>["Authorization: whm {$user}:{$token}"],
+        CURLOPT_POST=>true, CURLOPT_POSTFIELDS=>json_encode(['domain'=>$domain]),
     ]);
-    curl_exec($ch2); curl_close($ch2);
-    echo json_encode($result);
+    $whmData = @json_decode(curl_exec($ch5), true);
+    curl_close($ch5);
+    if (($whmData['metadata']['result'] ?? 0) == 1) {
+        $steps[] = ['step'=>'whm_ssl','status'=>'ok','msg'=>'تم تثبيت SSL عبر WHM API'];
+        echo json_encode(['ok'=>true,'steps'=>$steps,'msg'=>'تم تفعيل HTTPS عبر WHM']);
+        exit;
+    }
+    $steps[] = ['step'=>'whm_ssl','status'=>'error','msg'=>'WHM API غير متاح أو فشل'];
+    $steps[] = ['step'=>'diagnosis','status'=>'error','msg'=>'تأكد من: ①  DNS يشير لسيرفرك ②  النطاق مضاف كـ Addon Domain ③  Let\'s Encrypt مفعَّل في cPanel'];
+    echo json_encode(['ok'=>false,'steps'=>$steps,'error'=>'تعذر تثبيت SSL — راجع الخطوات المفصَّلة']);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Poll SSL status for a domain
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_ssl_status' && is_admin()) {
+    header('Content-Type: application/json');
+    $domain = trim($_REQUEST['domain'] ?? '');
+    if (!$domain) { echo json_encode(['ok'=>false,'error'=>'النطاق مطلوب']); exit; }
+
+    $apiUrl = rtrim(get_cfg($pdo,'cpanel_url',''), '/') ?: 'https://localhost:2083';
+    $token  = get_cfg($pdo,'cpanel_api_token','');
+    $user   = get_cfg($pdo,'cpanel_user','');
+    if (!$token || !$user) { echo json_encode(['ok'=>false,'error'=>'cPanel غير مُعدَّ']); exit; }
+
+    $hdrs = ["Authorization: cpanel {$user}:{$token}"];
+
+    $ch = curl_init("{$apiUrl}/execute/SSL/installed_host?" . http_build_query(['domain'=>$domain]));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_HTTPHEADER=>$hdrs]);
+    $instData = @json_decode(curl_exec($ch), true);
+    curl_close($ch);
+
+    if ((int)($instData['status'] ?? 0) === 1) {
+        $cert = $instData['data'] ?? [];
+        echo json_encode(['ok'=>true,'status'=>'active','msg'=>'✅ SSL مثبَّت وفعّال',
+            'expiry'=>$cert['not_after'] ?? '','issuer'=>$cert['issuer']['commonName'] ?? '']);
+        exit;
+    }
+
+    $ch = curl_init("{$apiUrl}/execute/SSL/get_autossl_pending_queue");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_HTTPHEADER=>$hdrs]);
+    $queueData = @json_decode(curl_exec($ch), true);
+    curl_close($ch);
+
+    foreach ($queueData['data'] ?? [] as $qi) {
+        if (strtolower($qi['domain'] ?? '') === strtolower($domain)) {
+            echo json_encode(['ok'=>true,'status'=>'pending','msg'=>'⏳ AutoSSL يعمل على تثبيت الشهادة — أعد المحاولة خلال دقيقتين']);
+            exit;
+        }
+    }
+
+    echo json_encode(['ok'=>true,'status'=>'none','msg'=>'⚠️ لا توجد شهادة ولا طلب قيد التنفيذ — استخدم زر "تثبيت SSL"']);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: One-click full domain setup (addon + DB + SSL)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_full_setup' && is_admin()) {
+    header('Content-Type: application/json');
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $domain   = strtolower(trim($input['domain'] ?? ''));
+    $docRoot  = trim($input['doc_root'] ?? '');
+    $siteMode = in_array($input['site_mode'] ?? '', ['redirect','mirror','category','standalone']) ? $input['site_mode'] : 'mirror';
+    $catSlug  = preg_replace('/[^a-z0-9\-_]/', '', strtolower(trim($input['category_slug'] ?? '')));
+    $skipAddon = !empty($input['skip_addon']);
+    if (!$domain) { echo json_encode(['ok'=>false,'error'=>'النطاق مطلوب']); exit; }
+
+    $apiUrl  = rtrim(get_cfg($pdo,'cpanel_url',''), '/') ?: 'https://localhost:2083';
+    $token   = get_cfg($pdo,'cpanel_api_token','');
+    $user    = get_cfg($pdo,'cpanel_user','');
+    $hdrs    = ["Authorization: cpanel {$user}:{$token}"];
+    $steps   = [];
+    $finalOk = true;
+
+    if (!$docRoot) $docRoot = 'public_html/' . preg_replace('/[^a-z0-9\-\.]/', '', $domain);
+
+    // Step 1: Add addon domain in cPanel
+    if (!$skipAddon && $token && $user) {
+        $ch = curl_init("{$apiUrl}/execute/AddonDomain/list_addeddomains?regex=" . urlencode("^{$domain}$"));
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_HTTPHEADER=>$hdrs]);
+        $listData = @json_decode(curl_exec($ch), true);
+        curl_close($ch);
+        $alreadyAdded = false;
+        foreach ($listData['data'] ?? [] as $d) {
+            if (strtolower($d['domain'] ?? '') === $domain) { $alreadyAdded = true; break; }
+        }
+        if ($alreadyAdded) {
+            $steps[] = ['step'=>'addon_domain','status'=>'ok','msg'=>'النطاق مضاف مسبقاً في cPanel'];
+        } else {
+            $ch = curl_init("{$apiUrl}/execute/AddonDomain/addaddondomain");
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>30, CURLOPT_SSL_VERIFYPEER=>false,
+                CURLOPT_HTTPHEADER=>$hdrs, CURLOPT_POST=>true,
+                CURLOPT_POSTFIELDS=>http_build_query(['newdomain'=>$domain,'subdomain'=>explode('.',$domain)[0],'dir'=>$docRoot]),
+            ]);
+            $addD = @json_decode(curl_exec($ch), true);
+            curl_close($ch);
+            $addMsg = $addD['result'][0]['reason'] ?? ($addD['errors'][0] ?? '');
+            if ((int)($addD['status'] ?? 0) === 1 || stripos($addMsg,'exist')!==false) {
+                $steps[] = ['step'=>'addon_domain','status'=>'ok','msg'=>$addMsg ?: 'تم إضافة النطاق إلى cPanel'];
+            } else {
+                $steps[] = ['step'=>'addon_domain','status'=>'warning','msg'=>"تعذرت الإضافة: {$addMsg} — تابع باقي الخطوات"];
+                $finalOk = false;
+            }
+        }
+    } else {
+        $steps[] = ['step'=>'addon_domain','status'=>'skipped','msg'=>$skipAddon ? 'تخطّي الإضافة لـ cPanel (مضاف مسبقاً)' : 'cPanel غير مُعدَّ — تخطّي'];
+    }
+
+    // Step 2: Save/update domain in DB
+    try {
+        $domRow = $pdo->prepare("SELECT id FROM domains WHERE full_domain=?");
+        $domRow->execute([$domain]);
+        $domId  = $domRow->fetchColumn();
+        $svrRoot = rtrim(get_cfg($pdo,'server_doc_root',''), '/');
+        $absRoot = $svrRoot ? "{$svrRoot}/{$docRoot}" : $docRoot;
+        if ($domId) {
+            $pdo->prepare("UPDATE domains SET status='active', doc_root=?, site_mode=?, category_slug=? WHERE id=?")
+                ->execute([$absRoot, $siteMode, $catSlug ?: null, $domId]);
+        } else {
+            $pdo->prepare("INSERT INTO domains (full_domain,status,doc_root,site_mode,category_slug,created_at) VALUES (?,?,?,?,?,NOW())")
+                ->execute([$domain,'active',$absRoot,$siteMode,$catSlug?:null]);
+        }
+        $steps[] = ['step'=>'save_db','status'=>'ok','msg'=>"حُفظ النطاق في قاعدة البيانات (وضع: {$siteMode})"];
+    } catch (\Throwable $e) {
+        $steps[] = ['step'=>'save_db','status'=>'warning','msg'=>'خطأ في قاعدة البيانات: ' . $e->getMessage()];
+    }
+
+    // Step 3: SSL — LetsEncrypt request → AutoSSL fallback
+    if ($token && $user) {
+        $cpQ = function($ep,$p=[],$m='POST') use ($apiUrl,$hdrs) {
+            $u="{$apiUrl}/execute/{$ep}";
+            if($m==='GET'&&$p)$u.='?'.http_build_query($p);
+            $c=curl_init($u); curl_setopt_array($c,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>30,
+                CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_HTTPHEADER=>$hdrs,
+                CURLOPT_POST=>($m==='POST'),CURLOPT_POSTFIELDS=>($m==='POST'?http_build_query($p):'')]);
+            $r=curl_exec($c); curl_close($c); return @json_decode($r,true);
+        };
+        $sslCk = $cpQ('SSL/installed_host',['domain'=>$domain],'GET');
+        if ((int)($sslCk['status']??0)===1) {
+            $steps[] = ['step'=>'ssl','status'=>'ok','msg'=>'SSL مثبَّت بالفعل'];
+        } else {
+            $le = $cpQ('LetsEncrypt/request_ssl_for_domain',['domain'=>$domain]);
+            if ((int)($le['status']??0)===1) {
+                $steps[] = ['step'=>'ssl','status'=>'ok','msg'=>'تم طلب شهادة Let\'s Encrypt — ستفعل خلال دقيقتين'];
+            } else {
+                $at = $cpQ('SSL/start_autossl_check',['domain'=>$domain]);
+                if ((int)($at['status']??0)===1) {
+                    $steps[] = ['step'=>'ssl','status'=>'ok','msg'=>'AutoSSL قيد التشغيل — راجع حالة SSL لاحقاً'];
+                } else {
+                    $steps[] = ['step'=>'ssl','status'=>'warning','msg'=>'تعذر تفعيل SSL تلقائياً — استخدم زر "تثبيت SSL" المتخصص'];
+                    $finalOk = false;
+                }
+            }
+        }
+    } else {
+        $steps[] = ['step'=>'ssl','status'=>'skipped','msg'=>'cPanel غير مُعدَّ — فعّل SSL يدوياً'];
+    }
+
+    echo json_encode(['ok'=>$finalOk,'steps'=>$steps,'summary'=>$finalOk?'تم إعداد النطاق بنجاح':'اكتملت بعض الخطوات مع تحذيرات','domain'=>$domain]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Bulk create subdomains under the main domain
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'reserve_bulk_subdomains' && is_admin()) {
+    header('Content-Type: application/json');
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $items    = (array)($input['items'] ?? []);
+    $mainHost = strtolower(parse_url(SITE_URL, PHP_URL_HOST) ?: '');
+    if (empty($items)) { echo json_encode(['ok'=>false,'error'=>'قائمة فارغة']); exit; }
+
+    $apiUrl  = rtrim(get_cfg($pdo,'cpanel_url',''), '/') ?: 'https://localhost:2083';
+    $token   = get_cfg($pdo,'cpanel_api_token','');
+    $user    = get_cfg($pdo,'cpanel_user','');
+    $hdrs    = ["Authorization: cpanel {$user}:{$token}"];
+    $svrRoot = rtrim(get_cfg($pdo,'server_doc_root',''), '/');
+    $results = [];
+
+    foreach (array_slice($items, 0, 30) as $item) {
+        $name     = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim($item['name'] ?? '')));
+        $catSlug  = preg_replace('/[^a-z0-9\-_]/', '', strtolower(trim($item['category_slug'] ?? $name)));
+        $siteMode = in_array($item['site_mode'] ?? '', ['mirror','category','redirect','standalone']) ? $item['site_mode'] : 'category';
+        if (!$name) { $results[] = ['name'=>'','ok'=>false,'msg'=>'اسم غير صالح']; continue; }
+
+        $fullDomain = "{$name}.{$mainHost}";
+        $docRoot    = "public_html/{$name}.{$mainHost}";
+        $absRoot    = $svrRoot ? "{$svrRoot}/{$docRoot}" : $docRoot;
+        $result     = ['name'=>$name,'domain'=>$fullDomain,'ok'=>false,'msg'=>''];
+
+        $cpanelOk = false;
+        if ($token && $user) {
+            $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>20, CURLOPT_SSL_VERIFYPEER=>false,
+                CURLOPT_HTTPHEADER=>$hdrs, CURLOPT_POST=>true,
+                CURLOPT_POSTFIELDS=>http_build_query(['domain'=>$name,'rootdomain'=>$mainHost,'dir'=>$docRoot]),
+            ]);
+            $subD    = @json_decode(curl_exec($ch), true);
+            curl_close($ch);
+            $subMsg  = $subD['result'][0]['reason'] ?? '';
+            $cpanelOk = ((int)($subD['status']??0)===1) || stripos($subMsg,'exist')!==false;
+        }
+
+        try {
+            $existing = $pdo->prepare("SELECT id FROM domains WHERE full_domain=?");
+            $existing->execute([$fullDomain]);
+            $existId = $existing->fetchColumn();
+            if ($existId) {
+                $pdo->prepare("UPDATE domains SET status='active',doc_root=?,site_mode=?,category_slug=? WHERE id=?")
+                    ->execute([$absRoot,$siteMode,$catSlug?:null,$existId]);
+            } else {
+                $pdo->prepare("INSERT INTO domains (full_domain,status,doc_root,site_mode,category_slug,created_at) VALUES (?,?,?,?,?,NOW())")
+                    ->execute([$fullDomain,'active',$absRoot,$siteMode,$catSlug?:null]);
+            }
+            $result['ok']  = true;
+            $result['msg'] = $cpanelOk ? 'تم الإنشاء في cPanel وحُفظ في قاعدة البيانات' : 'حُفظ في قاعدة البيانات (cPanel: ' . (!($token&&$user)?'غير مُعدَّ':'فشل') . ')';
+        } catch (\Throwable $e) {
+            $result['msg'] = 'خطأ: ' . $e->getMessage();
+        }
+        $results[] = $result;
+    }
+    $success = count(array_filter($results, fn($r) => $r['ok']));
+    echo json_encode(['ok'=>true,'results'=>$results,'success'=>$success,'total'=>count($results)]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Namecheap API domain check (with RDAP fallback)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'namecheap_check' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $domains = array_filter(array_map(fn($d)=>preg_replace('/[^a-z0-9\-\.]/','',$d), (array)($input['domains']??[])));
+    if (empty($domains)) { echo json_encode(['ok'=>false,'error'=>'أدخل نطاقاً واحداً على الأقل']); exit; }
+    $domains = array_slice(array_values($domains), 0, 50);
+
+    $apiUser  = get_cfg($pdo,'namecheap_api_user','');
+    $apiKey   = get_cfg($pdo,'namecheap_api_key','');
+    $clientIp = get_cfg($pdo,'namecheap_client_ip','') ?: ($_SERVER['SERVER_ADDR'] ?? '127.0.0.1');
+
+    if (!$apiUser || !$apiKey) {
+        // Fallback: RDAP GET check (not HEAD — HEAD gives wrong status)
+        $results = [];
+        foreach ($domains as $d) {
+            $ch = curl_init("https://rdap.org/domain/{$d}");
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>6,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_USERAGENT=>'yassota-domain-checker/1.0']);
+            curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            $results[] = ['domain'=>$d,'available'=>($code===404||$code===0),'status'=>$code===404?'available':($code===200?'taken':'unknown'),'source'=>'rdap'];
+        }
+        echo json_encode(['ok'=>true,'results'=>$results,'source'=>'rdap_fallback','note'=>'Namecheap API غير مُعدَّ — استُخدم RDAP كبديل']);
+        exit;
+    }
+
+    // Namecheap API: domains.check
+    $url = 'https://api.namecheap.com/xml.response?' . http_build_query([
+        'ApiUser'=>$apiUser,'ApiKey'=>$apiKey,'UserName'=>$apiUser,
+        'ClientIp'=>$clientIp,'Command'=>'namecheap.domains.check',
+        'DomainList'=>implode(',', $domains),
+    ]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_USERAGENT=>'yassota/1.0']);
+    $xmlStr  = curl_exec($ch);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr || !$xmlStr) { echo json_encode(['ok'=>false,'error'=>'فشل الاتصال بـ Namecheap: '.$curlErr]); exit; }
+
+    $xml = @simplexml_load_string($xmlStr);
+    if (!$xml) { echo json_encode(['ok'=>false,'error'=>'استجابة XML غير صالحة']); exit; }
+    if ((string)($xml['Status']??'') !== 'OK') {
+        echo json_encode(['ok'=>false,'error'=>(string)($xml->Errors->Error??'خطأ Namecheap')]); exit;
+    }
+
+    $results = [];
+    foreach ($xml->CommandResponse->DomainCheckResult ?? [] as $dr) {
+        $a = $dr->attributes();
+        $avail = strtolower((string)$a['Available']) === 'true';
+        $results[] = ['domain'=>(string)$a['Domain'],'available'=>$avail,'status'=>$avail?'available':'taken',
+            'isPremium'=>strtolower((string)$a['IsPremiumName'])==='true','price'=>(string)($a['PremiumRegistrationPrice']??''),'source'=>'namecheap'];
+    }
+    echo json_encode(['ok'=>true,'results'=>$results,'source'=>'namecheap']);
     exit;
 }
 
@@ -5547,11 +5957,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_domain_scan' && is_admin()) 
     foreach ($tlds as $tld) {
         $tld  = preg_replace('/[^a-z0-9\-\.]/', '', strtolower(ltrim($tld, '.')));
         $full = "$name.$tld";
-        $rdap = "https://rdap.org/domain/$full";
-        $ch   = curl_init($rdap);
+        $ch   = curl_init("https://rdap.org/domain/$full");
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5,
-            CURLOPT_FOLLOWLOCATION => true, CURLOPT_NOBODY => true,
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 6,
+            CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_USERAGENT => 'yassota-domain-checker/1.0',
         ]);
         curl_exec($ch);
@@ -9686,6 +10095,16 @@ function toggleSettingDetail(btn){
           <strong>cPanel → File Manager → Home</strong> وانظر المسار في شريط العنوان.
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">IP السيرفر العام (اختياري)</label>
+        <input class="form-input" type="text" name="server_ip"
+          value="<?= h(get_cfg($pdo,'server_ip')) ?>" placeholder="185.x.x.x"
+          dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+        <div class="form-hint">
+          يُستخدم لتشخيص DNS — يتحقق إذا كان النطاق يشير لسيرفرك قبل الإضافة لـ cPanel.
+          اعرفه من: <strong>cPanel → Server Information</strong> أو عبر <code>dig +short myip.opendns.com @resolver1.opendns.com</code>
+        </div>
+      </div>
       <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button type="button" onclick="testCpanel()" class="btn" style="background:var(--accent);color:#fff;font-size:13px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
@@ -9792,6 +10211,36 @@ function toggleSettingDetail(btn){
           <span>URL_DELETED (تطبيق محذوف)</span>
         </label>
       </div>
+    </div>
+  </div>
+
+  <!-- Namecheap Domain API -->
+  <div class="panel">
+    <h2>Namecheap Domain API <span style="color:var(--muted);font-weight:400">(اختياري)</span></h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+      يتيح فحص توافر النطاقات مباشرة من لوحة التحكم عبر Namecheap API بدلاً من RDAP. مطلوب لمعرفة الأسعار وتوافر النطاقات المميزة.
+    </p>
+    <div class="form-group">
+      <label class="form-label">API User Name</label>
+      <input class="form-input" type="text" name="namecheap_api_user"
+        value="<?= h(get_cfg($pdo,'namecheap_api_user')) ?>" placeholder="اسم حساب Namecheap"
+        dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">API Key</label>
+      <input class="form-input" type="password" name="namecheap_api_key"
+        value="<?= h(get_cfg($pdo,'namecheap_api_key')) ?>" placeholder="مفتاح API من Namecheap → Profile → Tools → API Access"
+        dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">
+        Profile → Tools → API Access → Enable → مفتاح API. يجب إضافة IP سيرفرك لقائمة Whitelisted IPs في نفس الصفحة.
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Client IP (IP السيرفر للـ Whitelist)</label>
+      <input class="form-input" type="text" name="namecheap_client_ip"
+        value="<?= h(get_cfg($pdo,'namecheap_client_ip')) ?>" placeholder="IP سيرفرك مثل 185.x.x.x"
+        dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+      <div class="form-hint">نفس IP الذي أضفته في قائمة Namecheap Whitelisted IPs. اتركه فارغاً لاستخدام IP السيرفر الحالي تلقائياً.</div>
     </div>
   </div>
 
@@ -11363,6 +11812,62 @@ $freeSources = [
 <div id="tab-api-deploy" class="dm-tab-panel" style="display:none">
   <div style="display:grid;gap:20px">
 
+    <!-- ── One-click full setup ── -->
+    <div class="panel" style="border-right:4px solid #6366f1">
+      <h3 style="margin:0 0 4px">🚀 إعداد نطاق كامل بنقرة واحدة</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">يضيف النطاق لـ cPanel، يحفظه في قاعدة البيانات، ويثبّت SSL — كل شيء بخطوة واحدة</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><label class="form-label">النطاق الكامل</label><input id="fsetup-domain" class="form-input" placeholder="mynewsite.com" style="direction:ltr"></div>
+        <div><label class="form-label">مجلد الملفات (اختياري)</label><input id="fsetup-docroot" class="form-input" placeholder="public_html/mynewsite.com" style="direction:ltr"></div>
+        <div>
+          <label class="form-label">وضع الموقع</label>
+          <select id="fsetup-mode" class="form-input" onchange="document.getElementById('fsetup-cat-row').style.display=this.value==='category'?'block':'none'">
+            <option value="mirror">نسخة مطابقة (Mirror)</option>
+            <option value="category">قسم محدد (Category)</option>
+            <option value="redirect">إعادة توجيه (Redirect)</option>
+            <option value="standalone">موقع مستقل</option>
+          </select>
+        </div>
+        <div id="fsetup-cat-row" style="display:none"><label class="form-label">اسم القسم (Slug)</label><input id="fsetup-cat" class="form-input" placeholder="games" style="direction:ltr"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="fsetup-skip-addon"> <span>النطاق مضاف يدوياً في cPanel — تخطّي خطوة الإضافة</span>
+      </label>
+      <button onclick="runFullSetup()" class="btn-primary" style="background:#6366f1">🚀 إعداد كامل</button>
+      <div id="fsetup-log" style="margin-top:14px;display:grid;gap:6px"></div>
+    </div>
+
+    <!-- ── Bulk Subdomains Creator ── -->
+    <div class="panel" style="border-right:4px solid #0ea5e9">
+      <h3 style="margin:0 0 4px">🌐 إنشاء نطاقات فرعية جماعية</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">أنشئ عدة subdomains دفعة واحدة تحت النطاق الرئيسي مع تعيين قسم لكل واحد</p>
+      <div id="bsub-items" style="display:grid;gap:8px;margin-bottom:12px">
+        <div class="bsub-row" style="display:flex;gap:8px;align-items:center">
+          <input class="form-input bsub-name" placeholder="games" style="direction:ltr;flex:1">
+          <select class="form-input bsub-cat" style="flex:1.5">
+            <option value="">-- اختر قسماً --</option>
+            <?php
+            try {
+                $cats = $pdo->query("SELECT slug,name FROM categories ORDER BY name")->fetchAll();
+                foreach ($cats as $c) echo '<option value="'.h($c['slug']).'">'.h($c['name']).'</option>';
+            } catch (\Throwable $e) {}
+            ?>
+          </select>
+          <select class="form-input bsub-mode" style="flex:1">
+            <option value="category">قسم محدد</option>
+            <option value="mirror">نسخة مطابقة</option>
+            <option value="redirect">إعادة توجيه</option>
+          </select>
+          <button onclick="this.closest('.bsub-row').remove()" style="background:none;border:none;color:#ef4444;font-size:18px;cursor:pointer;padding:0 4px">×</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="addBsubRow()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;color:var(--muted)">+ إضافة صف</button>
+        <button onclick="runBulkSubdomains()" class="btn-primary" style="background:#0ea5e9">🌐 إنشاء الجميع</button>
+      </div>
+      <div id="bsub-log" style="margin-top:12px;display:grid;gap:4px"></div>
+    </div>
+
     <!-- ── Bulk Domain Scanner ── -->
     <div class="panel">
       <h3 style="margin:0 0 4px">🔍 مسح شامل لتوافر النطاقات</h3>
@@ -11377,29 +11882,42 @@ $freeSources = [
 
     <!-- ── cPanel: Add Addon Domain ── -->
     <div class="panel">
-      <h3 style="margin:0 0 4px">⚙️ إضافة نطاق إلى cPanel</h3>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">بعد أن تشير سجلات DNS للنطاق إلى سيرفرك، استخدم هذا الزر لإضافته كـ Addon Domain في cPanel تلقائياً</p>
+      <h3 style="margin:0 0 4px">⚙️ إضافة نطاق إلى cPanel (مع Fallback تلقائي)</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">يتحقق أولاً إن كان مضافاً، ثم يجرّب AddonDomain، وإن فشل ينتقل تلقائياً إلى SubDomain — مع تشخيص DNS</p>
       <div style="display:grid;gap:12px;max-width:480px">
         <div><label class="form-label">النطاق الكامل</label><input id="cpanel-addon-domain" class="form-input" placeholder="mynewsite.com" style="direction:ltr"></div>
         <div><label class="form-label">مجلد الملفات (اختياري)</label><input id="cpanel-addon-dir" class="form-input" placeholder="public_html/mynewsite.com" style="direction:ltr"></div>
       </div>
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button onclick="addCpanelDomain()" class="btn-primary">➕ إضافة إلى cPanel</button>
-        <div id="cpanel-addon-status" style="font-size:13px;padding:10px 0;color:var(--muted)"></div>
       </div>
+      <div id="cpanel-addon-log" style="margin-top:10px;display:grid;gap:4px"></div>
     </div>
 
     <!-- ── cPanel: Install SSL ── -->
     <div class="panel">
-      <h3 style="margin:0 0 4px">🔒 تفعيل HTTPS (Let's Encrypt)</h3>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">بعد إضافة الدومين، فعّل شهادة SSL مجانية تلقائياً. تأكد أن DNS يشير إلى سيرفرك أولاً ثم أكمل الإضافة عبر cPanel ثم اضغط هنا.</p>
-      <div style="display:grid;gap:12px;max-width:480px">
+      <h3 style="margin:0 0 4px">🔒 تثبيت SSL — سلسلة محاولات ذكية</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">يجرّب: (1) فحص SSL الحالي ← (2) LetsEncrypt/request_ssl_for_domain ← (3) LetsEncrypt/install ← (4) AutoSSL مع polling ← (5) WHM API</p>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;max-width:480px">
         <div><label class="form-label">النطاق</label><input id="cpanel-ssl-domain" class="form-input" placeholder="mynewsite.com" style="direction:ltr"></div>
+        <div style="display:flex;gap:8px;flex-direction:column">
+          <button onclick="installSsl()" class="btn-primary" style="background:#16a34a;white-space:nowrap">🔒 تثبيت SSL</button>
+          <button onclick="checkSslStatus()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--muted);white-space:nowrap">📊 حالة SSL</button>
+        </div>
       </div>
-      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-        <button onclick="installSsl()" class="btn-primary" style="background:#16a34a">🔒 تثبيت SSL</button>
-        <div id="cpanel-ssl-status" style="font-size:13px;padding:10px 0;color:var(--muted)"></div>
+      <div id="cpanel-ssl-log" style="margin-top:10px;display:grid;gap:4px"></div>
+    </div>
+
+    <!-- ── Namecheap API Domain Check ── -->
+    <div class="panel">
+      <h3 style="margin:0 0 4px">🏷️ فحص توافر النطاقات (Namecheap API / RDAP)</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">أدخل نطاقات كاملة للفحص. يستخدم Namecheap API إذا كانت الإعدادات مُفعَّلة، وإلا يتحول تلقائياً لـ RDAP</p>
+      <textarea id="nc-domains" class="form-input" rows="4" placeholder="myapp.com&#10;myapp.net&#10;myapp.xyz" style="direction:ltr;font-family:monospace;resize:vertical"></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button onclick="runNcCheck()" class="btn-primary">🔍 فحص التوافر</button>
+        <span style="font-size:12px;color:var(--muted);padding:10px 0"><?= get_cfg($pdo,'namecheap_api_key','') ? '✅ Namecheap API مُعدَّ' : '⚠️ RDAP fallback (أضف namecheap_api_key في الإعدادات للدقة الكاملة)' ?></span>
       </div>
+      <div id="nc-results" style="margin-top:14px;display:grid;gap:6px"></div>
     </div>
 
     <!-- ── Multi-site Quick Guide ── -->
@@ -11421,13 +11939,12 @@ $freeSources = [
           <?php endforeach; ?>
         </div>
         <p>لضبط وضع الدومين: اذهب إلى <strong>نطاقاتي → ⚙️ إدارة → الإعدادات</strong></p>
-        <p style="margin-top:8px"><strong>خطوات إعداد دومين منفصل:</strong></p>
+        <p style="margin-top:8px"><strong>خطوات إعداد دومين منفصل (يدوي):</strong></p>
         <ol style="padding-right:20px;line-height:2">
           <li>سجّل النطاق لدى مسجّل (Namecheap، Porkbun...)</li>
           <li>اضبط DNS: سجّل A → عنوان IP سيرفرك</li>
-          <li>أضفه إلى cPanel كـ Addon Domain (الزر أعلاه)</li>
-          <li>فعّل HTTPS (الزر أعلاه)</li>
-          <li>أضفه يدوياً في قسم نطاقاتي واضبط وضع الموقع</li>
+          <li>استخدم زر "إعداد كامل" بالأعلى أو أضفه يدوياً لـ cPanel ثم ثبّت SSL</li>
+          <li>أضفه في قسم نطاقاتي واضبط وضع الموقع</li>
         </ol>
       </div>
     </div>
@@ -11436,6 +11953,75 @@ $freeSources = [
 </div>
 
 <script>
+/* ── Shared: render step log ── */
+function renderSteps(el, steps) {
+  var icons = {ok:'✅',warning:'⚠️',error:'❌',info:'ℹ️',skipped:'⏭️',pending:'⏳'};
+  el.innerHTML = steps.map(function(s){
+    var ic = icons[s.status] || '•';
+    var col = s.status==='ok'?'#16a34a':s.status==='error'?'#ef4444':s.status==='warning'?'#d97706':'var(--muted)';
+    return '<div style="font-size:12px;padding:5px 10px;border-radius:6px;background:var(--bg);border:1px solid var(--border)">'
+      + '<span style="margin-left:6px">'+ic+'</span>'
+      + '<span style="color:'+col+'">'+esc(s.msg||s.step)+'</span></div>';
+  }).join('');
+}
+
+/* ── Full Setup ── */
+function runFullSetup(){
+  var domain=document.getElementById('fsetup-domain').value.trim();
+  var docRoot=document.getElementById('fsetup-docroot').value.trim();
+  var mode=document.getElementById('fsetup-mode').value;
+  var cat=document.getElementById('fsetup-cat').value.trim();
+  var skip=document.getElementById('fsetup-skip-addon').checked;
+  var log=document.getElementById('fsetup-log');
+  if(!domain){alert('أدخل النطاق أولاً');return;}
+  log.innerHTML='<div style="font-size:13px;color:var(--muted)">⏳ جارٍ الإعداد الكامل (قد يستغرق دقيقة بسبب SSL)...</div>';
+  fetch('admin.php?ajax=domain_full_setup',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({domain:domain,doc_root:docRoot,site_mode:mode,category_slug:cat,skip_addon:skip})})
+  .then(function(r){return r.json();}).then(function(d){
+    renderSteps(log, d.steps||[]);
+    var sumEl=document.createElement('div');
+    sumEl.style.cssText='margin-top:8px;font-weight:600;font-size:13px;padding:8px 12px;border-radius:8px;';
+    sumEl.style.background=d.ok?'rgba(22,163,74,.1)':'rgba(239,68,68,.1)';
+    sumEl.style.color=d.ok?'#16a34a':'#ef4444';
+    sumEl.textContent=(d.ok?'✅ ':'❌ ')+(d.summary||'');
+    log.appendChild(sumEl);
+  }).catch(function(e){log.innerHTML='<div style="color:#ef4444;font-size:13px">❌ فشل الاتصال</div>';});
+}
+
+/* ── Bulk Subdomains ── */
+function addBsubRow(){
+  var row=document.createElement('div');
+  row.className='bsub-row';
+  row.style.cssText='display:flex;gap:8px;align-items:center';
+  row.innerHTML='<input class="form-input bsub-name" placeholder="games" style="direction:ltr;flex:1">'
+    +'<select class="form-input bsub-cat" style="flex:1.5"><option value="">-- اختر قسماً --</option><?php
+    try { foreach($pdo->query("SELECT slug,name FROM categories ORDER BY name")->fetchAll() as $c)
+        echo '<option value="'.h($c["slug"]).'">'.h($c["name"])."</option>"; } catch(\Throwable $e) {} ?></select>'
+    +'<select class="form-input bsub-mode" style="flex:1"><option value="category">قسم محدد</option><option value="mirror">نسخة مطابقة</option><option value="redirect">إعادة توجيه</option></select>'
+    +'<button onclick="this.closest(\'.bsub-row\').remove()" style="background:none;border:none;color:#ef4444;font-size:18px;cursor:pointer;padding:0 4px">×</button>';
+  document.getElementById('bsub-items').appendChild(row);
+}
+function runBulkSubdomains(){
+  var rows=[...document.querySelectorAll('.bsub-row')];
+  var items=rows.map(function(r){return{name:r.querySelector('.bsub-name').value.trim(),category_slug:r.querySelector('.bsub-cat').value,site_mode:r.querySelector('.bsub-mode').value};}).filter(function(i){return i.name;});
+  var log=document.getElementById('bsub-log');
+  if(!items.length){alert('أضف نطاقاً فرعياً واحداً على الأقل');return;}
+  log.innerHTML='<div style="color:var(--muted);font-size:13px">⏳ جارٍ الإنشاء...</div>';
+  fetch('admin.php?ajax=reserve_bulk_subdomains',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})})
+  .then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){log.innerHTML='<div style="color:#ef4444;font-size:13px">❌ '+esc(d.error)+'</div>';return;}
+    log.innerHTML=d.results.map(function(r){
+      var col=r.ok?'#16a34a':'#ef4444';
+      return '<div style="font-size:12px;padding:5px 10px;border-radius:6px;background:var(--bg);border:1px solid var(--border)">'
+        +'<span style="font-family:monospace;direction:ltr;color:var(--muted)">'+esc(r.domain)+'</span>'
+        +' <span style="color:'+col+';margin-right:8px">'+(r.ok?'✅':'❌')+'</span>'
+        +'<span style="color:'+col+'">'+esc(r.msg)+'</span></div>';
+    }).join('')
+    +'<div style="font-weight:600;font-size:13px;margin-top:6px;color:'+(d.success===d.total?'#16a34a':'#d97706')+'">الإجمالي: '+d.success+'/'+d.total+' نجحت</div>';
+  }).catch(function(){log.innerHTML='<div style="color:#ef4444;font-size:13px">❌ فشل الاتصال</div>';});
+}
+
+/* ── Bulk Domain Scan ── */
 function runBulkScan(){
   var name=document.getElementById('bscan-name').value.trim();
   var tlds=document.getElementById('bscan-tlds').value.replace(/,/g,' ').split(/\s+/).filter(Boolean);
@@ -11444,7 +12030,7 @@ function runBulkScan(){
   res.innerHTML='<p style="color:var(--muted);font-size:13px">⏳ جارٍ الفحص...</p>';
   fetch('admin.php?ajax=bulk_domain_scan',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,tlds:tlds})})
-  .then(r=>r.json()).then(function(d){
+  .then(function(r){return r.json();}).then(function(d){
     if(!d.ok){res.innerHTML='<p style="color:var(--danger)">خطأ: '+esc(d.error)+'</p>';return;}
     res.innerHTML=d.results.map(function(r){
       var color=r.available?'#22c55e':'#ef4444';
@@ -11453,35 +12039,92 @@ function runBulkScan(){
       return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border)">'
         +'<span style="font-family:monospace;direction:ltr;min-width:180px">'+esc(r.domain)+'</span>'
         +'<span style="font-weight:600;color:'+color+'">'+label+'</span>'
-        +(r.available?'<a href="https://www.namecheap.com/domains/registration/results/?domain='+encodeURIComponent(r.domain)+'" target="_blank" class="btn-sm" style="font-size:11px;margin-right:auto">تسجيل</a>':'')
+        +(r.available?'<a href="https://www.namecheap.com/domains/registration/results/?domain='+encodeURIComponent(r.domain)+'" target="_blank" class="btn-sm" style="font-size:11px;margin-right:auto">تسجيل →</a>':'')
         +'</div>';
     }).join('');
   }).catch(function(){res.innerHTML='<p style="color:var(--danger)">فشل الاتصال</p>';});
 }
+
+/* ── cPanel Addon Domain (with steps log) ── */
 function addCpanelDomain(){
   var domain=document.getElementById('cpanel-addon-domain').value.trim();
   var dir=document.getElementById('cpanel-addon-dir').value.trim();
-  var st=document.getElementById('cpanel-addon-status');
+  var log=document.getElementById('cpanel-addon-log');
   if(!domain){alert('أدخل النطاق أولاً');return;}
-  st.textContent='⏳ جارٍ الإضافة...';
+  log.innerHTML='<div style="color:var(--muted);font-size:13px">⏳ جارٍ الإضافة...</div>';
   fetch('admin.php?ajax=cpanel_addon_domain',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({domain:domain,doc_root:dir})})
-  .then(r=>r.json()).then(function(d){
-    if(d.ok){st.style.color='#22c55e';st.textContent='✅ '+(d.msg||'تم الإضافة بنجاح');}
-    else{st.style.color='#ef4444';st.textContent='❌ '+(d.error||'خطأ');}
-  }).catch(function(){st.style.color='#ef4444';st.textContent='❌ فشل الاتصال';});
+  .then(function(r){return r.json();}).then(function(d){
+    renderSteps(log, d.steps||[]);
+    if(!d.steps||!d.steps.length){
+      log.innerHTML='<div style="font-size:13px;color:'+(d.ok?'#16a34a':'#ef4444')+'">'+(d.ok?'✅':'❌')+' '+(d.msg||d.error||'')+'</div>';
+    }
+  }).catch(function(){log.innerHTML='<div style="color:#ef4444;font-size:13px">❌ فشل الاتصال</div>';});
 }
+
+/* ── SSL Install (with steps log + pending detection) ── */
 function installSsl(){
   var domain=document.getElementById('cpanel-ssl-domain').value.trim();
-  var st=document.getElementById('cpanel-ssl-status');
+  var log=document.getElementById('cpanel-ssl-log');
   if(!domain){alert('أدخل النطاق أولاً');return;}
-  st.textContent='⏳ جارٍ تثبيت SSL...';
+  log.innerHTML='<div style="color:var(--muted);font-size:13px">⏳ جارٍ تثبيت SSL (قد يستغرق 90 ثانية للـ polling)...</div>';
   fetch('admin.php?ajax=cpanel_ssl_install',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({domain:domain})})
-  .then(r=>r.json()).then(function(d){
-    if(d.ok){st.style.color='#22c55e';st.textContent='✅ '+(d.msg||'تم تثبيت SSL بنجاح');}
-    else{st.style.color='#ef4444';st.textContent='❌ '+(d.error||'خطأ');}
-  }).catch(function(){st.style.color='#ef4444';st.textContent='❌ فشل الاتصال';});
+  .then(function(r){return r.json();}).then(function(d){
+    renderSteps(log, d.steps||[]);
+    if(!d.steps||!d.steps.length){
+      var col=d.ok?'#16a34a':'#ef4444';
+      log.innerHTML='<div style="font-size:13px;color:'+col+'">'+(d.ok?'✅':'❌')+' '+(d.msg||d.error||'')+'</div>';
+    }
+    if(d.ok && d.pending){
+      var pollEl=document.createElement('div');
+      pollEl.style.cssText='font-size:12px;margin-top:8px;color:#d97706';
+      pollEl.textContent='⏳ الشهادة قيد التثبيت — سيبدأ الفحص التلقائي خلال 90 ثانية...';
+      log.appendChild(pollEl);
+      setTimeout(function(){checkSslStatusFor(domain,log,pollEl);},90000);
+    }
+  }).catch(function(){log.innerHTML='<div style="color:#ef4444;font-size:13px">❌ فشل الاتصال</div>';});
+}
+function checkSslStatus(){
+  var domain=document.getElementById('cpanel-ssl-domain').value.trim();
+  if(!domain){alert('أدخل النطاق أولاً');return;}
+  checkSslStatusFor(domain,document.getElementById('cpanel-ssl-log'),null);
+}
+function checkSslStatusFor(domain,log,replaceEl){
+  fetch('admin.php?ajax=domain_ssl_status&domain='+encodeURIComponent(domain))
+  .then(function(r){return r.json();}).then(function(d){
+    var col=d.status==='active'?'#16a34a':d.status==='pending'?'#d97706':'#ef4444';
+    var html='<div style="font-size:13px;padding:6px 10px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:'+col+'">'
+      +esc(d.msg||'')+(d.expiry?' — انتهاء: '+esc(d.expiry):'')+(d.issuer?' ('+esc(d.issuer)+')':'')+'</div>';
+    if(replaceEl){replaceEl.outerHTML=html;}else{var el=document.createElement('div');el.innerHTML=html;log.appendChild(el);}
+  }).catch(function(){if(replaceEl)replaceEl.textContent='❌ فشل فحص الحالة';});
+}
+
+/* ── Namecheap / RDAP domain check ── */
+function runNcCheck(){
+  var raw=document.getElementById('nc-domains').value.trim();
+  var domains=raw.split(/[\n,\s]+/).map(function(d){return d.trim().toLowerCase();}).filter(Boolean);
+  var res=document.getElementById('nc-results');
+  if(!domains.length){alert('أدخل نطاقاً واحداً على الأقل');return;}
+  res.innerHTML='<div style="color:var(--muted);font-size:13px">⏳ جارٍ الفحص...</div>';
+  fetch('admin.php?ajax=namecheap_check',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({domains:domains})})
+  .then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){res.innerHTML='<div style="color:#ef4444;font-size:13px">❌ '+esc(d.error)+'</div>';return;}
+    var noteHtml=d.note?'<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+esc(d.note)+'</div>':'';
+    res.innerHTML=noteHtml+d.results.map(function(r){
+      var color=r.available?'#22c55e':'#ef4444';
+      var label=r.available?'✅ متاح':'❌ مأخوذ';
+      if(r.status==='unknown'){color='#f59e0b';label='⚠ غير معروف';}
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border)">'
+        +'<span style="font-family:monospace;direction:ltr;min-width:200px">'+esc(r.domain)+'</span>'
+        +'<span style="font-weight:600;color:'+color+'">'+label+'</span>'
+        +(r.isPremium?'<span style="font-size:11px;color:#d97706">Premium</span>':'')
+        +(r.price?'<span style="font-size:12px;color:var(--muted)">$'+esc(r.price)+'</span>':'')
+        +(r.available?'<a href="https://www.namecheap.com/domains/registration/results/?domain='+encodeURIComponent(r.domain)+'" target="_blank" class="btn-sm" style="font-size:11px;margin-right:auto">تسجيل →</a>':'')
+        +'</div>';
+    }).join('');
+  }).catch(function(){res.innerHTML='<div style="color:#ef4444;font-size:13px">❌ فشل الاتصال</div>';});
 }
 </script>
 
