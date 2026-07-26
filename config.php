@@ -1,28 +1,41 @@
 <?php
 /* ═══════════════════════════════════════════════
    YASSOTA  — config.php
-   عدّل هذا الملف فقط ببيانات استضافتك
+   لا تعدّل هذا الملف مباشرةً — ضع بيانات
+   استضافتك في config.local.php (لا يُرفع لـ git)
    ═══════════════════════════════════════════════ */
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'your_db_name');
-define('DB_USER', 'your_db_user');
-define('DB_PASS', 'your_db_password');
+/*
+ * تحميل الإعدادات المحلية (بيانات قاعدة البيانات، SITE_URL، إلخ)
+ * هذا الملف موجود فقط على السيرفر ولا يُرفع إلى git،
+ * لذا يبقى سليماً بعد كل تحديث.
+ * عند النشر الأول: انسخ config.local.php.example إلى config.local.php وعدّله.
+ */
+$_localCfg = __DIR__ . '/config.local.php';
+if (file_exists($_localCfg)) {
+    require_once $_localCfg;
+}
+unset($_localCfg);
 
-define('SITE_URL',    'https://example.com');   // بدون / في النهاية
-define('SITE_NAME',   'yassota');
-define('APP_SECRET',  'change-me-to-random-string-xyz789');
+// القيم الافتراضية — تُستخدم فقط إن لم يُعرَّف المتغير في config.local.php
+defined('DB_HOST')     || define('DB_HOST',     'localhost');
+defined('DB_NAME')     || define('DB_NAME',     'your_db_name');
+defined('DB_USER')     || define('DB_USER',     'your_db_user');
+defined('DB_PASS')     || define('DB_PASS',     'your_db_password');
 
-define('MAX_ICON_MB',  5);
-define('MAX_APK_MB',   500);
-define('ROOT_PATH',    __DIR__);
-define('UPLOAD_PATH',  __DIR__ . '/uploads');
-define('UPLOAD_URL',   SITE_URL . '/uploads');
+defined('SITE_URL')    || define('SITE_URL',    'https://example.com');  // بدون / في النهاية
+defined('SITE_NAME')   || define('SITE_NAME',   'yassota');
+defined('APP_SECRET')  || define('APP_SECRET',  'change-me-to-random-string-xyz789');
+
+defined('MAX_ICON_MB') || define('MAX_ICON_MB',  5);
+defined('MAX_APK_MB')  || define('MAX_APK_MB',   500);
+defined('ROOT_PATH')   || define('ROOT_PATH',    __DIR__);
+defined('UPLOAD_PATH') || define('UPLOAD_PATH',  __DIR__ . '/uploads');
+defined('UPLOAD_URL')  || define('UPLOAD_URL',   SITE_URL . '/uploads');
 
 // ─── Evil security system ───────────────────────────────────────
-// This IP is always exempt from all security checks, view/download
-// counting, and analytics. Edit to match the real admin's IP.
-define('EVIL_ADMIN_IP', '149.86.144.52');
+// عدّل هذا في config.local.php وليس هنا
+defined('EVIL_ADMIN_IP') || define('EVIL_ADMIN_IP', '0.0.0.0');
 
 date_default_timezone_set('Asia/Riyadh');
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
