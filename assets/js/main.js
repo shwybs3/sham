@@ -18,14 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
   var commentSlot = document.getElementById('comment-form-slot');
   if (commentSlot) {
     if (typeof fetch !== 'undefined') {
-      fetch('comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''))
+      fetch('/comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''))
         .then(function(r){ return r.ok ? r.text() : Promise.reject(); })
         .then(function(html){ commentSlot.innerHTML = html; })
         .catch(function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
     } else {
       // Fallback for very old browsers without fetch
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''));
+      xhr.open('GET', '/comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''));
       xhr.onload = function(){ if (xhr.status === 200) commentSlot.innerHTML = xhr.responseText; };
       xhr.onerror = function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم.</p>'; };
       xhr.send();

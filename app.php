@@ -174,9 +174,9 @@ $catMap = [
     'communication' => 'CommunicationApplication',
 ];
 $schemaCategory = $catMap[strtolower($app['cat_slug'] ?? '')] ?? 'MobileApplication';
-// Prefer admin-set explicit count, then real comment count, then downloads÷100 (floor 50 so Google shows stars)
+// Only use real rating counts — never a synthetic download-based proxy
 $ratingCount = !empty($app['rating_count']) ? (int)$app['rating_count']
-    : ($commentCount > 0 ? $commentCount : max(50, intval(($app['downloads'] ?: 0) / 10)));
+    : ($commentCount > 0 ? $commentCount : 0);
 
 $schemaData = [
     "@context" => "https://schema.org",
@@ -193,13 +193,6 @@ $schemaData = [
         "priceCurrency" => "USD",
         "availability" => "https://schema.org/InStock",
     ],
-    "aggregateRating" => [
-        "@type" => "AggregateRating",
-        "ratingValue" => number_format($avgRating, 1),
-        "ratingCount" => $ratingCount,
-        "bestRating"  => "5",
-        "worstRating" => "1",
-    ],
     "publisher" => ["@type" => "Organization", "name" => get_cfg($pdo, 'site_name', 'yassota'), "url" => rtrim(SITE_URL, '/')],
 ];
 if ($app['developer'])    $schemaData["author"] = ["@type" => "Organization", "name" => $app['developer']];
@@ -212,6 +205,16 @@ if ($app['downloads'] > 0) $schemaData["interactionStatistic"] = [
     "interactionType" => "https://schema.org/DownloadAction",
     "userInteractionCount" => (int)$app['downloads'],
 ];
+// Only include aggregateRating when real reviews exist — Google penalises synthetic counts
+if ($ratingCount > 0 && $avgRating > 0) {
+    $schemaData["aggregateRating"] = [
+        "@type"       => "AggregateRating",
+        "ratingValue" => number_format($avgRating, 1),
+        "ratingCount" => $ratingCount,
+        "bestRating"  => "5",
+        "worstRating" => "1",
+    ];
+}
 // Remove null values
 $schemaData = array_filter($schemaData, fn($v) => $v !== null && $v !== '');
 $schema = json_encode($schemaData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
