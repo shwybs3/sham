@@ -609,9 +609,9 @@ function wave(): string {
   <div class="section-box reveal">
     <div class="section-head"><span class="section-title">صور من التطبيق</span></div>
     <div class="screenshots-scroll">
-      <?php foreach ($screenshots as $i => $ss): ?>
+      <?php foreach ($screenshots as $i => $ss): $ssUrl = (str_starts_with($ss,'http')||str_starts_with($ss,'//')) ? $ss : media_url($ss); ?>
       <div class="screenshot-thumb">
-        <img src="<?= h($ss) ?>" alt="<?= h($app['name']) ?> screenshot <?= $i+1 ?>" loading="lazy">
+        <img src="<?= h($ssUrl) ?>" alt="<?= h($app['name']) ?> screenshot <?= $i+1 ?>" loading="lazy">
         <div class="screenshot-overlay"><?= svgi('zoom') ?></div>
       </div>
       <?php endforeach; ?>

@@ -4591,7 +4591,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'create_subdomain' && is_admin()) 
     }
 
     $siteHost  = parse_url(rtrim(get_cfg($pdo,'site_url',SITE_URL),'/'), PHP_URL_HOST) ?: '';
-    $subName   = $slug . '-tool';
+    $subName   = $slug;
     $subDomain = $subName . '.' . $siteHost;
     $docRoot   = $docBase ? "{$docBase}/{$subName}" : "public_html/{$subName}";
 
@@ -4625,7 +4625,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'create_subdomain' && is_admin()) 
             echo json_encode(['ok'=>false,'error'=>$msg]); exit;
         }
     }
-    echo json_encode(['ok'=>true,'subdomain'=>$subDomain,'docroot'=>$docRoot]);
+    // Try to write default content to the subdomain directory
+    $serverRoot = rtrim(get_cfg($pdo,'server_doc_root') ?: '/home/'.get_cfg($pdo,'cpanel_user').'/public_html', '/');
+    $subDir     = $serverRoot . '/' . $subName;
+    $deployed   = false;
+    if ($serverRoot && !is_dir($subDir) && @mkdir($subDir, 0755, true)) {
+        $deployed = true;
+    } elseif (is_dir($subDir)) {
+        $deployed = true;
+    }
+    if ($deployed && !file_exists($subDir . '/index.php')) {
+        $toolLabels = ['compress'=>'ضاغط الصور','resize'=>'تغيير حجم الصورة','qr'=>'مولّد QR Code',
+                       'pass'=>'مولّد كلمات المرور','colors'=>'منتقي الألوان','encode'=>'مشفّر Base64/URL',
+                       'words'=>'عدّاد الكلمات','whatsapp'=>'روابط واتساب مباشرة',
+                       'write'=>'كاتب المحتوى AI','hashtag'=>'مولّد الهاشتاق AI'];
+        $toolName = $toolLabels[$slug] ?? $slug;
+        $siteMain = rtrim(get_cfg($pdo,'site_url') ?: 'https://yassota.com', '/');
+        $defaultHtml  = '<?php header("Location: ' . $siteMain . '"); exit; ?>';
+        @file_put_contents($subDir . '/index.php', $defaultHtml);
+    }
+    echo json_encode(['ok'=>true,'subdomain'=>$subDomain,'docroot'=>$docRoot,'dir'=>$subDir,'deployed'=>$deployed]);
     exit;
 }
 
@@ -9739,6 +9758,7 @@ elseif ($page === 'html-pages'):
     <?php endif; ?>
     <?php $pagesUrl = rtrim(SITE_URL,'/').'/pages/'; ?>
     <a href="<?= h($pagesUrl) ?>" target="_blank" style="font-size:12px;color:var(--muted)">📂 /pages/ على الموقع</a>
+    <span style="font-size:11px;color:var(--muted)">⚠ الإرسال لـ IndexNow يعني "أبلغنا Google" فقط — الفهرسة الفعلية قد تستغرق أياماً</span>
   </div>
 </div>
 
@@ -9846,6 +9866,7 @@ function startBulkGen(){
   btn.disabled=true; btn.textContent='⟳ جارٍ التوليد…';
   if(wrap)wrap.style.display='block';
 
+  var genCompleted = false;
   const es=new EventSource('?ajax=generate_html_pages_bulk');
   es.onmessage=function(e){
     try{
@@ -9854,6 +9875,7 @@ function startBulkGen(){
       if(counter)counter.textContent=d.done+'/'+d.total;
       if(curApp)curApp.textContent='🔄 '+d.name;
       if(d.complete){
+        genCompleted=true;
         es.close();
         if(status)status.textContent='✅ تم توليد '+d.done+' صفحة وإرسالها لـ IndexNow';
         btn.textContent='✓ اكتمل';
@@ -9868,7 +9890,8 @@ function startBulkGen(){
   };
   es.onerror=function(){
     es.close();
-    if(status)status.textContent='❌ حدث خطأ أثناء التوليد';
+    if(genCompleted) return; // normal close after success — not an error
+    if(status)status.textContent='❌ حدث خطأ في الاتصال — حاول مجدداً';
     btn.disabled=false; btn.textContent='⚡ توليد جميع الصفحات';
   };
 }
@@ -10384,7 +10407,15 @@ $docRoot = rtrim(get_cfg($pdo,'server_doc_root') ?: '/home/'.get_cfg($pdo,'cpane
 
 <div class="admin-header">
   <h1>أدوات الويب (Subdomains)</h1>
-  <p style="color:var(--muted);font-size:13px;margin-top:4px">إدارة أدوات الويب المثبّتة على نطاقات فرعية — تأكد من ضبط بيانات cPanel في الإعدادات أولاً</p>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">إدارة أدوات الويب على النطاقات الفرعية — تأكد من ضبط بيانات cPanel في الإعدادات أولاً</p>
+</div>
+
+<div class="panel" style="margin-bottom:16px;border-right:3px solid #f59e0b;background:rgba(245,158,11,.05)">
+  <p style="font-size:13px;color:#92400e;margin:0">
+    <strong>⚠ تنبيه مهم:</strong> تم إصلاح خطأ كان يُسجِّل النطاقات بصيغة <code>hashtag-tool.yassota.com</code> بدلاً من <code>hashtag.yassota.com</code>.
+    إذا سجّلت النطاقات سابقاً، يرجى <strong>حذف النطاقات القديمة من cPanel</strong> ثم اضغط "تسجيل جميع النطاقات" مجدداً.
+    النطاقات الصحيحة الآن: <code>qr.yassota.com</code>، <code>hashtag.yassota.com</code>، إلخ.
+  </p>
 </div>
 
 <div class="panel" style="margin-bottom:20px">
@@ -10457,7 +10488,7 @@ function registerSub(slug) {
         btn.style.background = '#22c55e';
         btn.textContent = '✓ مُسجَّل';
         st.style.color = '#22c55e';
-        st.textContent = 'نجح';
+        st.textContent = d.deployed ? 'نجح — الملفات: ' + (d.dir || d.docroot) : 'نجح';
       } else {
         btn.disabled = false;
         btn.textContent = 'إعادة المحاولة';
@@ -10466,7 +10497,8 @@ function registerSub(slug) {
       }
       var log = document.getElementById('reg-log');
       log.style.display = 'block';
-      log.textContent += '['+slug+'] ' + JSON.stringify(d) + '\n';
+      var msg = '['+slug+'] ' + (d.ok ? '✓ ' + d.subdomain + (d.dir ? '\n    ملف الإندكس: ' + d.dir + '/index.php' : '') : '✗ ' + (d.error||'خطأ')) + '\n';
+      log.textContent += msg;
     })
     .catch(function(e){
       btn.disabled = false;
