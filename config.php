@@ -691,6 +691,26 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'subdomains';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS domains (
+      id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      name          VARCHAR(64) NOT NULL,
+      tld           VARCHAR(30) NOT NULL,
+      full_domain   VARCHAR(128) NOT NULL,
+      type          ENUM('free_sub','free_real','cheap','paid','reserved') NOT NULL DEFAULT 'reserved',
+      source        VARCHAR(64) DEFAULT NULL,
+      status        ENUM('available','taken','unknown','reserved','active','expired') NOT NULL DEFAULT 'reserved',
+      expires_at    DATE NULL,
+      registrar_url TEXT DEFAULT NULL,
+      price_usd     DECIMAL(8,2) NULL,
+      notes         TEXT DEFAULT NULL,
+      admin_only    TINYINT(1) NOT NULL DEFAULT 1,
+      created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_domain (full_domain),
+      INDEX idx_tld (tld),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'domains';
+
     return $log;
 }
 ensure_schema($pdo);

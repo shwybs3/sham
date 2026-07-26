@@ -5091,6 +5091,75 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'hosting_toggle_https' && is_admin
     exit;
 }
 
+/* ─────────────── DOMAIN MANAGER AJAX ─────────────── */
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_check' && is_admin()) {
+    header('Content-Type: application/json');
+    $name = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim($_GET['name'] ?? '')));
+    $tld  = preg_replace('/[^a-z0-9\.\-]/', '', strtolower(trim($_GET['tld'] ?? '')));
+    if (!$name || !$tld) { echo json_encode(['ok'=>false,'status'=>'error','msg'=>'missing']); exit; }
+    $full = $name . '.' . $tld;
+    // Use RDAP.org — free, ICANN-backed
+    $ch = curl_init('https://rdap.org/domain/' . urlencode($full));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+        CURLOPT_FOLLOWLOCATION => true, CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_USERAGENT => 'yassota-domain-checker/1.0',
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+    if ($curlErr) { echo json_encode(['ok'=>true,'status'=>'unknown','domain'=>$full]); exit; }
+    $status = ($code === 404) ? 'available' : (($code === 200) ? 'taken' : 'unknown');
+    echo json_encode(['ok'=>true,'status'=>$status,'domain'=>$full,'http'=>$code]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_reserve' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $name   = preg_replace('/[^a-z0-9\-]/', '', strtolower(trim($input['name'] ?? '')));
+    $tld    = preg_replace('/[^a-z0-9\.\-]/', '', strtolower(trim($input['tld'] ?? '')));
+    $type   = in_array($input['type']??'', ['free_sub','free_real','cheap','paid','reserved']) ? $input['type'] : 'reserved';
+    $source = trim($input['source'] ?? '');
+    $price  = is_numeric($input['price'] ?? '') ? (float)$input['price'] : null;
+    $notes  = trim($input['notes'] ?? '');
+    $expires = !empty($input['expires']) ? $input['expires'] : null;
+    $regUrl = trim($input['registrar_url'] ?? '');
+    if (!$name || !$tld) { echo json_encode(['ok'=>false,'error'=>'الاسم والامتداد مطلوبان']); exit; }
+    $full   = $name . '.' . $tld;
+    try {
+        $pdo->prepare("INSERT INTO domains (name,tld,full_domain,type,source,status,price_usd,notes,expires_at,registrar_url) VALUES (?,?,?,'reserved',?,?,?,?,?,?) ON DUPLICATE KEY UPDATE type=VALUES(type),source=VALUES(source),status='reserved',price_usd=VALUES(price_usd),notes=VALUES(notes),expires_at=VALUES(expires_at),registrar_url=VALUES(registrar_url)")
+            ->execute([$name,$tld,$full,$source?:'admin',$type,$price,$notes,$expires,$regUrl]);
+        echo json_encode(['ok'=>true,'id'=>(int)$pdo->lastInsertId(),'domain'=>$full]);
+    } catch (\Throwable $e) { echo json_encode(['ok'=>false,'error'=>$e->getMessage()]); }
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_delete' && is_admin()) {
+    header('Content-Type: application/json');
+    $id = (int)(json_decode(file_get_contents('php://input'),true)['id'] ?? 0);
+    if ($id) $pdo->prepare("DELETE FROM domains WHERE id=?")->execute([$id]);
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_update_status' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id     = (int)($input['id'] ?? 0);
+    $status = in_array($input['status']??'', ['available','taken','unknown','reserved','active','expired']) ? $input['status'] : 'reserved';
+    $notes  = trim($input['notes'] ?? '');
+    $expires = !empty($input['expires']) ? $input['expires'] : null;
+    if ($id) {
+        $pdo->prepare("UPDATE domains SET status=?,notes=?,expires_at=? WHERE id=?")->execute([$status,$notes,$expires,$id]);
+    }
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
@@ -5136,6 +5205,7 @@ $navLinks = [
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'tools-manager' => ['label'=>'أدوات الويب (Subdomains)', 'icon'=>'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
     'hosting-manager' => ['label'=>'مدير الاستضافة والدومينات', 'icon'=>'M5 12H3l9-9 9 9h-2M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7M9 21V12h6v9'],
+    'domain-manager' => ['label'=>'مدير النطاقات المجانية', 'icon'=>'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9'],
     'ad-networks' => ['label'=>'شبكات الإعلانات & AdSense', 'icon'=>'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
@@ -10518,6 +10588,680 @@ function registerAll() {
   }
   next();
 }
+</script>
+
+<?php
+/* ─────────────── FREE DOMAIN MANAGER ─────────────── */
+elseif ($page === 'domain-manager'):
+$reservedDomains = $pdo->query("SELECT * FROM domains ORDER BY created_at DESC")->fetchAll();
+$tldCatalog = [
+  // [tld, length, price_ar, type, category, emoji, registrar_hint]
+  // === 2 حرف (نادر جداً) ===
+  ['io','2','$35-60/سنة','paid','tech','⚡','namecheap.com'],
+  ['co','2','$28-35/سنة','paid','business','💼','namecheap.com'],
+  ['ai','2','$80-100/سنة','paid','tech','🤖','namecheap.com'],
+  ['me','2','$12-18/سنة','paid','personal','👤','namecheap.com'],
+  ['tv','2','$28-40/سنة','paid','media','📺','namecheap.com'],
+  ['fm','2','$85-120/سنة','paid','media','📻','get.fm'],
+  ['gg','2','$13-20/سنة','paid','gaming','🎮','namecheap.com'],
+  ['sh','2','$25-40/سنة','paid','tech','🐚','namecheap.com'],
+  ['to','2','$38-55/سنة','paid','general','➡️','namecheap.com'],
+  ['cc','2','$18-28/سنة','paid','general','©️','namecheap.com'],
+  ['ws','2','$14-22/سنة','paid','general','🌐','namecheap.com'],
+  ['ly','2','$75/سنة','paid','general','🔗','register.ly'],
+  ['gl','2','$30/سنة','paid','general','🌍','namecheap.com'],
+  ['pm','2','مجاني*','free_real','french','🇫🇷','nic.pm'],
+  ['re','2','~€12/سنة','paid','french','🇫🇷','nic.re'],
+  ['am','2','$40/سنة','paid','general','🎵','amnic.net'],
+  ['st','2','$25/سنة','paid','general','🌟','nic.st'],
+  ['ht','2','$30/سنة','paid','general','🌴','haitidomains.com'],
+  ['pw','2','$2-5/سنة','cheap','general','🌊','namecheap.com'],
+  // === 3 حرف (مميز) ===
+  ['com','3','$8-15/سنة','paid','general','🏆','namecheap.com'],
+  ['net','3','$10-14/سنة','paid','tech','🌐','namecheap.com'],
+  ['org','3','$9-12/سنة','paid','nonprofit','🤝','namecheap.com'],
+  ['app','3','$12-18/سنة','paid','tech','📱','namecheap.com'],
+  ['dev','3','$10-15/سنة','paid','tech','👨‍💻','namecheap.com'],
+  ['pro','3','$10-16/سنة','paid','business','💎','namecheap.com'],
+  ['biz','3','$8-13/سنة','paid','business','📊','namecheap.com'],
+  ['fun','3','$1-3/سنة','cheap','general','🎉','namecheap.com'],
+  ['xyz','3','$0.99-5/سنة','cheap','general','🔤','namecheap.com'],
+  ['one','3','$3-8/سنة','cheap','general','1️⃣','namecheap.com'],
+  ['wtf','3','$20-30/سنة','paid','fun','😤','namecheap.com'],
+  ['ink','3','$15-25/سنة','paid','creative','🖊️','namecheap.com'],
+  ['run','3','$10-18/سنة','paid','general','🏃','namecheap.com'],
+  ['ski','3','$40-60/سنة','paid','sports','⛷️','namecheap.com'],
+  ['bio','3','$35-50/سنة','paid','science','🧬','namecheap.com'],
+  ['eco','3','$80/سنة','paid','environment','🌿','namecheap.com'],
+  ['red','3','$10-20/سنة','cheap','general','🔴','namecheap.com'],
+  ['tel','3','$8-15/سنة','cheap','general','📞','namecheap.com'],
+  ['top','3','$1-3/سنة','cheap','general','🔝','namecheap.com'],
+  ['win','3','$3-8/سنة','cheap','general','🏅','namecheap.com'],
+  ['bid','3','$3-6/سنة','cheap','general','🔨','namecheap.com'],
+  ['vip','3','$15-25/سنة','paid','premium','⭐','namecheap.com'],
+  ['tax','3','$40-60/سنة','paid','finance','💰','namecheap.com'],
+  ['law','3','$60-80/سنة','paid','legal','⚖️','namecheap.com'],
+  // === 4 حرف (مميز) ===
+  ['blog','4','$22-35/سنة','paid','content','📝','namecheap.com'],
+  ['shop','4','$28-40/سنة','paid','ecommerce','🛍️','namecheap.com'],
+  ['tech','4','$35-55/سنة','paid','tech','💻','namecheap.com'],
+  ['club','4','$8-15/سنة','cheap','community','🎪','namecheap.com'],
+  ['live','4','$13-20/سنة','paid','media','🔴','namecheap.com'],
+  ['news','4','$35-50/سنة','paid','media','📰','namecheap.com'],
+  ['wiki','4','$28-40/سنة','paid','content','📚','namecheap.com'],
+  ['site','4','$1-5/سنة','cheap','general','🏠','namecheap.com'],
+  ['help','4','$25-40/سنة','paid','general','🆘','namecheap.com'],
+  ['host','4','$30-50/سنة','paid','tech','🖥️','namecheap.com'],
+  ['zone','4','$20-35/سنة','paid','general','🗺️','namecheap.com'],
+  ['blue','4','$15-25/سنة','cheap','general','🔵','namecheap.com'],
+  ['gold','4','$20-35/سنة','paid','premium','🟡','namecheap.com'],
+  ['pink','4','$15-25/سنة','cheap','general','🌸','namecheap.com'],
+  ['love','4','$20-30/سنة','paid','general','❤️','namecheap.com'],
+  ['guru','4','$28-40/سنة','paid','knowledge','🧘','namecheap.com'],
+  ['cafe','4','$20-30/سنة','paid','food','☕','namecheap.com'],
+  ['city','4','$20-30/سنة','paid','local','🏙️','namecheap.com'],
+  ['chat','4','$20-30/سنة','paid','social','💬','namecheap.com'],
+  ['buzz','4','$20-30/سنة','cheap','social','🐝','namecheap.com'],
+  ['casa','4','$8-15/سنة','cheap','real-estate','🏡','namecheap.com'],
+  ['care','4','$20-30/سنة','paid','health','💚','namecheap.com'],
+  ['game','4','$15-25/سنة','paid','gaming','🎮','namecheap.com'],
+  ['gift','4','$25-35/سنة','paid','ecommerce','🎁','namecheap.com'],
+  ['golf','4','$55-80/سنة','paid','sports','⛳','namecheap.com'],
+  ['page','4','$12-18/سنة','cheap','general','📄','namecheap.com'],
+  ['pics','4','$12-20/سنة','cheap','media','📸','namecheap.com'],
+  ['rent','4','$25-40/سنة','paid','real-estate','🏘️','namecheap.com'],
+  ['rest','4','$25-40/سنة','paid','food','🍽️','namecheap.com'],
+  ['show','4','$15-25/سنة','paid','entertainment','🎬','namecheap.com'],
+  ['surf','4','$15-25/سنة','cheap','sports','🏄','namecheap.com'],
+  ['taxi','4','$20-30/سنة','paid','transport','🚕','namecheap.com'],
+  ['team','4','$20-30/سنة','paid','business','👥','namecheap.com'],
+  ['tips','4','$15-25/سنة','cheap','content','💡','namecheap.com'],
+  ['tour','4','$25-35/سنة','paid','travel','✈️','namecheap.com'],
+  ['toys','4','$20-30/سنة','paid','ecommerce','🧸','namecheap.com'],
+  ['tube','4','$20-30/سنة','paid','media','📹','namecheap.com'],
+  ['sale','4','$8-15/سنة','cheap','ecommerce','🏷️','namecheap.com'],
+  ['farm','4','$20-30/سنة','paid','agriculture','🌾','namecheap.com'],
+  ['fish','4','$20-30/سنة','paid','general','🐟','namecheap.com'],
+  ['food','4','$25-40/سنة','paid','food','🍔','namecheap.com'],
+  ['hair','4','$20-30/سنة','paid','beauty','💇','namecheap.com'],
+  ['kids','4','$20-30/سنة','paid','education','👶','namecheap.com'],
+  ['limo','4','$35-50/سنة','paid','transport','🚙','namecheap.com'],
+  ['loan','4','$40-60/سنة','paid','finance','💳','namecheap.com'],
+  ['mobi','4','$15-25/سنة','cheap','mobile','📱','namecheap.com'],
+  // === دومينات فرعية مجانية (كلها مجانية) ===
+  ['github.io','9','مجاني 100%','free_sub','free','🐱','github.com'],
+  ['netlify.app','10','مجاني 100%','free_sub','free','⚡','netlify.com'],
+  ['vercel.app','9','مجاني 100%','free_sub','free','▲','vercel.com'],
+  ['pages.dev','8','مجاني 100%','free_sub','free','☁️','pages.cloudflare.com'],
+  ['onrender.com','11','مجاني 100%','free_sub','free','🎨','render.com'],
+  ['surge.sh','7','مجاني 100%','free_sub','free','⚡','surge.sh'],
+  ['rf.gd','4','مجاني 100%','free_sub','free','♾️','infinityfree.com'],
+  ['epizy.com','8','مجاني 100%','free_sub','free','♾️','infinityfree.com'],
+  ['eu.org','5','مجاني 100%','free_real','free','🇪🇺','eu.org'],
+  ['js.org','5','مجاني (JS فقط)','free_sub','free','🟨','js.org'],
+  ['glitch.me','7','مجاني 100%','free_sub','free','✨','glitch.com'],
+  ['replit.app','9','مجاني 100%','free_sub','free','♻️','replit.com'],
+];
+
+// Free sources guide data
+$freeSources = [
+  [
+    'name' => 'InfinityFree',
+    'logo' => '♾️',
+    'url'  => 'https://infinityfree.com',
+    'free_tlds' => ['.rf.gd', '.epizy.com', '.infinityfreeapp.com'],
+    'features' => ['PHP + MySQL مجاناً','400MB مساحة','SSL مجاني','Unlimited bandwidth'],
+    'steps' => [
+      'سجّل على infinityfree.com (بريد إلكتروني فقط)',
+      'اضغط "Create Account" → اختر أي اسم → احصل على نطاق مجاني',
+      'ارفع ملفاتك عبر File Manager أو FTP: Host: ftpupload.net — Port: 21',
+      'لإضافة نطاق خارجي: Addon Domains → أدخل النطاق → انسخ Nameservers',
+      'اذهب لمسجّل نطاقك → غيّر Nameservers إلى القيم من InfinityFree',
+    ],
+    'color' => '#6366f1',
+  ],
+  [
+    'name' => 'GitHub Pages',
+    'logo' => '🐱',
+    'url'  => 'https://pages.github.com',
+    'free_tlds' => ['.github.io'],
+    'features' => ['HTTPS تلقائي','نطاق مجاني دائم','Git-based deployment','مناسب للمواقع الثابتة'],
+    'steps' => [
+      'أنشئ حساباً على github.com',
+      'أنشئ Repository باسم: username.github.io',
+      'ارفع ملفاتك إلى الـ repository',
+      'اذهب Settings → Pages → اختر branch → احفظ',
+      'موقعك سيكون على: https://username.github.io',
+      'لنطاق مخصص: أضف ملف CNAME واكتب نطاقك، ثم غيّر DNS في مسجّل النطاق',
+    ],
+    'color' => '#24292e',
+  ],
+  [
+    'name' => 'Netlify',
+    'logo' => '⚡',
+    'url'  => 'https://netlify.com',
+    'free_tlds' => ['.netlify.app'],
+    'features' => ['Deploy تلقائي من GitHub','HTTPS تلقائي','CDN عالمي','100GB bandwidth مجاناً'],
+    'steps' => [
+      'سجّل على netlify.com (مجاناً بحساب GitHub)',
+      'اضغط "Add new site" → "Deploy manually" أو ربط GitHub repo',
+      'ارفع مجلد موقعك بالسحب والإفلات',
+      'ستحصل فوراً على رابط: https://random-name.netlify.app',
+      'لتغيير الاسم: Site settings → Change site name',
+      'لنطاق مخصص: Domain settings → Add custom domain → غيّر DNS',
+    ],
+    'color' => '#00c7b7',
+  ],
+  [
+    'name' => 'Cloudflare Pages',
+    'logo' => '☁️',
+    'url'  => 'https://pages.cloudflare.com',
+    'free_tlds' => ['.pages.dev'],
+    'features' => ['CDN Cloudflare العالمي','نطاق مجاني دائم','HTTPS تلقائي','Unlimited requests'],
+    'steps' => [
+      'سجّل على cloudflare.com (مجاناً)',
+      'اذهب Workers & Pages → Create application → Pages',
+      'اختر "Direct Upload" أو اربط GitHub/GitLab',
+      'ارفع ملفاتك → اضغط Deploy',
+      'ستحصل على: https://project-name.pages.dev',
+      'لنطاق مخصص: Custom domains → Add a domain',
+    ],
+    'color' => '#f48120',
+  ],
+  [
+    'name' => 'Vercel',
+    'logo' => '▲',
+    'url'  => 'https://vercel.com',
+    'free_tlds' => ['.vercel.app'],
+    'features' => ['أسرع CDN عالمي','Zero config deployment','HTTPS تلقائي','100GB bandwidth مجاناً'],
+    'steps' => [
+      'سجّل على vercel.com بحساب GitHub',
+      'اضغط "Add New" → "Project"',
+      'استورد repo من GitHub أو ارفع المجلد يدوياً',
+      'اضغط Deploy — سيعمل الموقع فوراً',
+      'ستحصل على: https://project.vercel.app',
+      'لنطاق مخصص: Project Settings → Domains → Add',
+    ],
+    'color' => '#000000',
+  ],
+  [
+    'name' => 'Render',
+    'logo' => '🎨',
+    'url'  => 'https://render.com',
+    'free_tlds' => ['.onrender.com'],
+    'features' => ['PHP + Node + Python مجاناً','نطاق مجاني','HTTPS تلقائي','Cron Jobs مجاناً'],
+    'steps' => [
+      'سجّل على render.com (مجاناً)',
+      'اضغط "New" → "Web Service" أو "Static Site"',
+      'اربط GitHub repo أو ارفع الكود مباشرة',
+      'اختر Runtime: PHP, Node, Python, إلخ',
+      'موقعك سيكون: https://project.onrender.com',
+      'لنطاق مخصص: Settings → Custom Domains',
+    ],
+    'color' => '#46e3b7',
+  ],
+  [
+    'name' => 'EU.org (نطاق حقيقي مجاني)',
+    'logo' => '🇪🇺',
+    'url'  => 'https://eu.org',
+    'free_tlds' => ['.eu.org'],
+    'features' => ['نطاق حقيقي (ليس subdomain)','مجاني بالكامل','يُقبل منذ 1996','صالح مدى الحياة'],
+    'steps' => [
+      'اذهب eu.org وسجّل حساباً جديداً',
+      'من "Register a domain" أدخل الاسم المطلوب',
+      'أدخل Nameservers الخاصة باستضافتك (يجب أن تكون لديك استضافة)',
+      'انتظر موافقة المشرفين — قد يستغرق أسابيع (يدوي وبطيء)',
+      'بعد القبول، نطاقك name.eu.org يعمل بشكل دائم ومجاني',
+      'مثالي للمشاريع التقنية والمجتمعية',
+    ],
+    'color' => '#003399',
+  ],
+];
+?>
+
+<div class="admin-header">
+  <h1>🌐 مدير النطاقات المجانية</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">
+    ابحث عن نطاقات مجانية أو رخيصة — احجزها وتتبعها — دليل كامل لـ <?= count($freeSources) ?> مصادر مجانية
+  </p>
+</div>
+
+<!-- ── TAB NAVIGATION ── -->
+<div id="dm-tabs" style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto">
+  <?php foreach(['search'=>'🔍 بحث عن نطاق','my-domains'=>'📋 نطاقاتي ('.count($reservedDomains).')','free-guide'=>'🆓 مصادر مجانية','tld-catalog'=>'📚 كتالوج الامتدادات'] as $tab=>$label): ?>
+  <button onclick="switchTab('<?= $tab ?>')" class="dm-tab-btn" data-tab="<?= $tab ?>"
+    style="padding:10px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px">
+    <?= $label ?>
+  </button>
+  <?php endforeach; ?>
+</div>
+
+<!-- ════ TAB: SEARCH ════ -->
+<div id="tab-search" class="dm-tab-panel">
+
+  <!-- Search bar -->
+  <div class="panel" style="margin-bottom:20px">
+    <h3 style="margin:0 0 14px;font-size:15px">أدخل اسم النطاق المطلوب</h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <input id="dm-name-input" type="text" class="form-input" placeholder="mysite" style="flex:1;min-width:200px;font-size:18px;font-weight:700;direction:ltr" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'')">
+      <button onclick="startDomainSearch()" class="btn-primary" id="dm-search-btn" style="padding:12px 24px;font-size:15px">🔍 ابحث</button>
+    </div>
+
+    <!-- Filter chips -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px" id="dm-filter-chips">
+      <button class="dm-filter active" data-filter="all" onclick="setFilter('all',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--primary);color:#fff;cursor:pointer;font-size:12px">🌐 الكل</button>
+      <button class="dm-filter" data-filter="free" onclick="setFilter('free',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px">🆓 مجانية فقط</button>
+      <button class="dm-filter" data-filter="2" onclick="setFilter('2',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px">⚡ 2 حرف (نادرة)</button>
+      <button class="dm-filter" data-filter="3" onclick="setFilter('3',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px">💎 3 حروف</button>
+      <button class="dm-filter" data-filter="4" onclick="setFilter('4',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px">🏆 4 حروف</button>
+      <button class="dm-filter" data-filter="cheap" onclick="setFilter('cheap',this)" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px">💸 رخيصة $1-5</button>
+    </div>
+    <div id="dm-progress" style="display:none;margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span id="dm-progress-text" style="font-size:13px;color:var(--muted)">جارٍ الفحص...</span>
+        <span id="dm-progress-count" style="font-size:12px;color:var(--muted)">0/0</span>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px">
+        <div id="dm-progress-bar" style="height:100%;background:linear-gradient(90deg,#22c55e,#3b82f6);border-radius:3px;width:0;transition:width .3s"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results legend -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;margin-left:4px"></span>متاح</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-left:4px"></span>مأخوذ</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;margin-left:4px"></span>غير معروف</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#94a3b8;margin-left:4px"></span>جارٍ الفحص</span>
+  </div>
+
+  <!-- Results grid -->
+  <div id="dm-results" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
+  <div id="dm-empty" style="text-align:center;padding:40px;color:var(--muted)">
+    <div style="font-size:40px;margin-bottom:12px">🌐</div>
+    <p>أدخل اسماً واضغط "بحث" للبدء</p>
+  </div>
+</div>
+
+<!-- ════ TAB: MY DOMAINS ════ -->
+<div id="tab-my-domains" class="dm-tab-panel" style="display:none">
+  <div class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <h3 style="margin:0">النطاقات المحجوزة (<?= count($reservedDomains) ?>)</h3>
+      <button onclick="showAddDomainModal()" class="btn-primary">+ إضافة يدوية</button>
+    </div>
+    <?php if (empty($reservedDomains)): ?>
+    <p style="color:var(--muted);text-align:center;padding:30px">لا توجد نطاقات محجوزة — ابحث في تبويب "بحث عن نطاق" واحجز ما يعجبك</p>
+    <?php else: ?>
+    <div style="overflow-x:auto">
+      <table class="admin-table">
+        <thead><tr><th>النطاق</th><th>النوع</th><th>الحالة</th><th>السعر</th><th>الانتهاء</th><th>ملاحظات</th><th>إجراء</th></tr></thead>
+        <tbody>
+        <?php foreach ($reservedDomains as $d):
+          $typeLabels = ['free_sub'=>'🆓 فرعي مجاني','free_real'=>'🆓 حقيقي مجاني','cheap'=>'💸 رخيص','paid'=>'💰 مدفوع','reserved'=>'📌 محجوز'];
+          $stColors   = ['available'=>'#22c55e','taken'=>'#ef4444','unknown'=>'#f59e0b','reserved'=>'#3b82f6','active'=>'#22c55e','expired'=>'#ef4444'];
+          $stLabels   = ['available'=>'متاح','taken'=>'مأخوذ','unknown'=>'غير معروف','reserved'=>'محجوز','active'=>'نشط','expired'=>'منتهي'];
+        ?>
+        <tr>
+          <td style="font-weight:700;font-family:monospace;direction:ltr"><?= h($d['full_domain']) ?></td>
+          <td style="font-size:12px"><?= $typeLabels[$d['type']] ?? h($d['type']) ?></td>
+          <td><span style="color:<?= $stColors[$d['status']] ?? '#94a3b8' ?>;font-weight:600;font-size:13px"><?= $stLabels[$d['status']] ?? h($d['status']) ?></span></td>
+          <td style="font-size:13px;color:var(--muted)"><?= $d['price_usd'] ? '$'.(float)$d['price_usd'].'/سنة' : '—' ?></td>
+          <td style="font-size:12px;color:var(--muted)"><?= $d['expires_at'] ? date('Y-m-d', strtotime($d['expires_at'])) : '—' ?></td>
+          <td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis"><?= h($d['notes'] ?: '—') ?></td>
+          <td style="display:flex;gap:6px">
+            <?php if ($d['registrar_url']): ?><a href="<?= h($d['registrar_url']) ?>" target="_blank" class="btn-sm">🔗</a><?php endif; ?>
+            <button onclick="deleteDomain(<?= $d['id'] ?>)" class="btn-sm" style="background:#ef4444;color:#fff">🗑️</button>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+  </div>
+
+  <!-- Add domain modal (hidden) -->
+  <div id="add-domain-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:none;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:16px;padding:28px;max-width:460px;width:90%;max-height:90vh;overflow-y:auto">
+      <h3 style="margin:0 0 20px">إضافة نطاق يدوياً</h3>
+      <div style="display:grid;gap:14px">
+        <div><label class="form-label">الاسم (بدون امتداد)</label><input id="add-dm-name" type="text" class="form-input" placeholder="mysite" style="direction:ltr"></div>
+        <div><label class="form-label">الامتداد</label><input id="add-dm-tld" type="text" class="form-input" placeholder="com" style="direction:ltr"></div>
+        <div><label class="form-label">النوع</label><select id="add-dm-type" class="form-input"><option value="reserved">محجوز للمستقبل</option><option value="free_sub">فرعي مجاني</option><option value="free_real">حقيقي مجاني</option><option value="cheap">رخيص ($1-5)</option><option value="paid">مدفوع</option></select></div>
+        <div><label class="form-label">السعر السنوي ($)</label><input id="add-dm-price" type="number" class="form-input" placeholder="0.00" step="0.01"></div>
+        <div><label class="form-label">تاريخ الانتهاء (اختياري)</label><input id="add-dm-expires" type="date" class="form-input"></div>
+        <div><label class="form-label">رابط المسجّل</label><input id="add-dm-url" type="url" class="form-input" placeholder="https://namecheap.com" style="direction:ltr"></div>
+        <div><label class="form-label">ملاحظات</label><textarea id="add-dm-notes" class="form-input" rows="2" placeholder="ملاحظات إضافية"></textarea></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button onclick="submitAddDomain()" class="btn-primary">حفظ النطاق</button>
+        <button onclick="document.getElementById('add-domain-modal').style.display='none'" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border);background:var(--bg);cursor:pointer">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ TAB: FREE GUIDE ════ -->
+<div id="tab-free-guide" class="dm-tab-panel" style="display:none">
+  <div style="display:grid;gap:16px">
+    <?php foreach ($freeSources as $src): ?>
+    <div class="panel" style="border-right:4px solid <?= $src['color'] ?>">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;cursor:pointer" onclick="this.closest('.panel').querySelector('.src-body').style.display = this.closest('.panel').querySelector('.src-body').style.display==='none'?'block':'none'">
+        <span style="font-size:30px"><?= $src['logo'] ?></span>
+        <div style="flex:1">
+          <h3 style="margin:0;font-size:16px"><?= h($src['name']) ?></h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <?php foreach ($src['free_tlds'] as $ftld): ?>
+            <code style="background:rgba(0,0,0,.07);padding:2px 8px;border-radius:6px;font-size:12px;color:<?= $src['color'] ?>"><?= h($ftld) ?></code>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <a href="<?= h($src['url']) ?>" target="_blank" onclick="event.stopPropagation()" class="btn-primary" style="font-size:12px;padding:6px 14px;text-decoration:none;flex-shrink:0">
+          زيارة الموقع ↗
+        </a>
+      </div>
+      <div class="src-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div>
+            <h4 style="font-size:13px;margin:0 0 8px;color:var(--muted)">المميزات</h4>
+            <ul style="padding-right:18px;font-size:13px;line-height:2;margin:0">
+              <?php foreach ($src['features'] as $f): ?><li><?= h($f) ?></li><?php endforeach; ?>
+            </ul>
+          </div>
+          <div>
+            <h4 style="font-size:13px;margin:0 0 8px;color:var(--muted)">خطوات التسجيل</h4>
+            <ol style="padding-right:18px;font-size:12px;line-height:2;margin:0;color:var(--muted)">
+              <?php foreach ($src['steps'] as $s): ?><li><?= h($s) ?></li><?php endforeach; ?>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+
+    <!-- Extra: cheap TLD sources -->
+    <div class="panel" style="border-right:4px solid #f59e0b">
+      <h3 style="margin:0 0 16px;font-size:16px">💸 أرخص امتدادات مدفوعة (تبدأ من $0.99/سنة)</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+        <?php
+        $cheapDomains = [
+          ['namecheap.com','Namecheap','منافس قوي — دومينات .xyz من $0.99','#d32f2f'],
+          ['porkbun.com','Porkbun','أسعار الجملة — .fun و.site أقل من $2','#fd6c5c'],
+          ['cloudflare.com/registrar','Cloudflare Registrar','بسعر التكلفة بالضبط — بدون ربح','#f48120'],
+          ['name.com','Name.com','عروض تصل لـ 90% خصم على السنة الأولى','#1e88e5'],
+          ['godaddy.com','GoDaddy','$0.01 للسنة الأولى أحياناً في العروض','#1a1a1a'],
+        ];
+        foreach ($cheapDomains as [$url,$name,$desc,$c]):
+        ?>
+        <div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">
+          <div style="font-weight:700;font-size:14px;color:<?= $c ?>;margin-bottom:4px"><?= h($name) ?></div>
+          <p style="font-size:12px;color:var(--muted);margin:0 0 10px"><?= h($desc) ?></p>
+          <a href="https://<?= h($url) ?>" target="_blank" style="font-size:12px;color:#3b82f6">زيارة ↗</a>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <div style="margin-top:20px;background:rgba(34,197,94,.07);border-radius:10px;padding:16px;border:1px solid rgba(34,197,94,.2)">
+        <h4 style="color:#16a34a;margin:0 0 10px;font-size:14px">💡 طرق الحصول على دومينات مجانية حقيقية</h4>
+        <ul style="font-size:13px;line-height:2.2;padding-right:20px;margin:0;color:var(--muted)">
+          <li><strong>GitHub Education Pack</strong> — طلاب: دومين .me أو .tech مجاني + استضافات مجانية كثيرة</li>
+          <li><strong>Cloudflare R2 + Workers</strong> — استضافة كاملة مجانية + نطاق مخصص (إذا تملكه)</li>
+          <li><strong>عروض الإطلاق (Launch promotions)</strong> — كل TLD جديد يُطلق بعروض السنة الأولى مجاناً أو بسعر رمزي</li>
+          <li><strong>.tk عبر Tokelau</strong> — بعض مزودي الخدمات لا يزالون يقدمون .tk مجاناً (نادر الآن)</li>
+          <li><strong>EU.org</strong> — نطاق حقيقي .eu.org مجاني للأبد (يحتاج موافقة يدوية)</li>
+          <li><strong>ربط نطاق Cloudflare</strong> — إذا نقلت النطاق لـ Cloudflare يتجدد بسعر التكلفة فقط (بدون ربح)</li>
+          <li><strong>Namecheap promo</strong> — أحياناً $0.99 للسنة الأولى لنطاقات .com عند استخدام كوبونات</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ TAB: TLD CATALOG ════ -->
+<div id="tab-tld-catalog" class="dm-tab-panel" style="display:none">
+  <div class="panel" style="margin-bottom:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="tld-search" type="text" class="form-input" placeholder="ابحث في الامتدادات..." style="flex:1;min-width:200px" oninput="filterTldCatalog(this.value)">
+      <select id="tld-cat-filter" class="form-input" style="width:180px" onchange="filterTldCatalog(document.getElementById('tld-search').value)">
+        <option value="">كل الفئات</option>
+        <option value="free">مجانية</option>
+        <option value="cheap">رخيصة</option>
+        <option value="2">2 حرف</option>
+        <option value="3">3 حروف</option>
+        <option value="4">4 حروف</option>
+        <option value="tech">تقنية</option>
+        <option value="business">أعمال</option>
+        <option value="media">إعلام</option>
+        <option value="ecommerce">تجارة</option>
+        <option value="gaming">ألعاب</option>
+        <option value="free_sub">فرعي مجاني</option>
+      </select>
+      <span id="tld-count-badge" style="font-size:13px;color:var(--muted);white-space:nowrap"><?= count($tldCatalog) ?> امتداد</span>
+    </div>
+  </div>
+
+  <div id="tld-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+    <?php foreach ($tldCatalog as $t): [$tld,$len,$price,$type,$cat,$emoji,$reg] = $t; ?>
+    <div class="tld-card" data-tld="<?= h($tld) ?>" data-len="<?= $len ?>" data-type="<?= $type ?>" data-cat="<?= $cat ?>"
+         style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:border-color .2s"
+         onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='var(--border)'"
+         onclick="selectTldFromCatalog('<?= h($tld) ?>', '<?= h($type) ?>')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:22px"><?= $emoji ?></span>
+        <?php if ($type==='free_sub'||$type==='free_real'): ?>
+        <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">مجاني</span>
+        <?php elseif ($type==='cheap'): ?>
+        <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">رخيص</span>
+        <?php endif; ?>
+      </div>
+      <div style="font-family:monospace;font-weight:800;font-size:18px;color:var(--primary)">.<?= h($tld) ?></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px"><?= h($price) ?></div>
+      <div style="font-size:11px;color:var(--muted)"><?= $len ?> <?= $len==='1'?'حرف':($len==='2'?'حرفان':'حرف') ?> • <?= h($cat) ?></div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<script>
+// ── TLD data for JS ──
+var DM_TLDS = <?= json_encode(array_map(fn($t)=>['tld'=>$t[0],'len'=>(int)$t[1],'price'=>$t[2],'type'=>$t[3],'cat'=>$t[4],'emoji'=>$t[5],'reg'=>$t[6]], $tldCatalog), JSON_UNESCAPED_UNICODE) ?>;
+
+var dmCurrentFilter = 'all';
+var dmSearchRunning = false;
+var dmChecked = 0; var dmTotal = 0;
+
+function switchTab(tab) {
+  document.querySelectorAll('.dm-tab-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.dm-tab-btn').forEach(b=>{
+    b.style.color='var(--muted)';
+    b.style.borderBottomColor='transparent';
+  });
+  document.getElementById('tab-'+tab).style.display='block';
+  var btn = document.querySelector('[data-tab="'+tab+'"]');
+  if(btn){ btn.style.color='var(--primary)'; btn.style.borderBottomColor='var(--primary)'; }
+}
+
+function setFilter(f, el) {
+  dmCurrentFilter = f;
+  document.querySelectorAll('.dm-filter').forEach(b=>{
+    b.style.background='var(--bg)'; b.style.color='var(--text)'; b.style.borderColor='var(--border)';
+  });
+  el.style.background='var(--primary)'; el.style.color='#fff';
+}
+
+function getFilteredTlds() {
+  return DM_TLDS.filter(function(t) {
+    if (dmCurrentFilter === 'all') return true;
+    if (dmCurrentFilter === 'free') return t.type==='free_sub'||t.type==='free_real';
+    if (dmCurrentFilter === 'cheap') return t.type==='cheap';
+    if (dmCurrentFilter === '2') return t.len===2;
+    if (dmCurrentFilter === '3') return t.len===3;
+    if (dmCurrentFilter === '4') return t.len===4;
+    return true;
+  });
+}
+
+function startDomainSearch() {
+  var name = document.getElementById('dm-name-input').value.trim();
+  if (!name) { document.getElementById('dm-name-input').focus(); return; }
+  if (dmSearchRunning) return;
+
+  var tlds = getFilteredTlds();
+  if (!tlds.length) { alert('لا توجد امتدادات بهذا الفلتر'); return; }
+
+  dmSearchRunning = true;
+  dmChecked = 0; dmTotal = tlds.length;
+  document.getElementById('dm-empty').style.display='none';
+  document.getElementById('dm-results').innerHTML = '';
+  document.getElementById('dm-search-btn').disabled=true;
+  document.getElementById('dm-search-btn').textContent='⏳ جارٍ الفحص...';
+  document.getElementById('dm-progress').style.display='block';
+  document.getElementById('dm-progress-count').textContent='0/'+dmTotal;
+
+  // Pre-render all cards as "checking"
+  var resultsDiv = document.getElementById('dm-results');
+  tlds.forEach(function(t) {
+    var card = document.createElement('div');
+    card.id = 'dmc-'+t.tld.replace(/\./g,'-');
+    card.style.cssText='background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;transition:border-color .3s';
+    card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<span style="font-size:18px">'+t.emoji+'</span>'
+      +'<span class="avail-badge" style="font-size:11px;color:#94a3b8">جارٍ الفحص...</span></div>'
+      +'<div style="font-family:monospace;font-weight:800;font-size:16px;color:var(--primary)">.'+t.tld+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin:4px 0">'+t.price+'</div>'
+      +'<div class="dm-card-actions" style="display:none;margin-top:8px;display:flex;gap:6px"></div>';
+    resultsDiv.appendChild(card);
+  });
+
+  // Check in parallel batches of 8
+  var queue = tlds.slice();
+  var running = 0; var PARALLEL = 8;
+
+  function checkNext() {
+    while (running < PARALLEL && queue.length) {
+      var t = queue.shift();
+      running++;
+      checkTld(name, t, function() { running--; checkNext(); });
+    }
+    if (!queue.length && running===0) finishSearch();
+  }
+  checkNext();
+}
+
+function checkTld(name, t, done) {
+  var cardId = 'dmc-'+t.tld.replace(/\./g,'-');
+  var card = document.getElementById(cardId);
+  fetch('admin.php?ajax=domain_check&name='+encodeURIComponent(name)+'&tld='+encodeURIComponent(t.tld))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      dmChecked++;
+      updateProgress();
+      if (!card) { done(); return; }
+      var badge = card.querySelector('.avail-badge');
+      var actions = card.querySelector('.dm-card-actions');
+      var full = name+'.'+t.tld;
+      if (d.status==='available') {
+        card.style.borderColor='#22c55e';
+        badge.style.color='#22c55e'; badge.textContent='✅ متاح';
+        actions.style.display='flex';
+        actions.innerHTML = '<button onclick="reserveDomain(\''+name+'\',\''+t.tld+'\',\''+t.type+'\',\''+escHtml(t.price)+'\')" style="flex:1;background:#22c55e;color:#fff;border:none;border-radius:6px;padding:5px 0;cursor:pointer;font-size:12px">📌 احجز</button>'
+          +(t.reg?'<a href="https://'+t.reg+'" target="_blank" style="flex:1;background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:12px;text-align:center;text-decoration:none">سجّل ↗</a>':'');
+      } else if (d.status==='taken') {
+        card.style.borderColor='#ef4444';
+        badge.style.color='#ef4444'; badge.textContent='❌ مأخوذ';
+      } else {
+        card.style.borderColor='#f59e0b';
+        badge.style.color='#f59e0b'; badge.textContent='⚠ غير معروف';
+        actions.style.display='flex';
+        actions.innerHTML='<button onclick="reserveDomain(\''+name+'\',\''+t.tld+'\',\''+t.type+'\',\''+escHtml(t.price)+'\')" style="width:100%;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 0;cursor:pointer;font-size:12px">📌 احجز على أي حال</button>';
+      }
+      done();
+    }).catch(function(){ dmChecked++; updateProgress(); done(); });
+}
+
+function updateProgress() {
+  var pct = Math.round(dmChecked/dmTotal*100);
+  document.getElementById('dm-progress-bar').style.width=pct+'%';
+  document.getElementById('dm-progress-count').textContent=dmChecked+'/'+dmTotal;
+  document.getElementById('dm-progress-text').textContent='تم فحص '+dmChecked+' من '+dmTotal+' امتداد';
+}
+
+function finishSearch() {
+  dmSearchRunning = false;
+  document.getElementById('dm-search-btn').disabled=false;
+  document.getElementById('dm-search-btn').textContent='🔍 ابحث مجدداً';
+  document.getElementById('dm-progress-text').textContent='اكتمل الفحص ✅';
+}
+
+function reserveDomain(name, tld, type, priceStr) {
+  var price = parseFloat(priceStr.replace(/[^0-9.]/g,'')) || null;
+  var notes = prompt('ملاحظات (اختياري):', '') ;
+  if (notes === null) return;
+  fetch('admin.php?ajax=domain_reserve', {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,tld:tld,type:type,price:price,notes:notes})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){
+      var card = document.getElementById('dmc-'+tld.replace(/\./g,'-'));
+      if(card){ var b=card.querySelector('.avail-badge'); if(b){b.textContent='📌 محجوز';b.style.color='#3b82f6';} }
+      alert('✅ تم حجز '+name+'.'+tld);
+    } else alert('خطأ: '+(d.error||''));
+  });
+}
+
+function deleteDomain(id) {
+  if(!confirm('حذف هذا النطاق من القائمة؟')) return;
+  fetch('admin.php?ajax=domain_delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+    .then(function(r){return r.json();}).then(function(d){ if(d.ok) location.reload(); });
+}
+
+function showAddDomainModal() {
+  document.getElementById('add-domain-modal').style.display='flex';
+}
+
+function submitAddDomain() {
+  var name=document.getElementById('add-dm-name').value.trim().toLowerCase().replace(/[^a-z0-9\-]/g,'');
+  var tld=document.getElementById('add-dm-tld').value.trim().toLowerCase().replace(/[^a-z0-9.\-]/g,'');
+  if(!name||!tld){alert('الاسم والامتداد مطلوبان');return;}
+  var price=parseFloat(document.getElementById('add-dm-price').value)||null;
+  fetch('admin.php?ajax=domain_reserve',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,tld:tld,type:document.getElementById('add-dm-type').value,
+      price:price,notes:document.getElementById('add-dm-notes').value,
+      expires:document.getElementById('add-dm-expires').value,
+      registrar_url:document.getElementById('add-dm-url').value})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.ok){document.getElementById('add-domain-modal').style.display='none';location.reload();}
+      else alert('خطأ: '+(d.error||''));
+    });
+}
+
+function selectTldFromCatalog(tld, type) {
+  switchTab('search');
+  document.getElementById('dm-name-input').focus();
+  document.getElementById('dm-name-input').placeholder='أدخل الاسم ثم ابحث مع .'+tld;
+}
+
+function filterTldCatalog(q) {
+  var cat = document.getElementById('tld-cat-filter').value;
+  q = q.toLowerCase();
+  var cards = document.querySelectorAll('.tld-card');
+  var visible = 0;
+  cards.forEach(function(c) {
+    var tld=c.dataset.tld||''; var len=c.dataset.len||''; var type=c.dataset.type||''; var ccat=c.dataset.cat||'';
+    var matchQ = !q || tld.includes(q);
+    var matchCat = !cat || cat===type || cat===len || cat===ccat || (cat==='free'&&(type==='free_sub'||type==='free_real')) || (cat==='cheap'&&type==='cheap') || (cat==='free_sub'&&type==='free_sub');
+    c.style.display = (matchQ&&matchCat)?'':'none';
+    if(matchQ&&matchCat) visible++;
+  });
+  document.getElementById('tld-count-badge').textContent=visible+' امتداد';
+}
+
+function escHtml(s){ return String(s).replace(/'/g,"\\'"); }
+
+// Init
+switchTab('search');
+document.addEventListener('DOMContentLoaded',function(){ switchTab('search'); });
 </script>
 
 <?php
