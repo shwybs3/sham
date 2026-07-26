@@ -1,183 +1,212 @@
-/* ════ DOWNLOAD PAGE — Professional Monetisation Layout ════ */
+/* ════ DOWNLOAD PAGE — Professional Layout ════ */
 
-/* ── Outer wrapper ── */
 .dlp-wrap {
-  max-width: 680px;
+  max-width: 980px;
   margin: 0 auto;
-  padding: 24px 16px 60px;
+  padding: 28px 20px 80px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-/* ── Steps indicator ── */
-.dlp-steps {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 18px 0 8px;
-}
-.dlp-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.dlp-step-dot {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 700;
-  background: var(--navy-700);
-  border: 2px solid var(--border-c);
-  color: var(--muted);
-  transition: all .3s;
-}
-.dlp-step.done .dlp-step-dot {
-  background: rgba(22,163,74,.15);
-  border-color: #16a34a;
-  color: #16a34a;
-}
-.dlp-step.active .dlp-step-dot {
-  background: rgba(6,182,212,.15);
-  border-color: var(--cyan);
-  color: var(--cyan);
-  box-shadow: 0 0 0 4px rgba(6,182,212,.1);
-}
-.dlp-step-label {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  font-weight: 500;
-}
-.dlp-step.done .dlp-step-label,
-.dlp-step.active .dlp-step-label {
-  color: var(--white);
-}
-.dlp-step-line {
-  flex: 1;
-  height: 2px;
-  background: var(--border-c);
-  min-width: 32px;
-  max-width: 80px;
-  margin-bottom: 22px;
-}
-
-/* ── App hero card ── */
+/* ── Hero band (dark) ── */
 .dlp-hero {
-  background: var(--navy-700);
-  border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  background: linear-gradient(135deg, #0c1e36 0%, #1a3a6e 100%);
+  border-radius: 22px;
+  padding: 26px 28px;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 22px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(12,30,54,.3);
 }
-.dlp-hero-icon { flex-shrink: 0; }
+.dlp-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; left: -60px;
+  width: 240px; height: 240px;
+  border-radius: 50%;
+  background: rgba(14,165,233,.07);
+  pointer-events: none;
+}
+.dlp-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; right: -40px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: rgba(124,58,237,.06);
+  pointer-events: none;
+}
+.dlp-hero-icon { flex-shrink: 0; position: relative; z-index: 1; }
 .dlp-icon-img {
-  width: 76px; height: 76px;
-  border-radius: 18px;
-  border: 1px solid var(--border-c);
+  width: 92px; height: 92px;
+  border-radius: 22px;
+  border: 2px solid rgba(255,255,255,.14);
   object-fit: cover;
-  box-shadow: 0 4px 14px rgba(15,23,42,.12);
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
 }
 .dlp-icon-placeholder {
-  width: 76px; height: 76px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--navy-500), var(--navy-400));
-  border: 1px solid var(--border-c);
+  width: 92px; height: 92px;
+  border-radius: 22px;
+  background: rgba(255,255,255,.06);
+  border: 2px solid rgba(255,255,255,.1);
   display: flex; align-items: center; justify-content: center;
 }
-.dlp-hero-info { flex: 1; min-width: 0; }
+.dlp-hero-info { flex: 1; min-width: 0; position: relative; z-index: 1; }
 .dlp-app-name {
   font-family: var(--f-head);
-  font-size: 20px; font-weight: 900;
-  color: var(--white);
-  margin: 0 0 8px;
+  font-size: 22px; font-weight: 900;
+  color: #fff;
+  margin: 0 0 10px;
   line-height: 1.2;
 }
 .dlp-app-meta {
   display: flex; flex-wrap: wrap; gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .dlp-meta-chip {
   display: inline-flex; align-items: center;
-  padding: 3px 10px;
+  padding: 3px 11px;
   border-radius: 20px;
   font-size: 11px; font-weight: 600;
-  background: rgba(6,182,212,.1);
-  border: 1px solid rgba(6,182,212,.2);
-  color: var(--cyan);
+  background: rgba(14,165,233,.15);
+  border: 1px solid rgba(14,165,233,.25);
+  color: #7dd3fc;
   font-family: var(--f-mono);
 }
 .dlp-verified {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px;
-  color: #16a34a;
-  background: rgba(22,163,74,.08);
-  border: 1px solid rgba(22,163,74,.2);
+  font-size: 11px; color: #4ade80;
+  background: rgba(74,222,128,.1);
+  border: 1px solid rgba(74,222,128,.2);
   border-radius: 20px;
   padding: 4px 10px;
+  margin-bottom: 10px;
+}
+.dlp-hero-stats {
+  display: flex; gap: 24px; margin-top: 6px; flex-wrap: wrap;
+}
+.dlp-hero-stat {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.dlp-hero-stat strong {
+  color: rgba(255,255,255,.9);
+  font-size: 14px; font-weight: 700;
+  font-family: var(--f-head);
+}
+.dlp-hero-stat span {
+  font-size: 10px; color: rgba(255,255,255,.45);
+  font-weight: 500;
 }
 
-/* ── Ad zone — uses the global .ad-zone/.ad-filled mechanism from main.css ── */
+/* ── Steps indicator ── */
+.dlp-steps {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; padding: 16px 0 4px;
+}
+.dlp-step {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; flex-shrink: 0;
+}
+.dlp-step-dot {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  background: var(--surface-2);
+  border: 2px solid var(--border-c);
+  color: var(--muted);
+  transition: all .35s;
+}
+.dlp-step.done .dlp-step-dot {
+  background: rgba(22,163,74,.1);
+  border-color: #16a34a; color: #16a34a;
+}
+.dlp-step.active .dlp-step-dot {
+  background: rgba(14,165,233,.12);
+  border-color: var(--cyan); color: var(--cyan);
+  box-shadow: 0 0 0 5px rgba(14,165,233,.08);
+}
+.dlp-step-label {
+  font-size: 11px; color: var(--muted);
+  white-space: nowrap; font-weight: 500;
+}
+.dlp-step.done .dlp-step-label,
+.dlp-step.active .dlp-step-label { color: var(--text); }
+.dlp-step-line {
+  flex: 1; height: 2px;
+  background: var(--border-c);
+  min-width: 32px; max-width: 90px;
+  margin-bottom: 22px;
+}
+
+/* ── Main 2-column grid ── */
+.dlp-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+.dlp-download-col,
+.dlp-info-col {
+  display: flex; flex-direction: column; gap: 16px;
+}
 
 /* ── Countdown card ── */
 .dlp-countdown-card {
-  background: var(--navy-700);
+  background: var(--surface);
   border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  padding: 32px 28px;
+  border-radius: 22px;
+  padding: 36px 28px;
   text-align: center;
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 .dlp-countdown-card::before {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(6,182,212,.06) 0%, transparent 65%);
+  background: radial-gradient(ellipse at 50% -10%, rgba(14,165,233,.05) 0%, transparent 65%);
   pointer-events: none;
 }
 .dlp-countdown-header {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   font-size: 14px; color: var(--muted);
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 .dlp-pulse-dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
   background: var(--cyan);
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 @keyframes pulse-dot {
   0%,100% { transform: scale(1); opacity: 1; }
-  50%      { transform: scale(1.4); opacity: .6; }
+  50%      { transform: scale(1.5); opacity: .5; }
 }
 
 /* Ring */
 .dlp-ring-wrap {
-  position: relative;
-  display: inline-block;
-  width: 140px; height: 140px;
-  margin-bottom: 24px;
+  position: relative; display: inline-block;
+  width: 160px; height: 160px;
+  margin-bottom: 28px;
 }
 .dlp-ring-svg {
-  width: 140px; height: 140px;
+  width: 160px; height: 160px;
   transform: rotate(-90deg);
 }
 .dlp-ring-bg {
   fill: none;
-  stroke: rgba(6,182,212,.08);
-  stroke-width: 5;
+  stroke: rgba(14,165,233,.07);
+  stroke-width: 7;
 }
 .dlp-ring-prog {
   fill: none;
   stroke: var(--cyan);
-  stroke-width: 5;
+  stroke-width: 7;
   stroke-linecap: round;
   transition: stroke-dashoffset .95s linear;
+  filter: drop-shadow(0 0 6px rgba(14,165,233,.55));
 }
 .dlp-ring-inner {
   position: absolute; inset: 0;
@@ -185,21 +214,17 @@
 }
 .dlp-count {
   font-family: var(--f-mono);
-  font-size: 42px; font-weight: 800;
-  color: var(--cyan);
-  line-height: 1;
+  font-size: 52px; font-weight: 800;
+  color: var(--cyan); line-height: 1;
 }
-.dlp-count-label {
-  font-size: 12px; color: var(--muted);
-  margin-top: 2px;
-}
+.dlp-count-label { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
 /* Progress bar */
 .dlp-progress-bar {
-  width: 100%; height: 5px;
-  background: rgba(6,182,212,.08);
+  width: 100%; height: 6px;
+  background: rgba(14,165,233,.07);
   border-radius: 3px; overflow: hidden;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 .dlp-progress-fill {
   height: 100%; width: 0%;
@@ -211,100 +236,104 @@
 /* Download button */
 .dlp-btn-download {
   display: inline-flex; align-items: center; justify-content: center; gap: 12px;
-  width: 100%; max-width: 360px;
-  padding: 16px 32px;
+  width: 100%; max-width: 380px;
+  padding: 18px 36px;
   border-radius: 50px;
   font-family: var(--f-head); font-size: 17px; font-weight: 800;
-  background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+  background: linear-gradient(135deg, #0ea5e9 0%, #7c3aed 100%);
   color: #fff; border: none; cursor: pointer;
-  box-shadow: 0 6px 24px rgba(14,165,233,.3);
+  box-shadow: 0 8px 28px rgba(14,165,233,.35);
   text-decoration: none;
   transition: transform .2s, box-shadow .2s;
-  animation: glow-pulse 2s ease-in-out infinite;
+  animation: glow-pulse 2.2s ease-in-out infinite;
 }
 .dlp-btn-download:hover {
-  transform: scale(1.03);
-  box-shadow: 0 10px 32px rgba(14,165,233,.45);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 38px rgba(14,165,233,.55);
   color: #fff;
 }
 .dlp-btn-download.hidden { display: none; }
 @keyframes glow-pulse {
-  0%,100% { box-shadow: 0 6px 24px rgba(14,165,233,.3); }
-  50%      { box-shadow: 0 6px 36px rgba(14,165,233,.55); }
+  0%,100% { box-shadow: 0 8px 28px rgba(14,165,233,.3); }
+  50%      { box-shadow: 0 8px 42px rgba(14,165,233,.6); }
 }
-.dlp-manual-hint {
-  font-size: 12px; color: var(--muted);
-  margin-top: 10px;
-}
+.dlp-manual-hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
 
 /* No-link state */
 .dlp-no-link {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 24px;
-  background: rgba(239,68,68,.06);
-  border: 1px solid rgba(239,68,68,.18);
-  border-radius: 12px;
-  color: var(--muted);
-  font-size: 14px; text-align: center;
+  padding: 28px;
+  background: rgba(239,68,68,.04);
+  border: 1px dashed rgba(239,68,68,.25);
+  border-radius: 14px;
+  color: var(--muted); font-size: 14px; text-align: center;
 }
 .dlp-no-link strong { color: var(--danger); font-size: 15px; }
 .dlp-no-link p { margin: 0; font-size: 13px; }
 
 /* ── Trust badges ── */
 .dlp-trust {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
 }
 .dlp-trust-item {
-  display: flex; align-items: center; gap: 7px;
-  padding: 8px 16px;
-  border-radius: 30px;
-  border: 1px solid var(--border-c);
-  background: var(--navy-700);
-  font-size: 12px; font-weight: 600;
-  color: var(--muted);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  transition: background .2s;
 }
+.dlp-trust-item:hover { background: var(--surface-3); }
 .dlp-trust-item svg { color: var(--cyan); flex-shrink: 0; }
+.dlp-trust-text { display: flex; flex-direction: column; gap: 2px; }
+.dlp-trust-text strong { font-size: 12px; font-weight: 700; color: var(--text); }
+.dlp-trust-text small  { font-size: 10px; color: var(--muted); }
+
+/* ── Info sidebar panels ── */
+.dlp-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.dlp-panel-head {
+  padding: 13px 18px;
+  font-size: 13px; font-weight: 700; color: var(--text);
+  border-bottom: 1px solid var(--border-c);
+  background: var(--surface-2);
+  display: flex; align-items: center; gap: 8px;
+}
+.dlp-panel-body { padding: 16px 18px; }
 
 /* ── Meta grid ── */
 .dlp-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 1px;
   background: var(--border-c);
-  border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
 }
 .dlp-meta-cell {
-  padding: 12px 16px;
-  background: var(--navy-700);
+  padding: 11px 16px;
+  background: var(--surface);
 }
-.dlp-meta-key {
-  font-size: 11px; color: var(--muted); font-weight: 500;
-  margin-bottom: 3px;
-}
-.dlp-meta-val {
-  font-size: 13px; font-weight: 700; color: var(--white);
-}
+.dlp-meta-key  { font-size: 10px; color: var(--muted); font-weight: 500; margin-bottom: 3px; }
+.dlp-meta-val  { font-size: 13px; font-weight: 700; color: var(--text); }
 
-/* ── Screenshots ── */
-.dlp-screenshots {
-  background: var(--navy-700);
-  border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-}
-.dlp-section-title {
-  font-size: 14px; font-weight: 700; color: var(--white);
-  margin-bottom: 12px;
-}
+/* ── Screenshots in sidebar ── */
 .dlp-screenshots-track {
-  display: flex; gap: 10px;
-  overflow-x: auto; padding-bottom: 6px;
+  display: flex; gap: 8px;
+  overflow-x: auto; padding-bottom: 4px;
   scrollbar-width: thin; scrollbar-color: var(--border-c) transparent;
 }
 .dlp-screenshot {
-  width: 110px; min-width: 110px; height: 190px;
+  width: 82px; min-width: 82px; height: 142px;
   object-fit: cover; border-radius: 10px;
   border: 1px solid var(--border-c);
 }
@@ -313,94 +342,150 @@
 .dlp-mirrors {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 14px 18px;
-  background: var(--navy-700);
+  background: var(--surface);
   border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
+  border-radius: 14px;
 }
 .dlp-mirrors-label {
+  display: flex; align-items: center; gap: 5px;
   font-size: 12px; color: var(--muted); font-weight: 500;
 }
 .dlp-mirror-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border-radius: 30px;
   border: 1px solid var(--border-c);
-  background: rgba(6,182,212,.07);
-  color: var(--cyan); font-size: 12px; font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text); font-size: 12px; font-weight: 600;
   text-decoration: none;
-  transition: background .2s, border-color .2s;
+  transition: border-color .2s, background .2s;
 }
-.dlp-mirror-btn:hover { background: rgba(6,182,212,.15); border-color: rgba(6,182,212,.4); }
+.dlp-mirror-btn:hover { background: var(--surface-3); border-color: var(--cyan); color: var(--cyan); }
 
 /* ── Hash details ── */
 .dlp-hash-details {
   border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  border-radius: 14px; overflow: hidden;
+  background: var(--surface);
 }
 .dlp-hash-details summary {
   display: flex; align-items: center; gap: 8px;
-  padding: 13px 18px;
-  background: var(--navy-700);
-  cursor: pointer;
+  padding: 13px 18px; cursor: pointer;
   font-size: 12px; font-weight: 600; color: var(--muted);
   list-style: none;
 }
-.dlp-hash-details summary:hover { color: var(--white); }
-.dlp-hash-body {
-  padding: 14px 18px;
-  background: var(--navy-800);
-  font-size: 12px;
-}
+.dlp-hash-details summary:hover { color: var(--text); }
+.dlp-hash-body { padding: 14px 18px; background: var(--surface-2); font-size: 12px; }
 .dlp-hash-code {
   display: block;
-  background: rgba(0,0,0,.2);
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 10px;
-  word-break: break-all;
-  cursor: pointer;
+  background: var(--surface-3);
+  padding: 6px 10px; border-radius: 6px;
+  font-size: 10px; word-break: break-all;
+  cursor: pointer; font-family: var(--f-mono); color: var(--text);
   transition: background .2s;
 }
-.dlp-hash-code:hover { background: rgba(0,0,0,.35); }
-.dlp-hash-code[data-copied]::after { content: ' ✓ نُسخ'; color: #16a34a; }
+.dlp-hash-code:hover { background: var(--surface-4); }
+.dlp-hash-code[data-copied]::after { content: ' ✓ نُسخ'; color: var(--success); }
 
 /* ── Google Play link ── */
-.dlp-gplay {
-  text-align: center;
-  font-size: 12px; color: var(--muted);
-}
+.dlp-gplay { text-align: center; font-size: 12px; color: var(--muted); }
 .dlp-gplay a {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 18px;
-  border: 1px solid var(--border-c);
-  border-radius: 8px;
-  color: var(--text);
-  text-decoration: none; font-size: 12px;
-  background: var(--navy-700);
+  padding: 9px 20px; border: 1px solid var(--border-c);
+  border-radius: 10px; color: var(--text); text-decoration: none;
+  font-size: 12px; background: var(--surface);
   transition: border-color .2s;
 }
 .dlp-gplay a:hover { border-color: var(--cyan); }
 
+/* ── Installation guide ── */
+.dlp-install-guide {
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: 22px;
+  padding: 30px 28px;
+  box-shadow: var(--shadow-sm);
+}
+.dlp-install-title {
+  font-family: var(--f-head);
+  font-size: 17px; font-weight: 800; color: var(--text);
+  margin: 0 0 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.dlp-install-title::before {
+  content: '';
+  display: block; width: 4px; height: 22px;
+  background: linear-gradient(180deg, var(--cyan), var(--purple));
+  border-radius: 2px; flex-shrink: 0;
+}
+.dlp-install-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.dlp-install-step {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 10px;
+  padding: 20px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-c);
+  border-radius: 16px;
+  transition: border-color .2s, transform .2s;
+}
+.dlp-install-step:hover {
+  border-color: rgba(14,165,233,.25);
+  transform: translateY(-2px);
+}
+.dlp-install-num {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--f-mono); font-size: 15px; font-weight: 800;
+  background: linear-gradient(135deg, rgba(14,165,233,.12), rgba(124,58,237,.12));
+  border: 2px solid rgba(14,165,233,.2);
+  color: var(--cyan);
+}
+.dlp-install-icon { font-size: 30px; line-height: 1; }
+.dlp-install-step h3 {
+  font-family: var(--f-head);
+  font-size: 13px; font-weight: 700; color: var(--text);
+  margin: 0; line-height: 1.4;
+}
+.dlp-install-step p {
+  font-size: 11px; color: var(--muted); margin: 0; line-height: 1.6;
+}
+
 /* ── Telegram button ── */
 .dlp-tg-btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  padding: 14px 24px;
-  background: #2AABEE14;
-  border: 1.5px solid #2AABEE35;
-  border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px 24px;
+  background: rgba(42,171,238,.06);
+  border: 1.5px solid rgba(42,171,238,.22);
+  border-radius: 18px;
   color: #2AABEE; font-size: 14px; font-weight: 700;
   text-decoration: none;
   transition: background .2s, border-color .2s;
 }
-.dlp-tg-btn:hover { background: #2AABEE22; border-color: #2AABEE60; }
+.dlp-tg-btn:hover { background: rgba(42,171,238,.12); border-color: rgba(42,171,238,.45); }
 
 /* ── Related apps ── */
 .dlp-related {
-  background: var(--navy-700);
+  background: var(--surface);
   border: 1px solid var(--border-c);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.dlp-related-title {
+  font-family: var(--f-head);
+  font-size: 16px; font-weight: 800; color: var(--text);
+  margin: 0 0 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.dlp-related-title::before {
+  content: '';
+  display: block; width: 4px; height: 20px;
+  background: linear-gradient(180deg, var(--cyan), var(--purple));
+  border-radius: 2px; flex-shrink: 0;
 }
 .dlp-related-grid {
   display: grid;
@@ -409,65 +494,68 @@
 }
 .dlp-related-card {
   display: flex; flex-direction: column; align-items: center;
-  gap: 8px; padding: 12px 8px;
+  gap: 8px; padding: 16px 10px;
   border: 1px solid var(--border-c);
-  border-radius: 14px;
-  background: var(--navy-800);
-  text-decoration: none;
-  text-align: center;
-  transition: border-color .2s, background .2s;
+  border-radius: 16px;
+  background: var(--surface-2);
+  text-decoration: none; text-align: center;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
 }
 .dlp-related-card:hover {
-  border-color: rgba(6,182,212,.35);
-  background: rgba(6,182,212,.05);
+  border-color: rgba(14,165,233,.3);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 .dlp-related-icon {
-  width: 50px; height: 50px;
-  border-radius: 12px;
+  width: 54px; height: 54px;
+  border-radius: 14px; object-fit: cover;
   border: 1px solid var(--border-c);
-  object-fit: cover;
 }
 .dlp-related-icon-ph {
-  width: 50px; height: 50px;
-  border-radius: 12px;
-  background: var(--navy-600);
+  width: 54px; height: 54px;
+  border-radius: 14px;
+  background: var(--surface-3);
   border: 1px solid var(--border-c);
   display: flex; align-items: center; justify-content: center;
 }
-.dlp-related-name {
-  font-size: 12px; font-weight: 700; color: var(--white);
-  line-height: 1.3;
-}
-.dlp-related-desc {
-  font-size: 10px; color: var(--muted);
-  line-height: 1.4;
-}
+.dlp-related-name  { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.dlp-related-desc  { font-size: 10px; color: var(--muted); line-height: 1.4; }
 
 /* ── Footer nav ── */
 .dlp-footer-nav {
   display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
-  padding-top: 8px;
-  font-size: 11px;
+  padding-top: 8px; font-size: 11px;
 }
 .dlp-footer-nav a { color: var(--muted); text-decoration: none; }
-.dlp-footer-nav a:hover { color: var(--white); }
+.dlp-footer-nav a:hover { color: var(--text); }
 
-/* ── Mobile ── */
-@media (max-width: 480px) {
-  .dlp-wrap { padding: 16px 12px 48px; gap: 12px; }
-  .dlp-hero { flex-direction: column; text-align: center; }
-  .dlp-app-meta { justify-content: center; }
-  .dlp-related-grid { grid-template-columns: repeat(2, 1fr); }
-  .dlp-countdown-card { padding: 24px 16px; }
-  .dlp-trust { gap: 8px; }
-  .dlp-trust-item { padding: 7px 12px; font-size: 11px; }
+/* ── Section title (legacy, kept for compat) ── */
+.dlp-section-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+
+/* ── Mobile: collapse to single column ── */
+@media (max-width: 720px) {
+  .dlp-main-grid { grid-template-columns: 1fr; }
+  .dlp-install-steps { grid-template-columns: repeat(2, 1fr); }
+  .dlp-related-grid  { grid-template-columns: repeat(3, 1fr); }
 }
 
-@media (max-width: 400px) {
-  /* Hide step labels — too cramped on narrow phones */
+@media (max-width: 480px) {
+  .dlp-wrap { padding: 16px 12px 60px; gap: 14px; }
+  .dlp-hero  { flex-direction: column; text-align: center; padding: 22px 18px; }
+  .dlp-hero-stats   { justify-content: center; }
+  .dlp-app-meta     { justify-content: center; }
+  .dlp-countdown-card { padding: 28px 18px; }
+  .dlp-ring-wrap  { width: 140px; height: 140px; }
+  .dlp-ring-svg   { width: 140px; height: 140px; }
+  .dlp-count      { font-size: 44px; }
+  .dlp-trust      { grid-template-columns: 1fr; gap: 8px; }
+  .dlp-install-steps  { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dlp-related-grid   { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .dlp-install-guide  { padding: 22px 16px; }
+}
+
+@media (max-width: 380px) {
   .dlp-step-label { display: none; }
-  .dlp-step-line { min-width: 20px; max-width: 40px; }
-  .dlp-steps { padding: 12px 0 6px; }
-  .dlp-related-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .dlp-meta-grid { grid-template-columns: repeat(2, 1fr); }
+  .dlp-step-line  { min-width: 18px; max-width: 36px; }
+  .dlp-meta-grid  { grid-template-columns: 1fr 1fr; }
 }
