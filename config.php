@@ -2550,6 +2550,94 @@ function clean_long_text(?string $s): string {
     return preg_replace('/\n{3,}/', "\n\n", $s);
 }
 
+/**
+ * Calculate a 0-100 quality score for an app row.
+ * Returns ['score','grade','color','issues','details','ld_pct'].
+ */
+function app_quality_score(array $app): array {
+    $score   = 0;
+    $issues  = [];
+    $details = [];
+
+    // ── Icon (15 pts) ──
+    $hasIcon = !empty($app['icon_path']);
+    $iconPts = $hasIcon ? 15 : 0;
+    $score += $iconPts;
+    $details['icon'] = ['pts'=>$iconPts,'max'=>15,'label'=>'الأيقونة'];
+    if (!$hasIcon) $issues[] = 'الأيقونة مفقودة';
+
+    // ── Short description (10 pts) ──
+    $sdLen  = mb_strlen(trim($app['short_description'] ?? ''));
+    $sdPts  = $sdLen >= 80 ? 10 : ($sdLen >= 40 ? 6 : ($sdLen > 0 ? 3 : 0));
+    $score += $sdPts;
+    $details['short_desc'] = ['pts'=>$sdPts,'max'=>10,'label'=>'الوصف القصير','chars'=>$sdLen];
+    if ($sdLen < 40) $issues[] = 'الوصف القصير قصير (' . $sdLen . ' حرف)';
+
+    // ── Long description (25 pts) ──
+    $ldLen  = mb_strlen(trim($app['long_description'] ?? ''));
+    $ldPts  = $ldLen >= 1500 ? 25 : ($ldLen >= 600 ? 18 : ($ldLen >= 200 ? 10 : ($ldLen > 0 ? 5 : 0)));
+    $score += $ldPts;
+    $ldPct  = min(100, (int)round($ldLen / 1500 * 100));
+    $details['long_desc'] = ['pts'=>$ldPts,'max'=>25,'label'=>'الوصف المطوّل','chars'=>$ldLen,'pct'=>$ldPct];
+    if ($ldLen < 600) $issues[] = 'الوصف المطوّل قصير (' . $ldLen . ' حرف — المثالي 1500+)';
+
+    // ── SEO title (10 pts) ──
+    $stLen  = mb_strlen(trim($app['seo_title'] ?? ''));
+    $stPts  = ($stLen >= 50 && $stLen <= 60) ? 10 : ($stLen >= 30 ? 6 : ($stLen > 0 ? 3 : 0));
+    $score += $stPts;
+    $details['seo_title'] = ['pts'=>$stPts,'max'=>10,'label'=>'عنوان SEO','chars'=>$stLen];
+    if ($stLen === 0) $issues[] = 'عنوان SEO مفقود';
+    elseif ($stLen > 60) $issues[] = 'عنوان SEO طويل جداً (' . $stLen . ' حرف، الحد 60)';
+
+    // ── Meta description (10 pts) ──
+    $mdLen  = mb_strlen(trim($app['meta_description'] ?? ''));
+    $mdPts  = ($mdLen >= 120 && $mdLen <= 160) ? 10 : ($mdLen >= 60 ? 6 : ($mdLen > 0 ? 3 : 0));
+    $score += $mdPts;
+    $details['meta_desc'] = ['pts'=>$mdPts,'max'=>10,'label'=>'Meta Description','chars'=>$mdLen];
+    if ($mdLen === 0) $issues[] = 'Meta Description مفقود';
+    elseif ($mdLen > 160) $issues[] = 'Meta Description طويل جداً (' . $mdLen . ')';
+
+    // ── Keywords (5 pts) ──
+    $kwPts  = trim($app['keywords'] ?? '') ? 5 : 0;
+    $score += $kwPts;
+    $details['keywords'] = ['pts'=>$kwPts,'max'=>5,'label'=>'كلمات مفتاحية'];
+    if (!$kwPts) $issues[] = 'الكلمات المفتاحية مفقودة';
+
+    // ── Screenshots (10 pts) ──
+    $shots   = json_decode($app['screenshots'] ?? '[]', true) ?: [];
+    $sCnt    = count(array_filter($shots));
+    $sPts    = $sCnt >= 4 ? 10 : ($sCnt >= 2 ? 6 : ($sCnt >= 1 ? 3 : 0));
+    $score  += $sPts;
+    $details['screenshots'] = ['pts'=>$sPts,'max'=>10,'label'=>'الصور','count'=>$sCnt];
+    if ($sCnt < 3) $issues[] = 'الصور أقل من 3 (الموجود: ' . $sCnt . ')';
+
+    // ── Download URL (10 pts) ──
+    $hasDl  = !empty(trim($app['download_url'] ?? ''));
+    $dlPts  = $hasDl ? 10 : 0;
+    $score += $dlPts;
+    $details['download'] = ['pts'=>$dlPts,'max'=>10,'label'=>'رابط التحميل'];
+    if (!$hasDl) $issues[] = 'رابط التحميل مفقود (سيُنشر كمسودة)';
+
+    // ── Features (5 pts) ──
+    $feats   = json_decode($app['features'] ?? '[]', true) ?: [];
+    $fCnt    = count(array_filter($feats));
+    $fPts    = $fCnt >= 5 ? 5 : ($fCnt >= 3 ? 3 : ($fCnt >= 1 ? 1 : 0));
+    $score  += $fPts;
+    $details['features'] = ['pts'=>$fPts,'max'=>5,'label'=>'المميزات','count'=>$fCnt];
+    if ($fCnt < 3) $issues[] = 'المميزات أقل من 3';
+
+    // ── Version (5 pts) ──
+    $verPts = !empty(trim($app['version'] ?? '')) ? 5 : 0;
+    $score += $verPts;
+    $details['version'] = ['pts'=>$verPts,'max'=>5,'label'=>'رقم الإصدار'];
+    if (!$verPts) $issues[] = 'رقم الإصدار مفقود';
+
+    $grade = $score >= 85 ? 'A' : ($score >= 70 ? 'B' : ($score >= 50 ? 'C' : 'D'));
+    $color = $score >= 85 ? '#22c55e' : ($score >= 70 ? '#84cc16' : ($score >= 50 ? '#f59e0b' : '#ef4444'));
+
+    return ['score'=>$score,'max'=>100,'grade'=>$grade,'color'=>$color,'issues'=>$issues,'details'=>$details,'ld_pct'=>$ldPct];
+}
+
 // Shared SEO-field standards embedded in every AI prompt that generates
 // seo_title/meta_description/keywords, so the whole site produces the same
 // search-optimized pattern real Arabic app-download sites rank with —

@@ -1068,7 +1068,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_html_pages_bulk' && is_a
         $pct = (int)($done / $total * 100);
         echo "data: " . json_encode(['pct'=>$pct,'done'=>$done,'total'=>$total,'name'=>$app['name']]) . "\n\n";
         flush();
-        if ($done % 50 === 0) usleep(100000);
+        unset($html);
+        if ($done % 50 === 0) { usleep(100000); gc_collect_cycles(); }
     }
 
     // Bulk IndexNow submission (max 10000 per call)
@@ -1408,6 +1409,151 @@ if (isset($_GET['ajax']) === true && $_GET['ajax'] === 'fetch_playstore' && is_a
    ai_generate_image() in config.php for why this can fail
    even with a valid key: free image models are scarce).
    ══════════════════════════════════════════════════════ */
+
+/* ══ AJAX: Landing pages CRUD ══ */
+if (isset($_GET['ajax']) && in_array($_GET['ajax'], ['lp_delete','lp_update','lp_regenerate','lp_reindex','lp_external_import']) && is_admin()) {
+    header('Content-Type: application/json');
+    $act  = $_GET['ajax'];
+    $lpId = (int)($_GET['lp_id'] ?? 0);
+
+    if ($act === 'lp_delete') {
+        $lp = $pdo->prepare("SELECT * FROM landing_pages WHERE id=?")->execute([$lpId]) ? $pdo->query("SELECT * FROM landing_pages WHERE id=$lpId")->fetch(PDO::FETCH_ASSOC) : null;
+        if ($lp && !empty($lp['file_path']) && file_exists($lp['file_path'])) {
+            @unlink($lp['file_path']);
+            $dir = dirname($lp['file_path']);
+            if (is_dir($dir) && count(scandir($dir)) <= 2) @rmdir($dir);
+        }
+        $pdo->prepare("DELETE FROM landing_pages WHERE id=?")->execute([$lpId]);
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    if ($act === 'lp_update') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $title = trim($input['title'] ?? '');
+        $desc  = trim($input['meta_description'] ?? '');
+        $pdo->prepare("UPDATE landing_pages SET title=?,meta_description=?,updated_at=NOW() WHERE id=?")->execute([$title,$desc,$lpId]);
+        // Also rewrite the HTML file with updated title/meta
+        $lp  = $pdo->query("SELECT lp.*,a.* FROM landing_pages lp JOIN apps a ON lp.app_id=a.id WHERE lp.id=$lpId")->fetch(PDO::FETCH_ASSOC);
+        if ($lp && !empty($lp['file_path'])) {
+            $app2  = $lp;
+            $html2 = landing_page_html($pdo, $app2, $lp['lang'], $lp['page_url']);
+            // Inject custom title/meta if provided
+            if ($title) $html2 = preg_replace('/<title>[^<]*<\/title>/', '<title>' . htmlspecialchars($title, ENT_QUOTES) . '</title>', $html2, 1);
+            if ($desc)  $html2 = preg_replace('/(<meta name="description" content=")[^"]*"/', '$1' . htmlspecialchars($desc, ENT_QUOTES) . '"', $html2, 1);
+            @file_put_contents($lp['file_path'], $html2);
+        }
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    if ($act === 'lp_regenerate') {
+        $lp = $pdo->query("SELECT lp.*,a.* FROM landing_pages lp JOIN apps a ON lp.app_id=a.id WHERE lp.id=$lpId")->fetch(PDO::FETCH_ASSOC);
+        if (!$lp) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
+        $app2 = $lp; $lang2 = $lp['lang']; $pageUrl2 = $lp['page_url'];
+        $html2 = landing_page_html($pdo, $app2, $lang2, $pageUrl2);
+        if (@file_put_contents($lp['file_path'], $html2) !== false) {
+            $pdo->prepare("UPDATE landing_pages SET indexed=0,indexed_at=NULL,updated_at=NOW() WHERE id=?")->execute([$lpId]);
+            echo json_encode(['ok'=>true]);
+        } else {
+            echo json_encode(['ok'=>false,'error'=>'فشل الكتابة إلى الملف']);
+        }
+        exit;
+    }
+
+    if ($act === 'lp_reindex') {
+        $lp = $pdo->query("SELECT * FROM landing_pages WHERE id=$lpId")->fetch(PDO::FETCH_ASSOC);
+        if (!$lp) { echo json_encode(['ok'=>false,'error'=>'Not found']); exit; }
+        ping_search_engines($pdo, $lp['page_url']);
+        google_indexing_request($pdo, [$lp['page_url']]);
+        $pdo->prepare("UPDATE landing_pages SET indexed=1,indexed_at=NOW() WHERE id=?")->execute([$lpId]);
+        echo json_encode(['ok'=>true]);
+        exit;
+    }
+
+    if ($act === 'lp_external_import') {
+        // Import from Play Store by package name or search term
+        $input   = json_decode(file_get_contents('php://input'), true);
+        $pkgs    = array_filter(array_map('trim', preg_split('/[\r\n,;]+/', $input['packages'] ?? '')));
+        $publish = !empty($input['publish']);
+        $results = [];
+        foreach (array_slice($pkgs, 0, 50) as $pkg) {
+            $psData = fetch_playstore_full($pdo, $pkg);
+            if (!$psData || !isset($psData['name'])) {
+                $results[] = ['pkg'=>$pkg,'ok'=>false,'error'=>'لم يُعثر على البيانات'];
+                continue;
+            }
+            // Build app row
+            $slug = unique_slug($pdo, slugify($psData['name']));
+            $iconPath = '';
+            if (!empty($psData['icon_url'])) {
+                $iconData = @file_get_contents($psData['icon_url'], false, stream_context_create(['http'=>['timeout'=>8]]));
+                if ($iconData) {
+                    $icoDir = __DIR__ . '/uploads/icons';
+                    if (!is_dir($icoDir)) @mkdir($icoDir,0755,true);
+                    $tmpPath = $icoDir . '/' . $slug . '_tmp.jpg';
+                    file_put_contents($tmpPath, $iconData);
+                    $final = compress_image_to($tmpPath, $icoDir . '/' . $slug . '.webp', 512, 512, 88);
+                    @unlink($tmpPath);
+                    if ($final) $iconPath = 'uploads/icons/' . $slug . '.webp';
+                }
+            }
+            $d = [
+                'name'             => $psData['name'],
+                'slug'             => $slug,
+                'seo_title'        => $psData['seo_title'] ?? '',
+                'meta_description' => $psData['meta_description'] ?? '',
+                'keywords'         => $psData['keywords'] ?? '',
+                'short_description'=> $psData['short_description'] ?? '',
+                'long_description' => $psData['long_description'] ?? '',
+                'developer'        => $psData['developer'] ?? '',
+                'version'          => $psData['version'] ?? '',
+                'play_store_version'=> $psData['version'] ?? '',
+                'android_version'  => $psData['android_version'] ?? '',
+                'size_mb'          => $psData['size_mb'] ?? '',
+                'license'          => 'Free',
+                'package_name'     => $psData['package_name'] ?? $pkg,
+                'category_id'      => null,
+                'rating'           => !empty($psData['rating']) ? (float)$psData['rating'] : 4.5,
+                'rating_count'     => 0,
+                'download_url'     => $psData['download_url'] ?? '',
+                'mirror2_url'      => '',
+                'mirror3_url'      => '',
+                'download_source'  => 'playstore',
+                'apk_path'         => '',
+                'apk_size_bytes'   => 0,
+                'apk_hash_sha256'  => '',
+                'apk_hash_md5'     => '',
+                'apk_uploaded_at'  => null,
+                'whats_new'        => $psData['whats_new'] ?? '',
+                'playstore_url'    => 'https://play.google.com/store/apps/details?id=' . rawurlencode($pkg),
+                'status'           => ($publish && !empty($psData['download_url'])) ? 'published' : 'draft',
+                'needs_update'     => 0,
+                'icon_path'        => $iconPath,
+                'screenshots'      => json_encode($psData['screenshots'] ?? [], JSON_UNESCAPED_UNICODE),
+                'features'         => json_encode($psData['features'] ?? [], JSON_UNESCAPED_UNICODE),
+                'pros'             => json_encode([], JSON_UNESCAPED_UNICODE),
+                'cons'             => json_encode([], JSON_UNESCAPED_UNICODE),
+                'install_steps'    => json_encode([], JSON_UNESCAPED_UNICODE),
+                'faq'              => json_encode([], JSON_UNESCAPED_UNICODE),
+                'badge'            => 'new',
+                'release_date'     => null,
+            ];
+            $cols = implode(',', array_keys($d));
+            $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
+            $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+            $newId = (int)$pdo->lastInsertId();
+            bump_cache_version($pdo);
+            $results[] = ['pkg'=>$pkg,'ok'=>true,'id'=>$newId,'name'=>$d['name'],'status'=>$d['status']];
+            unset($psData, $iconData, $d);
+            gc_collect_cycles();
+        }
+        echo json_encode(['ok'=>true,'results'=>$results]);
+        exit;
+    }
+    exit;
+}
+
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_icon_ai' && is_admin()) {
     header('Content-Type: application/json');
     $input = json_decode(file_get_contents('php://input'), true);
@@ -2664,6 +2810,8 @@ P;
         ]);
     $newId = (int)$pdo->lastInsertId();
 
+    unset($result, $data, $playstoreMeta, $features, $pros, $cons, $installSteps, $faq);
+    gc_collect_cycles();
     echo json_encode([
         'success' => true, 'id' => $newId, 'name' => $finalName, 'slug' => $slug,
         'has_playstore' => (bool)$playstoreUrl, 'has_icon' => (bool)$iconPath,
@@ -4420,6 +4568,7 @@ $navLinks = [
     'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
     'file-import'   => ['label'=>'استيراد من ملف',            'icon'=>'M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
     'bulk-csv-import' => ['label'=>'استيراد CSV ضخم (50K+)', 'icon'=>'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z'],
+    'external-import' => ['label'=>'استيراد من متاجر خارجية', 'icon'=>'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
@@ -4681,11 +4830,13 @@ function filterAppsTable(q) {
     <tr>
       <th style="width:44px"></th>
       <th>التطبيق</th><th>التصنيف</th><th>إصدار</th><th>حجم</th>
-      <th>مشاهدات</th><th>تحميلات</th><th>الحالة</th><th>إجراءات</th>
+      <th>مشاهدات</th><th>تحميلات</th><th>جودة</th><th>الحالة</th><th>إجراءات</th>
     </tr>
   </thead>
   <tbody id="apps-tbody">
-  <?php foreach ($appsList as $a): ?>
+  <?php foreach ($appsList as $a):
+      $qs = app_quality_score($a);
+  ?>
   <tr data-name="<?= h(strtolower($a['name'])) ?>" data-dev="<?= h(strtolower($a['developer'] ?? '')) ?>" data-status="<?= h($a['status']) ?>">
     <td class="td-thumb">
       <?php if ($a['icon_path']): ?>
@@ -4694,12 +4845,19 @@ function filterAppsTable(q) {
         <div class="app-thumb-placeholder"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="3"/></svg></div>
       <?php endif; ?>
     </td>
-    <td data-label="التطبيق" style="font-weight:700"><?= h($a['name']) ?></td>
+    <td data-label="التطبيق" style="font-weight:700"><?= h($a['name']) ?>
+      <?php if (!empty($a['developer'])): ?><div style="font-size:11px;color:var(--muted);font-weight:400"><?= h($a['developer']) ?></div><?php endif; ?>
+    </td>
     <td data-label="التصنيف" style="color:var(--muted);font-size:12px"><?= h($a['cat'] ?? '—') ?></td>
     <td data-label="إصدار" style="font-family:var(--f-mono);font-size:12px"><?= h($a['version'] ?? '—') ?></td>
     <td data-label="حجم" style="font-family:var(--f-mono);font-size:12px"><?= $a['size_mb'] ? h($a['size_mb']).' MB' : '—' ?></td>
     <td data-label="مشاهدات" style="font-family:var(--f-mono)"><?= number_format($a['views']) ?></td>
     <td data-label="تحميلات" style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
+    <td data-label="جودة" style="text-align:center">
+      <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>#quality-panel" title="<?= h(implode(' · ', array_slice($qs['issues'],0,3))) ?>" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:800;border:1px solid;color:<?= $qs['color'] ?>;border-color:<?= $qs['color'] ?>;background:<?= $qs['color'] ?>18">
+        <?= $qs['score'] ?>% <?= $qs['grade'] ?>
+      </a>
+    </td>
     <td data-label="الحالة">
       <span class="status-badge status-<?= $a['status'] ?>"><?= $a['status']==='published'?'منشور':'مسودة' ?></span>
       <?php if (!empty($a['needs_update'])): ?><span class="status-badge status-draft" style="border-color:rgba(251,191,36,.3);color:#fbbf24;background:rgba(251,191,36,.1)">يحتاج تحديث</span><?php endif; ?>
@@ -4708,7 +4866,7 @@ function filterAppsTable(q) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>" class="btn-edit">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          تعديل / تحديث
+          تعديل
         </a>
         <a href="<?= h(app_url($a['slug'])) ?>" target="_blank" class="btn-view">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -4723,8 +4881,8 @@ function filterAppsTable(q) {
     </td>
   </tr>
   <?php endforeach; ?>
-  <?php if (!$appsList): ?><tr id="apps-empty"><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">لا توجد تطبيقات</td></tr><?php endif; ?>
-  <?php if ($appsList): ?><tr id="apps-empty" style="display:none"><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">لا نتائج مطابقة</td></tr><?php endif; ?>
+  <?php if (!$appsList): ?><tr id="apps-empty"><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">لا توجد تطبيقات</td></tr><?php endif; ?>
+  <?php if ($appsList): ?><tr id="apps-empty" style="display:none"><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">لا نتائج مطابقة</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>
@@ -5268,7 +5426,63 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
   </button>
 </form>
 
-<?php if ($isEdit): ?>
+<?php if ($isEdit):
+  $qs = app_quality_score($app);
+?>
+<div class="panel" id="quality-panel" style="margin-bottom:24px;border-color:<?= $qs['color'] ?>44">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+    <h2 style="margin:0">نظام تقييم جودة المحتوى</h2>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:36px;font-weight:900;color:<?= $qs['color'] ?>"><?= $qs['score'] ?>%</div>
+      <div>
+        <div style="font-size:22px;font-weight:800;color:<?= $qs['color'] ?>;line-height:1">الدرجة <?= $qs['grade'] ?></div>
+        <div style="font-size:11px;color:var(--muted)"><?= $qs['score']>=85?'محتوى ممتاز':($qs['score']>=70?'محتوى جيد':($qs['score']>=50?'يحتاج تحسين':'محتوى ضعيف')) ?></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div style="height:8px;background:var(--border-c);border-radius:4px;overflow:hidden;margin-bottom:16px">
+    <div style="height:100%;width:<?= $qs['score'] ?>%;background:<?= $qs['color'] ?>;border-radius:4px;transition:width .4s"></div>
+  </div>
+
+  <!-- Score breakdown grid -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:16px">
+    <?php foreach ($qs['details'] as $key => $d): ?>
+    <div style="background:var(--surface-2);border:1px solid var(--border-c);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--muted)"><?= h($d['label']) ?></span>
+        <span style="font-size:11px;font-weight:700;color:<?= $d['pts']===$d['max']?'#22c55e':($d['pts']>0?'#f59e0b':'#ef4444') ?>"><?= $d['pts'] ?>/<?= $d['max'] ?></span>
+      </div>
+      <div style="height:4px;background:var(--border-c);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:<?= $d['max']>0?round($d['pts']/$d['max']*100):0 ?>%;background:<?= $d['pts']===$d['max']?'#22c55e':($d['pts']>0?'#f59e0b':'#ef4444') ?>;border-radius:2px"></div>
+      </div>
+      <?php if (isset($d['chars'])): ?><div style="font-size:10px;color:var(--muted);margin-top:4px"><?= number_format($d['chars']) ?> حرف<?php if (isset($d['pct'])): ?> — <?= $d['pct'] ?>% من المثالي<?php endif; ?></div><?php endif; ?>
+      <?php if (isset($d['count'])): ?><div style="font-size:10px;color:var(--muted);margin-top:4px"><?= $d['count'] ?> عناصر</div><?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Issues list -->
+  <?php if ($qs['issues']): ?>
+  <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:12px 14px">
+    <div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:8px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-left:4px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <?= count($qs['issues']) ?> مشاكل تحتاج معالجة
+    </div>
+    <ul style="margin:0;padding-right:16px;display:flex;flex-direction:column;gap:4px">
+      <?php foreach ($qs['issues'] as $issue): ?>
+      <li style="font-size:12px;color:var(--muted)"><?= h($issue) ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+  <?php else: ?>
+  <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:12px 14px;font-size:12px;color:#22c55e;font-weight:600">
+    ✅ محتوى مكتمل — لا توجد مشاكل مكتشفة
+  </div>
+  <?php endif; ?>
+</div>
+
 <div class="panel" style="margin-bottom:40px">
   <h2>التحقق من سلامة الرابط</h2>
   <p class="form-hint" style="margin-bottom:14px">
@@ -8256,70 +8470,305 @@ function startBulkGen(){
 <?php
 /* ─────────────── LANDING PAGES MANAGEMENT ─────────────── */
 elseif ($page === 'landing-pages'):
-    $pages = $pdo->query("SELECT lp.*,a.name as app_name,a.slug FROM landing_pages lp JOIN apps a ON lp.app_id=a.id ORDER BY lp.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
-    $arPages = array_filter($pages, fn($p) => ($p['lang'] ?? '') === 'ar');
-    $enPages = array_filter($pages, fn($p) => ($p['lang'] ?? '') === 'en');
+    $lpPages = $pdo->query("SELECT lp.*,a.name as app_name,a.slug FROM landing_pages lp JOIN apps a ON lp.app_id=a.id ORDER BY lp.updated_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+    $lpAr = count(array_filter($lpPages, fn($p) => $p['lang']==='ar'));
+    $lpEn = count(array_filter($lpPages, fn($p) => $p['lang']==='en'));
+    $lpIdx= array_sum(array_column($lpPages,'indexed'));
 ?>
 <div class="admin-header">
   <h1>صفحات الهبوط (Landing Pages)</h1>
-  <p style="color:var(--muted);font-size:13px;margin-top:4px">صفحات HTML مستقلة تُنشأ تلقائياً عند نشر أي تطبيق بصيغتين: عربية وإنجليزية</p>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">تُنشأ تلقائياً (AR + EN) عند نشر أي تطبيق — يمكن تعديلها، إعادة توليدها، وفهرستها يدوياً</p>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px">
-  <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:#2563eb"><?= count($arPages) ?></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات عربية</div>
-  </div>
-  <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:#8b5cf6"><?= count($enPages) ?></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات إنجليزية</div>
-  </div>
-  <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:<?= array_sum(array_column($pages,'indexed')) > 0 ? '#22c55e' : '#f59e0b' ?>"><?= array_sum(array_column($pages,'indexed')) ?></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:4px">مفهرسة</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px">
+  <div class="panel" style="text-align:center;padding:16px"><div style="font-size:28px;font-weight:800;color:#2563eb"><?= $lpAr ?></div><div style="font-size:11px;color:var(--muted)">صفحات عربية</div></div>
+  <div class="panel" style="text-align:center;padding:16px"><div style="font-size:28px;font-weight:800;color:#8b5cf6"><?= $lpEn ?></div><div style="font-size:11px;color:var(--muted)">صفحات إنجليزية</div></div>
+  <div class="panel" style="text-align:center;padding:16px"><div style="font-size:28px;font-weight:800;color:#22c55e"><?= $lpIdx ?></div><div style="font-size:11px;color:var(--muted)">مفهرسة</div></div>
+  <div class="panel" style="text-align:center;padding:16px"><div style="font-size:28px;font-weight:800;color:#f59e0b"><?= count($lpPages) - $lpIdx ?></div><div style="font-size:11px;color:var(--muted)">تنتظر الفهرسة</div></div>
+</div>
+
+<!-- Edit modal -->
+<div id="lp-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeLpModal()">
+  <div style="background:var(--bg-card);border:1px solid var(--border-c);border-radius:18px;padding:28px;width:min(600px,95vw);max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="margin:0">تعديل صفحة الهبوط</h3>
+      <button onclick="closeLpModal()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <input type="hidden" id="lp-edit-id">
+    <div class="form-group">
+      <label class="form-label">العنوان (title tag)</label>
+      <input id="lp-edit-title" class="form-input" type="text" placeholder="عنوان الصفحة...">
+      <div id="lp-title-cnt" class="form-hint" style="margin-top:4px">0 حرف — المثالي 50–60</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Meta Description</label>
+      <textarea id="lp-edit-meta" class="form-textarea" rows="3" placeholder="وصف الصفحة..."></textarea>
+      <div id="lp-meta-cnt" class="form-hint" style="margin-top:4px">0 حرف — المثالي 120–160</div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button onclick="closeLpModal()" style="padding:10px 20px;border-radius:10px;border:1px solid var(--border-c);background:transparent;color:var(--muted);cursor:pointer">إلغاء</button>
+      <button id="lp-save-btn" onclick="saveLpEdit()" style="padding:10px 20px;border-radius:10px;border:none;background:#2563eb;color:#fff;cursor:pointer;font-weight:600">حفظ التعديلات</button>
+    </div>
   </div>
 </div>
 
-<div class="panel">
-  <h2 style="margin-bottom:16px">القائمة الكاملة</h2>
+<div class="panel" style="padding:0;overflow:hidden">
   <table class="admin-table" style="width:100%;border-collapse:collapse">
     <thead>
       <tr style="border-bottom:2px solid var(--border-c)">
-        <th style="text-align:right;padding:12px">التطبيق</th>
-        <th style="text-align:center;padding:12px">اللغة</th>
-        <th style="text-align:center;padding:12px;font-size:12px">الفهرسة</th>
-        <th style="text-align:center;padding:12px;font-size:12px">التاريخ</th>
-        <th style="text-align:center;padding:12px">إجراءات</th>
+        <th style="padding:12px;text-align:right">التطبيق</th>
+        <th style="padding:12px;text-align:center;width:80px">لغة</th>
+        <th style="padding:12px;text-align:right">العنوان المخصص</th>
+        <th style="padding:12px;text-align:center;width:90px">فهرسة</th>
+        <th style="padding:12px;text-align:center;width:180px">إجراءات</th>
       </tr>
     </thead>
     <tbody>
-      <?php if (!$pages): ?>
-      <tr><td colspan="5" style="padding:20px;text-align:center;color:var(--muted)">لا توجد صفحات هبوط حتى الآن — ستُنشأ تلقائياً عند نشر تطبيق</td></tr>
-      <?php else: ?>
-        <?php foreach ($pages as $p): ?>
-        <tr style="border-bottom:1px solid var(--border-c)">
-          <td style="padding:12px"><?= h($p['app_name'] ?? '') ?></td>
-          <td style="padding:12px;text-align:center;font-size:12px"><?= $p['lang'] === 'ar' ? '🇸🇦 العربية' : '🇬🇧 English' ?></td>
-          <td style="padding:12px;text-align:center;font-size:12px">
-            <?php if ($p['indexed']): ?>
-              <span style="color:#22c55e">✓ نعم</span>
-            <?php else: ?>
-              <span style="color:#f59e0b">⏳ بانتظار</span>
+      <?php if (!$lpPages): ?>
+        <tr><td colspan="5" style="padding:30px;text-align:center;color:var(--muted)">لا توجد صفحات هبوط بعد — ستُنشأ تلقائياً عند نشر تطبيق</td></tr>
+      <?php else: foreach ($lpPages as $lp): ?>
+      <tr id="lp-row-<?= $lp['id'] ?>" style="border-bottom:1px solid var(--border-c)">
+        <td style="padding:10px 12px">
+          <a href="admin.php?page=edit-app&id=<?= $lp['app_id'] ?>" style="font-weight:600;color:var(--white);text-decoration:none"><?= h($lp['app_name']) ?></a>
+          <?php if (!empty($lp['page_url'])): ?><div style="font-size:10px;color:var(--muted);margin-top:2px"><?= h($lp['page_url']) ?></div><?php endif; ?>
+        </td>
+        <td style="padding:10px;text-align:center;font-size:11px">
+          <?= $lp['lang'] === 'ar' ? '<span style="background:rgba(6,182,212,.1);color:var(--cyan);border-radius:6px;padding:2px 6px">AR</span>' : '<span style="background:rgba(124,58,237,.1);color:#a78bfa;border-radius:6px;padding:2px 6px">EN</span>' ?>
+        </td>
+        <td style="padding:10px 12px;font-size:12px;color:var(--muted)">
+          <?= h(mb_substr($lp['title'] ?? '', 0, 60)) ?: '<em>افتراضي</em>' ?>
+        </td>
+        <td style="padding:10px;text-align:center">
+          <span id="lp-idx-<?= $lp['id'] ?>" style="font-size:11px;color:<?= $lp['indexed'] ? '#22c55e' : '#f59e0b' ?>">
+            <?= $lp['indexed'] ? '✓ مفهرسة' : '⏳ انتظار' ?>
+          </span>
+        </td>
+        <td style="padding:10px;text-align:center">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center">
+            <?php if (!empty($lp['page_url'])): ?>
+            <a href="<?= h($lp['page_url']) ?>" target="_blank" title="عرض" style="padding:4px 8px;background:rgba(6,182,212,.1);border-radius:6px;color:var(--cyan);font-size:10px;text-decoration:none">عرض</a>
             <?php endif; ?>
-          </td>
-          <td style="padding:12px;text-align:center;font-size:12px;color:var(--muted)"><?= date('Y-m-d', strtotime($p['created_at'] ?? '')) ?></td>
-          <td style="padding:12px;text-align:center">
-            <a href="<?= h($p['page_url'] ?? '') ?>" target="_blank" title="عرض الصفحة" style="display:inline-block;padding:4px 8px;background:rgba(6,182,212,.1);border-radius:6px;color:var(--cyan);font-size:11px;margin-left:4px">🔗 عرض</a>
-            <?php if (!empty($p['subdomain_url'])): ?>
-              <a href="<?= h($p['subdomain_url']) ?>" target="_blank" title="الدومين الفرعي" style="display:inline-block;padding:4px 8px;background:rgba(124,58,237,.1);border-radius:6px;color:#a78bfa;font-size:11px">🌐 فرعي</a>
-            <?php endif; ?>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-      <?php endif; ?>
+            <button onclick="openLpEdit(<?= $lp['id'] ?>,<?= h(json_encode($lp['title'] ?? '')) ?>,<?= h(json_encode($lp['meta_description'] ?? '')) ?>)" style="padding:4px 8px;background:rgba(6,182,212,.1);border:none;border-radius:6px;color:var(--cyan);font-size:10px;cursor:pointer">تعديل</button>
+            <button onclick="lpAction('lp_regenerate',<?= $lp['id'] ?>,this)" style="padding:4px 8px;background:rgba(251,191,36,.1);border:none;border-radius:6px;color:#fbbf24;font-size:10px;cursor:pointer" title="إعادة توليد HTML">تجديد</button>
+            <button onclick="lpAction('lp_reindex',<?= $lp['id'] ?>,this)" id="lp-reindex-<?= $lp['id'] ?>" style="padding:4px 8px;background:rgba(34,197,94,.1);border:none;border-radius:6px;color:#22c55e;font-size:10px;cursor:pointer" title="إرسال للفهرسة">فهرسة</button>
+            <button onclick="lpAction('lp_delete',<?= $lp['id'] ?>,this,true)" style="padding:4px 8px;background:rgba(239,68,68,.1);border:none;border-radius:6px;color:#ef4444;font-size:10px;cursor:pointer" title="حذف">حذف</button>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; endif; ?>
     </tbody>
   </table>
 </div>
+
+<script>
+function openLpEdit(id,title,meta) {
+  document.getElementById('lp-edit-id').value = id;
+  document.getElementById('lp-edit-title').value = title||'';
+  document.getElementById('lp-edit-meta').value  = meta||'';
+  updateLpCounts();
+  document.getElementById('lp-edit-modal').style.display='flex';
+}
+function closeLpModal() { document.getElementById('lp-edit-modal').style.display='none'; }
+function updateLpCounts() {
+  var t = document.getElementById('lp-edit-title').value.length;
+  var m = document.getElementById('lp-edit-meta').value.length;
+  document.getElementById('lp-title-cnt').textContent = t + ' حرف — المثالي 50–60';
+  document.getElementById('lp-meta-cnt').textContent  = m + ' حرف — المثالي 120–160';
+  document.getElementById('lp-title-cnt').style.color = (t>=50&&t<=60)?'#22c55e':(t>0?'#f59e0b':'var(--muted)');
+  document.getElementById('lp-meta-cnt').style.color  = (m>=120&&m<=160)?'#22c55e':(m>0?'#f59e0b':'var(--muted)');
+}
+document.getElementById('lp-edit-title').addEventListener('input',updateLpCounts);
+document.getElementById('lp-edit-meta').addEventListener('input',updateLpCounts);
+
+async function saveLpEdit() {
+  var id    = document.getElementById('lp-edit-id').value;
+  var btn   = document.getElementById('lp-save-btn');
+  var title = document.getElementById('lp-edit-title').value;
+  var meta  = document.getElementById('lp-edit-meta').value;
+  btn.disabled=true; btn.textContent='جارٍ الحفظ…';
+  try {
+    var r = await fetch('admin.php?ajax=lp_update&lp_id='+id, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,meta_description:meta})});
+    var d = await r.json();
+    if(d.ok) { closeLpModal(); location.reload(); }
+    else alert('خطأ: '+(d.error||'Unknown'));
+  } catch(e){ alert('خطأ في الشبكة'); }
+  btn.disabled=false; btn.textContent='حفظ التعديلات';
+}
+
+async function lpAction(action,id,btn,confirm_del) {
+  if(confirm_del && !confirm('تأكيد حذف الصفحة؟')) return;
+  var orig = btn.textContent;
+  btn.disabled=true; btn.textContent='…';
+  try {
+    var r = await fetch('admin.php?ajax='+action+'&lp_id='+id, {method:'POST'});
+    var d = await r.json();
+    if(d.ok) {
+      if(action==='lp_delete') { document.getElementById('lp-row-'+id)?.remove(); }
+      else if(action==='lp_reindex') {
+        var el = document.getElementById('lp-idx-'+id);
+        if(el){ el.textContent='✓ مفهرسة'; el.style.color='#22c55e'; }
+        btn.disabled=false; btn.textContent=orig;
+      } else { btn.disabled=false; btn.textContent=orig; }
+    } else { alert('خطأ: '+(d.error||'Unknown')); btn.disabled=false; btn.textContent=orig; }
+  } catch(e){ alert('خطأ في الشبكة'); btn.disabled=false; btn.textContent=orig; }
+}
+</script>
+
+<?php
+/* ─────────────── EXTERNAL STORE IMPORT ─────────────── */
+elseif ($page === 'external-import'): ?>
+
+<div class="admin-header">
+  <h1>استيراد من متاجر خارجية</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">استيراد تطبيقات من Google Play باستخدام أسماء الحزم (Package Names) — حتى 50 تطبيقاً في كل دُفعة</p>
+</div>
+
+<div class="panel" style="margin-bottom:20px">
+  <h3 style="margin:0 0 16px;font-size:16px;display:flex;align-items:center;gap:8px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+    استيراد من Google Play Store
+  </h3>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
+    أدخل أسماء الحزم (Package Names) بمعدل سطر واحد لكل حزمة أو مفصولة بفواصل.<br>
+    مثال: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px">com.instagram.android</code>
+    أو الرابط الكامل من Google Play.
+  </p>
+  <div class="form-group">
+    <label class="form-label">أسماء الحزم / روابط Google Play</label>
+    <textarea id="ei-packages" class="form-input" rows="10" placeholder="com.whatsapp&#10;com.instagram.android&#10;com.facebook.katana&#10;...أو الصق روابط Play Store مباشرة"></textarea>
+    <div class="form-hint">الحد الأقصى: 50 حزمة في كل دفعة واحدة</div>
+  </div>
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+      <input type="checkbox" id="ei-publish" style="width:16px;height:16px">
+      <span>نشر مباشرة (إذا وُجد رابط تحميل)</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+      <input type="checkbox" id="ei-gen-content" style="width:16px;height:16px" checked>
+      <span>توليد محتوى AI تلقائياً</span>
+    </label>
+  </div>
+  <button class="btn" id="ei-start-btn" onclick="eiStart()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3"/></svg>
+    بدء الاستيراد
+  </button>
+</div>
+
+<!-- Progress + Results -->
+<div id="ei-progress-wrap" style="display:none">
+  <div class="panel" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <strong id="ei-progress-label">جارٍ الاستيراد…</strong>
+      <span id="ei-progress-pct" style="color:var(--accent);font-weight:700">0%</span>
+    </div>
+    <div style="height:8px;background:var(--border-c);border-radius:4px;overflow:hidden">
+      <div id="ei-progress-bar" style="height:100%;background:var(--accent);border-radius:4px;transition:width .3s;width:0%"></div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted)" id="ei-progress-status"></div>
+  </div>
+
+  <div class="panel">
+    <h4 style="margin:0 0 12px;font-size:14px">نتائج الاستيراد</h4>
+    <div style="overflow-x:auto">
+      <table class="admin-table" style="min-width:600px">
+        <thead><tr>
+          <th>الحزمة</th>
+          <th>الاسم</th>
+          <th>الحالة</th>
+          <th>الرابط</th>
+        </tr></thead>
+        <tbody id="ei-results-body"></tbody>
+      </table>
+    </div>
+    <div id="ei-summary" style="margin-top:14px;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;display:none"></div>
+  </div>
+</div>
+
+<script>
+async function eiStart() {
+  const raw = document.getElementById('ei-packages').value.trim();
+  if (!raw) { alert('أدخل أسماء الحزم أولاً'); return; }
+
+  // Parse: extract package names from raw text (lines, commas, Play Store URLs)
+  const lines = raw.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean);
+  const pkgs = lines.map(l => {
+    const m = l.match(/[?&]id=([a-zA-Z0-9._]+)/);
+    return m ? m[1] : l;
+  }).filter(p => /^[a-zA-Z][a-zA-Z0-9._]+$/.test(p));
+
+  if (!pkgs.length) { alert('لم يتم التعرّف على أي اسم حزمة صحيح'); return; }
+  if (pkgs.length > 50) { alert('الحد الأقصى 50 حزمة في كل دفعة'); return; }
+
+  const publish = document.getElementById('ei-publish').checked;
+  const btn = document.getElementById('ei-start-btn');
+  btn.disabled = true; btn.textContent = 'جارٍ الاستيراد…';
+
+  document.getElementById('ei-progress-wrap').style.display = 'block';
+  document.getElementById('ei-results-body').innerHTML = '';
+  document.getElementById('ei-summary').style.display = 'none';
+  setProgress(0, pkgs.length, 'جارٍ استيراد التطبيقات…');
+
+  let ok = 0, fail = 0;
+  // Process in batches of 5 to avoid timeout
+  const batchSize = 5;
+  for (let i = 0; i < pkgs.length; i += batchSize) {
+    const batch = pkgs.slice(i, i + batchSize);
+    try {
+      const resp = await fetch('admin.php?ajax=lp_external_import', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ packages: batch.join('\n'), publish })
+      });
+      const d = await resp.json();
+      if (d.ok && d.results) {
+        d.results.forEach(r => {
+          addResultRow(r);
+          if (r.ok) ok++; else fail++;
+        });
+      }
+    } catch(e) {
+      batch.forEach(pkg => {
+        addResultRow({ pkg, ok: false, error: 'خطأ في الشبكة' });
+        fail++;
+      });
+    }
+    setProgress(Math.min(i + batchSize, pkgs.length), pkgs.length, `تمت معالجة ${Math.min(i+batchSize,pkgs.length)} من ${pkgs.length}`);
+  }
+
+  btn.disabled = false; btn.textContent = 'بدء الاستيراد مرة أخرى';
+  setProgress(pkgs.length, pkgs.length, 'اكتمل الاستيراد');
+
+  const sumEl = document.getElementById('ei-summary');
+  sumEl.style.display = 'block';
+  sumEl.innerHTML = `
+    <strong>ملخص الاستيراد:</strong>
+    <span style="color:#22c55e;margin-right:12px">✓ ناجح: ${ok}</span>
+    ${fail > 0 ? `<span style="color:#ef4444">✗ فشل: ${fail}</span>` : ''}
+    <a href="admin.php?page=apps" style="margin-right:16px;color:var(--accent)">عرض التطبيقات المستوردة ←</a>
+  `;
+}
+
+function setProgress(done, total, msg) {
+  const pct = total > 0 ? Math.round((done/total)*100) : 0;
+  document.getElementById('ei-progress-bar').style.width = pct + '%';
+  document.getElementById('ei-progress-pct').textContent = pct + '%';
+  document.getElementById('ei-progress-status').textContent = msg || '';
+  if (done >= total) document.getElementById('ei-progress-label').textContent = 'اكتمل الاستيراد';
+}
+
+function addResultRow(r) {
+  const tbody = document.getElementById('ei-results-body');
+  const tr = document.createElement('tr');
+  const statusCell = r.ok
+    ? `<td><span style="color:#22c55e;font-weight:600">✓ ${r.status === 'published' ? 'منشور' : 'مسودة'}</span></td>`
+    : `<td><span style="color:#ef4444">✗ ${r.error || 'فشل'}</span></td>`;
+  const linkCell = r.ok && r.id
+    ? `<td><a href="admin.php?page=edit-app&id=${r.id}" style="color:var(--accent);font-size:12px">تعديل ←</a></td>`
+    : '<td>—</td>';
+  tr.innerHTML = `<td style="font-family:monospace;font-size:12px">${r.pkg}</td><td>${r.name || '—'}</td>${statusCell}${linkCell}`;
+  tbody.appendChild(tr);
+}
+</script>
 
 <?php
 /* ─────────────── SERVER CONNECTION MANAGER ─────────────── */
