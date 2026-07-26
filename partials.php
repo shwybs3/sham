@@ -239,6 +239,9 @@ function render_app_card(array $app): void { ?>
     <?php endif; ?>
     <div class="app-card-cat"><?= h($app['cat_name'] ?? 'تطبيق') ?></div>
     <div class="app-card-name"><?= h($app['name']) ?></div>
+    <?php if (!empty($app['short_description'])): ?>
+    <div class="app-card-desc"><?= h(mb_substr($app['short_description'], 0, 80)) ?><?= mb_strlen($app['short_description']) > 80 ? '…' : '' ?></div>
+    <?php endif; ?>
     <div class="app-card-meta">
       <div class="app-card-rating">
         <?= partial_icon('star') ?>

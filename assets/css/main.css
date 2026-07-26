@@ -567,6 +567,15 @@ button, input, select, textarea { font-family: inherit; }
   text-overflow: ellipsis;
   line-height: 1.3;
 }
+.app-card-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .app-card-cat {
   font-size: 11px;
   color: var(--muted);

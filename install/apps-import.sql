@@ -17321,3 +17321,25 @@ INSERT IGNORE INTO apps (
 
 SET foreign_key_checks = 1;
 -- Done: 935 apps inserted
+
+-- Fix download_url: replace Google Play URLs with APKPure direct-APK links
+-- where package_name is available, enabling actual APK downloads.
+UPDATE apps
+SET download_url = CONCAT(
+  'https://d.apkpure.com/b/APK/', package_name,
+  '?versionCode=latest&nc=arm64-v8a&sv=21'
+)
+WHERE
+  package_name IS NOT NULL
+  AND package_name != ''
+  AND download_url LIKE '%play.google.com%'
+  AND status = 'published';
+
+-- For apps that still have a Play Store URL (no package_name), preserve it as playstore_url
+-- and clear download_url so the site shows the "تحميل من Google Play" fallback cleanly
+UPDATE apps
+SET playstore_url = download_url, download_url = NULL
+WHERE
+  download_url LIKE '%play.google.com%'
+  AND (package_name IS NULL OR package_name = '')
+  AND status = 'published';

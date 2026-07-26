@@ -721,24 +721,9 @@ function tick() {
       if (captchaWrap) captchaWrap.style.display = 'block';
       if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
       <?php if ($dlCaptchaType === 'v3'): ?>
-      // v3 is invisible — auto-run, with fallback if it fails or is blocked
-      if (captchaWrap) captchaWrap.style.display = 'none';
-      if (statusText) statusText.innerHTML = '<strong style="color:var(--primary)">⟳ جارٍ التحقق التلقائي…</strong>';
-      function _tryRunV3() {
-        if (typeof grecaptcha !== 'undefined') {
-          window.runDlV3Captcha();
-        } else {
-          // API blocked or not loaded — allow through immediately
-          dlCaptchaSolved = true; triggerDownload();
-        }
-      }
-      if (typeof grecaptcha !== 'undefined') {
-        _tryRunV3();
-      } else {
-        setTimeout(_tryRunV3, 1500);
-      }
-      // Ultimate failsafe: if download hasn't fired after 9 seconds, allow anyway
-      setTimeout(function(){ if (!dlCaptchaSolved) { dlCaptchaSolved = true; triggerDownload(); } }, 9000);
+      // v3: keep button visible — user must click it, then v3 runs silently on click
+      // Do NOT auto-hide the button or auto-run v3 here
+      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ اضغط زر التحقق أدناه لبدء التحميل</strong>';
       <?php endif; ?>
       // Also show the (still-disabled) button so user sees it exists
       if (btnManual) { btnManual.classList.remove('hidden'); }
