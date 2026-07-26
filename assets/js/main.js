@@ -225,8 +225,13 @@ document.addEventListener('DOMContentLoaded', () => {
       current = ((i % slides.length) + slides.length) % slides.length;
       slides[current].classList.add('active');
       thumbs[current].classList.add('active');
-      // Only scroll the thumb strip horizontally — never scroll the full page vertically
-      thumbs[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      // Scroll only the thumb strip container horizontally — never move the page vertically
+      var strip = thumbs[current].closest('.fc-thumbs');
+      if (strip) {
+        var tw = thumbs[current];
+        var targetLeft = tw.offsetLeft - (strip.offsetWidth - tw.offsetWidth) / 2;
+        strip.scrollTo({ left: targetLeft, behavior: 'smooth' });
+      }
       resetProgress();
     }
 

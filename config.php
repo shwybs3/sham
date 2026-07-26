@@ -703,12 +703,18 @@ function ensure_schema(PDO $pdo): array {
       registrar_url TEXT DEFAULT NULL,
       price_usd     DECIMAL(8,2) NULL,
       notes         TEXT DEFAULT NULL,
+      doc_root      VARCHAR(255) DEFAULT NULL,
       admin_only    TINYINT(1) NOT NULL DEFAULT 1,
       created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uq_domain (full_domain),
       INDEX idx_tld (tld),
       INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Additive migration: add doc_root if missing
+    $domainsCols = array_column($pdo->query("SHOW COLUMNS FROM domains")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    if (!in_array('doc_root', $domainsCols)) {
+        $pdo->exec("ALTER TABLE domains ADD COLUMN doc_root VARCHAR(255) DEFAULT NULL AFTER notes");
+    }
     $log[] = 'domains';
 
     return $log;

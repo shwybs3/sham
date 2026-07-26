@@ -5160,6 +5160,261 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_update_status' && is_admin
     exit;
 }
 
+/* ─────────────── DOMAIN FILE MANAGER AJAX ─────────────── */
+
+// Path validation — ensures $rel stays inside $root (blocks traversal)
+function dm_safe_path(string $root, string $rel): ?string {
+    $root = rtrim(realpath($root) ?: $root, '/');
+    $rel  = ltrim(str_replace(["\0", '..'], ['', ''], $rel), '/');
+    $full = $root . '/' . $rel;
+    // For paths that already exist, double-check with realpath
+    $real = realpath($full);
+    if ($real !== false) {
+        return (strncmp($real, $root, strlen($root)) === 0) ? $real : null;
+    }
+    // For new files/dirs, validate without realpath
+    return (strncmp($full, $root, strlen($root)) === 0) ? $full : null;
+}
+
+function dm_get_root(PDO $pdo, int $id): ?string {
+    $d = $pdo->prepare("SELECT doc_root, name FROM domains WHERE id=?");
+    $d->execute([$id]);
+    $row = $d->fetch();
+    if (!$row) return null;
+    if ($row['doc_root']) return rtrim($row['doc_root'], '/');
+    // Fallback: server_doc_root + /domainname
+    $base = rtrim(get_cfg($pdo,'server_doc_root') ?: '', '/');
+    if (!$base) return null;
+    return $base . '/' . preg_replace('/[^a-z0-9\-]/','', strtolower($row['name']));
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_set_docroot' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id      = (int)($input['id'] ?? 0);
+    $docRoot = trim($input['doc_root'] ?? '');
+    if (!$id) { echo json_encode(['ok'=>false,'error'=>'id required']); exit; }
+    $pdo->prepare("UPDATE domains SET doc_root=? WHERE id=?")->execute([$docRoot ?: null, $id]);
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_files' && is_admin()) {
+    header('Content-Type: application/json');
+    $id   = (int)($_GET['id'] ?? 0);
+    $rel  = trim($_GET['rel'] ?? '');
+    $root = dm_get_root($pdo, $id);
+    if (!$root) { echo json_encode(['ok'=>false,'error'=>'لم يُعيَّن مسار للملفات لهذا النطاق']); exit; }
+    if (!is_dir($root)) @mkdir($root, 0755, true);
+    $dir  = dm_safe_path($root, $rel);
+    if (!$dir || !is_dir($dir)) { echo json_encode(['ok'=>false,'error'=>'المسار غير صحيح']); exit; }
+    $items = [];
+    foreach (scandir($dir) as $f) {
+        if ($f === '.' || $f === '..') continue;
+        $fp   = $dir . '/' . $f;
+        $isDir= is_dir($fp);
+        $items[] = [
+            'name'  => $f,
+            'is_dir'=> $isDir,
+            'size'  => $isDir ? null : filesize($fp),
+            'mtime' => filemtime($fp),
+            'ext'   => $isDir ? '' : strtolower(pathinfo($f, PATHINFO_EXTENSION)),
+        ];
+    }
+    usort($items, fn($a,$b) => ($b['is_dir'] <=> $a['is_dir']) ?: strcmp($a['name'], $b['name']));
+    $relDisplay = ltrim(str_replace($root, '', $dir), '/');
+    echo json_encode(['ok'=>true,'root'=>$root,'rel'=>$relDisplay,'items'=>$items]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_read' && is_admin()) {
+    header('Content-Type: application/json');
+    $id   = (int)($_GET['id'] ?? 0);
+    $rel  = trim($_GET['rel'] ?? '');
+    $root = dm_get_root($pdo, $id);
+    if (!$root) { echo json_encode(['ok'=>false,'error'=>'لا يوجد مسار']); exit; }
+    $path = dm_safe_path($root, $rel);
+    if (!$path || !is_file($path)) { echo json_encode(['ok'=>false,'error'=>'الملف غير موجود']); exit; }
+    if (filesize($path) > 512*1024) { echo json_encode(['ok'=>false,'error'=>'الملف كبير جداً للتعديل (>512KB)']); exit; }
+    echo json_encode(['ok'=>true,'content'=>file_get_contents($path),'name'=>basename($path)]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_save' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id      = (int)($input['id'] ?? 0);
+    $rel     = trim($input['rel'] ?? '');
+    $content = $input['content'] ?? '';
+    $root    = dm_get_root($pdo, $id);
+    if (!$root) { echo json_encode(['ok'=>false,'error'=>'لا يوجد مسار']); exit; }
+    $path = dm_safe_path($root, $rel);
+    if (!$path) { echo json_encode(['ok'=>false,'error'=>'مسار غير صحيح']); exit; }
+    @mkdir(dirname($path), 0755, true);
+    $res = file_put_contents($path, $content);
+    echo json_encode(['ok'=> $res !== false]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_upload' && is_admin()) {
+    header('Content-Type: application/json');
+    $id   = (int)($_POST['id'] ?? 0);
+    $rel  = trim($_POST['rel'] ?? '');
+    $root = dm_get_root($pdo, $id);
+    if (!$root || empty($_FILES['file'])) { echo json_encode(['ok'=>false,'error'=>'بيانات ناقصة']); exit; }
+    $dir  = dm_safe_path($root, $rel);
+    if (!$dir) { echo json_encode(['ok'=>false,'error'=>'مسار غير صحيح']); exit; }
+    @mkdir($dir, 0755, true);
+    $origName = basename($_FILES['file']['name']);
+    $origName = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $origName);
+    $dest = dm_safe_path($root, $rel . '/' . $origName);
+    if (!$dest) { echo json_encode(['ok'=>false,'error'=>'اسم الملف غير صحيح']); exit; }
+    if (move_uploaded_file($_FILES['file']['tmp_name'], $dest)) {
+        echo json_encode(['ok'=>true,'name'=>$origName]);
+    } else {
+        echo json_encode(['ok'=>false,'error'=>'فشل رفع الملف']);
+    }
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_delete' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id    = (int)($input['id'] ?? 0);
+    $rel   = trim($input['rel'] ?? '');
+    $root  = dm_get_root($pdo, $id);
+    if (!$root || !$rel) { echo json_encode(['ok'=>false,'error'=>'بيانات ناقصة']); exit; }
+    $path  = dm_safe_path($root, $rel);
+    if (!$path) { echo json_encode(['ok'=>false,'error'=>'مسار غير صحيح']); exit; }
+    if (is_file($path)) { unlink($path); echo json_encode(['ok'=>true]); }
+    elseif (is_dir($path)) {
+        // simple recursive delete
+        $it = new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS);
+        $ri = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($ri as $f) { $f->isDir() ? rmdir($f) : unlink($f); }
+        rmdir($path);
+        echo json_encode(['ok'=>true]);
+    } else {
+        echo json_encode(['ok'=>false,'error'=>'المسار غير موجود']);
+    }
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_mkdir' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id     = (int)($input['id'] ?? 0);
+    $rel    = trim($input['rel'] ?? '');
+    $folder = preg_replace('/[^a-zA-Z0-9_\-]/', '_', trim($input['name'] ?? ''));
+    $root   = dm_get_root($pdo, $id);
+    if (!$root || !$folder) { echo json_encode(['ok'=>false,'error'=>'بيانات ناقصة']); exit; }
+    $path = dm_safe_path($root, $rel . '/' . $folder);
+    if (!$path) { echo json_encode(['ok'=>false,'error'=>'مسار غير صحيح']); exit; }
+    @mkdir($path, 0755, true);
+    echo json_encode(['ok'=>is_dir($path)]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_rename' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id      = (int)($input['id'] ?? 0);
+    $rel     = trim($input['rel'] ?? '');
+    $newName = preg_replace('/[^a-zA-Z0-9._\-]/', '_', trim($input['new_name'] ?? ''));
+    $root    = dm_get_root($pdo, $id);
+    if (!$root || !$rel || !$newName) { echo json_encode(['ok'=>false,'error'=>'بيانات ناقصة']); exit; }
+    $oldPath = dm_safe_path($root, $rel);
+    $newPath = dm_safe_path($root, dirname($rel) . '/' . $newName);
+    if (!$oldPath || !$newPath) { echo json_encode(['ok'=>false,'error'=>'مسار غير صحيح']); exit; }
+    $ok = rename($oldPath, $newPath);
+    echo json_encode(['ok'=>$ok]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_deploy_template' && is_admin()) {
+    header('Content-Type: application/json');
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id       = (int)($input['id'] ?? 0);
+    $template = $input['template'] ?? '';
+    $root     = dm_get_root($pdo, $id);
+    if (!$root) { echo json_encode(['ok'=>false,'error'=>'لا يوجد مسار']); exit; }
+    $stmt = $pdo->prepare("SELECT * FROM domains WHERE id=?");
+    $stmt->execute([$id]);
+    $dom = $stmt->fetch();
+    $siteUrl  = rtrim(get_cfg($pdo,'site_url') ?: 'https://yassota.com', '/');
+    $domName  = $dom ? $dom['full_domain'] : '';
+    @mkdir($root, 0755, true);
+    $files = [];
+    if ($template === 'redirect') {
+        $idx = "<?php header('Location: {$siteUrl}', true, 301); exit; ?>";
+        file_put_contents($root . '/index.php', $idx);
+        $files[] = 'index.php';
+    } elseif ($template === 'landing') {
+        $year = date('Y');
+        $html = <<<HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{$domName} - يassota</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+h1{font-size:clamp(28px,5vw,52px);font-weight:900;margin-bottom:16px}
+p{color:#94a3b8;font-size:16px;max-width:500px;line-height:1.8;margin-bottom:32px}
+.btn{display:inline-block;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px}
+.logo{font-size:48px;margin-bottom:20px}
+footer{margin-top:40px;color:#475569;font-size:12px}
+</style>
+</head>
+<body>
+<div class="logo">🌐</div>
+<h1>{$domName}</h1>
+<p>هذا النطاق يعمل بنجاح. قريباً سيتوفر المحتوى الكامل.</p>
+<a href="{$siteUrl}" class="btn">زيارة yassota.com</a>
+<footer>&copy; {$year} yassota.com — جميع الحقوق محفوظة</footer>
+</body></html>
+HTML;
+        file_put_contents($root . '/index.html', $html);
+        $files[] = 'index.html';
+    } elseif ($template === 'robots') {
+        file_put_contents($root . '/robots.txt', "User-agent: *\nAllow: /\nSitemap: https://{$domName}/sitemap.xml\n");
+        $files[] = 'robots.txt';
+    } elseif ($template === 'htaccess') {
+        $ht = "Options -Indexes\nErrorDocument 404 /index.html\n";
+        file_put_contents($root . '/.htaccess', $ht);
+        $files[] = '.htaccess';
+    }
+    echo json_encode(['ok'=>true,'files'=>$files]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_indexnow' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $id    = (int)($input['id'] ?? 0);
+    $stmt  = $pdo->prepare("SELECT full_domain FROM domains WHERE id=?");
+    $stmt->execute([$id]);
+    $dom   = $stmt->fetchColumn();
+    if (!$dom) { echo json_encode(['ok'=>false,'error'=>'نطاق غير موجود']); exit; }
+    $key   = get_cfg($pdo,'indexnow_key') ?: '';
+    if (!$key) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح IndexNow في الإعدادات']); exit; }
+    $urls  = ["https://{$dom}/", "https://{$dom}/sitemap.xml"];
+    $body  = json_encode(['host'=>$dom,'key'=>$key,'keyLocation'=>"https://{$dom}/{$key}.txt",'urlList'=>$urls]);
+    $ch    = curl_init('https://api.indexnow.org/indexnow');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body,
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json','Accept: application/json'],
+    ]);
+    $res  = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    echo json_encode(['ok'=>true,'http'=>$code,'resp'=>$res]);
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
@@ -10828,7 +11083,7 @@ $freeSources = [
 
 <!-- ── TAB NAVIGATION ── -->
 <div id="dm-tabs" style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto">
-  <?php foreach(['search'=>'🔍 بحث عن نطاق','my-domains'=>'📋 نطاقاتي ('.count($reservedDomains).')','free-guide'=>'🆓 مصادر مجانية','tld-catalog'=>'📚 كتالوج الامتدادات'] as $tab=>$label): ?>
+  <?php foreach(['search'=>'🔍 بحث عن نطاق','my-domains'=>'📋 نطاقاتي ('.count($reservedDomains).')','free-guide'=>'🆓 مصادر مجانية','tld-catalog'=>'📚 كتالوج الامتدادات','ideas'=>'💡 20 فكرة للتطوير'] as $tab=>$label): ?>
   <button onclick="switchTab('<?= $tab ?>')" class="dm-tab-btn" data-tab="<?= $tab ?>"
     style="padding:10px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px">
     <?= $label ?>
@@ -10895,23 +11150,31 @@ $freeSources = [
     <?php else: ?>
     <div style="overflow-x:auto">
       <table class="admin-table">
-        <thead><tr><th>النطاق</th><th>النوع</th><th>الحالة</th><th>السعر</th><th>الانتهاء</th><th>ملاحظات</th><th>إجراء</th></tr></thead>
+        <thead><tr><th>النطاق</th><th>النوع</th><th>الحالة</th><th>السعر</th><th>الانتهاء</th><th>الملفات</th><th>إجراء</th></tr></thead>
         <tbody>
         <?php foreach ($reservedDomains as $d):
           $typeLabels = ['free_sub'=>'🆓 فرعي مجاني','free_real'=>'🆓 حقيقي مجاني','cheap'=>'💸 رخيص','paid'=>'💰 مدفوع','reserved'=>'📌 محجوز'];
           $stColors   = ['available'=>'#22c55e','taken'=>'#ef4444','unknown'=>'#f59e0b','reserved'=>'#3b82f6','active'=>'#22c55e','expired'=>'#ef4444'];
           $stLabels   = ['available'=>'متاح','taken'=>'مأخوذ','unknown'=>'غير معروف','reserved'=>'محجوز','active'=>'نشط','expired'=>'منتهي'];
+          $hasRoot    = !empty($d['doc_root']);
         ?>
         <tr>
-          <td style="font-weight:700;font-family:monospace;direction:ltr"><?= h($d['full_domain']) ?></td>
+          <td style="font-weight:700;font-family:monospace;direction:ltr">
+            <a href="https://<?= h($d['full_domain']) ?>" target="_blank" style="color:var(--primary);text-decoration:none"><?= h($d['full_domain']) ?> ↗</a>
+          </td>
           <td style="font-size:12px"><?= $typeLabels[$d['type']] ?? h($d['type']) ?></td>
           <td><span style="color:<?= $stColors[$d['status']] ?? '#94a3b8' ?>;font-weight:600;font-size:13px"><?= $stLabels[$d['status']] ?? h($d['status']) ?></span></td>
           <td style="font-size:13px;color:var(--muted)"><?= $d['price_usd'] ? '$'.(float)$d['price_usd'].'/سنة' : '—' ?></td>
           <td style="font-size:12px;color:var(--muted)"><?= $d['expires_at'] ? date('Y-m-d', strtotime($d['expires_at'])) : '—' ?></td>
-          <td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis"><?= h($d['notes'] ?: '—') ?></td>
-          <td style="display:flex;gap:6px">
-            <?php if ($d['registrar_url']): ?><a href="<?= h($d['registrar_url']) ?>" target="_blank" class="btn-sm">🔗</a><?php endif; ?>
-            <button onclick="deleteDomain(<?= $d['id'] ?>)" class="btn-sm" style="background:#ef4444;color:#fff">🗑️</button>
+          <td style="font-size:11px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis" title="<?= h($d['doc_root'] ?: 'لم يُعيَّن') ?>">
+            <?= $hasRoot ? '📁 '.h(basename($d['doc_root'])) : '<span style="color:#f59e0b">⚠ لم يُعيَّن</span>' ?>
+          </td>
+          <td>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <button onclick="openDomainManager(<?= $d['id'] ?>, '<?= h(addslashes($d['full_domain'])) ?>')" class="btn-sm" style="background:#3b82f6;color:#fff">⚙️ إدارة</button>
+              <?php if ($d['registrar_url']): ?><a href="<?= h($d['registrar_url']) ?>" target="_blank" class="btn-sm">🔗</a><?php endif; ?>
+              <button onclick="deleteDomain(<?= $d['id'] ?>)" class="btn-sm" style="background:#ef4444;color:#fff">🗑</button>
+            </div>
           </td>
         </tr>
         <?php endforeach; ?>
@@ -11060,6 +11323,202 @@ $freeSources = [
       <div style="font-size:11px;color:var(--muted)"><?= $len ?> <?= $len==='1'?'حرف':($len==='2'?'حرفان':'حرف') ?> • <?= h($cat) ?></div>
     </div>
     <?php endforeach; ?>
+  </div>
+</div>
+
+<!-- ════ TAB: 20 IDEAS ════ -->
+<div id="tab-ideas" class="dm-tab-panel" style="display:none">
+  <div style="display:grid;gap:14px">
+    <?php
+    $ideas = [
+      ['🏥','Domain Health Monitor','فحص تلقائي لكل نطاق (ping + response time) وعرض حالة الاتصال بلون أخضر/أصفر/أحمر','متوسط','قيد التخطيط'],
+      ['🔒','SSL Certificate Checker','فحص صلاحية شهادة SSL لكل نطاق وتحذير قبل انتهائها بـ 30 يوم','سهل','قيد التخطيط'],
+      ['📊','Domain Portfolio Analytics','لوحة إحصاءات: كم نطاق فعّال، منتهي، مجاني، مدفوع — مع رسم بياني','سهل','قيد التخطيط'],
+      ['⏰','Auto-Expiry Alerts','تنبيه بالبريد الإلكتروني عند اقتراب انتهاء نطاق (30/14/7 أيام)','سهل','قيد التخطيط'],
+      ['🔄','Batch RDAP Re-check','إعادة فحص توفر جميع النطاقات المحجوزة دفعة واحدة','سهل','قيد التخطيط'],
+      ['🚀','Quick Deploy Templates','نشر قوالب جاهزة: صفحة هبوط، إعادة توجيه، صفحة أدوات، robots.txt','مكتمل جزئياً','متوفر الآن'],
+      ['🗺️','Sitemap Auto-Generator','توليد sitemap.xml لكل نطاق وإرساله مباشرة لـ IndexNow','متوسط','قيد التخطيط'],
+      ['🤖','robots.txt Manager','تعديل robots.txt مباشرة من لوحة الإدارة لكل نطاق','سهل','قيد التخطيط'],
+      ['↩️','Domain Redirect Manager','ضبط إعادة توجيه 301 بين النطاقات مع تتبع السلسلة','متوسط','قيد التخطيط'],
+      ['🌍','DNS Record Viewer','استعراض سجلات A, CNAME, MX, TXT لأي نطاق باستخدام DNS-over-HTTPS','متوسط','قيد التخطيط'],
+      ['📋','Content Clone Tool','نسخ هيكل المحتوى من yassota.com لنطاق جديد تلقائياً','صعب','قيد التخطيط'],
+      ['🏷️','Category-Per-Domain','ربط كل نطاق بتصنيف تطبيقات ليعرض محتواه فقط (مرآة مخصصة)','متوسط','قيد التخطيط'],
+      ['📦','Subdomain → Domain Migration','نقل محتوى نطاق فرعي موجود إلى نطاق كامل جديد','صعب','قيد التخطيط'],
+      ['💰','Domain Value Estimator','تقدير بالذكاء الاصطناعي لقيمة إعادة البيع أو التأجير للنطاق','متوسط','قيد التخطيط'],
+      ['🔍','Competitor Domain Watcher','مراقبة نطاقات المنافسين والإشعار بأي تغيير في محتواها','صعب','قيد التخطيط'],
+      ['📥','Bulk Domain Import (CSV)','استيراد قائمة نطاقات من ملف CSV لإضافتها دفعةً واحدة','سهل','قيد التخطيط'],
+      ['🏷️','Domain Notes & Smart Tags','تصنيفات مخصصة للنطاقات: apps | tools | blog | لاحقاً | للبيع','سهل','قيد التخطيط'],
+      ['📤','One-click IndexNow Bulk','إرسال جميع نطاقات "نشط" لـ IndexNow بضغطة واحدة','سهل','قيد التخطيط'],
+      ['🔗','Domain Alias Manager','ربط عدة نطاقات بنفس المحتوى مع كانونيكال واحد','متوسط','قيد التخطيط'],
+      ['📈','Domain Ranking Tracker','تتبع ترتيب كل نطاق في Google لكلمات مفتاحية محددة','صعب','قيد التخطيط'],
+    ];
+    foreach ($ideas as $i => [$icon, $title, $desc, $diff, $status]):
+      $diffColor = $diff==='سهل' ? '#22c55e' : ($diff==='متوسط' ? '#f59e0b' : '#ef4444');
+      $stBg      = $status==='متوفر الآن' ? 'rgba(34,197,94,.1)' : 'var(--bg)';
+      $stColor   = $status==='متوفر الآن' ? '#16a34a' : 'var(--muted)';
+    ?>
+    <div style="background:<?= $stBg ?>;border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:flex-start;gap:14px">
+      <div style="font-size:28px;line-height:1;flex-shrink:0"><?= $icon ?></div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+          <span style="font-weight:800;font-size:14px"><?= $i+1 ?>. <?= h($title) ?></span>
+          <div style="display:flex;gap:6px">
+            <span style="font-size:11px;padding:2px 10px;border-radius:20px;background:<?= $diffColor ?>22;color:<?= $diffColor ?>;font-weight:700"><?= h($diff) ?></span>
+            <span style="font-size:11px;padding:2px 10px;border-radius:20px;color:<?= $stColor ?>;border:1px solid <?= $stColor ?>;font-weight:700"><?= h($status) ?></span>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin:0;line-height:1.7"><?= h($desc) ?></p>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<!-- ════ DOMAIN MANAGEMENT MODAL ════ -->
+<div id="dm-manage-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--surface);border-radius:16px;width:100%;max-width:820px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <!-- Modal header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)">
+      <div>
+        <h2 id="dmm-title" style="margin:0;font-size:18px">إدارة النطاق</h2>
+        <p id="dmm-subtitle" style="margin:4px 0 0;font-size:12px;color:var(--muted)">لوحة الملفات والسيو والنشر</p>
+      </div>
+      <button onclick="closeDomainManager()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--muted);padding:4px 8px">✕</button>
+    </div>
+    <!-- Modal tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto">
+      <?php foreach(['dmm-files'=>'📁 الملفات','dmm-deploy'=>'🚀 نشر قوالب','dmm-seo'=>'🔍 SEO','dmm-settings'=>'⚙️ إعدادات'] as $t=>$l): ?>
+      <button onclick="switchDmmTab('<?= $t ?>')" class="dmm-tab" data-tab="<?= $t ?>"
+        style="padding:12px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px">
+        <?= $l ?>
+      </button>
+      <?php endforeach; ?>
+    </div>
+    <!-- Modal body -->
+    <div id="dmm-body" style="padding:20px 24px;min-height:300px">
+
+      <!-- ── FILES TAB ── -->
+      <div id="dmm-files" class="dmm-panel">
+        <div id="dmm-no-root" style="display:none;background:rgba(245,158,11,.07);border:1px solid #f59e0b;border-radius:10px;padding:16px;margin-bottom:16px">
+          <h4 style="color:#92400e;margin:0 0 8px">⚠️ لم يُعيَّن مسار ملفات لهذا النطاق</h4>
+          <p style="font-size:13px;color:var(--muted);margin:0 0 12px">أدخل المسار المطلق لمجلد ملفات النطاق على السيرفر (مثال: <code>/home/user/public_html/mysite</code>)</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="dmm-root-input" type="text" class="form-input" style="flex:1;direction:ltr;font-family:monospace;font-size:13px" placeholder="/home/username/public_html/domainname">
+            <button onclick="saveDmmRoot()" class="btn-primary" style="font-size:13px">حفظ المسار</button>
+          </div>
+        </div>
+        <!-- Breadcrumb -->
+        <div id="dmm-breadcrumb" style="display:flex;align-items:center;gap:6px;font-size:13px;flex-wrap:wrap;margin-bottom:14px;min-height:28px">
+          <button onclick="loadFiles('')" style="border:none;background:none;cursor:pointer;color:var(--primary);font-size:13px;padding:0">🏠 الجذر</button>
+        </div>
+        <!-- Toolbar -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button onclick="dmmNewFile()" class="btn-sm" style="background:#3b82f6;color:#fff">+ ملف جديد</button>
+          <button onclick="dmmMkdir()" class="btn-sm" style="background:#8b5cf6;color:#fff">+ مجلد</button>
+          <label class="btn-sm" style="background:#22c55e;color:#fff;cursor:pointer">
+            ⬆ رفع ملف
+            <input type="file" id="dmm-upload-input" style="display:none" onchange="dmmUpload(this)">
+          </label>
+          <button onclick="loadFiles(dmm_rel)" class="btn-sm">🔄 تحديث</button>
+        </div>
+        <!-- File list -->
+        <div id="dmm-file-list" style="background:var(--bg);border-radius:10px;border:1px solid var(--border);overflow:hidden">
+          <div style="padding:30px;text-align:center;color:var(--muted)">جارٍ التحميل...</div>
+        </div>
+        <!-- Inline editor -->
+        <div id="dmm-editor" style="display:none;margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+            <span id="dmm-editor-filename" style="font-family:monospace;font-size:13px;font-weight:700;color:var(--primary)"></span>
+            <div style="display:flex;gap:8px">
+              <button onclick="saveFile()" class="btn-sm" style="background:#22c55e;color:#fff">💾 حفظ</button>
+              <button onclick="document.getElementById('dmm-editor').style.display='none'" class="btn-sm">✕ إغلاق</button>
+            </div>
+          </div>
+          <textarea id="dmm-editor-area" style="width:100%;height:380px;font-family:monospace;font-size:13px;padding:14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);resize:vertical;direction:ltr;tab-size:2" spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <!-- ── DEPLOY TAB ── -->
+      <div id="dmm-deploy" class="dmm-panel" style="display:none">
+        <h3 style="margin:0 0 16px;font-size:15px">قوالب جاهزة للنشر الفوري</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
+          <?php
+          $templates = [
+            ['redirect','↩️ إعادة توجيه','يعيد الزوار تلقائياً لـ yassota.com — index.php','#3b82f6'],
+            ['landing','🌟 صفحة هبوط','صفحة احترافية تُعرّف بالنطاق وتربطه بـ yassota.com','#8b5cf6'],
+            ['robots','🤖 robots.txt','ملف robots.txt مع مسار السيتماب','#f59e0b'],
+            ['htaccess','.htaccess','منع فهرسة المجلدات + توجيه 404 للصفحة الرئيسية','#64748b'],
+          ];
+          foreach ($templates as [$key,$name,$desc,$col]):
+          ?>
+          <div style="border:1px solid <?= $col ?>;border-radius:12px;padding:18px;text-align:center;cursor:pointer;transition:background .2s"
+               onmouseover="this.style.background='<?= $col ?>11'" onmouseout="this.style.background=''"
+               onclick="deployTemplate('<?= $key ?>')">
+            <div style="font-size:28px;margin-bottom:10px"><?= explode(' ',$name)[0] ?></div>
+            <div style="font-weight:700;font-size:13px;color:<?= $col ?>;margin-bottom:6px"><?= h(implode(' ',array_slice(explode(' ',$name),1))) ?></div>
+            <p style="font-size:12px;color:var(--muted);margin:0"><?= h($desc) ?></p>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <div id="dmm-deploy-status" style="margin-top:14px;font-size:13px;color:var(--muted)"></div>
+      </div>
+
+      <!-- ── SEO TAB ── -->
+      <div id="dmm-seo" class="dmm-panel" style="display:none">
+        <div style="display:grid;gap:14px">
+          <div class="panel" style="margin:0">
+            <h4 style="margin:0 0 10px">🔔 IndexNow — إرسال للفهرسة</h4>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 12px">يُرسل إشعاراً لـ Google وBing و Yandex بأن النطاق يحتوي محتوى جديداً</p>
+            <button onclick="submitIndexNow()" class="btn-primary" style="font-size:13px">⚡ أرسل IndexNow الآن</button>
+            <div id="dmm-indexnow-status" style="margin-top:10px;font-size:13px"></div>
+          </div>
+          <div class="panel" style="margin:0">
+            <h4 style="margin:0 0 10px">🤖 robots.txt</h4>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 12px">محتوى robots.txt الذي سيتم كتابته عند الضغط على "نشر robots.txt" في تبويب النشر</p>
+            <textarea id="dmm-robots-preview" style="width:100%;height:100px;font-family:monospace;font-size:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);padding:10px;direction:ltr" readonly></textarea>
+          </div>
+          <div class="panel" style="margin:0">
+            <h4 style="margin:0 0 10px">🌐 روابط سريعة</h4>
+            <div id="dmm-quick-links" style="display:flex;flex-direction:column;gap:8px;font-size:13px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS TAB ── -->
+      <div id="dmm-settings" class="dmm-panel" style="display:none">
+        <div style="display:grid;gap:16px">
+          <div>
+            <label class="form-label">مسار ملفات النطاق على السيرفر (doc_root)</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="dmm-settings-root" type="text" class="form-input" style="flex:1;direction:ltr;font-family:monospace;font-size:13px" placeholder="/home/username/public_html/domain">
+              <button onclick="saveDmmRoot()" class="btn-primary" style="font-size:13px">حفظ</button>
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 0">المسار المطلق لمجلد النطاق — يُستخدم لمدير الملفات والنشر السريع</p>
+          </div>
+          <div>
+            <label class="form-label">تحديث الحالة</label>
+            <select id="dmm-settings-status" class="form-input">
+              <option value="reserved">📌 محجوز</option>
+              <option value="active">✅ نشط</option>
+              <option value="available">🟢 متاح</option>
+              <option value="expired">❌ منتهي</option>
+              <option value="taken">🔴 مأخوذ</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">ملاحظات</label>
+            <textarea id="dmm-settings-notes" class="form-input" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="form-label">تاريخ الانتهاء</label>
+            <input id="dmm-settings-expires" type="date" class="form-input">
+          </div>
+          <button onclick="saveDmmSettings()" class="btn-primary">💾 حفظ الإعدادات</button>
+          <div id="dmm-settings-status-msg" style="font-size:13px;color:var(--muted)"></div>
+        </div>
+      </div>
+
+    </div><!-- /dmm-body -->
   </div>
 </div>
 
@@ -11258,6 +11717,245 @@ function filterTldCatalog(q) {
 }
 
 function escHtml(s){ return String(s).replace(/'/g,"\\'"); }
+
+/* ════ DOMAIN MANAGEMENT MODAL JS ════ */
+var dmm_id   = 0;
+var dmm_name = '';
+var dmm_rel  = '';
+var dmm_root_val = '';
+var dmm_editing  = '';
+
+function openDomainManager(id, name) {
+  dmm_id   = id;
+  dmm_name = name;
+  dmm_rel  = '';
+  document.getElementById('dmm-title').textContent = '⚙️ إدارة: ' + name;
+  document.getElementById('dm-manage-modal').style.display = 'flex';
+  switchDmmTab('dmm-files');
+  loadFiles('');
+  // populate quick links
+  var ql = document.getElementById('dmm-quick-links');
+  if (ql) ql.innerHTML =
+    '<a href="https://'+name+'" target="_blank" style="color:#3b82f6">🌐 https://'+name+' ↗</a>'+
+    '<span style="color:var(--muted)">🗂 robots: https://'+name+'/robots.txt</span>'+
+    '<span style="color:var(--muted)">🗺 sitemap: https://'+name+'/sitemap.xml</span>';
+  var rp = document.getElementById('dmm-robots-preview');
+  if (rp) rp.value = 'User-agent: *\nAllow: /\nSitemap: https://'+name+'/sitemap.xml\n';
+}
+
+function closeDomainManager() {
+  document.getElementById('dm-manage-modal').style.display = 'none';
+}
+
+function switchDmmTab(tab) {
+  document.querySelectorAll('.dmm-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.dmm-tab').forEach(b=>{b.style.color='var(--muted)';b.style.borderBottomColor='transparent';});
+  document.getElementById(tab).style.display = 'block';
+  var btn = document.querySelector('.dmm-tab[data-tab="'+tab+'"]');
+  if (btn) { btn.style.color='var(--primary)'; btn.style.borderBottomColor='var(--primary)'; }
+}
+
+function loadFiles(rel) {
+  dmm_rel = rel || '';
+  var fl = document.getElementById('dmm-file-list');
+  fl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">⏳ جارٍ التحميل...</div>';
+  document.getElementById('dmm-editor').style.display = 'none';
+  fetch('admin.php?ajax=domain_files&id='+dmm_id+'&rel='+encodeURIComponent(dmm_rel))
+    .then(r=>r.json()).then(function(d) {
+      if (!d.ok) {
+        if (d.error && d.error.includes('مسار')) {
+          document.getElementById('dmm-no-root').style.display = 'block';
+        }
+        fl.innerHTML = '<div style="padding:20px;text-align:center;color:#f59e0b">⚠️ '+d.error+'</div>';
+        return;
+      }
+      document.getElementById('dmm-no-root').style.display = 'none';
+      dmm_root_val = d.root;
+      renderBreadcrumb(d.rel);
+      renderFileList(d.items, d.rel);
+    }).catch(function(e){ fl.innerHTML='<div style="padding:20px;color:#ef4444">خطأ: '+e.message+'</div>'; });
+}
+
+function renderBreadcrumb(rel) {
+  var bc = document.getElementById('dmm-breadcrumb');
+  var parts = rel ? rel.split('/').filter(Boolean) : [];
+  var html = '<button onclick="loadFiles(\'\')" style="border:none;background:none;cursor:pointer;color:var(--primary);font-size:13px;padding:0">🏠 الجذر</button>';
+  parts.forEach(function(p, i) {
+    var path = parts.slice(0,i+1).join('/');
+    html += ' <span style="color:var(--muted)">/</span> <button onclick="loadFiles(\''+path+'\')" style="border:none;background:none;cursor:pointer;color:var(--primary);font-size:13px;padding:0">'+p+'</button>';
+  });
+  bc.innerHTML = html;
+}
+
+function fmtSize(bytes) {
+  if (bytes===null||bytes===undefined) return '—';
+  if (bytes<1024) return bytes+'B';
+  if (bytes<1048576) return (bytes/1024).toFixed(1)+'KB';
+  return (bytes/1048576).toFixed(1)+'MB';
+}
+
+function fmtDate(ts) {
+  var d=new Date(ts*1000);
+  return d.toLocaleDateString('ar-SA',{year:'numeric',month:'short',day:'numeric'});
+}
+
+function isEditable(ext) {
+  return ['php','html','htm','css','js','txt','json','xml','md','htaccess','sql','yaml','yml','env','sh','ini','conf','log'].indexOf(ext)>-1 || !ext;
+}
+
+function renderFileList(items, rel) {
+  var fl = document.getElementById('dmm-file-list');
+  if (!items.length) {
+    fl.innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">المجلد فارغ</div>';
+    return;
+  }
+  var rows = items.map(function(f) {
+    var path = (rel ? rel+'/' : '') + f.name;
+    var icon = f.is_dir ? '📁' : (f.ext==='php'?'🐘':f.ext==='html'||f.ext==='htm'?'🌐':f.ext==='css'?'🎨':f.ext==='js'?'⚡':f.ext==='json'?'📋':f.ext==='txt'?'📄':'📄');
+    var actions = '';
+    if (f.is_dir) {
+      actions='<button onclick="loadFiles(\''+path+'\')" class="btn-sm" style="font-size:11px">فتح</button>';
+    } else {
+      if(isEditable(f.ext)) actions+='<button onclick="editFile(\''+path+'\')" class="btn-sm" style="font-size:11px;background:#3b82f6;color:#fff">تعديل</button> ';
+      actions+='<button onclick="deleteFilePrompt(\''+path+'\',false)" class="btn-sm" style="font-size:11px;background:#ef4444;color:#fff">حذف</button>';
+    }
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:10px 12px;font-family:monospace;font-size:13px">'+icon+' '+f.name+'</td>'
+      +'<td style="padding:10px;font-size:12px;color:var(--muted)">'+fmtSize(f.size)+'</td>'
+      +'<td style="padding:10px;font-size:12px;color:var(--muted)">'+fmtDate(f.mtime)+'</td>'
+      +'<td style="padding:10px">'+actions+'</td>'
+      +'</tr>';
+  });
+  fl.innerHTML='<table style="width:100%;border-collapse:collapse">'
+    +'<thead style="background:var(--surface)"><tr><th style="padding:8px 12px;text-align:right;font-size:12px;color:var(--muted)">الاسم</th><th style="padding:8px;text-align:right;font-size:12px;color:var(--muted)">الحجم</th><th style="padding:8px;text-align:right;font-size:12px;color:var(--muted)">التاريخ</th><th style="padding:8px;text-align:right;font-size:12px;color:var(--muted)">إجراء</th></tr></thead>'
+    +'<tbody>'+rows.join('')+'</tbody></table>';
+}
+
+function editFile(rel) {
+  dmm_editing = rel;
+  fetch('admin.php?ajax=domain_file_read&id='+dmm_id+'&rel='+encodeURIComponent(rel))
+    .then(r=>r.json()).then(function(d) {
+      if (!d.ok) { alert('خطأ: '+d.error); return; }
+      document.getElementById('dmm-editor-filename').textContent = d.name;
+      document.getElementById('dmm-editor-area').value = d.content;
+      document.getElementById('dmm-editor').style.display = 'block';
+      document.getElementById('dmm-editor-area').focus();
+    });
+}
+
+function saveFile() {
+  var content = document.getElementById('dmm-editor-area').value;
+  fetch('admin.php?ajax=domain_file_save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,rel:dmm_editing,content:content})})
+    .then(r=>r.json()).then(function(d){
+      if(d.ok) {
+        var fn = document.getElementById('dmm-editor-filename');
+        fn.textContent = fn.textContent.replace(' ✏️','') + ' ✅ تم الحفظ';
+        setTimeout(function(){ fn.textContent=fn.textContent.replace(' ✅ تم الحفظ',''); }, 2000);
+      } else alert('خطأ في الحفظ');
+    });
+}
+
+function deleteFilePrompt(rel, isDir) {
+  var name = rel.split('/').pop();
+  if (!confirm('هل تريد حذف "'+(isDir?'مجلد ':'ملف ')+name+'"؟'+(isDir?' سيتم حذف كل محتوياته!':''))) return;
+  fetch('admin.php?ajax=domain_file_delete',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,rel:rel})})
+    .then(r=>r.json()).then(function(d){ if(d.ok) loadFiles(dmm_rel); else alert('خطأ: '+d.error); });
+}
+
+function dmmMkdir() {
+  var name = prompt('اسم المجلد الجديد:','');
+  if (!name) return;
+  fetch('admin.php?ajax=domain_file_mkdir',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,rel:dmm_rel,name:name})})
+    .then(r=>r.json()).then(function(d){ if(d.ok) loadFiles(dmm_rel); else alert('خطأ: '+d.error); });
+}
+
+function dmmNewFile() {
+  var name = prompt('اسم الملف الجديد (مثال: index.php):','index.php');
+  if (!name) return;
+  var rel = (dmm_rel?dmm_rel+'/':'')+name;
+  fetch('admin.php?ajax=domain_file_save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,rel:rel,content:''})})
+    .then(r=>r.json()).then(function(d){
+      if(d.ok){ loadFiles(dmm_rel); setTimeout(function(){editFile(rel);},400); }
+      else alert('خطأ: '+d.error);
+    });
+}
+
+function dmmUpload(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var fd = new FormData();
+  fd.append('id', dmm_id);
+  fd.append('rel', dmm_rel);
+  fd.append('file', file);
+  fetch('admin.php?ajax=domain_file_upload', {method:'POST',body:fd})
+    .then(r=>r.json()).then(function(d){
+      input.value='';
+      if(d.ok) { loadFiles(dmm_rel); } else alert('خطأ: '+d.error);
+    });
+}
+
+function saveDmmRoot() {
+  var val = (document.getElementById('dmm-root-input')||document.getElementById('dmm-settings-root')).value.trim();
+  fetch('admin.php?ajax=domain_set_docroot',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,doc_root:val})})
+    .then(r=>r.json()).then(function(d){ if(d.ok) loadFiles(''); });
+}
+
+function deployTemplate(tpl) {
+  var st = document.getElementById('dmm-deploy-status');
+  st.textContent='⏳ جارٍ النشر...';
+  fetch('admin.php?ajax=domain_deploy_template',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id,template:tpl})})
+    .then(r=>r.json()).then(function(d){
+      if(d.ok){
+        st.textContent='✅ تم نشر: '+d.files.join(', ');
+        st.style.color='#22c55e';
+      } else {
+        st.textContent='❌ '+(d.error||'خطأ');
+        st.style.color='#ef4444';
+      }
+    });
+}
+
+function submitIndexNow() {
+  var st = document.getElementById('dmm-indexnow-status');
+  st.textContent='⏳ جارٍ الإرسال...';
+  fetch('admin.php?ajax=domain_indexnow',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dmm_id})})
+    .then(r=>r.json()).then(function(d){
+      if(d.ok){
+        st.textContent='✅ تم الإرسال — HTTP '+d.http;
+        st.style.color='#22c55e';
+      } else {
+        st.textContent='❌ '+(d.error||'خطأ');
+        st.style.color='#ef4444';
+      }
+    });
+}
+
+function saveDmmSettings() {
+  var status  = document.getElementById('dmm-settings-status').value;
+  var notes   = document.getElementById('dmm-settings-notes').value;
+  var expires = document.getElementById('dmm-settings-expires').value;
+  var root    = document.getElementById('dmm-settings-root').value.trim();
+  var msg     = document.getElementById('dmm-settings-status-msg');
+  msg.textContent='⏳ جارٍ الحفظ...';
+  Promise.all([
+    fetch('admin.php?ajax=domain_update_status',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:dmm_id,status:status,notes:notes,expires:expires})}),
+    root ? fetch('admin.php?ajax=domain_set_docroot',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:dmm_id,doc_root:root})}) : Promise.resolve()
+  ]).then(function(){ msg.textContent='✅ تم الحفظ'; msg.style.color='#22c55e'; });
+}
+
+// Close modal on backdrop click
+document.getElementById('dm-manage-modal').addEventListener('click', function(e){
+  if (e.target===this) closeDomainManager();
+});
 
 // Init
 switchTab('search');
