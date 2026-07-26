@@ -1920,6 +1920,291 @@ function playstore_search(string $query, int $timeout = 20): ?string {
     return null;
 }
 
+/**
+ * fetch_playstore_full — Full Play Store scrape + AI Arabic content enrichment.
+ * Fetches OG meta from the app page, extracts extended fields, then calls
+ * playstore_generate_arabic_content() to produce a 1500–2500 char Arabic
+ * long_description, features, pros, cons, whats_new, and SEO fields.
+ * Returns null only when the HTTP fetch itself fails.
+ */
+function fetch_playstore_full(PDO $pdo, string $packageId, bool $aiEnrich = true): ?array {
+    $url = 'https://play.google.com/store/apps/details?id=' . urlencode($packageId) . '&hl=ar&gl=SA';
+    $agents = [
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    ];
+    $html = null;
+    foreach ($agents as $ua) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 25, CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER => ["User-Agent: {$ua}", 'Accept-Language: ar-SA,ar;q=0.9,en;q=0.8', 'Accept: text/html,*/*;q=0.8'],
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($body && $code === 200) { $html = $body; break; }
+    }
+    if (!$html) return null;
+
+    /* OG extraction helper */
+    $og = function (string $prop) use ($html): ?string {
+        if (preg_match('#<meta[^>]+property=["\']' . preg_quote($prop,'#') . '["\'][^>]+content=["\']([^"\']*)["\']#i', $html, $m) ||
+            preg_match('#<meta[^>]+content=["\']([^"\']*)["\'][^>]+property=["\']' . preg_quote($prop,'#') . '["\']#i', $html, $m))
+            return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+        return null;
+    };
+
+    $rawName   = $og('og:title');
+    $shortDesc = $og('og:description');
+    $iconUrl   = $og('og:image');
+    if (!$rawName) return null;
+    $name = trim(preg_replace('/\s*[-–]\s*(Apps on Google Play|تطبيقات على Google Play).*$/i', '', $rawName));
+
+    /* Developer */
+    $developer = null;
+    if (preg_match('#/store/apps/developer\?id=[^"\']*["\'][^>]*>([^<]{2,80})</a>#u', $html, $m))
+        $developer = html_entity_decode(trim($m[1]), ENT_QUOTES, 'UTF-8');
+    if (!$developer && preg_match('#"author"\s*:\s*\{"@type":"[^"]*","name":"([^"]+)"#', $html, $m))
+        $developer = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+
+    /* Version & Android */
+    $version = null;
+    if (preg_match('#"softwareVersion"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+    if (!$version && preg_match('#"currentVersionName"\s*:\s*"([^"]{1,30})"#', $html, $m)) $version = $m[1];
+    $androidReq = null;
+    if (preg_match('#"operatingSystem"\s*:\s*"([^"]{1,40})"#', $html, $m)) $androidReq = $m[1];
+
+    /* Rating */
+    $rating = 4.5;
+    if (preg_match('#"ratingValue"\s*:\s*"?([\d.]+)"?#', $html, $m)) $rating = (float)$m[1];
+
+    /* Full description — try HTML itemprop first, then large Arabic JSON string */
+    $longDesc = $shortDesc ?? '';
+    if (preg_match('#itemprop=["\']description["\'][^>]*><div[^>]*>([\s\S]{200,}?)</div>#u', $html, $m))
+        $longDesc = html_entity_decode(strip_tags(str_replace(['<br>','<br/>','<br />'], "\n", $m[1])), ENT_QUOTES, 'UTF-8');
+    if (mb_strlen($longDesc) < 200) {
+        preg_match_all('#,"([^"\\\\]{200,3000})"#', $html, $ms);
+        foreach ($ms[1] as $cand) {
+            if (preg_match('/[\x{0600}-\x{06FF}]/u', $cand)) { $longDesc = $cand; break; }
+        }
+    }
+
+    /* What's new */
+    $whatsNew = null;
+    if (preg_match('#itemprop=["\']releaseNotes["\'][^>]*><div[^>]*>([\s\S]{10,500}?)</div>#u', $html, $m))
+        $whatsNew = html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8');
+
+    /* Screenshot URLs */
+    $screenshots = [];
+    preg_match_all('#https://play-lh\.googleusercontent\.com/([A-Za-z0-9_\-]{20,})#', $html, $ssm);
+    $iconBase = $iconUrl ? strtok($iconUrl, '=') : '';
+    foreach (array_unique($ssm[0] ?? []) as $ssUrl) {
+        if ($iconBase && strtok($ssUrl, '=') === $iconBase) continue;
+        $screenshots[] = $ssUrl;
+        if (count($screenshots) >= 5) break;
+    }
+
+    $data = [
+        'name'              => $name,
+        'package_name'      => $packageId,
+        'short_description' => $shortDesc ? mb_substr($shortDesc, 0, 300) : '',
+        'long_description'  => $longDesc,
+        'developer'         => $developer ?? '',
+        'version'           => $version ?? '',
+        'android_version'   => $androidReq ?? '',
+        'rating'            => $rating,
+        'icon_url'          => $iconUrl ?? '',
+        'screenshot_urls'   => $screenshots,
+        'whats_new'         => $whatsNew ?? '',
+        'playstore_url'     => "https://play.google.com/store/apps/details?id={$packageId}",
+        'download_url'      => "https://play.google.com/store/apps/details?id={$packageId}",
+        'features'          => [], 'pros' => [], 'cons' => [],
+        'seo_title'         => '', 'meta_description' => '',
+    ];
+
+    /* AI Arabic content enrichment */
+    if ($aiEnrich) {
+        $ai = playstore_generate_arabic_content($pdo, $data);
+        foreach (['long_description','features','pros','cons','whats_new','seo_title','meta_description'] as $k) {
+            if (!empty($ai[$k])) $data[$k] = $ai[$k];
+        }
+    }
+
+    /* Fallback SEO */
+    if (empty($data['seo_title']))
+        $data['seo_title'] = 'تحميل ' . $name . ' APK للأندرويد — ' . (defined('SITE_NAME') ? SITE_NAME : '');
+    if (empty($data['meta_description']))
+        $data['meta_description'] = mb_substr($data['short_description'], 0, 155);
+
+    return $data;
+}
+
+/**
+ * playstore_generate_arabic_content — Uses AI to produce rich Arabic content for an app.
+ * Returns array: long_description, features[], pros[], cons[], whats_new, seo_title, meta_description.
+ */
+function playstore_generate_arabic_content(PDO $pdo, array $appData): array {
+    $name      = $appData['name'] ?? '';
+    $developer = $appData['developer'] ?? '';
+    $shortDesc = $appData['short_description'] ?? '';
+    $baseDesc  = mb_substr($appData['long_description'] ?? '', 0, 600);
+    if (!$name) return [];
+
+    $prompt = "أنت كاتب محتوى متخصص في تطبيقات الأندرويد العربية. أنشئ محتوى احترافياً للتطبيق:
+الاسم: {$name}
+المطور: {$developer}
+الوصف المختصر: {$shortDesc}" . ($baseDesc ? "\nالوصف المرجعي: {$baseDesc}" : '') . "
+
+أعد JSON صالح فقط بهذا الشكل تماماً (لا تضف أي نص خارجه):
+{
+  \"long_description\": \"<وصف عربي تفصيلي بين 1500 و2500 حرف يشرح التطبيق، ميزاته، استخداماته، لمن هو مناسب>\",
+  \"features\": [\"ميزة 1\",\"ميزة 2\",\"ميزة 3\",\"ميزة 4\",\"ميزة 5\",\"ميزة 6\"],
+  \"pros\": [\"إيجابية 1\",\"إيجابية 2\",\"إيجابية 3\",\"إيجابية 4\"],
+  \"cons\": [\"سلبية 1\",\"سلبية 2\"],
+  \"whats_new\": \"<ما الجديد في الإصدار الأخير — جملة أو جملتان>\",
+  \"seo_title\": \"<عنوان SEO جذاب لا يتجاوز 60 حرفاً>\",
+  \"meta_description\": \"<وصف ميتا مقنع لا يتجاوز 155 حرفاً>\"
+}";
+
+    $r = ai_text($pdo, $prompt);
+    if (!($r['ok'] ?? false) || empty($r['content'])) return [];
+    if (preg_match('/\{[\s\S]+\}/u', $r['content'], $m)) {
+        $parsed = json_decode($m[0], true);
+        return is_array($parsed) ? $parsed : [];
+    }
+    return [];
+}
+
+/**
+ * playstore_curated_library — Curated list of ~100 popular Arabic-market apps by category.
+ * Each entry: [package_id, display_name, developer].
+ */
+function playstore_curated_library(): array {
+    return [
+        'social' => ['label' => 'تواصل اجتماعي', 'color' => '#3b82f6', 'apps' => [
+            ['com.whatsapp','WhatsApp','Meta'],
+            ['com.instagram.android','Instagram','Meta'],
+            ['com.snapchat.android','Snapchat','Snap Inc.'],
+            ['com.facebook.katana','Facebook','Meta'],
+            ['com.twitter.android','X (تويتر)','X Corp.'],
+            ['com.telegram.messenger','Telegram','Telegram FZ-LLC'],
+            ['com.zhiliaoapp.musically','TikTok','ByteDance'],
+            ['com.discord','Discord','Discord Inc.'],
+            ['com.pinterest','Pinterest','Pinterest'],
+            ['com.linkedin.android','LinkedIn','LinkedIn'],
+        ]],
+        'games_action' => ['label' => 'ألعاب أكشن', 'color' => '#ef4444', 'apps' => [
+            ['com.activision.callofduty.shooter','Call of Duty Mobile','Activision'],
+            ['com.pubg.imobile','PUBG Mobile','Krafton'],
+            ['com.garena.game.freefire','Free Fire','Garena'],
+            ['com.madfingergames.deadtrigger2','Dead Trigger 2','MADFINGER Games'],
+            ['com.war.machines.tanks.army.game','War Machines','Fun Games For Free'],
+            ['com.sniperX.gun.shooting.offline','Sniper 3D','Fun Games For Free'],
+            ['com.netease.lztgglobal','Rules of Survival','NetEase Games'],
+            ['com.gameloft.android.ANMP.GloftM1HM','Modern Combat 5','Gameloft'],
+            ['com.ea.games.r3_row','Real Racing 3','EA'],
+            ['com.vectorunit.beach.bzr','Beach Buggy Racing 2','Vector Unit'],
+        ]],
+        'games_casual' => ['label' => 'ألعاب كاجوال', 'color' => '#f59e0b', 'apps' => [
+            ['com.supercell.clashofclans','Clash of Clans','Supercell'],
+            ['com.supercell.clashroyale','Clash Royale','Supercell'],
+            ['com.mojang.minecraftpe','Minecraft','Mojang Studios'],
+            ['com.roblox.client','Roblox','Roblox Corporation'],
+            ['com.king.candycrushsaga','Candy Crush Saga','King'],
+            ['com.kiloo.subwaysurf','Subway Surfers','Kiloo'],
+            ['com.outfit7.mytalkingtom2','My Talking Tom 2','Outfit7 Limited'],
+            ['com.imangi.templerun2','Temple Run 2','Imangi Studios'],
+            ['com.halfbrick.fruitninja','Fruit Ninja','Halfbrick Studios'],
+            ['com.microsoft.xboxapp','Xbox Game Pass','Microsoft'],
+        ]],
+        'games_rpg' => ['label' => 'ألعاب RPG', 'color' => '#8b5cf6', 'apps' => [
+            ['com.miHoYo.GenshinImpact','Genshin Impact','miHoYo'],
+            ['com.riotgames.league.wildrift','Wild Rift','Riot Games'],
+            ['com.supercell.brawlstars','Brawl Stars','Supercell'],
+            ['com.mobile.legends','Mobile Legends: Bang Bang','Moonton'],
+            ['com.igg.android.lordsmobile','Lords Mobile','IGG.COM'],
+            ['com.plarium.vikings','Vikings: War of Clans','Plarium'],
+            ['com.hcg.cok.gp','Clash of Kings','Elex Wireless'],
+            ['com.kabam.mheroic','Marvel Strike Force','Scopely'],
+            ['com.sega.totd','Total War Battles: Kingdom','SEGA'],
+            ['com.garena.game.codm','Arena of Valor','Garena'],
+        ]],
+        'tools' => ['label' => 'أدوات ومساعدات', 'color' => '#06b6d4', 'apps' => [
+            ['com.google.android.apps.translate','Google Translate','Google'],
+            ['com.adobe.scan.android','Adobe Scan','Adobe'],
+            ['com.microsoft.office.word','Microsoft Word','Microsoft'],
+            ['com.microsoft.office.excel','Microsoft Excel','Microsoft'],
+            ['com.microsoft.office.powerpoint','Microsoft PowerPoint','Microsoft'],
+            ['org.mozilla.firefox','Firefox Browser','Mozilla'],
+            ['com.opera.browser','Opera Browser','Opera'],
+            ['net.windscribe.vpnclient','Windscribe VPN','Windscribe Inc.'],
+            ['com.whatsapp.w4b','WhatsApp Business','Meta'],
+            ['com.google.android.keep','Google Keep','Google'],
+        ]],
+        'entertainment' => ['label' => 'ترفيه وبث', 'color' => '#ec4899', 'apps' => [
+            ['com.mbc.shahid','Shahid','MBC Group'],
+            ['com.netflix.mediaclient','Netflix','Netflix'],
+            ['com.spotify.music','Spotify','Spotify AB'],
+            ['com.google.android.youtube','YouTube','Google'],
+            ['com.mxtech.videoplayer.ad','MX Player','MX Media & Entertainment'],
+            ['tv.twitch.android.app','Twitch','Amazon'],
+            ['com.disney.disneyplus','Disney+','Disney'],
+            ['com.soundcloud.android','SoundCloud','SoundCloud'],
+            ['com.viu.tv','Viu','PCCW Media'],
+            ['com.anghami','Anghami','Anghami'],
+        ]],
+        'shopping' => ['label' => 'تسوق وتجارة', 'color' => '#10b981', 'apps' => [
+            ['com.amazon.mShop.android.shopping','Amazon Shopping','Amazon Mobile LLC'],
+            ['com.noon.buyerapp','Noon','Noon'],
+            ['com.namshi.android','Namshi','Namshi'],
+            ['com.shein.plus','SHEIN','ROADGET BUSINESS PTE. LTD.'],
+            ['com.aliexpress.revolutionary','AliExpress','Alibaba Mobile'],
+            ['com.jollychic.android','JollyChic','JollyChic'],
+            ['com.jumia.android','Jumia Online Shopping','Jumia'],
+            ['com.salla.app','سلة — متاجر إلكترونية','Salla'],
+            ['com.woocommerce.android','WooCommerce','Automattic'],
+            ['com.shopify.mobile','Shopify','Shopify Inc.'],
+        ]],
+        'education' => ['label' => 'تعليم ومهارات', 'color' => '#f97316', 'apps' => [
+            ['com.duolingo','Duolingo','Duolingo'],
+            ['net.edraak.app','إدراك','Edraak'],
+            ['com.coursera.android','Coursera','Coursera'],
+            ['com.udemy.android','Udemy','Udemy'],
+            ['com.khanacademy.android','Khan Academy','Khan Academy'],
+            ['com.lingodeer','LingoDeer','LingoDeer'],
+            ['com.memrise.android.memrisecompanion','Memrise','Memrise'],
+            ['com.socratic.android','Socratic by Google','Google'],
+            ['com.photomath','Photomath','Google'],
+            ['com.elmo.mobile.arabic','Fun Arabic Alphabet','Fun Educational Apps'],
+        ]],
+        'finance' => ['label' => 'مالية ومصارف', 'color' => '#14b8a6', 'apps' => [
+            ['com.paypal.android.p2pmobile','PayPal','PayPal Mobile'],
+            ['com.binance.dev','Binance','Binance'],
+            ['com.stcpay.app.stcpayapp','STC Pay','STC'],
+            ['com.rajhiBank.mobile.android','Al Rajhi Bank','Al Rajhi Banking'],
+            ['com.ncb.alahlidigital','SNB Digital','Saudi National Bank'],
+            ['com.google.android.apps.walletnfcrel','Google Pay','Google'],
+            ['com.coinbase.android','Coinbase','Coinbase'],
+            ['com.aman.pay','أمان','Aman'],
+            ['com.moodys.appmobile','اتمنى تطبيق مالي','مالي'],
+            ['com.transferwise.android','Wise','Wise'],
+        ]],
+        'health' => ['label' => 'صحة ولياقة', 'color' => '#84cc16', 'apps' => [
+            ['com.samsung.android.shealth','Samsung Health','Samsung'],
+            ['com.google.android.apps.fitness','Google Fit','Google'],
+            ['com.myfitnesspal.android','MyFitnessPal','MyFitnessPal'],
+            ['com.calm.android','Calm','Calm.com'],
+            ['com.headspace.android','Headspace','Headspace'],
+            ['com.fitbit.FitbitMobile','Fitbit','Google'],
+            ['com.runkeeper.android','Runkeeper','ASICS Digital'],
+            ['com.strava','Strava','Strava'],
+            ['com.noom.weight.loss.coach','Noom','Noom'],
+            ['com.abdaapps.fasting','Zero Fasting App','Biostrap'],
+        ]],
+    ];
+}
+
 // Downloads a remote image URL and saves it as a processed app icon (shared by
 // Play Store import and the bulk generator).
 function import_remote_icon(string $remoteUrl, string $slug): ?string {

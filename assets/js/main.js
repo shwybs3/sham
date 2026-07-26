@@ -52,7 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-    reveals.forEach(el => io.observe(el));
+    reveals.forEach(el => {
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        /* Already in viewport on load — show immediately, no blank flash */
+        el.style.transition = 'none';
+        el.classList.add('visible');
+        el.getBoundingClientRect(); /* force reflow so transition suppression applies */
+        el.style.transition = '';
+      } else {
+        io.observe(el);
+      }
+    });
   } else {
     reveals.forEach(el => el.classList.add('visible'));
   }

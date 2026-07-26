@@ -4793,6 +4793,165 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'submit_sitemap_now' && is_admin()
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Play Store Library — import single app with AI
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'ps_import_one' && is_admin()) {
+    header('Content-Type: application/json');
+    $pkg     = trim($_POST['package'] ?? '');
+    $publish = !empty($_POST['publish']);
+    if (!$pkg || !preg_match('/^[a-zA-Z][a-zA-Z0-9_.]+$/', $pkg)) {
+        echo json_encode(['ok'=>false,'error'=>'package_name غير صالح']); exit;
+    }
+    /* Check if already exists */
+    $exists = $pdo->prepare("SELECT id,name FROM apps WHERE package_name=? LIMIT 1");
+    $exists->execute([$pkg]);
+    if ($dup = $exists->fetch()) {
+        echo json_encode(['ok'=>false,'error'=>"موجود بالفعل: {$dup['name']} (ID {$dup['id']})", 'duplicate_id'=>(int)$dup['id']]); exit;
+    }
+    $psData = fetch_playstore_full($pdo, $pkg, true);
+    if (!$psData || empty($psData['name'])) {
+        echo json_encode(['ok'=>false,'error'=>'لم يُعثر على بيانات التطبيق في متجر Play (قد تكون Google تمنع الوصول من هذا السيرفر)']); exit;
+    }
+    /* Resolve category from curated library or default to apps */
+    $catSt = $pdo->prepare("SELECT id FROM categories WHERE slug=? LIMIT 1");
+    $catSt->execute(['apps']); $catId = $catSt->fetchColumn() ?: null;
+
+    $slug     = unique_slug($pdo, slugify($psData['name']));
+    $iconPath = '';
+    if (!empty($psData['icon_url'])) $iconPath = import_remote_icon($psData['icon_url'], $slug) ?? '';
+
+    /* Download & save screenshots */
+    $ssPaths = [];
+    if (!empty($psData['playstore_url'])) {
+        $ssPaths = fetch_playstore_screenshots($psData['playstore_url'], $slug, 4);
+    }
+    if (!$ssPaths && !empty($psData['screenshot_urls'])) {
+        $ssDir = UPLOAD_PATH . '/screenshots';
+        if (!is_dir($ssDir)) @mkdir($ssDir, 0755, true);
+        foreach (array_slice($psData['screenshot_urls'], 0, 4) as $i => $ssUrl) {
+            $ssPath = "{$ssDir}/{$slug}-ss{$i}.webp";
+            $bin = @file_get_contents($ssUrl);
+            if ($bin) { file_put_contents($ssPath, $bin); $ssPaths[] = "uploads/screenshots/{$slug}-ss{$i}.webp"; }
+        }
+    }
+
+    $d = [
+        'name'              => $psData['name'],
+        'slug'              => $slug,
+        'seo_title'         => $psData['seo_title'] ?? '',
+        'meta_description'  => $psData['meta_description'] ?? '',
+        'keywords'          => '',
+        'short_description' => $psData['short_description'] ?? '',
+        'long_description'  => $psData['long_description'] ?? '',
+        'developer'         => $psData['developer'] ?? '',
+        'version'           => $psData['version'] ?? '',
+        'play_store_version'=> $psData['version'] ?? '',
+        'android_version'   => $psData['android_version'] ?? '',
+        'size_mb'           => $psData['size_mb'] ?? '',
+        'license'           => 'Free',
+        'package_name'      => $pkg,
+        'category_id'       => $catId,
+        'rating'            => !empty($psData['rating']) ? (float)$psData['rating'] : 4.5,
+        'rating_count'      => 0,
+        'download_url'      => $psData['download_url'] ?? "https://play.google.com/store/apps/details?id={$pkg}",
+        'mirror2_url'       => '', 'mirror3_url' => '',
+        'download_source'   => 'playstore',
+        'apk_path'          => '', 'apk_size_bytes' => 0, 'apk_hash_sha256' => '', 'apk_hash_md5' => '', 'apk_uploaded_at' => null,
+        'whats_new'         => $psData['whats_new'] ?? '',
+        'playstore_url'     => "https://play.google.com/store/apps/details?id={$pkg}",
+        'status'            => $publish ? 'published' : 'draft',
+        'needs_update'      => 0,
+        'icon_path'         => $iconPath,
+        'screenshots'       => json_encode($ssPaths, JSON_UNESCAPED_UNICODE),
+        'features'          => json_encode($psData['features'] ?? [], JSON_UNESCAPED_UNICODE),
+        'pros'              => json_encode($psData['pros'] ?? [], JSON_UNESCAPED_UNICODE),
+        'cons'              => json_encode($psData['cons'] ?? [], JSON_UNESCAPED_UNICODE),
+        'install_steps'     => '[]', 'faq' => '[]',
+        'badge'             => 'new',
+        'release_date'      => null,
+    ];
+    $cols = implode(',', array_keys($d));
+    $vals = implode(',', array_map(fn($k) => ":$k", array_keys($d)));
+    try {
+        $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+        $newId = (int)$pdo->lastInsertId();
+        bump_cache_version($pdo);
+        register_shutdown_function(function() use ($pdo,$newId,$slug,$publish) {
+            try {
+                if ($publish) google_indexing_request($pdo, url($slug));
+                ping_search_engines($pdo);
+            } catch (Throwable $e) {}
+        });
+        echo json_encode(['ok'=>true,'id'=>$newId,'name'=>$d['name'],'slug'=>$slug,'status'=>$d['status'],'icon'=>$iconPath]);
+    } catch (Throwable $e) {
+        echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Play Store Library — bulk import list of packages
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'ps_bulk_import' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true);
+    $pkgs    = array_filter(array_map('trim', preg_split('/[\r\n,;|\s]+/', $input['packages'] ?? '')));
+    $publish = !empty($input['publish']);
+    $results = [];
+    foreach (array_slice($pkgs, 0, 50) as $pkg) {
+        if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_.]+$/', $pkg)) {
+            $results[] = ['pkg'=>$pkg,'ok'=>false,'error'=>'package_name غير صالح']; continue;
+        }
+        $dup = $pdo->prepare("SELECT id FROM apps WHERE package_name=? LIMIT 1");
+        $dup->execute([$pkg]);
+        if ($dup->fetchColumn()) { $results[] = ['pkg'=>$pkg,'ok'=>false,'error'=>'موجود مسبقاً']; continue; }
+
+        $psData = fetch_playstore_full($pdo, $pkg, true);
+        if (!$psData || empty($psData['name'])) {
+            $results[] = ['pkg'=>$pkg,'ok'=>false,'error'=>'لم يُعثر على البيانات']; continue;
+        }
+        $slug = unique_slug($pdo, slugify($psData['name']));
+        $iconPath = !empty($psData['icon_url']) ? (import_remote_icon($psData['icon_url'], $slug) ?? '') : '';
+        $ssPaths = !empty($psData['playstore_url']) ? fetch_playstore_screenshots($psData['playstore_url'], $slug, 3) : [];
+
+        $catSt = $pdo->prepare("SELECT id FROM categories WHERE slug='apps' LIMIT 1");
+        $catSt->execute(); $catId = $catSt->fetchColumn() ?: null;
+        $d = [
+            'name'=>$psData['name'],'slug'=>$slug,
+            'seo_title'=>$psData['seo_title']??'','meta_description'=>$psData['meta_description']??'','keywords'=>'',
+            'short_description'=>$psData['short_description']??'','long_description'=>$psData['long_description']??'',
+            'developer'=>$psData['developer']??'','version'=>$psData['version']??'',
+            'play_store_version'=>$psData['version']??'','android_version'=>$psData['android_version']??'',
+            'size_mb'=>$psData['size_mb']??'','license'=>'Free','package_name'=>$pkg,
+            'category_id'=>$catId,'rating'=>(float)($psData['rating']??4.5),'rating_count'=>0,
+            'download_url'=>$psData['download_url']??"https://play.google.com/store/apps/details?id={$pkg}",
+            'mirror2_url'=>'','mirror3_url'=>'','download_source'=>'playstore',
+            'apk_path'=>'','apk_size_bytes'=>0,'apk_hash_sha256'=>'','apk_hash_md5'=>'','apk_uploaded_at'=>null,
+            'whats_new'=>$psData['whats_new']??'',
+            'playstore_url'=>"https://play.google.com/store/apps/details?id={$pkg}",
+            'status'=>$publish?'published':'draft','needs_update'=>0,'icon_path'=>$iconPath,
+            'screenshots'=>json_encode($ssPaths,JSON_UNESCAPED_UNICODE),
+            'features'=>json_encode($psData['features']??[],JSON_UNESCAPED_UNICODE),
+            'pros'=>json_encode($psData['pros']??[],JSON_UNESCAPED_UNICODE),
+            'cons'=>json_encode($psData['cons']??[],JSON_UNESCAPED_UNICODE),
+            'install_steps'=>'[]','faq'=>'[]','badge'=>'new','release_date'=>null,
+        ];
+        try {
+            $cols = implode(',',array_keys($d)); $vals = implode(',',array_map(fn($k)=>":$k",array_keys($d)));
+            $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
+            $newId = (int)$pdo->lastInsertId();
+            bump_cache_version($pdo);
+            $results[] = ['pkg'=>$pkg,'ok'=>true,'id'=>$newId,'name'=>$d['name'],'status'=>$d['status'],'icon'=>$iconPath];
+        } catch (Throwable $e) {
+            $results[] = ['pkg'=>$pkg,'ok'=>false,'error'=>$e->getMessage()];
+        }
+        unset($psData,$d); gc_collect_cycles();
+    }
+    echo json_encode(['ok'=>true,'results'=>$results,'imported'=>count(array_filter($results,fn($r)=>$r['ok']))]);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
 // Critical security event count for nav badge
@@ -4815,6 +4974,7 @@ $navLinks = [
     'file-import'   => ['label'=>'استيراد من ملف',            'icon'=>'M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
     'bulk-csv-import' => ['label'=>'استيراد CSV ضخم (50K+)', 'icon'=>'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z'],
     'external-import' => ['label'=>'استيراد من متاجر خارجية', 'icon'=>'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9'],
+    'playstore-library' => ['label'=>'مكتبة Play Store', 'icon'=>'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
@@ -7531,6 +7691,33 @@ elseif ($page === 'stats'):
         WHERE event_type='search' AND created_at >= (NOW() - INTERVAL $days DAY) AND meta IS NOT NULL AND meta<>''
         GROUP BY meta ORDER BY c DESC LIMIT 10
     ")->fetchAll();
+
+    /* Country stats from visitor_profiles */
+    try {
+        $countryStats = $pdo->query("
+            SELECT country, COUNT(*) AS visitors, SUM(total_views) AS views
+            FROM visitor_profiles
+            WHERE country IS NOT NULL AND country <> ''
+            GROUP BY country
+            ORDER BY views DESC
+            LIMIT 40
+        ")->fetchAll();
+    } catch (Throwable $e) { $countryStats = []; }
+    $countryMaxViews = $countryStats ? max(array_column($countryStats, 'views')) : 1;
+
+    $countryNames = [
+        'SA'=>'المملكة العربية السعودية','AE'=>'الإمارات العربية المتحدة','EG'=>'مصر','KW'=>'الكويت',
+        'QA'=>'قطر','BH'=>'البحرين','OM'=>'عُمان','JO'=>'الأردن','IQ'=>'العراق','SY'=>'سوريا',
+        'LB'=>'لبنان','LY'=>'ليبيا','TN'=>'تونس','MA'=>'المغرب','DZ'=>'الجزائر','SD'=>'السودان',
+        'YE'=>'اليمن','PS'=>'فلسطين','SO'=>'الصومال','MR'=>'موريتانيا','DJ'=>'جيبوتي','KM'=>'جزر القمر',
+        'US'=>'الولايات المتحدة','GB'=>'المملكة المتحدة','DE'=>'ألمانيا','FR'=>'فرنسا','CA'=>'كندا',
+        'AU'=>'أستراليا','TR'=>'تركيا','PK'=>'باكستان','IN'=>'الهند','ID'=>'إندونيسيا',
+        'MY'=>'ماليزيا','NG'=>'نيجيريا','SN'=>'السنغال','ML'=>'مالي','MX'=>'المكسيك',
+        'BR'=>'البرازيل','RU'=>'روسيا','CN'=>'الصين','JP'=>'اليابان','KR'=>'كوريا الجنوبية',
+        'NL'=>'هولندا','SE'=>'السويد','NO'=>'النرويج','ES'=>'إسبانيا','IT'=>'إيطاليا',
+        'PL'=>'بولندا','PH'=>'الفلبين','VN'=>'فيتنام','TH'=>'تايلاند','ZA'=>'جنوب أفريقيا',
+        'GH'=>'غانا','KE'=>'كينيا','ET'=>'إثيوبيا','TZ'=>'تنزانيا','UG'=>'أوغندا',
+    ];
 ?>
 <div class="admin-header"><h1>إحصائيات الموقع</h1></div>
 
@@ -7591,7 +7778,7 @@ elseif ($page === 'stats'):
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;margin-bottom:40px">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
   <div class="panel">
     <h2>أكثر عمليات البحث (آخر 30 يوم)</h2>
     <table class="admin-table">
@@ -7615,6 +7802,48 @@ elseif ($page === 'stats'):
       </tbody>
     </table>
   </div>
+</div>
+
+<!-- Country visit statistics -->
+<div class="panel" style="margin-top:20px;margin-bottom:40px">
+  <h2 style="margin-bottom:4px">الزيارات حسب الدولة</h2>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:18px">مبني على بيانات ملفات الزوار المحلية (ip-api.com). الدول التي يتصفح زوارها عبر VPN قد تظهر بموقع مختلف.</p>
+  <?php if ($countryStats): ?>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px 24px">
+    <?php
+    $totalVisitorCount = array_sum(array_column($countryStats, 'visitors'));
+    $totalViewCount    = array_sum(array_column($countryStats, 'views'));
+    foreach ($countryStats as $ci => $cs):
+        $code    = strtoupper($cs['country']);
+        $name    = $countryNames[$code] ?? $code;
+        $pct     = $countryMaxViews > 0 ? round($cs['views'] / $countryMaxViews * 100) : 0;
+        $viewPct = $totalViewCount > 0 ? round($cs['views'] / $totalViewCount * 100, 1) : 0;
+        $flag    = mb_convert_encoding('&#' . (0x1F1E6 + (ord($code[0]) - 65)) . ';&#' . (0x1F1E6 + (ord($code[1]) - 65)) . ';', 'UTF-8', 'HTML-ENTITIES');
+    ?>
+    <div style="display:flex;flex-direction:column;gap:3px;padding:8px 0;border-bottom:1px solid var(--border-c)">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px">
+        <span><?= $flag ?> <?= h($name) ?></span>
+        <span style="font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px"><?= number_format($cs['views']) ?> مشاهدة (<?= $viewPct ?>%)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+          <div style="width:<?= $pct ?>%;height:100%;background:var(--cyan);border-radius:3px;transition:width .4s"></div>
+        </div>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap"><?= number_format($cs['visitors']) ?> زائر</span>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-c);font-size:12px;color:var(--muted);display:flex;gap:24px">
+    <span>إجمالي الدول: <strong><?= count($countryStats) ?></strong></span>
+    <span>إجمالي الزوار الفريدين: <strong><?= number_format($totalVisitorCount) ?></strong></span>
+    <span>إجمالي المشاهدات الموثقة: <strong><?= number_format($totalViewCount) ?></strong></span>
+  </div>
+  <?php else: ?>
+  <p style="color:var(--muted);font-size:14px;text-align:center;padding:30px 0">
+    لا توجد بيانات دول بعد — ستظهر البيانات مع تراكم الزيارات عبر ip-api.com.
+  </p>
+  <?php endif; ?>
 </div>
 
 <?php
@@ -9668,6 +9897,191 @@ async function lpAction(action,id,btn,confirm_del) {
     } else { alert('خطأ: '+(d.error||'Unknown')); btn.disabled=false; btn.textContent=orig; }
   } catch(e){ alert('خطأ في الشبكة'); btn.disabled=false; btn.textContent=orig; }
 }
+</script>
+
+<?php
+/* ─────────────── PLAY STORE LIBRARY ─────────────── */
+elseif ($page === 'playstore-library'):
+$psLib = playstore_curated_library();
+?>
+<div class="admin-header">
+  <h1>مكتبة Play Store — استيراد تطبيقات كاملة</h1>
+  <p style="color:var(--muted);font-size:13px;margin-top:4px">
+    يجلب البيانات من متجر Play ثم يولّد وصفاً عربياً 1500–2500 حرف + مميزات + إيجابيات + سلبيات + بيانات SEO تلقائياً.
+  </p>
+</div>
+
+<div class="panel" style="margin-bottom:16px">
+  <h2 style="font-size:14px;margin-bottom:12px">استيراد بـ Package ID (فردي أو بالجملة)</h2>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:1;min-width:220px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Package ID (مثال: com.whatsapp)</label>
+      <input id="ps-single-pkg" type="text" placeholder="com.example.app" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap">
+      <input type="checkbox" id="ps-publish" checked style="width:14px;height:14px"> نشر فوري
+    </label>
+    <button onclick="psImportSingle()" class="btn btn-primary" style="white-space:nowrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+      استيراد
+    </button>
+  </div>
+  <div id="ps-single-result" style="margin-top:10px;font-size:13px"></div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+  <h2 style="font-size:14px;margin-bottom:8px">استيراد بالجملة — قائمة Package IDs</h2>
+  <textarea id="ps-bulk-pkgs" rows="5" placeholder="com.whatsapp&#10;com.telegram.messenger&#10;com.spotify.music&#10;..." style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:monospace;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+  <div style="display:flex;gap:10px;margin-top:8px;align-items:center">
+    <button onclick="psBulkImport()" class="btn btn-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      استيراد الجميع
+    </button>
+    <span id="ps-bulk-status" style="font-size:13px;color:var(--muted)"></span>
+  </div>
+  <div id="ps-bulk-log" style="margin-top:10px;max-height:220px;overflow-y:auto;font-size:12px;font-family:monospace"></div>
+</div>
+
+<!-- Category Browser -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+<?php foreach ($psLib as $catKey => $cat): ?>
+<div class="panel" style="padding:0;overflow:hidden">
+  <div style="background:<?= htmlspecialchars($cat['color'],'UTF-8') ?>;padding:12px 16px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:15px;font-weight:700;color:#fff"><?= htmlspecialchars($cat['label'],'UTF-8') ?></span>
+    <span style="margin-right:auto;font-size:11px;color:rgba(255,255,255,.7)"><?= count($cat['apps']) ?> تطبيق</span>
+    <button onclick="psCatImportAll('<?= $catKey ?>')" style="font-size:11px;padding:4px 10px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:6px;color:#fff;cursor:pointer;white-space:nowrap">استيراد الكل</button>
+  </div>
+  <div style="padding:8px">
+    <?php foreach ($cat['apps'] as [$pkgId,$appName,$dev]): ?>
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;transition:.15s" class="ps-app-row" data-pkg="<?= htmlspecialchars($pkgId,'UTF-8') ?>">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= htmlspecialchars($appName,'UTF-8') ?></div>
+        <div style="font-size:11px;color:var(--muted)"><?= htmlspecialchars($pkgId,'UTF-8') ?></div>
+      </div>
+      <div class="ps-badge-<?= htmlspecialchars($pkgId,'UTF-8') ?>" style="font-size:11px;white-space:nowrap"></div>
+      <button onclick="psImportPkg('<?= htmlspecialchars($pkgId,'UTF-8') ?>',this)" style="font-size:11px;padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;flex-shrink:0">استيراد</button>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div id="cat-status-<?= $catKey ?>" style="padding:8px 12px;font-size:12px;display:none"></div>
+</div>
+<?php endforeach; ?>
+</div>
+
+<script>
+function psImportPkg(pkg, btn) {
+  btn.disabled = true; btn.textContent = '⏳';
+  var pub = document.getElementById('ps-publish')?.checked ? '1' : '0';
+  var fd = new FormData();
+  fd.append('package', pkg); fd.append('publish', pub);
+  fetch('admin.php?ajax=ps_import_one', {method:'POST',body:fd})
+    .then(r=>r.json()).then(d=>{
+      var badge = document.querySelector('.ps-badge-' + pkg.replace(/\./g,'\\2e '));
+      if (d.ok) {
+        btn.textContent = '✅'; btn.style.background = '#059669';
+        if (badge) { badge.textContent = d.status==='published' ? '✅ منشور' : '📝 مسودة'; badge.style.color='#059669'; }
+      } else {
+        btn.textContent = '❌'; btn.style.background = '#ef4444'; btn.disabled = false;
+        if (badge) { badge.textContent = d.error; badge.style.color='#ef4444'; }
+      }
+    }).catch(()=>{btn.textContent='❌ شبكة';btn.style.background='#ef4444';btn.disabled=false;});
+}
+
+function psImportSingle() {
+  var pkg = document.getElementById('ps-single-pkg').value.trim();
+  var res = document.getElementById('ps-single-result');
+  if (!pkg) { res.textContent = 'أدخل package ID أولاً'; res.style.color='#ef4444'; return; }
+  res.textContent = '⏳ جارٍ الجلب من Play Store + توليد المحتوى بالذكاء الاصطناعي…';
+  res.style.color = 'var(--muted)';
+  var pub = document.getElementById('ps-publish')?.checked ? '1' : '0';
+  var fd = new FormData(); fd.append('package',pkg); fd.append('publish',pub);
+  fetch('admin.php?ajax=ps_import_one',{method:'POST',body:fd})
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) {
+        res.innerHTML = '✅ تم الاستيراد: <a href="admin.php?page=edit-app&id='+d.id+'" style="color:var(--primary)">'+d.name+'</a> ('+d.status+')';
+        res.style.color = '#059669';
+        document.getElementById('ps-single-pkg').value = '';
+      } else {
+        res.textContent = '❌ ' + (d.error || 'فشل الاستيراد');
+        res.style.color = '#ef4444';
+      }
+    }).catch(()=>{res.textContent='❌ خطأ في الشبكة';res.style.color='#ef4444';});
+}
+
+function psBulkImport() {
+  var raw = document.getElementById('ps-bulk-pkgs').value;
+  var pkgs = raw.split(/[\r\n,;|\s]+/).map(s=>s.trim()).filter(Boolean);
+  if (!pkgs.length) { document.getElementById('ps-bulk-status').textContent='أدخل قائمة Package IDs أولاً'; return; }
+  var status = document.getElementById('ps-bulk-status');
+  var log = document.getElementById('ps-bulk-log');
+  status.textContent = '⏳ جارٍ الاستيراد ('+pkgs.length+' تطبيق)…';
+  log.innerHTML = '';
+  var pub = document.getElementById('ps-publish')?.checked;
+  /* Import one by one to show live progress without timeout */
+  var idx = 0, imported = 0, failed = 0;
+  function next() {
+    if (idx >= pkgs.length) {
+      status.textContent = '✅ انتهى: '+imported+' مستورد، '+failed+' فشل';
+      return;
+    }
+    var pkg = pkgs[idx++];
+    status.textContent = '⏳ ('+idx+'/'+pkgs.length+') '+pkg;
+    var fd = new FormData(); fd.append('package',pkg); fd.append('publish', pub?'1':'0');
+    fetch('admin.php?ajax=ps_import_one',{method:'POST',body:fd})
+      .then(r=>r.json()).then(d=>{
+        var line = document.createElement('div');
+        line.style.cssText = 'padding:3px 0;border-bottom:1px solid var(--border)';
+        if (d.ok) {
+          imported++;
+          line.innerHTML = '<span style="color:#059669">✅</span> '+d.name+' <span style="color:var(--muted)">('+d.status+')</span>';
+        } else {
+          failed++;
+          line.innerHTML = '<span style="color:#ef4444">❌</span> '+pkg+' — '+(d.error||'فشل');
+        }
+        log.prepend(line);
+        setTimeout(next, 800); /* Small delay to avoid rate-limiting */
+      }).catch(()=>{ failed++; setTimeout(next,1000); });
+  }
+  next();
+}
+
+function psCatImportAll(catKey) {
+  var rows = document.querySelectorAll('[data-pkg]');
+  var pkgs = [];
+  rows.forEach(r=>{ if (r.dataset.pkg) pkgs.push(r.dataset.pkg); });
+  /* Filter to this category only — read from DOM buttons in this card */
+  var card = document.querySelector('[id="cat-status-'+catKey+'"]')?.closest('.panel');
+  if (!card) return;
+  var btns = card.querySelectorAll('[data-pkg]');
+  var catPkgs = Array.from(btns).map(r=>r.dataset.pkg).filter(Boolean);
+  if (!catPkgs.length) return;
+  var status = document.getElementById('cat-status-'+catKey);
+  status.style.display = 'block'; status.textContent = '⏳ جارٍ الاستيراد…';
+  var idx = 0, imported = 0;
+  var pub = document.getElementById('ps-publish')?.checked;
+  function next() {
+    if (idx >= catPkgs.length) {
+      status.textContent = '✅ تم استيراد '+imported+' تطبيق من أصل '+catPkgs.length;
+      return;
+    }
+    var pkg = catPkgs[idx++];
+    var btn = card.querySelector('[onclick*="\''+pkg+'\'"]');
+    if (btn) { btn.disabled=true; btn.textContent='⏳'; }
+    var fd = new FormData(); fd.append('package',pkg); fd.append('publish',pub?'1':'0');
+    fetch('admin.php?ajax=ps_import_one',{method:'POST',body:fd})
+      .then(r=>r.json()).then(d=>{
+        if (d.ok) { imported++; if(btn){btn.textContent='✅';btn.style.background='#059669';} }
+        else { if(btn){btn.textContent='❌';btn.style.background='#ef4444';btn.disabled=false;} }
+        status.textContent = '⏳ ('+idx+'/'+catPkgs.length+') '+imported+' مستورد…';
+        setTimeout(next, 800);
+      }).catch(()=>setTimeout(next,1000));
+  }
+  next();
+}
+/* Hover effect for app rows */
+document.querySelectorAll('.ps-app-row').forEach(r=>{
+  r.addEventListener('mouseenter',()=>r.style.background='var(--hover-bg,rgba(0,0,0,.04))');
+  r.addEventListener('mouseleave',()=>r.style.background='');
+});
 </script>
 
 <?php
