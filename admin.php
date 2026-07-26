@@ -2116,9 +2116,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'import_preset_one' && is_admin())
 - meta_description: وصف ميتا (150-160 حرف)
 - keywords: قائمة كلمات مفتاحية مفصولة بفاصلة (15-20 كلمة)";
 
-        $aiRaw = ai_text($pdo, $aiPrompt, 1500, 45);
-        if ($aiRaw) {
-            $aiData = ai_extract_json($aiRaw);
+        $aiRaw = ai_text($pdo, $aiPrompt);
+        if (!empty($aiRaw['ok']) && $aiRaw['content']) {
+            $aiData = ai_extract_json($aiRaw['content']);
             if ($aiData) {
                 $shortDesc = $aiData['short_description'] ?? $shortDesc;
                 $longDesc  = $aiData['long_description']  ?? $longDesc;
@@ -4178,8 +4178,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fetch_playstore_full' && is_admin
 
 الوصف:
 ' . mb_substr($meta['long_description'] ?? '', 0, 1500);
-            $rawAi = ai_text($pdo, $aiPrompt, 1200, 45);
-            if ($rawAi) $aiData = ai_extract_json($rawAi) ?: [];
+            $rawAi = ai_text($pdo, $aiPrompt);
+            if (!empty($rawAi['ok']) && $rawAi['content']) $aiData = ai_extract_json($rawAi['content']) ?: [];
         }
 
         $siteName = preg_replace('/[^a-z0-9]/i', '', get_cfg($pdo,'site_name','yassota'));
@@ -9162,11 +9162,11 @@ $hasKey = (bool)get_cfg($pdo,'indexnow_key','');
 $sitemapUrl = rtrim(SITE_URL,'/').'/sitemap.xml';
 $itEngines = [
   ['id'=>'google_sitemap',   'name'=>'Google Sitemap Ping',  'flag'=>'🇺🇸', 'color'=>'#4285F4',
-   'desc'=>'يُبلّغ Google فوراً بتحديث خريطة الموقع لإعادة فهرسة المحتوى الجديد.',
-   'link'=>'https://search.google.com/search-console', 'link_label'=>'Google SC', 'key_required'=>false],
+   'desc'=>'أوقف Google هذا الـ endpoint رسمياً في يونيو 2023. أرسل Sitemap يدوياً من Google Search Console، أو استخدم IndexNow أعلاه.',
+   'link'=>'https://search.google.com/search-console', 'link_label'=>'Google SC', 'key_required'=>false, 'deprecated'=>true],
   ['id'=>'bing_sitemap',     'name'=>'Bing Sitemap Ping',    'flag'=>'🔷', 'color'=>'#00809D',
-   'desc'=>'يُبلّغ Bing بتحديث Sitemap — يؤثر أيضاً على DuckDuckGo ومحركات Bing-powered.',
-   'link'=>'https://www.bing.com/webmasters', 'link_label'=>'Bing WMT', 'key_required'=>false],
+   'desc'=>'أوقف Bing هذا الـ endpoint — استخدم IndexNow عبر api.indexnow.org أعلاه بدلاً منه (يصل Bing تلقائياً).',
+   'link'=>'https://www.bing.com/webmasters', 'link_label'=>'Bing WMT', 'key_required'=>false, 'deprecated'=>true],
   ['id'=>'yandex_sitemap',   'name'=>'Yandex Sitemap Ping',  'flag'=>'🇷🇺', 'color'=>'#FF3333',
    'desc'=>'يُبلّغ Yandex بتحديث خريطة الموقع — ضروري للترتيب في روسيا ودول CIS.',
    'link'=>'https://webmaster.yandex.com', 'link_label'=>'Yandex WMT', 'key_required'=>false],
@@ -9214,16 +9214,19 @@ $itEngines = [
 
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:20px">
 <?php foreach ($itEngines as $eng):
-  $last  = $lastPings[$eng['id']] ?? null;
-  $ok    = $last && $last['status'] === 'success';
-  $disabled = $eng['key_required'] && !$hasKey;
+  $last       = $lastPings[$eng['id']] ?? null;
+  $ok         = $last && $last['status'] === 'success';
+  $disabled   = ($eng['key_required'] && !$hasKey) || !empty($eng['deprecated']);
+  $isDeprec   = !empty($eng['deprecated']);
 ?>
-<div class="panel" style="padding:16px;border-top:3px solid <?= $eng['color'] ?>55;margin-bottom:0">
+<div class="panel" style="padding:16px;border-top:3px solid <?= $eng['color'] ?>55;margin-bottom:0;<?= $isDeprec ? 'opacity:.8' : '' ?>">
   <div style="margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap">
       <span style="font-size:15px"><?= $eng['flag'] ?></span>
       <span style="font-weight:700;font-size:13px;color:var(--white)"><?= h($eng['name']) ?></span>
-      <?php if ($disabled): ?>
+      <?php if ($isDeprec): ?>
+        <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(107,114,128,.15);color:#9ca3af;border:1px solid rgba(107,114,128,.3)">⚠ مُهمل</span>
+      <?php elseif ($disabled): ?>
         <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">يحتاج مفتاح</span>
       <?php elseif ($last): ?>
         <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:<?= $ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)' ?>;color:<?= $ok?'#4ade80':'#f87171' ?>;border:1px solid <?= $ok?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)' ?>">
@@ -9232,11 +9235,12 @@ $itEngines = [
       <?php endif; ?>
     </div>
     <div style="font-size:11px;color:var(--muted);line-height:1.7"><?= h($eng['desc']) ?></div>
-    <?php if ($last): ?>
+    <?php if ($last && !$isDeprec): ?>
       <div style="font-size:10px;color:var(--muted);margin-top:5px">آخر إرسال: <?= h(substr($last['at'],0,16)) ?></div>
     <?php endif; ?>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <?php if (!$isDeprec): ?>
     <button type="button"
       class="ping-engine-btn <?= $disabled ? '' : 'btn-ai' ?>"
       data-engine="<?= h($eng['id']) ?>"
@@ -9245,6 +9249,7 @@ $itEngines = [
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
       إرسال
     </button>
+    <?php endif; ?>
     <?php if ($eng['link']): ?>
       <a href="<?= h($eng['link']) ?>" target="_blank" rel="noopener" style="font-size:11px;color:var(--cyan);display:flex;align-items:center;gap:4px">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
