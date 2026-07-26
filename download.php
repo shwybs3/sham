@@ -676,6 +676,8 @@ function verifyDlCaptcha(token, type) {
       if (captchaWrap) captchaWrap.style.display = 'none';
       triggerDownload();
     } else {
+      // v3 is advisory/invisible — allow through even on failure
+      if (type === 'v3') { dlCaptchaSolved = true; triggerDownload(); return; }
       // Reset widget so user can retry
       if (typeof turnstile !== 'undefined') turnstile.reset();
       if (typeof grecaptcha !== 'undefined' && type === 'v2') grecaptcha.reset();
@@ -719,13 +721,24 @@ function tick() {
       if (captchaWrap) captchaWrap.style.display = 'block';
       if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
       <?php if ($dlCaptchaType === 'v3'): ?>
-      // v3 is invisible — auto-run without showing any widget
+      // v3 is invisible — auto-run, with fallback if it fails or is blocked
       if (captchaWrap) captchaWrap.style.display = 'none';
-      if (typeof grecaptcha !== 'undefined') {
-        window.runDlV3Captcha();
-      } else {
-        setTimeout(function(){ if (typeof grecaptcha !== 'undefined') window.runDlV3Captcha(); }, 1500);
+      if (statusText) statusText.innerHTML = '<strong style="color:var(--primary)">⟳ جارٍ التحقق التلقائي…</strong>';
+      function _tryRunV3() {
+        if (typeof grecaptcha !== 'undefined') {
+          window.runDlV3Captcha();
+        } else {
+          // API blocked or not loaded — allow through immediately
+          dlCaptchaSolved = true; triggerDownload();
+        }
       }
+      if (typeof grecaptcha !== 'undefined') {
+        _tryRunV3();
+      } else {
+        setTimeout(_tryRunV3, 1500);
+      }
+      // Ultimate failsafe: if download hasn't fired after 9 seconds, allow anyway
+      setTimeout(function(){ if (!dlCaptchaSolved) { dlCaptchaSolved = true; triggerDownload(); } }, 9000);
       <?php endif; ?>
       // Also show the (still-disabled) button so user sees it exists
       if (btnManual) { btnManual.classList.remove('hidden'); }

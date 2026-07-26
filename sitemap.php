@@ -72,4 +72,21 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   </url>
   <?php endforeach; ?>
 
+  <!-- HTML landing pages (/pages/*.html) -->
+  <?php
+  $pagesDir = __DIR__ . '/pages';
+  if (is_dir($pagesDir)) {
+      foreach (glob($pagesDir . '/*.html') ?: [] as $htmlFile) {
+          $slug    = basename($htmlFile, '.html');
+          $lastmod = date('Y-m-d', filemtime($htmlFile));
+          echo "  <url>\n";
+          echo "    <loc>" . SITE_URL . "/pages/" . rawurlencode($slug) . ".html</loc>\n";
+          echo "    <lastmod>{$lastmod}</lastmod>\n";
+          echo "    <changefreq>monthly</changefreq>\n";
+          echo "    <priority>0.4</priority>\n";
+          echo "  </url>\n";
+      }
+  }
+  ?>
+
 </urlset>

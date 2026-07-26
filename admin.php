@@ -291,18 +291,229 @@ P;
    AJAX: Bulk-fix existing SEO titles > 60 chars
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'fix_long_seo_titles' && is_admin()) {
-    header('Content-Type: application/json');
-    $rows = $pdo->query("SELECT id, seo_title FROM apps WHERE CHAR_LENGTH(seo_title) > 60")->fetchAll(PDO::FETCH_ASSOC);
-    $fixed = 0;
-    $upd = $pdo->prepare("UPDATE apps SET seo_title=? WHERE id=?");
-    foreach ($rows as $r) {
-        $clamped = seo_title_clamp($r['seo_title']);
-        if ($clamped !== $r['seo_title']) {
-            $upd->execute([$clamped, $r['id']]);
-            $fixed++;
+    ob_clean(); // discard any accidental prior output
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        // Inline clamp so this works even if config.php is old
+        if (!function_exists('_seo_clamp_local')) {
+            function _seo_clamp_local(string $t, int $max = 60): string {
+                $t = trim($t);
+                if (mb_strlen($t, 'UTF-8') <= $max) return $t;
+                $cut  = mb_substr($t, 0, $max, 'UTF-8');
+                $last = mb_strrpos($cut, ' ');
+                return ($last !== false && $last > $max * 0.6) ? mb_substr($cut, 0, $last, 'UTF-8') : $cut;
+            }
+        }
+        $rows  = $pdo->query("SELECT id, seo_title FROM apps WHERE seo_title IS NOT NULL AND CHAR_LENGTH(seo_title) > 60")->fetchAll(PDO::FETCH_ASSOC);
+        $fixed = 0;
+        $upd   = $pdo->prepare("UPDATE apps SET seo_title=? WHERE id=?");
+        foreach ($rows as $r) {
+            $fn      = function_exists('seo_title_clamp') ? 'seo_title_clamp' : '_seo_clamp_local';
+            $clamped = $fn($r['seo_title']);
+            if ($clamped !== $r['seo_title']) {
+                $upd->execute([$clamped, $r['id']]);
+                $fixed++;
+            }
+        }
+        echo json_encode(['ok' => true, 'fixed' => $fixed, 'total' => count($rows)]);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    }
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   HTML PAGES — helper (build one .html file for an app)
+   ══════════════════════════════════════════════════════ */
+function build_html_page(array $app): string {
+    $siteUrl = defined('SITE_URL') ? rtrim(SITE_URL, '/') : 'https://yassota.com';
+    $slug    = $app['slug'] ?? '';
+    $name    = htmlspecialchars($app['name'] ?? '', ENT_QUOTES, 'UTF-8');
+    $appUrl  = $siteUrl . '/' . rawurlencode($slug) . '/';
+    $iconUrl = !empty($app['icon_path']) ? $siteUrl . '/' . ltrim($app['icon_path'], '/') : '';
+    $ver     = htmlspecialchars($app['version'] ?? '', ENT_QUOTES, 'UTF-8');
+    $cat     = htmlspecialchars($app['cat_name'] ?? '', ENT_QUOTES, 'UTF-8');
+    $dev     = htmlspecialchars($app['developer'] ?? '', ENT_QUOTES, 'UTF-8');
+    $rawSeoTitle = $app['seo_title'] ?? "{$app['name']} — تحميل النسخة الأحدث";
+    $seoTitle    = htmlspecialchars($rawSeoTitle, ENT_QUOTES, 'UTF-8');
+    $rawSeoDesc  = $app['seo_description'] ?? mb_substr(strip_tags($app['description'] ?? ''), 0, 160, 'UTF-8');
+    $seoDesc     = htmlspecialchars($rawSeoDesc, ENT_QUOTES, 'UTF-8');
+    $size        = htmlspecialchars($app['size'] ?? '', ENT_QUOTES, 'UTF-8');
+    $rating      = number_format((float)($app['rating'] ?? 4.5), 1);
+    $dlCount     = (int)($app['downloads'] ?? 0);
+    $today       = date('Y-m-d');
+
+    $schema = json_encode([
+        '@context'    => 'https://schema.org',
+        '@type'       => 'SoftwareApplication',
+        'name'        => $app['name'] ?? '',
+        'description' => $rawSeoDesc,
+        'image'       => $iconUrl,
+        'url'         => $appUrl,
+        'applicationCategory' => 'MobileApplication',
+        'operatingSystem' => 'Android',
+        'softwareVersion' => $app['version'] ?? '',
+        'offers'      => ['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD'],
+        'aggregateRating' => ['@type'=>'AggregateRating','ratingValue'=>$rating,'ratingCount'=>max(10,$dlCount),'bestRating'=>'5'],
+    ], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{$seoTitle}</title>
+<meta name="description" content="{$seoDesc}">
+<meta property="og:title" content="{$seoTitle}">
+<meta property="og:description" content="{$seoDesc}">
+<meta property="og:image" content="{$iconUrl}">
+<meta property="og:url" content="{$appUrl}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="{$appUrl}">
+<meta http-equiv="refresh" content="5; url={$appUrl}">
+<script type="application/ld+json">{$schema}</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;min-height:100vh;display:flex;align-items:center;justify-content:center;direction:rtl}
+.card{background:#fff;border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,.12);padding:40px 32px;max-width:460px;width:calc(100% - 32px);text-align:center}
+.icon{width:96px;height:96px;border-radius:22px;object-fit:cover;box-shadow:0 4px 16px rgba(0,0,0,.15);margin-bottom:20px}
+.icon-placeholder{width:96px;height:96px;border-radius:22px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:inline-flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:20px}
+h1{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:8px;line-height:1.3}
+.meta{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0 20px}
+.badge{background:#f0f4f8;color:#4a5568;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:500}
+.badge.blue{background:#eff6ff;color:#2563eb}
+.desc{color:#64748b;font-size:14px;line-height:1.7;margin-bottom:28px;text-align:right}
+.btn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;text-decoration:none;padding:14px 32px;border-radius:14px;font-size:16px;font-weight:600;box-shadow:0 4px 16px rgba(37,99,235,.35);transition:transform .15s,box-shadow .15s;margin-bottom:16px;width:100%;justify-content:center}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(37,99,235,.45)}
+.countdown{color:#94a3b8;font-size:13px}
+.countdown span{color:#2563eb;font-weight:700;font-size:15px}
+.redirect-bar{height:3px;background:#e2e8f0;border-radius:2px;margin:12px 0 20px;overflow:hidden}
+.redirect-bar-fill{height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:2px;animation:fill 5s linear forwards}
+@keyframes fill{from{width:0}to{width:100%}}
+.brand{margin-top:24px;color:#cbd5e1;font-size:12px}
+.brand a{color:#94a3b8;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+HTML
+    . (!empty($iconUrl) ? "<img src=\"{$iconUrl}\" alt=\"{$name}\" class=\"icon\" loading=\"eager\">\n" : "<div class=\"icon-placeholder\">📱</div>\n")
+    . "<h1>{$name}</h1>\n"
+    . "<div class=\"meta\">"
+    . (!empty($ver) ? "<span class=\"badge blue\">v{$ver}</span>" : '')
+    . (!empty($cat) ? "<span class=\"badge\">{$cat}</span>" : '')
+    . (!empty($size) ? "<span class=\"badge\">{$size}</span>" : '')
+    . (!empty($dev) ? "<span class=\"badge\">{$dev}</span>" : '')
+    . "</div>\n"
+    . (!empty($rawSeoDesc) ? "<p class=\"desc\">{$seoDesc}</p>\n" : '')
+    . "<a href=\"{$appUrl}\" class=\"btn\">⬇ تحميل {$name}</a>\n"
+    . "<div class=\"redirect-bar\"><div class=\"redirect-bar-fill\"></div></div>\n"
+    . "<p class=\"countdown\">سيتم التوجيه تلقائياً خلال <span id=\"cd\">5</span> ثوانٍ…</p>\n"
+    . "<p class=\"brand\">مقدَّم بواسطة <a href=\"{$siteUrl}\" target=\"_blank\">yassota</a></p>\n"
+    . "</div>\n"
+    . "<script>var c=5,el=document.getElementById('cd');var t=setInterval(function(){c--;if(el)el.textContent=c;if(c<=0){clearInterval(t);location.href='" . addslashes($appUrl) . "';}},1000);</script>\n"
+    . "</body></html>\n";
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Generate a single HTML landing page for an app
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_html_page' && is_admin()) {
+    ob_clean(); header('Content-Type: application/json; charset=utf-8');
+    $appId   = (int)($_POST['app_id'] ?? 0);
+    $appSlug = trim($_POST['slug'] ?? '');
+    if (!$appId && !$appSlug) { echo json_encode(['ok'=>false,'error'=>'app_id أو slug مطلوب']); exit; }
+
+    $stmt = $pdo->prepare("SELECT a.*, c.slug AS cat_slug, c.name AS cat_name
+        FROM apps a LEFT JOIN categories c ON a.category_id=c.id
+        WHERE (" . ($appSlug ? "a.slug=?" : "a.id=?") . ") AND a.status='published' LIMIT 1");
+    $stmt->execute([$appSlug ?: $appId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) { echo json_encode(['ok'=>false,'error'=>'التطبيق غير موجود أو غير منشور']); exit; }
+
+    $pagesDir = __DIR__ . '/pages';
+    if (!is_dir($pagesDir)) @mkdir($pagesDir, 0755, true);
+    if (!is_dir($pagesDir)) { echo json_encode(['ok'=>false,'error'=>'تعذّر إنشاء مجلد pages/']); exit; }
+
+    $html = build_html_page($row);
+    $file = $pagesDir . '/' . $row['slug'] . '.html';
+    if (file_put_contents($file, $html) === false) {
+        echo json_encode(['ok'=>false,'error'=>'فشل كتابة الملف']); exit;
+    }
+
+    // Submit URL to IndexNow
+    $pageUrl = rtrim(SITE_URL,'/') . '/pages/' . rawurlencode($row['slug']) . '.html';
+    $inKey   = get_cfg($pdo, 'indexnow_key');
+    if ($inKey) {
+        $payload = ['host'=>parse_url(SITE_URL,PHP_URL_HOST),'key'=>$inKey,'urlList'=>[$pageUrl]];
+        @file_get_contents('https://api.indexnow.org/indexnow', false, stream_context_create(['http'=>[
+            'method'=>'POST','timeout'=>8,'ignore_errors'=>true,
+            'header'=>"Content-Type: application/json\r\n",
+            'content'=>json_encode($payload),
+        ]]));
+    }
+
+    echo json_encode(['ok'=>true,'url'=>$pageUrl,'file'=>'pages/'.$row['slug'].'.html']);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Bulk-generate HTML pages (SSE progress)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_html_pages_bulk' && is_admin()) {
+    @ini_set('output_buffering','0'); @ini_set('zlib.output_compression','0');
+    if (ob_get_level()) ob_end_flush();
+    header('Content-Type: text/event-stream; charset=utf-8');
+    header('Cache-Control: no-cache'); header('X-Accel-Buffering: no');
+
+    $pagesDir = __DIR__ . '/pages';
+    if (!is_dir($pagesDir)) @mkdir($pagesDir, 0755, true);
+
+    $apps = $pdo->query("SELECT a.*, c.name AS cat_name
+        FROM apps a LEFT JOIN categories c ON a.category_id=c.id
+        WHERE a.status='published' ORDER BY a.id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $total = count($apps); $done = 0; $newPages = [];
+
+    foreach ($apps as $app) {
+        $html = build_html_page($app);
+        $file = $pagesDir . '/' . $app['slug'] . '.html';
+        file_put_contents($file, $html);
+        $done++;
+        $newPages[] = rtrim(SITE_URL,'/') . '/pages/' . rawurlencode($app['slug']) . '.html';
+        $pct = (int)($done / $total * 100);
+        echo "data: " . json_encode(['pct'=>$pct,'done'=>$done,'total'=>$total,'name'=>$app['name']]) . "\n\n";
+        flush();
+        if ($done % 50 === 0) usleep(100000);
+    }
+
+    // Bulk IndexNow submission (max 10000 per call)
+    $inKey = get_cfg($pdo, 'indexnow_key');
+    if ($inKey && $newPages) {
+        foreach (array_chunk($newPages, 500) as $chunk) {
+            $payload = ['host'=>parse_url(SITE_URL,PHP_URL_HOST),'key'=>$inKey,'urlList'=>$chunk];
+            @file_get_contents('https://api.indexnow.org/indexnow', false, stream_context_create(['http'=>[
+                'method'=>'POST','timeout'=>15,'ignore_errors'=>true,
+                'header'=>"Content-Type: application/json\r\n",
+                'content'=>json_encode($payload),
+            ]]));
         }
     }
-    echo json_encode(['ok'=>true,'fixed'=>$fixed,'total'=>count($rows)]);
+
+    echo "data: " . json_encode(['pct'=>100,'done'=>$done,'total'=>$total,'complete'=>true,'indexnow'=>count($newPages)]) . "\n\n";
+    flush(); exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: HTML pages status (count generated vs total)
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'html_pages_status' && is_admin()) {
+    ob_clean(); header('Content-Type: application/json; charset=utf-8');
+    $pagesDir  = __DIR__ . '/pages';
+    $generated = is_dir($pagesDir) ? count(glob($pagesDir . '/*.html')) : 0;
+    $total     = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+    echo json_encode(['ok'=>true,'generated'=>$generated,'total'=>$total]);
     exit;
 }
 
@@ -1942,15 +2153,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'download_url_apk' && is_admin()) 
         sse('error', ['msg' => 'رابط غير صالح']); exit;
     }
 
-    // Detect Play Store URL and auto-redirect to APKPure CDN
+    // Detect Play Store URL → extract package, build download waterfall
+    $detectedPkg = null;
     if (preg_match('#play\.google\.com/store/apps/details.*[?&]id=([\w.]+)#i', $url, $pkgMatch)) {
-        $pkg = $pkgMatch[1];
-        sse('progress', ['pct' => 2, 'msg' => "🔍 رابط متجر Play مكتشف — الباقة: {$pkg} — جارٍ البحث عبر APKPure…", 'bytes' => 0, 'total' => 0]);
-        // Try APKPure CDN (usually bypasses bot protection)
-        $url = "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=arm64-v8a&sv=21";
-        if (!$appName || $appName === 'app') {
-            $appName = str_replace(['.', '_'], ['-', '-'], $pkg);
-        }
+        $detectedPkg = $pkgMatch[1];
+        sse('progress', ['pct' => 2, 'msg' => "🔍 Google Play مكتشف — الباقة: {$detectedPkg}", 'bytes' => 0, 'total' => 0]);
+        $url = "https://d.apkpure.com/b/APK/{$detectedPkg}?versionCode=latest&nc=arm64-v8a&sv=21";
+        if (!$appName || $appName === 'app') $appName = str_replace(['.','_'], '-', $detectedPkg);
+    }
+    // Try to extract package from APKPure / liteapks URLs as fallback source
+    if (!$detectedPkg) {
+        if (preg_match('#apkpure\.com/[^/]+/([\w.]+)#i', $url, $m2)) $detectedPkg = $m2[1];
+        elseif (preg_match('#apkcombo\.com/[^/]+/([\w.]+)#i', $url, $m2)) $detectedPkg = $m2[1];
     }
 
     // Block SSRF — only allow public HTTP(S), no local addresses
@@ -1977,65 +2191,97 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'download_url_apk' && is_admin()) 
 
     sse('progress', ['pct' => 0, 'msg' => 'جارٍ الاتصال بالرابط…', 'bytes' => 0, 'total' => 0]);
 
-    // Open remote stream
-    $ctx = stream_context_create(['http' => [
-        'method'          => 'GET',
-        'timeout'         => 300,
-        'ignore_errors'   => true,
-        'follow_location' => true,
-        'max_redirects'   => 5,
-        'header'          => "User-Agent: Mozilla/5.0 (compatible; yassota-bot/1.0)\r\n",
-    ]]);
-
-    $remote = @fopen($url, 'rb', false, $ctx);
-    if (!$remote) {
-        sse('error', ['msg' => 'فشل الاتصال بالرابط — تحقق من الرابط']); exit;
-    }
-
-    // Detect total size from headers
-    $totalBytes = 0;
-    foreach ($http_response_header ?? [] as $h) {
-        if (preg_match('/^Content-Length:\s*(\d+)/i', $h, $m)) { $totalBytes = (int)$m[1]; break; }
-        if (preg_match('/^HTTP\/\S+\s+([45]\d\d)/i', $h, $m)) {
-            fclose($remote);
-            sse('error', ['msg' => "HTTP {$m[1]} — تحقق من صحة الرابط"]); exit;
-        }
+    // Build source waterfall (primary URL first, then APKPure CDN fallback if we have a package name)
+    $chromeUA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    $urlsToTry  = [$url];
+    if ($detectedPkg && strpos($url, 'd.apkpure.com') === false) {
+        $urlsToTry[] = "https://d.apkpure.com/b/APK/{$detectedPkg}?versionCode=latest&nc=arm64-v8a&sv=21";
+    } elseif ($detectedPkg) {
+        // primary IS APKPure CDN; add secondary via apkcombo
+        $urlsToTry[] = "https://apkcombo.com/apk-downloader/?package={$detectedPkg}";
     }
 
     $out = fopen($tmpFile, 'wb');
-    if (!$out) { fclose($remote); sse('error', ['msg' => 'فشل إنشاء الملف المؤقت']); exit; }
+    if (!$out) { sse('error', ['msg' => 'فشل إنشاء الملف المؤقت']); exit; }
 
-    $downloaded = 0;
-    $chunkSize  = 512 * 1024; // 512 KB
-    $lastReport = 0;
-    $startTime  = microtime(true);
+    $downloaded  = 0;
+    $totalBytes  = 0;
+    $lastReport  = 0;
+    $startTime   = microtime(true);
+    $successUrl  = null;
 
-    while (!feof($remote)) {
-        $chunk = fread($remote, $chunkSize);
-        if ($chunk === false) break;
-        fwrite($out, $chunk);
-        $downloaded += strlen($chunk);
+    foreach ($urlsToTry as $tryIdx => $tryUrl) {
+        if ($tryIdx > 0) {
+            sse('progress', ['pct' => 3, 'msg' => "🔄 المصدر الأول أعاد خطأ — جارٍ المحاولة عبر مصدر بديل…", 'bytes' => 0, 'total' => 0]);
+            ftruncate($out, 0); rewind($out);
+            $downloaded = 0; $totalBytes = 0; $lastReport = 0; $startTime = microtime(true);
+        }
 
-        // Report every 2% change or every 1 MB
-        $pct = $totalBytes > 0 ? min(99, round($downloaded / $totalBytes * 100)) : 0;
-        if ($pct >= $lastReport + 2 || $downloaded - ($lastReport / 100 * $totalBytes) >= 1048576) {
-            $elapsed = microtime(true) - $startTime;
-            $speed   = $elapsed > 0 ? $downloaded / $elapsed : 0;
-            $eta     = ($totalBytes > 0 && $speed > 0) ? round(($totalBytes - $downloaded) / $speed) : 0;
-            $mbDown  = round($downloaded / 1048576, 1);
-            $mbTotal = $totalBytes > 0 ? round($totalBytes / 1048576, 1) : '?';
-            $msg = "تم تحميل {$mbDown} MB" . ($totalBytes > 0 ? " من {$mbTotal} MB" : '') . ($eta > 0 ? " — متبقي {$eta}ث" : '');
-            sse('progress', ['pct' => $pct, 'msg' => $msg, 'bytes' => $downloaded, 'total' => $totalBytes]);
-            $lastReport = $pct;
+        $_dl   = &$downloaded;
+        $_tot  = &$totalBytes;
+        $_lr   = &$lastReport;
+        $_st   = &$startTime;
+
+        $ch = curl_init($tryUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_WRITEFUNCTION  => static function ($ch, $data) use (&$_dl, &$_tot, &$_lr, &$_st, $out) {
+                $n = fwrite($out, $data);
+                $_dl += strlen($data);
+                $pct = $_tot > 0 ? min(99, (int)($_dl / $_tot * 100)) : 0;
+                if ($pct >= $_lr + 2 || ($_dl - (int)($_lr / 100 * $_tot)) >= 1048576) {
+                    $elapsed = microtime(true) - $_st;
+                    $speed   = $elapsed > 0 ? $_dl / $elapsed : 0;
+                    $eta     = ($_tot > 0 && $speed > 0) ? (int)(($_tot - $_dl) / $speed) : 0;
+                    $mbDown  = round($_dl / 1048576, 1);
+                    $mbTotal = $_tot > 0 ? round($_tot / 1048576, 1) : '?';
+                    $msg     = "تم تحميل {$mbDown} MB" . ($_tot > 0 ? " من {$mbTotal} MB" : '') . ($eta > 0 ? " — متبقي {$eta}ث" : '');
+                    sse('progress', ['pct' => $pct, 'msg' => $msg, 'bytes' => $_dl, 'total' => $_tot]);
+                    $_lr = $pct;
+                }
+                return $n;
+            },
+            CURLOPT_HEADERFUNCTION => static function ($ch, $header) use (&$_tot) {
+                if (preg_match('/^Content-Length:\s*(\d+)/i', $header, $m)) $_tot = (int)$m[1];
+                return strlen($header);
+            },
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 8,
+            CURLOPT_TIMEOUT        => 300,
+            CURLOPT_USERAGENT      => $chromeUA,
+            CURLOPT_HTTPHEADER     => [
+                'Accept: application/vnd.android.package-archive, application/octet-stream, */*',
+                'Accept-Language: ar,en-US;q=0.9,en;q=0.8',
+                'Referer: https://apkpure.com/',
+                'Connection: keep-alive',
+            ],
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+
+        curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
+        curl_close($ch);
+        unset($_dl, $_tot, $_lr, $_st);
+
+        if ($httpCode >= 200 && $httpCode < 300 && $downloaded > 512) {
+            $successUrl = $tryUrl;
+            break;
+        }
+
+        $failHost = parse_url($tryUrl, PHP_URL_HOST);
+        if ($httpCode >= 400) {
+            sse('progress', ['pct' => 2, 'msg' => "HTTP {$httpCode} من {$failHost}", 'bytes' => 0, 'total' => 0]);
+        } elseif ($curlErr) {
+            sse('progress', ['pct' => 2, 'msg' => "خطأ شبكة: {$curlErr}", 'bytes' => 0, 'total' => 0]);
         }
     }
 
-    fclose($remote);
     fclose($out);
 
-    if ($downloaded < 1024) {
+    if (!$successUrl || $downloaded < 1024) {
         @unlink($tmpFile);
-        sse('error', ['msg' => 'الملف فارغ أو الرابط لا يحتوي على APK']); exit;
+        sse('error', ['msg' => 'فشل التحميل من جميع المصادر — تأكد من الرابط أو جرب رابط APKPure مباشر']); exit;
     }
 
     // Verify APK ZIP signature
@@ -3503,6 +3749,7 @@ $navLinks = [
     'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'badge'=>$_navEvilCount],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'seo-preview' => ['label'=>'معاينة نتائج Google', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'],
+    'html-pages'  => ['label'=>'صفحات HTML للفهرسة', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
     'file-manager' => ['label'=>'مدير الملفات', 'icon'=>'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
@@ -6888,20 +7135,202 @@ function fixLongSeoTitles() {
   if (!btn) return;
   btn.disabled = true;
   btn.textContent = 'جارٍ التصحيح...';
-  fetch('admin.php?ajax=fix_long_seo_titles', {method:'POST'})
-    .then(r => r.json())
-    .then(d => {
+  fetch('?ajax=fix_long_seo_titles', {method:'POST', credentials:'same-origin'})
+    .then(r => r.text())
+    .then(txt => {
+      let d;
+      try { d = JSON.parse(txt); } catch(e) {
+        btn.textContent = '❌ خطأ PHP: ' + txt.substring(0,80);
+        btn.disabled = false; return;
+      }
       if (d.ok) {
-        btn.textContent = `✓ تم تصحيح ${d.fixed} عنوان من أصل ${d.total}`;
+        btn.textContent = d.fixed > 0
+          ? `✓ تم تصحيح ${d.fixed} عنوان من أصل ${d.total}`
+          : `✓ لا توجد عناوين تتجاوز 60 حرفاً`;
         btn.style.background = 'rgba(34,197,94,.12)';
         btn.style.color = '#22c55e';
         if (d.fixed > 0) setTimeout(() => location.reload(), 1500);
       } else {
-        btn.textContent = '❌ فشل التصحيح';
+        btn.textContent = '❌ ' + (d.error || 'فشل التصحيح');
         btn.disabled = false;
       }
     })
-    .catch(() => { btn.textContent = '❌ خطأ في الاتصال'; btn.disabled = false; });
+    .catch(e => { btn.textContent = '❌ ' + (e.message || 'خطأ في الاتصال'); btn.disabled = false; });
+}
+</script>
+
+<?php
+/* ─────────────── HTML PAGES FOR INDEXING ─────────────── */
+elseif ($page === 'html-pages'):
+    $pagesDir  = __DIR__ . '/pages';
+    $generated = is_dir($pagesDir) ? count(glob($pagesDir . '/*.html')) : 0;
+    $totalApps = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+?>
+<div class="admin-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div>
+    <h1>صفحات HTML للفهرسة</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">أنشئ صفحة HTML لكل تطبيق — تُضاف تلقائياً إلى sitemap وتُقدَّم لمحركات البحث عبر IndexNow</p>
+  </div>
+  <button id="bulk-gen-btn" onclick="startBulkGen()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:14px;cursor:pointer;font-weight:600">
+    ⚡ توليد جميع الصفحات
+  </button>
+</div>
+
+<!-- Stats row -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px">
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:#2563eb" id="stat-generated"><?= $generated ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات مُنشأة</div>
+  </div>
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:#64748b"><?= $totalApps ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">إجمالي التطبيقات المنشورة</div>
+  </div>
+  <div class="panel" style="text-align:center;padding:20px">
+    <div style="font-size:32px;font-weight:800;color:<?= $generated>=$totalApps?'#22c55e':'#f59e0b' ?>" id="stat-remaining"><?= max(0,$totalApps-$generated) ?></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">تحتاج توليد</div>
+  </div>
+  <div class="panel" style="padding:20px;display:flex;flex-direction:column;justify-content:center;gap:8px">
+    <?php $inKey = get_cfg($pdo,'indexnow_key'); ?>
+    <?php if ($inKey): ?>
+    <span style="color:#22c55e;font-size:13px">✓ IndexNow مفعَّل — الصفحات الجديدة تُرسَل تلقائياً</span>
+    <?php else: ?>
+    <span style="color:#f59e0b;font-size:13px">⚠ IndexNow غير مفعَّل — فعِّله في الإعدادات</span>
+    <?php endif; ?>
+    <?php $pagesUrl = rtrim(SITE_URL,'/').'/pages/'; ?>
+    <a href="<?= h($pagesUrl) ?>" target="_blank" style="font-size:12px;color:var(--muted)">📂 /pages/ على الموقع</a>
+  </div>
+</div>
+
+<!-- Progress (hidden until bulk gen starts) -->
+<div id="bulk-progress-wrap" style="display:none" class="panel" style="margin-bottom:24px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <strong id="bulk-status-text">جارٍ التوليد…</strong>
+    <span id="bulk-counter" style="font-size:13px;color:var(--muted)"></span>
+  </div>
+  <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">
+    <div id="bulk-bar" style="height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:4px;width:0;transition:width .3s"></div>
+  </div>
+  <div id="bulk-current-app" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+</div>
+
+<!-- Apps table -->
+<div class="panel" style="overflow-x:auto">
+  <table class="admin-table" style="width:100%">
+    <thead><tr>
+      <th>التطبيق</th>
+      <th>رابط الصفحة</th>
+      <th>الحالة</th>
+      <th>إجراء</th>
+    </tr></thead>
+    <tbody>
+    <?php
+    $appRows = $pdo->query("SELECT a.id, a.slug, a.name, a.icon_path, a.version FROM apps a WHERE a.status='published' ORDER BY a.name ASC")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($appRows as $ar):
+        $htmlFile  = $pagesDir . '/' . $ar['slug'] . '.html';
+        $exists    = file_exists($htmlFile);
+        $pageUrl   = rtrim(SITE_URL,'/').'/pages/'.rawurlencode($ar['slug']).'.html';
+        $safeSlug  = addslashes($ar['slug']);
+        $safeName  = addslashes($ar['name']);
+    ?>
+    <tr>
+      <td style="display:flex;align-items:center;gap:10px;padding:10px 12px">
+        <?php if (!empty($ar['icon_path'])): ?>
+        <img src="<?= h(media_url($ar['icon_path'])) ?>" style="width:36px;height:36px;border-radius:8px;object-fit:cover" loading="lazy">
+        <?php else: ?>
+        <div style="width:36px;height:36px;border-radius:8px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:16px">📱</div>
+        <?php endif; ?>
+        <div>
+          <div style="font-weight:600;font-size:13px"><?= h($ar['name']) ?></div>
+          <?php if ($ar['version']): ?><div style="font-size:11px;color:var(--muted)">v<?= h($ar['version']) ?></div><?php endif; ?>
+        </div>
+      </td>
+      <td>
+        <?php if ($exists): ?>
+        <a href="<?= h($pageUrl) ?>" target="_blank" style="font-size:12px;color:var(--primary);word-break:break-all">/pages/<?= h($ar['slug']) ?>.html</a>
+        <?php else: ?><span style="color:var(--muted);font-size:12px">—</span><?php endif; ?>
+      </td>
+      <td>
+        <?php if ($exists): ?>
+        <span style="background:rgba(34,197,94,.1);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>
+        <?php else: ?>
+        <span style="background:rgba(245,158,11,.1);color:#f59e0b;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">⏳ لم يُنشأ</span>
+        <?php endif; ?>
+      </td>
+      <td>
+        <button onclick="genOnePage('<?= $safeSlug ?>', this)"
+                style="padding:5px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;cursor:pointer;color:#2563eb">
+          <?= $exists ? '🔄 إعادة توليد' : '⚡ توليد' ?>
+        </button>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function genOnePage(slug, btn) {
+  btn.disabled = true; btn.textContent = '⟳ جارٍ…';
+  fetch('?ajax=generate_html_page', {method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'slug='+encodeURIComponent(slug)
+  }).then(r=>r.json()).then(d=>{
+    if(d.ok){
+      btn.textContent='✓ مُنشأ';
+      btn.style.color='#22c55e';
+      btn.style.borderColor='#22c55e';
+      var tr=btn.closest('tr');
+      var td=tr ? tr.querySelector('td:nth-child(3)') : null;
+      if(td)td.innerHTML='<span style="background:rgba(34,197,94,.1);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>';
+      var tdL=tr ? tr.querySelector('td:nth-child(2)') : null;
+      if(tdL&&d.url)tdL.innerHTML='<a href="'+d.url+'" target="_blank" style="font-size:12px;color:var(--primary);word-break:break-all">'+d.file+'</a>';
+      var st=document.getElementById('stat-generated');
+      var rem=document.getElementById('stat-remaining');
+      if(st)st.textContent=parseInt(st.textContent||0)+1;
+      if(rem)rem.textContent=Math.max(0,parseInt(rem.textContent||0)-1);
+    } else {
+      btn.disabled=false; btn.textContent='❌ فشل';
+      alert(d.error||'خطأ غير معروف');
+    }
+  }).catch(()=>{btn.disabled=false;btn.textContent='❌ خطأ';});
+}
+
+function startBulkGen(){
+  const btn=document.getElementById('bulk-gen-btn');
+  const wrap=document.getElementById('bulk-progress-wrap');
+  const bar=document.getElementById('bulk-bar');
+  const status=document.getElementById('bulk-status-text');
+  const counter=document.getElementById('bulk-counter');
+  const curApp=document.getElementById('bulk-current-app');
+  btn.disabled=true; btn.textContent='⟳ جارٍ التوليد…';
+  if(wrap)wrap.style.display='block';
+
+  const es=new EventSource('?ajax=generate_html_pages_bulk');
+  es.onmessage=function(e){
+    try{
+      const d=JSON.parse(e.data);
+      if(bar)bar.style.width=d.pct+'%';
+      if(counter)counter.textContent=d.done+'/'+d.total;
+      if(curApp)curApp.textContent='🔄 '+d.name;
+      if(d.complete){
+        es.close();
+        if(status)status.textContent='✅ تم توليد '+d.done+' صفحة وإرسالها لـ IndexNow';
+        btn.textContent='✓ اكتمل';
+        var st=document.getElementById('stat-generated');
+        var rem=document.getElementById('stat-remaining');
+        if(st)st.textContent=d.total;
+        if(rem)rem.textContent='0';
+        if(curApp)curApp.textContent='';
+        setTimeout(()=>location.reload(),2000);
+      }
+    }catch(err){}
+  };
+  es.onerror=function(){
+    es.close();
+    if(status)status.textContent='❌ حدث خطأ أثناء التوليد';
+    btn.disabled=false; btn.textContent='⚡ توليد جميع الصفحات';
+  };
 }
 </script>
 

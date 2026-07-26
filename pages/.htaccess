@@ -1,0 +1,4 @@
+Options -Indexes
+DirectoryIndex disabled
+AddType text/html .html
+Header set X-Robots-Tag "index, follow"
