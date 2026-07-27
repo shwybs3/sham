@@ -287,6 +287,16 @@ $PLUGINS = [
      ['key'=>'auto_ban_vpn','label'=>'حجب VPN تلقائياً','type'=>'toggle','default'=>'1'],
      ['key'=>'auto_ban_tor','label'=>'حجب Tor تلقائياً','type'=>'toggle','default'=>'1'],
    ]],
+  ['slug'=>'layos-security','name'=>'Layos Security','cat'=>'security','icon'=>'🔍',
+   'desc'=>'محرك تقييم جودة المحتوى: يفرز التطبيقات (≥50٪) والمقالات (≥80٪) قبل الفهرسة في sitemap وRSS — مع تقارير، تجاوزات يدوية، وإشعارات YAI',
+   'version'=>'1.0.0','author'=>'Yassota','featured'=>true,
+   'url'=>'admin.php?page=layos',
+   'settings'=>[
+     ['key'=>'app_threshold','label'=>'الحد الأدنى لجودة التطبيقات (%)','type'=>'number','default'=>'50'],
+     ['key'=>'article_threshold','label'=>'الحد الأدنى لجودة المقالات (%)','type'=>'number','default'=>'80'],
+     ['key'=>'notify_apps','label'=>'إشعار YAI عند استبعاد تطبيقات من sitemap','type'=>'toggle','default'=>'1'],
+     ['key'=>'notify_articles','label'=>'إشعار YAI عند استبعاد مقالات من RSS','type'=>'toggle','default'=>'1'],
+   ]],
 
   /* ── Performance ── */
   ['slug'=>'cache-pro','name'=>'Cache Manager Pro','cat'=>'performance','icon'=>'⚡',

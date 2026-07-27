@@ -1,23 +1,51 @@
 <?php
 /* ═══════════════════════════════════════════
-   sitemap.xml — يحتوي فقط على الصفحات الحقيقية
-   المقالات التلقائية (app_articles) مُستبعدة
-   لأنها محتوى تكميلي وليست صفحات رئيسية
+   sitemap.xml — مدعوم بـ Layos Security
+   التطبيقات تُدرج فقط إذا تجاوز تقييم الجودة 50٪
    ═══════════════════════════════════════════ */
 require_once __DIR__ . '/config.php';
 header('Content-Type: application/xml; charset=utf-8');
 header('X-Robots-Tag: noindex');
 
-/* ── فقط التطبيقات المنشورة والموجودة فعلاً ── */
-$apps = $pdo->query(
-    "SELECT slug, updated_at, icon_path, name
+// ── التطبيقات المنشورة ──
+$allApps = $pdo->query(
+    "SELECT id, slug, name, seo_title, meta_desc, meta_description,
+            long_description, icon_path, download_url, updated_at
      FROM apps
      WHERE status='published'
-       AND (download_url IS NOT NULL AND download_url <> '')
      ORDER BY updated_at DESC"
 )->fetchAll();
 
-/* ── التصنيفات التي تحتوي على تطبيقات فعلاً ── */
+// فلتر Layos ≥ 50٪
+$apps    = [];
+$skipped = 0;
+foreach ($allApps as $a) {
+    // merge meta_desc aliases
+    if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
+    $result = layos_score_app($a);
+    if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
+        $apps[] = $a;
+    } else {
+        $skipped++;
+    }
+}
+
+// إشعار YAI عند استبعاد تطبيقات (مرة كل 12 ساعة)
+if ($skipped > 0) {
+    $lastNotify = get_cfg($pdo, 'layos_sitemap_notify_at', '');
+    if (!$lastNotify || strtotime($lastNotify) < strtotime('-12 hours')) {
+        yai_push($pdo, 'seo',
+            "🗺️ Layos: {$skipped} تطبيق مستبعد من Sitemap",
+            "تم استبعاد {$skipped} تطبيق من sitemap.xml لأن نقاط جودتهم أقل من 50٪.\n" .
+            "يؤدي وجودهم في الخريطة إلى تدهور سمعة الموقع في Google.\n" .
+            "افتح لوحة Layos Security لإصلاحها تلقائياً.",
+            'warning', url('admin.php?page=layos'), false, ''
+        );
+        set_cfg($pdo, 'layos_sitemap_notify_at', date('Y-m-d H:i:s'));
+    }
+}
+
+// ── التصنيفات التي فيها تطبيقات مقبولة ──
 $cats = $pdo->query(
     "SELECT DISTINCT c.slug
      FROM categories c
@@ -25,22 +53,17 @@ $cats = $pdo->query(
      WHERE c.slug IS NOT NULL AND c.slug <> ''"
 )->fetchAll();
 
-/* ── المطورون الذين لهم تطبيقات منشورة ── */
+// ── المطورون ──
 $developers = $pdo->query(
-    "SELECT DISTINCT developer
-     FROM apps
-     WHERE status='published'
-       AND developer IS NOT NULL AND developer <> ''
+    "SELECT DISTINCT developer FROM apps
+     WHERE status='published' AND developer IS NOT NULL AND developer <> ''
      LIMIT 50"
 )->fetchAll(PDO::FETCH_COLUMN);
 
-/* ── مقالات المدونة الرئيسية فقط (ليس app_articles) ── */
+// ── مقالات المدونة ──
 $blogPosts = $pdo->query(
-    "SELECT slug, updated_at
-     FROM blog_posts
-     WHERE status='published'
-     ORDER BY updated_at DESC
-     LIMIT 200"
+    "SELECT slug, updated_at FROM blog_posts
+     WHERE status='published' ORDER BY updated_at DESC LIMIT 200"
 )->fetchAll();
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
@@ -57,12 +80,11 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url><loc><?= SITE_URL ?>/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc><?= SITE_URL ?>/terms</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
 
-  <!-- التصنيفات (التي تحتوي على تطبيقات فقط) -->
+  <!-- التصنيفات -->
   <?php foreach ($cats as $c): ?>
   <url>
     <loc><?= SITE_URL ?>/category/<?= rawurlencode($c['slug']) ?></loc>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
+    <changefreq>daily</changefreq><priority>0.7</priority>
   </url>
   <?php endforeach; ?>
 
@@ -70,12 +92,11 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <?php foreach ($developers as $d): ?>
   <url>
     <loc><?= SITE_URL ?>/developer/<?= rawurlencode($d) ?></loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
+    <changefreq>weekly</changefreq><priority>0.5</priority>
   </url>
   <?php endforeach; ?>
 
-  <!-- التطبيقات (المنشورة ولها رابط تحميل فعلي) -->
+  <!-- التطبيقات المقبولة من Layos (≥50٪) -->
   <?php foreach ($apps as $a): ?>
   <url>
     <loc><?= h(app_url($a['slug'])) ?></loc>
@@ -96,8 +117,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url>
     <loc><?= h(blog_post_url($bp['slug'])) ?></loc>
     <lastmod><?= date('Y-m-d', strtotime($bp['updated_at'] ?: 'now')) ?></lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <changefreq>monthly</changefreq><priority>0.6</priority>
   </url>
   <?php endforeach; ?>
 

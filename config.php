@@ -4354,3 +4354,211 @@ function evil_check_vpn(PDO $pdo): bool {
 
     return $detected;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOS SECURITY — محرك تقييم جودة المحتوى
+   يُحدّد ما يُدرج في sitemap.xml و rss.php
+   المقالات: عتبة 80٪  |  التطبيقات: عتبة 50٪
+   ═══════════════════════════════════════════════════════════ */
+
+/**
+ * تقييم جودة مقال من app_articles (0-100)
+ * العتبة الدنيا للفهرسة: 80
+ */
+function layos_score_article(array $art): array {
+    $score  = 0;
+    $issues = [];
+
+    $title   = trim($art['title'] ?? '');
+    $body    = trim(strip_tags($art['body'] ?? ''));
+    $metaD   = trim($art['meta_description'] ?? $art['seo_title'] ?? '');
+    $bodyLen = mb_strlen($body);
+    $titleLen = mb_strlen($title);
+
+    // ── العنوان (20 نقطة) ──
+    if (!$title) {
+        $issues[] = ['sev'=>'critical','msg'=>'العنوان مفقود','fix'=>'توليد عنوان بالذكاء الاصطناعي'];
+    } elseif ($titleLen < 15) {
+        $score += 8;
+        $issues[] = ['sev'=>'warn','msg'=>"العنوان قصير جداً ({$titleLen} حرف) — الأفضل 30-70",'fix'=>'إعادة توليد العنوان'];
+    } elseif ($titleLen > 80) {
+        $score += 12;
+        $issues[] = ['sev'=>'warn','msg'=>"العنوان طويل ({$titleLen} حرف) — Google يقطع ما فوق 70",'fix'=>'اختصار العنوان'];
+    } else {
+        $score += 20;
+        $issues[] = ['sev'=>'ok','msg'=>"عنوان ممتاز ({$titleLen} حرف)"];
+    }
+
+    // ── طول المحتوى (35 نقطة) ──
+    if ($bodyLen < 100) {
+        $issues[] = ['sev'=>'critical','msg'=>"المحتوى فارغ تقريباً ({$bodyLen} حرف)",'fix'=>'توليد محتوى كامل بالذكاء الاصطناعي'];
+    } elseif ($bodyLen < 300) {
+        $score += 8;
+        $issues[] = ['sev'=>'critical','msg'=>"المحتوى قصير جداً ({$bodyLen} حرف) — الأدنى 300",'fix'=>'إضافة محتوى تفصيلي'];
+    } elseif ($bodyLen < 600) {
+        $score += 18;
+        $issues[] = ['sev'=>'warn','msg'=>"المحتوى متوسط ({$bodyLen} حرف) — الأفضل 800+",'fix'=>'توسيع المحتوى'];
+    } elseif ($bodyLen < 1000) {
+        $score += 28;
+        $issues[] = ['sev'=>'warn','msg'=>"محتوى جيد ({$bodyLen} حرف) — يمكن تحسينه",'fix'=>'إضافة فقرات إضافية'];
+    } else {
+        $score += 35;
+        $issues[] = ['sev'=>'ok','msg'=>"محتوى ممتاز ({$bodyLen} حرف)"];
+    }
+
+    // ── وصف Meta (15 نقطة) ──
+    $metaLen = mb_strlen($metaD);
+    if (!$metaD) {
+        $issues[] = ['sev'=>'warn','msg'=>'وصف Meta مفقود','fix'=>'توليد وصف من المحتوى تلقائياً'];
+    } elseif ($metaLen < 50) {
+        $score += 6;
+        $issues[] = ['sev'=>'warn','msg'=>"وصف قصير ({$metaLen} حرف) — الأفضل 120-160",'fix'=>'توسيع الوصف'];
+    } else {
+        $score += 15;
+        $issues[] = ['sev'=>'ok','msg'=>"وصف Meta جيد ({$metaLen} حرف)"];
+    }
+
+    // ── تكرار المحتوى (15 نقطة) ──
+    if ($bodyLen > 0) {
+        $sentences = array_filter(preg_split('/[.!?؟،\n]+/u', $body));
+        $unique    = array_unique($sentences);
+        $ratio     = count($sentences) > 0 ? count($unique) / count($sentences) : 0;
+        if ($ratio >= 0.85) {
+            $score += 15;
+            $issues[] = ['sev'=>'ok','msg'=>'المحتوى فريد وبدون تكرار'];
+        } elseif ($ratio >= 0.6) {
+            $score += 8;
+            $issues[] = ['sev'=>'warn','msg'=>'يوجد بعض التكرار في المحتوى','fix'=>'إعادة صياغة المقاطع المكررة'];
+        } else {
+            $issues[] = ['sev'=>'critical','msg'=>'تكرار شديد في المحتوى — Google يعتبره محتوى رديء','fix'=>'إعادة كتابة المحتوى بالكامل'];
+        }
+    }
+
+    // ── الكلمات المفتاحية (15 نقطة) ──
+    if ($title && $bodyLen > 0) {
+        $words = array_filter(preg_split('/\s+/u', $title));
+        $bodyL = mb_strtolower($body);
+        $found = 0;
+        foreach ($words as $w) {
+            if (mb_strlen($w) > 2 && str_contains($bodyL, mb_strtolower($w))) $found++;
+        }
+        $coverage = count($words) > 0 ? $found / count($words) : 0;
+        if ($coverage >= 0.7) {
+            $score += 15;
+            $issues[] = ['sev'=>'ok','msg'=>'الكلمات المفتاحية موزعة جيداً في المحتوى'];
+        } elseif ($coverage >= 0.4) {
+            $score += 8;
+            $issues[] = ['sev'=>'warn','msg'=>'بعض الكلمات المفتاحية غائبة عن المحتوى','fix'=>'إضافة الكلمات المفتاحية في الفقرات'];
+        } else {
+            $issues[] = ['sev'=>'warn','msg'=>'الكلمات المفتاحية غير موجودة في نص المقال','fix'=>'توليد محتوى يتضمن كلمات العنوان'];
+        }
+    }
+
+    return ['score' => min(100, $score), 'issues' => $issues,
+            'can_index' => $score >= 80, 'threshold' => 80];
+}
+
+/**
+ * تقييم جودة تطبيق لـ sitemap (0-100)
+ * العتبة الدنيا للفهرسة: 50
+ */
+function layos_score_app(array $app): array {
+    $score  = 0;
+    $issues = [];
+
+    $title = trim($app['seo_title'] ?? '');
+    $desc  = trim($app['meta_desc'] ?? $app['meta_description'] ?? '');
+    $ld    = trim($app['long_description'] ?? '');
+    $icon  = trim($app['icon_path'] ?? '');
+    $dl    = trim($app['download_url'] ?? '');
+    $tLen  = mb_strlen($title);
+    $dLen  = mb_strlen($desc);
+    $ldLen = mb_strlen($ld);
+
+    // ── رابط التحميل (25 نقطة — أهم معيار) ──
+    if (!$dl) {
+        $issues[] = ['sev'=>'critical','msg'=>'رابط التحميل مفقود — التطبيق سيُحوّل لمسودة تلقائياً','fix'=>'إضافة رابط تحميل أو Play Store'];
+    } else {
+        $score += 25;
+        $issues[] = ['sev'=>'ok','msg'=>'رابط تحميل نشط'];
+    }
+
+    // ── الأيقونة (15 نقطة) ──
+    if (!$icon) {
+        $score += 0;
+        $issues[] = ['sev'=>'warn','msg'=>'أيقونة مفقودة — تُضعف ظهور بطاقة البحث','fix'=>'رفع أيقونة أو استيرادها من Play Store'];
+    } else {
+        $score += 15;
+        $issues[] = ['sev'=>'ok','msg'=>'أيقونة موجودة'];
+    }
+
+    // ── عنوان SEO (20 نقطة) ──
+    if (!$title) {
+        $issues[] = ['sev'=>'critical','msg'=>'عنوان SEO مفقود','fix'=>'توليد عنوان بالذكاء الاصطناعي'];
+    } elseif ($tLen < 20) {
+        $score += 8;
+        $issues[] = ['sev'=>'warn','msg'=>"عنوان قصير ({$tLen} حرف) — الأفضل 40-60",'fix'=>'توسيع العنوان'];
+    } elseif ($tLen > 70) {
+        $score += 12;
+        $issues[] = ['sev'=>'warn','msg'=>"عنوان طويل ({$tLen} حرف) — يُقطع في Google",'fix'=>'اختصار العنوان'];
+    } else {
+        $score += 20;
+        $issues[] = ['sev'=>'ok','msg'=>"عنوان SEO ممتاز ({$tLen} حرف)"];
+    }
+
+    // ── وصف Meta (20 نقطة) ──
+    if (!$desc) {
+        $issues[] = ['sev'=>'critical','msg'=>'وصف Meta مفقود','fix'=>'توليد وصف بالذكاء الاصطناعي'];
+    } elseif ($dLen < 80) {
+        $score += 8;
+        $issues[] = ['sev'=>'warn','msg'=>"وصف قصير ({$dLen} حرف) — الأفضل 120-160",'fix'=>'توسيع الوصف'];
+    } elseif ($dLen > 170) {
+        $score += 14;
+        $issues[] = ['sev'=>'warn','msg'=>"وصف طويل ({$dLen} حرف) — سيُقطع",'fix'=>'تقليص الوصف'];
+    } else {
+        $score += 20;
+        $issues[] = ['sev'=>'ok','msg'=>"وصف Meta ممتاز ({$dLen} حرف)"];
+    }
+
+    // ── المحتوى التفصيلي (20 نقطة) ──
+    if (!$ld) {
+        $issues[] = ['sev'=>'critical','msg'=>'وصف تفصيلي مفقود — يقلل فرص الفهرسة بشدة','fix'=>'توليد محتوى 800+ حرف بالذكاء الاصطناعي'];
+    } elseif ($ldLen < 200) {
+        $score += 6;
+        $issues[] = ['sev'=>'critical','msg'=>"محتوى قصير جداً ({$ldLen} حرف)",'fix'=>'توسيع المحتوى'];
+    } elseif ($ldLen < 500) {
+        $score += 12;
+        $issues[] = ['sev'=>'warn','msg'=>"محتوى متوسط ({$ldLen} حرف) — الأفضل 800+",'fix'=>'إضافة مزيد من التفاصيل'];
+    } else {
+        $score += 20;
+        $issues[] = ['sev'=>'ok','msg'=>"محتوى تفصيلي ممتاز ({$ldLen} حرف)"];
+    }
+
+    return ['score' => min(100, $score), 'issues' => $issues,
+            'can_index' => $score >= 50, 'threshold' => 50];
+}
+
+/**
+ * يتحقق من وجود override يدوي للعنصر (index/noindex/auto)
+ * يُستخدم لفرض النشر أو المنع من إعدادات الادمن
+ */
+function layos_get_override(PDO $pdo, string $type, int $id): string {
+    return get_cfg($pdo, "layos_override_{$type}_{$id}", 'auto');
+}
+
+/**
+ * يحفظ override يدوي
+ */
+function layos_set_override(PDO $pdo, string $type, int $id, string $val): void {
+    set_cfg($pdo, "layos_override_{$type}_{$id}", $val);
+}
+
+/**
+ * يُقرر الفهرسة النهائية مع مراعاة الـ override اليدوي
+ */
+function layos_should_index(PDO $pdo, string $type, int $id, bool $autoDecision): bool {
+    $ov = layos_get_override($pdo, $type, $id);
+    if ($ov === 'index')   return true;
+    if ($ov === 'noindex') return false;
+    return $autoDecision;
+}

@@ -6101,6 +6101,23 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_prune' && is_admin()) {
     exit;
 }
 
+/* ── Layos Security: override (force index/noindex) ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'layos_override' && is_admin()) {
+    header('Content-Type: application/json');
+    if (!csrf_check()) { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+    $type = preg_replace('/[^a-z]/', '', $_POST['type'] ?? '');
+    $id   = (int)($_POST['id'] ?? 0);
+    $val  = in_array($_POST['val'] ?? '', ['index','noindex','auto']) ? $_POST['val'] : 'auto';
+    if ($type && $id) {
+        layos_set_override($pdo, $type, $id, $val);
+        $label = $val === 'index' ? 'فرض الفهرسة' : ($val === 'noindex' ? 'فرض الاستبعاد' : 'تلقائي');
+        echo json_encode(['ok'=>true,'msg'=>"تم تعيين {$label} للعنصر #{$id}"]);
+    } else {
+        echo json_encode(['ok'=>false,'error'=>'بيانات ناقصة']);
+    }
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
@@ -6145,6 +6162,7 @@ $navLinks = [
     'sitemap-health' => ['label'=>'🗺️ صحة Sitemap', 'icon'=>'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7'],
     'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'badge'=>$_navEvilCount],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+    'layos'       => ['label'=>'🔍 Layos Security',  'icon'=>'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'],
     'yai-seo'     => ['label'=>'🎯 Rank Match SEO',  'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
     'seo-scoring' => ['label'=>'تقييم فرص SEO', 'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
     'seo-preview' => ['label'=>'معاينة نتائج Google', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'],
@@ -15348,6 +15366,293 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
 
   window.runHealthCheck = runHealthCheck;
   window.runPrune = runPrune;
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'layos'): ?>
+<?php
+/* ════════════════════════════════════════════
+   LAYOS SECURITY — لوحة التحكم
+   ════════════════════════════════════════════ */
+
+// فحص التطبيقات
+$allApps = $pdo->query(
+    "SELECT id, slug, name, seo_title, meta_desc, meta_description,
+            long_description, icon_path, download_url, updated_at
+     FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 300"
+)->fetchAll();
+
+$appResults = [];
+foreach ($allApps as $a) {
+    if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
+    $sc = layos_score_app($a);
+    $ov = layos_get_override($pdo, 'app', (int)$a['id']);
+    $appResults[] = ['data' => $a, 'score' => $sc, 'override' => $ov,
+        'final' => layos_should_index($pdo, 'app', (int)$a['id'], $sc['can_index'])];
+}
+usort($appResults, fn($a,$b) => $a['score']['score'] <=> $b['score']['score']);
+
+// فحص المقالات
+$rawArts = $pdo->query(
+    "SELECT ar.id, ar.title, ar.slug, ar.body, ar.meta_description, ar.seo_title,
+            ar.created_at, ar.app_id, a.name AS app_name, a.icon_path
+     FROM app_articles ar JOIN apps a ON ar.app_id=a.id
+     WHERE a.status='published'
+     ORDER BY ar.created_at DESC LIMIT 400"
+)->fetchAll();
+
+$artResults = [];
+foreach ($rawArts as $art) {
+    $sc = layos_score_article($art);
+    $ov = layos_get_override($pdo, 'article', (int)$art['id']);
+    $artResults[] = ['data'=>$art, 'score'=>$sc, 'override'=>$ov,
+        'final'=>layos_should_index($pdo, 'article', (int)$art['id'], $sc['can_index'])];
+}
+usort($artResults, fn($a,$b) => $a['score']['score'] <=> $b['score']['score']);
+
+// إحصاء
+$appsIndexed  = count(array_filter($appResults, fn($r) => $r['final']));
+$appsExcluded = count($appResults) - $appsIndexed;
+$artsIndexed  = count(array_filter($artResults, fn($r) => $r['final']));
+$artsExcluded = count($artResults) - $artsIndexed;
+$avgAppScore  = count($appResults) ? array_sum(array_map(fn($r)=>$r['score']['score'], $appResults)) / count($appResults) : 0;
+$avgArtScore  = count($artResults) ? array_sum(array_map(fn($r)=>$r['score']['score'], $artResults)) / count($artResults) : 0;
+
+$layosTab = $_GET['t'] ?? 'apps';
+?>
+<style>
+.layos-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.layos-logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,#6366f1,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px}
+.layos-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+.layos-stat{background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:16px 20px;flex:1;min-width:120px;text-align:center}
+.layos-stat-n{font-size:28px;font-weight:800;margin-bottom:2px}
+.layos-stat-l{font-size:11px;color:var(--text-muted)}
+.layos-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--card-border);padding-bottom:0}
+.layos-tab{padding:8px 20px;font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;text-decoration:none}
+.layos-tab.active,.layos-tab:hover{color:var(--primary);border-bottom-color:var(--primary)}
+.layos-row{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--card-border)}
+.layos-row:last-child{border-bottom:none}
+.layos-icon{width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--sidebar-bg)}
+.layos-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.layos-meta{font-size:11px;color:var(--text-muted)}
+.layos-bar-wrap{width:100px;height:7px;background:var(--input-border);border-radius:4px;flex-shrink:0;margin-top:2px}
+.layos-bar{height:100%;border-radius:4px}
+.layos-badge{font-size:11px;font-weight:800;width:36px;text-align:center;border-radius:6px;padding:2px 0;flex-shrink:0}
+.layos-issues{margin-top:8px;padding:10px 12px;background:var(--sidebar-bg);border-radius:8px;display:none}
+.layos-issue{display:flex;align-items:flex-start;gap:7px;font-size:12px;padding:3px 0;line-height:1.5}
+.layos-issue .d{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.layos-issue.ok .d{background:#22c55e} .layos-issue.ok{color:var(--text-muted)}
+.layos-issue.warn .d{background:#f59e0b} .layos-issue.warn{color:#b45309}
+.layos-issue.critical .d{background:#ef4444} .layos-issue.critical{color:#dc2626}
+.layos-fix{font-size:11px;color:var(--primary);font-style:italic;margin-top:1px}
+.layos-toggle{cursor:pointer;font-size:11px;color:var(--primary);margin-top:4px;display:inline-block}
+.layos-override{display:flex;gap:4px;margin-top:6px}
+.layos-ov-btn{font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--card-border);background:var(--card-bg);color:var(--text-muted);cursor:pointer;transition:all .15s}
+.layos-ov-btn.active-index{background:rgba(16,185,129,.2);color:#059669;border-color:rgba(16,185,129,.4)}
+.layos-ov-btn.active-noindex{background:rgba(239,68,68,.2);color:#dc2626;border-color:rgba(239,68,68,.4)}
+.layos-ov-btn.active-auto{background:rgba(99,102,241,.2);color:#6366f1;border-color:rgba(99,102,241,.4)}
+.layos-indexed-badge{font-size:10px;padding:2px 7px;border-radius:50px;font-weight:700}
+.layos-indexed-badge.yes{background:rgba(16,185,129,.15);color:#059669}
+.layos-indexed-badge.no{background:rgba(239,68,68,.12);color:#dc2626}
+.layos-indexed-badge.forced{background:rgba(245,158,11,.15);color:#b45309}
+</style>
+
+<div class="admin-card" style="padding:0;overflow:hidden">
+  <div style="padding:24px 24px 0">
+    <div class="layos-header">
+      <div>
+        <div class="layos-logo">🔍 LAYOS SECURITY</div>
+        <div class="layos-sub">محرك تقييم الجودة — التطبيقات ≥50٪ · المقالات ≥80٪</div>
+      </div>
+      <div style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <a href="press.php?plugin=layos-security" class="btn btn-sm" style="background:linear-gradient(135deg,#6366f1,#10b981);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;text-decoration:none">⚡ إعدادات الإضافة</a>
+      </div>
+    </div>
+
+    <!-- إحصائيات -->
+    <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
+      <div class="layos-stat" style="border-color:rgba(16,185,129,.3)">
+        <div class="layos-stat-n" style="color:#10b981"><?= $appsIndexed ?></div>
+        <div class="layos-stat-l">تطبيق في Sitemap</div>
+      </div>
+      <div class="layos-stat" style="border-color:rgba(239,68,68,.3)">
+        <div class="layos-stat-n" style="color:#ef4444"><?= $appsExcluded ?></div>
+        <div class="layos-stat-l">تطبيق مستبعد</div>
+      </div>
+      <div class="layos-stat" style="border-color:rgba(16,185,129,.3)">
+        <div class="layos-stat-n" style="color:#10b981"><?= $artsIndexed ?></div>
+        <div class="layos-stat-l">مقال في RSS</div>
+      </div>
+      <div class="layos-stat" style="border-color:rgba(239,68,68,.3)">
+        <div class="layos-stat-n" style="color:#ef4444"><?= $artsExcluded ?></div>
+        <div class="layos-stat-l">مقال مستبعد</div>
+      </div>
+      <div class="layos-stat" style="border-color:rgba(99,102,241,.3)">
+        <div class="layos-stat-n" style="color:#6366f1"><?= round($avgAppScore) ?>٪</div>
+        <div class="layos-stat-l">متوسط جودة التطبيقات</div>
+      </div>
+      <div class="layos-stat" style="border-color:rgba(139,92,246,.3)">
+        <div class="layos-stat-n" style="color:#8b5cf6"><?= round($avgArtScore) ?>٪</div>
+        <div class="layos-stat-l">متوسط جودة المقالات</div>
+      </div>
+    </div>
+
+    <!-- التبويبات -->
+    <div class="layos-tabs">
+      <a href="admin.php?page=layos&t=apps" class="layos-tab <?= $layosTab==='apps'?'active':'' ?>">
+        📱 التطبيقات (<?= count($appResults) ?>)
+        <span style="font-size:11px;background:<?= $appsExcluded?'#ef444422':'#10b98122' ?>;color:<?= $appsExcluded?'#ef4444':'#10b981' ?>;border-radius:50px;padding:1px 7px;margin-right:4px"><?= $appsIndexed ?> مُدرَج</span>
+      </a>
+      <a href="admin.php?page=layos&t=articles" class="layos-tab <?= $layosTab==='articles'?'active':'' ?>">
+        📝 المقالات (<?= count($artResults) ?>)
+        <span style="font-size:11px;background:<?= $artsExcluded?'#ef444422':'#10b98122' ?>;color:<?= $artsExcluded?'#ef4444':'#10b981' ?>;border-radius:50px;padding:1px 7px;margin-right:4px"><?= $artsIndexed ?> مُدرَج</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- قائمة التطبيقات -->
+  <div id="layos-apps-list" style="padding:0 24px 24px;max-height:65vh;overflow-y:auto;<?= $layosTab!=='apps'?'display:none':'' ?>">
+    <?php foreach ($appResults as $r):
+      $a   = $r['data'];
+      $sc  = $r['score'];
+      $n   = $sc['score'];
+      $ov  = $r['override'];
+      $fin = $r['final'];
+      $col = $n >= 80 ? '#10b981' : ($n >= 50 ? '#f59e0b' : '#ef4444');
+      $icon = !empty($a['icon_path']) ? h(media_url($a['icon_path'])) : '';
+    ?>
+    <div class="layos-row">
+      <?php if ($icon): ?><img src="<?= $icon ?>" class="layos-icon" loading="lazy" alt=""><?php else: ?><div class="layos-icon" style="display:flex;align-items:center;justify-content:center;font-size:18px">📱</div><?php endif; ?>
+      <div style="flex:1;min-width:0">
+        <div class="layos-name"><?= h($a['name']) ?></div>
+        <div class="layos-meta"><?= h($a['slug']) ?></div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+          <div class="layos-bar-wrap"><div class="layos-bar" style="width:<?= $n ?>%;background:<?= $col ?>"></div></div>
+          <span style="font-size:11px;font-weight:700;color:<?= $col ?>"><?= $n ?>٪</span>
+          <span class="layos-indexed-badge <?= $fin?'yes':'no' ?>" style="<?= $ov!=='auto'?'background:rgba(245,158,11,.15);color:#b45309':'' ?>">
+            <?= $fin ? '✓ مُدرَج' : '✗ مستبعد' ?><?= $ov!=='auto'?' (يدوي)':'' ?>
+          </span>
+        </div>
+        <span class="layos-toggle" onclick="toggleLayos(this)">▼ تفاصيل التقييم</span>
+        <div class="layos-issues">
+          <?php foreach ($sc['issues'] as $iss): ?>
+          <div class="layos-issue <?= $iss['sev'] ?>">
+            <span class="d"></span>
+            <div>
+              <?= h($iss['msg']) ?>
+              <?php if (!empty($iss['fix'])): ?><div class="layos-fix">💡 <?= h($iss['fix']) ?></div><?php endif; ?>
+            </div>
+          </div>
+          <?php endforeach; ?>
+          <!-- Override controls -->
+          <div class="layos-override" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--card-border)">
+            <span style="font-size:11px;color:var(--text-muted);margin-left:6px">فرض الحالة:</span>
+            <button class="layos-ov-btn <?= $ov==='index'?'active-index':'' ?>" onclick="setOverride('app',<?= $a['id'] ?>,'index',this)">✓ فهرسة دائماً</button>
+            <button class="layos-ov-btn <?= $ov==='noindex'?'active-noindex':'' ?>" onclick="setOverride('app',<?= $a['id'] ?>,'noindex',this)">✗ استبعاد دائماً</button>
+            <button class="layos-ov-btn <?= $ov==='auto'?'active-auto':'' ?>" onclick="setOverride('app',<?= $a['id'] ?>,'auto',this)">⟳ تلقائي</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>" class="btn btn-sm" style="font-size:11px;padding:3px 10px;border-radius:6px;background:var(--primary);color:#fff;border:none;text-decoration:none">✏️ تعديل</a>
+        <?php if ($n < 80): ?>
+        <button onclick="layosFixApp(<?= $a['id'] ?>,this)" class="btn btn-sm" style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(99,102,241,.15);color:#6366f1;border:1px solid rgba(99,102,241,.3);cursor:pointer;white-space:nowrap">🤖 إصلاح AI</button>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- قائمة المقالات -->
+  <div id="layos-arts-list" style="padding:0 24px 24px;max-height:65vh;overflow-y:auto;<?= $layosTab!=='articles'?'display:none':'' ?>">
+    <?php foreach ($artResults as $r):
+      $art = $r['data'];
+      $sc  = $r['score'];
+      $n   = $sc['score'];
+      $ov  = $r['override'];
+      $fin = $r['final'];
+      $col = $n >= 80 ? '#10b981' : ($n >= 50 ? '#f59e0b' : '#ef4444');
+      $icon = !empty($art['icon_path']) ? h(media_url($art['icon_path'])) : '';
+    ?>
+    <div class="layos-row">
+      <?php if ($icon): ?><img src="<?= $icon ?>" class="layos-icon" loading="lazy" alt=""><?php else: ?><div class="layos-icon" style="display:flex;align-items:center;justify-content:center;font-size:18px">📝</div><?php endif; ?>
+      <div style="flex:1;min-width:0">
+        <div class="layos-name"><?= h(mb_substr($art['title'] ?: '(بدون عنوان)', 0, 70)) ?></div>
+        <div class="layos-meta"><?= h($art['app_name']) ?> · <?= date('Y-m-d', strtotime($art['created_at'])) ?></div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+          <div class="layos-bar-wrap"><div class="layos-bar" style="width:<?= $n ?>%;background:<?= $col ?>"></div></div>
+          <span style="font-size:11px;font-weight:700;color:<?= $col ?>"><?= $n ?>٪</span>
+          <span class="layos-indexed-badge <?= $fin?'yes':'no' ?>" style="<?= $ov!=='auto'?'background:rgba(245,158,11,.15);color:#b45309':'' ?>">
+            <?= $fin ? '✓ في RSS' : '✗ مستبعد' ?><?= $ov!=='auto'?' (يدوي)':'' ?>
+          </span>
+        </div>
+        <span class="layos-toggle" onclick="toggleLayos(this)">▼ تفاصيل التقييم</span>
+        <div class="layos-issues">
+          <?php foreach ($sc['issues'] as $iss): ?>
+          <div class="layos-issue <?= $iss['sev'] ?>">
+            <span class="d"></span>
+            <div>
+              <?= h($iss['msg']) ?>
+              <?php if (!empty($iss['fix'])): ?><div class="layos-fix">💡 <?= h($iss['fix']) ?></div><?php endif; ?>
+            </div>
+          </div>
+          <?php endforeach; ?>
+          <div class="layos-override" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--card-border)">
+            <span style="font-size:11px;color:var(--text-muted);margin-left:6px">فرض الحالة:</span>
+            <button class="layos-ov-btn <?= $ov==='index'?'active-index':'' ?>" onclick="setOverride('article',<?= $art['id'] ?>,'index',this)">✓ في RSS دائماً</button>
+            <button class="layos-ov-btn <?= $ov==='noindex'?'active-noindex':'' ?>" onclick="setOverride('article',<?= $art['id'] ?>,'noindex',this)">✗ استبعاد دائماً</button>
+            <button class="layos-ov-btn <?= $ov==='auto'?'active-auto':'' ?>" onclick="setOverride('article',<?= $art['id'] ?>,'auto',this)">⟳ تلقائي</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <a href="<?= h(article_url($art['slug'])) ?>" target="_blank" class="btn btn-sm" style="font-size:11px;padding:3px 10px;border-radius:6px;background:var(--card-bg);border:1px solid var(--card-border);text-decoration:none;white-space:nowrap">↗ عرض</a>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<script>
+(function(){
+const CSRF=<?= json_encode(csrf_token()) ?>;
+function showToast(msg,t='success'){
+  var el=document.getElementById('admin-toast')||document.body;
+  var d=document.createElement('div');
+  d.textContent=msg;
+  d.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3);color:'+(t==='error'?'#ef4444':'#10b981');
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(),2800);
+}
+window.toggleLayos=function(el){
+  var d=el.nextElementSibling;
+  if(!d)return;
+  var open=d.style.display==='block';
+  d.style.display=open?'none':'block';
+  el.textContent=open?'▼ تفاصيل التقييم':'▲ إخفاء التفاصيل';
+};
+window.setOverride=function(type,id,val,btn){
+  var fd=new FormData();
+  fd.append('_csrf',CSRF);fd.append('type',type);fd.append('id',id);fd.append('val',val);
+  fetch('admin.php?ajax=layos_override',{method:'POST',body:fd})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        showToast('✅ '+d.msg);
+        // update button states
+        var wrap=btn.closest('.layos-override');
+        wrap.querySelectorAll('.layos-ov-btn').forEach(b=>b.className='layos-ov-btn');
+        btn.classList.add('active-'+val);
+        setTimeout(()=>location.reload(),800);
+      } else showToast('❌ '+(d.error||'خطأ'),'error');
+    }).catch(()=>showToast('❌ خطأ في الاتصال','error'));
+};
+window.layosFixApp=function(id,btn){
+  btn.disabled=true;btn.textContent='⏳ جاري...';
+  fetch('admin.php?ajax=generate&id='+id,{method:'POST',
+    body:new URLSearchParams({_csrf:CSRF,regenerate:1})})
+  .then(()=>{btn.textContent='✅ تم';setTimeout(()=>location.reload(),2000);})
+  .catch(()=>{btn.disabled=false;btn.textContent='🤖 إصلاح AI';});
+};
 })();
 </script>
 <?php endif; ?>
