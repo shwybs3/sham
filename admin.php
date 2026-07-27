@@ -4980,10 +4980,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ps_bulk_import' && is_admin()) {
 /* ─────────────── HOSTING MANAGER AJAX ─────────────── */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'hosting_keyword_research' && is_admin()) {
     header('Content-Type: application/json');
-    $keys   = array_filter(array_map('trim', explode(',', get_cfg($pdo,'openrouter_api_key') ?: '')));
-    $apiKey = $keys[array_rand($keys)] ?? '';
+    $keys   = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    $apiKey = $keys ? $keys[array_rand($keys)] : '';
     $model  = get_cfg($pdo,'openrouter_model') ?: 'openai/gpt-4o-mini';
-    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter']); exit; }
+    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter — أضفه من الإعدادات']); exit; }
     $sysMsg = 'أنت خبير تحسين محركات البحث (SEO) متخصص في المنافسة المنخفضة وحجم البحث العالي للمواقع العربية. تاريخ اليوم: ' . date('Y-m-d') . '.';
     $userMsg = <<<PROMPT
 ابحث عن أفضل 10 أفكار لمواقع أدوات الويب باللغة العربية في الوقت الحالي، مقسمة كالتالي:
@@ -5061,10 +5061,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'subdomain_detect_type' && is_admi
     $input = json_decode(file_get_contents('php://input'), true) ?: [];
     $subName = trim($input['name'] ?? '');
     if (!$subName) { echo json_encode(['ok'=>false,'error'=>'اسم السبدومين مطلوب']); exit; }
-    $keys   = array_filter(array_map('trim', explode(',', get_cfg($pdo,'openrouter_api_key') ?: '')));
-    $apiKey = $keys[array_rand($keys)] ?? '';
+    $keys   = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    $apiKey = $keys ? $keys[array_rand($keys)] : '';
     $model  = get_cfg($pdo,'openrouter_model') ?: 'openai/gpt-4o-mini';
-    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter']); exit; }
+    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'لم يُضبط مفتاح OpenRouter — أضفه من الإعدادات']); exit; }
     $prompt = "بناءً على اسم الدومين الفرعي التالي: \"$subName\"\nحدد:\n1. نوع المحتوى المناسب له (أداة ويب / متجر تطبيقات / مدونة / خدمات)\n2. عنوان الموقع الاحترافي بالعربي\n3. وصف meta مختصر بالعربي (160 حرف)\n4. 5 أدوات أو خدمات مناسبة لتضمينها\nأعد JSON فقط: {\"content_type\":\"...\",\"title\":\"...\",\"description\":\"...\",\"suggestions\":[\"...\",\"...\",\"...\",\"...\",\"...\"]}";
     $resp = ai_call($apiKey, $model, 'أنت خبير بناء مواقع ويب.', $prompt, 500);
     $json = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($resp ?? ''));

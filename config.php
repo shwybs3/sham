@@ -1779,6 +1779,34 @@ function build_model_rotation(PDO $pdo, bool $forceAll = false): array {
 // value is multiplied by every (key × model) pair openrouter_call_rotating()
 // tries — a long per-attempt timeout is what made a single content-generation
 // request able to block a PHP worker for many minutes.
+// ai_call — simple wrapper matching the admin.php call signature.
+// Returns the text content string on success, or null on any failure.
+function ai_call(string $key, string $model, string $systemMsg, string $userMsg, int $maxTokens = 1000, int $timeout = 30): ?string {
+    if (!$key || !$model) return null;
+    $messages = [];
+    if ($systemMsg !== '') $messages[] = ['role' => 'system', 'content' => $systemMsg];
+    $messages[] = ['role' => 'user', 'content' => $userMsg];
+    $body = ['model' => $model, 'messages' => $messages, 'temperature' => 0.7];
+    if ($maxTokens > 0) $body['max_tokens'] = $maxTokens;
+    $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $key, 'Content-Type: application/json',
+            'HTTP-Referer: ' . SITE_URL, 'X-Title: yassota',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($body),
+    ]);
+    $res  = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($err || $code !== 200 || !$res) return null;
+    $d = json_decode($res, true);
+    return $d['choices'][0]['message']['content'] ?? null;
+}
+
 function openrouter_call(string $key, string $model, string $prompt, int $timeout = 20, int $maxTokens = 0): array {
     if (!$key) return ['ok' => false, 'content' => null, 'error' => 'لا يوجد مفتاح API', 'http' => 0];
     $body = ['model' => $model, 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => 0.7];
