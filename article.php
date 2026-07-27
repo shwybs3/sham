@@ -58,7 +58,8 @@ $articleSchema = json_encode([
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(article_url($article['slug'])) ?>">
+  <link rel="canonical" href="<?= h(app_url($article['app_slug'])) ?>">
+  <meta name="robots" content="noindex, follow">
   <meta property="og:type" content="article">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">
