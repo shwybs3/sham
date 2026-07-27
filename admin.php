@@ -6145,6 +6145,7 @@ $navLinks = [
     'sitemap-health' => ['label'=>'🗺️ صحة Sitemap', 'icon'=>'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7'],
     'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'badge'=>$_navEvilCount],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+    'yai-seo'     => ['label'=>'🎯 Rank Match SEO',  'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
     'seo-scoring' => ['label'=>'تقييم فرص SEO', 'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
     'seo-preview' => ['label'=>'معاينة نتائج Google', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'],
     'html-pages'  => ['label'=>'صفحات HTML للفهرسة', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
@@ -15347,6 +15348,329 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
 
   window.runHealthCheck = runHealthCheck;
   window.runPrune = runPrune;
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'yai-seo'): ?>
+<?php
+/* ════════════════════════════════════════════════
+   YASSOTA RANK MATCH SEO — Full SEO Analysis Dashboard
+   ════════════════════════════════════════════════ */
+$seoApps = $pdo->query(
+    "SELECT id, name, slug, seo_title, meta_desc, long_description, icon_path, status,
+            download_url, updated_at
+     FROM apps ORDER BY updated_at DESC LIMIT 200"
+)->fetchAll(PDO::FETCH_ASSOC);
+
+// Compute SEO score per app
+function yai_seo_score(array $app): array {
+    $issues = []; $score = 100;
+    $title  = trim($app['seo_title'] ?? '');
+    $desc   = trim($app['meta_desc'] ?? '');
+    $ld     = trim($app['long_description'] ?? '');
+    $icon   = trim($app['icon_path'] ?? '');
+    $dl     = trim($app['download_url'] ?? '');
+    $tLen   = mb_strlen($title);
+    $dLen   = mb_strlen($desc);
+    $ldLen  = mb_strlen($ld);
+
+    if (!$title)           { $score -= 20; $issues[] = ['سr'=>'critical','msg'=>'عنوان SEO مفقود']; }
+    elseif ($tLen < 30)    { $score -= 10; $issues[] = ['sr'=>'warn','msg'=>"العنوان قصير ({$tLen} حرف) — الأفضل 50-60"]; }
+    elseif ($tLen > 65)    { $score -= 8;  $issues[] = ['sr'=>'warn','msg'=>"العنوان طويل ({$tLen} حرف) — سيُقطع في Google"]; }
+    else                   { $issues[] = ['sr'=>'ok','msg'=>"عنوان SEO ممتاز ({$tLen} حرف)"]; }
+
+    if (!$desc)            { $score -= 15; $issues[] = ['sr'=>'critical','msg'=>'وصف Meta مفقود']; }
+    elseif ($dLen < 100)   { $score -= 8;  $issues[] = ['sr'=>'warn','msg'=>"وصف قصير ({$dLen} حرف) — الأفضل 120-160"]; }
+    elseif ($dLen > 170)   { $score -= 5;  $issues[] = ['sr'=>'warn','msg'=>"وصف طويل ({$dLen} حرف) — سيُقطع في Google"]; }
+    else                   { $issues[] = ['sr'=>'ok','msg'=>"وصف Meta ممتاز ({$dLen} حرف)"]; }
+
+    if (!$ld)              { $score -= 20; $issues[] = ['sr'=>'critical','msg'=>'وصف تفصيلي مفقود']; }
+    elseif ($ldLen < 300)  { $score -= 12; $issues[] = ['sr'=>'warn','msg'=>"المحتوى قصير ({$ldLen} حرف) — الأفضل 800+"]; }
+    elseif ($ldLen < 600)  { $score -= 6;  $issues[] = ['sr'=>'warn','msg'=>"المحتوى متوسط ({$ldLen} حرف) — الأفضل 800+"]; }
+    elseif ($ldLen >= 1500){ $issues[] = ['sr'=>'ok','msg'=>"محتوى ممتاز ({$ldLen} حرف)"]; }
+    else                   { $issues[] = ['sr'=>'ok','msg'=>"محتوى جيد ({$ldLen} حرف)"]; }
+
+    if (!$icon)            { $score -= 10; $issues[] = ['sr'=>'warn','msg'=>'أيقونة مفقودة (تؤثر على OG Image)']; }
+    else                   { $issues[] = ['sr'=>'ok','msg'=>'أيقونة / OG Image موجودة']; }
+
+    if (!$dl)              { $score -= 15; $issues[] = ['sr'=>'critical','msg'=>'رابط التحميل مفقود (Status: Draft تلقائياً)']; }
+    else                   { $issues[] = ['sr'=>'ok','msg'=>'رابط تحميل نشط']; }
+
+    if ($title && $desc && str_contains(mb_strtolower($desc), mb_strtolower(mb_substr($title,0,10)))) {
+        $issues[] = ['sr'=>'ok','msg'=>'الكلمة المفتاحية الرئيسية في الوصف'];
+    }
+    if ($title && $ld && str_contains(mb_strtolower($ld), mb_strtolower(mb_substr($title,0,10)))) {
+        $issues[] = ['sr'=>'ok','msg'=>'الكلمة المفتاحية الرئيسية في المحتوى'];
+    } elseif ($title && $ld) {
+        $score -= 5; $issues[] = ['sr'=>'warn','msg'=>'اسم التطبيق غير موجود في المحتوى التفصيلي'];
+    }
+
+    return ['score' => max(0, $score), 'issues' => $issues];
+}
+
+$appScores = [];
+foreach ($seoApps as $a) {
+    $appScores[$a['id']] = yai_seo_score($a);
+}
+usort($seoApps, fn($a,$b) => $appScores[$a['id']]['score'] <=> $appScores[$b['id']]['score']);
+
+$avgScore  = count($seoApps) ? array_sum(array_column($appScores,'score')) / count($seoApps) : 0;
+$critical  = count(array_filter($appScores, fn($s) => $s['score'] < 50));
+$good      = count(array_filter($appScores, fn($s) => $s['score'] >= 80));
+$medium    = count($appScores) - $critical - $good;
+?>
+<style>
+.yai-seo-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.yai-seo-logo{font-size:28px;font-weight:900;background:linear-gradient(135deg,#6366f1,#8b5cf6,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-1px}
+.yai-seo-sub{font-size:13px;color:var(--text-muted);margin-top:2px}
+.yai-score-card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:20px;text-align:center;flex:1;min-width:130px}
+.yai-score-num{font-size:32px;font-weight:800;margin-bottom:4px}
+.yai-score-lbl{font-size:12px;color:var(--text-muted)}
+.yai-app-row{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--card-border)}
+.yai-app-row:last-child{border-bottom:none}
+.yai-app-icon{width:40px;height:40px;border-radius:10px;object-fit:cover;background:var(--sidebar-bg);flex-shrink:0}
+.yai-app-name{font-size:14px;font-weight:600;color:var(--text)}
+.yai-app-slug{font-size:12px;color:var(--text-muted)}
+.yai-score-bar-wrap{width:120px;height:8px;background:var(--input-border);border-radius:4px;flex-shrink:0}
+.yai-score-bar{height:100%;border-radius:4px;transition:width .4s}
+.yai-score-badge{font-size:12px;font-weight:700;width:38px;text-align:center;border-radius:6px;padding:2px 0;flex-shrink:0}
+.yai-issue{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 0}
+.yai-issue .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.yai-issue.ok .dot{background:#22c55e}
+.yai-issue.warn .dot{background:#f59e0b}
+.yai-issue.critical .dot{background:#ef4444}
+.yai-issue.ok{color:var(--text-muted)}
+.yai-issue.warn{color:#b45309}
+.yai-issue.critical{color:#dc2626}
+.yai-expand{cursor:pointer;font-size:11px;color:var(--primary);margin-top:4px;display:inline-block}
+.yai-details{display:none;margin-top:8px;padding:10px;background:var(--sidebar-bg);border-radius:8px}
+.yai-filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.yai-filter-btn{padding:5px 14px;border-radius:50px;font-size:12px;font-weight:600;border:1px solid var(--card-border);background:var(--card-bg);color:var(--text-muted);cursor:pointer;transition:all .15s}
+.yai-filter-btn.active,.yai-filter-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+.yai-bulk-bar{background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+</style>
+
+<div class="admin-card" style="padding:0;overflow:hidden">
+  <div style="padding:24px 24px 0">
+    <div class="yai-seo-header">
+      <div>
+        <div class="yai-seo-logo">YASSOTA RANK MATCH SEO</div>
+        <div class="yai-seo-sub">تحليل SEO شامل لـ <?= count($seoApps) ?> تطبيق</div>
+      </div>
+      <div style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <a href="press.php" class="btn btn-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;text-decoration:none;padding:7px 16px;border-radius:8px;font-size:13px">⚡ PRESS PRO</a>
+        <button onclick="runBulkSeoFix()" class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;cursor:pointer">🤖 إصلاح تلقائي بالذكاء الاصطناعي</button>
+      </div>
+    </div>
+
+    <!-- Score cards -->
+    <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+      <div class="yai-score-card" style="border-color:rgba(99,102,241,.3)">
+        <div class="yai-score-num" style="color:#6366f1"><?= round($avgScore) ?></div>
+        <div class="yai-score-lbl">متوسط الدرجة</div>
+      </div>
+      <div class="yai-score-card" style="border-color:rgba(239,68,68,.3)">
+        <div class="yai-score-num" style="color:#ef4444"><?= $critical ?></div>
+        <div class="yai-score-lbl">بحاجة لإصلاح عاجل</div>
+      </div>
+      <div class="yai-score-card" style="border-color:rgba(245,158,11,.3)">
+        <div class="yai-score-num" style="color:#f59e0b"><?= $medium ?></div>
+        <div class="yai-score-lbl">يمكن تحسينه</div>
+      </div>
+      <div class="yai-score-card" style="border-color:rgba(34,197,94,.3)">
+        <div class="yai-score-num" style="color:#22c55e"><?= $good ?></div>
+        <div class="yai-score-lbl">ممتاز ✓</div>
+      </div>
+    </div>
+
+    <!-- Bulk AI fix progress -->
+    <div id="yai-bulk-progress" style="display:none" class="yai-bulk-bar">
+      <span id="yai-bulk-icon">⏳</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)" id="yai-bulk-label">جاري الإصلاح...</div>
+        <div style="height:6px;background:rgba(0,0,0,.1);border-radius:3px;margin-top:6px">
+          <div id="yai-bulk-bar" style="height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6);width:0%;transition:width .4s"></div>
+        </div>
+      </div>
+      <span id="yai-bulk-pct" style="font-size:13px;font-weight:700;color:#6366f1">0%</span>
+    </div>
+
+    <!-- Filters -->
+    <div class="yai-filter-bar">
+      <button class="yai-filter-btn active" onclick="filterSeo(this,'all')">الكل (<?= count($seoApps) ?>)</button>
+      <button class="yai-filter-btn" onclick="filterSeo(this,'critical')" style="--active-color:#ef4444">عاجل (<?= $critical ?>)</button>
+      <button class="yai-filter-btn" onclick="filterSeo(this,'medium')">متوسط (<?= $medium ?>)</button>
+      <button class="yai-filter-btn" onclick="filterSeo(this,'good')">ممتاز (<?= $good ?>)</button>
+      <input type="text" placeholder="ابحث في التطبيقات..." id="yai-seo-search"
+        onkeyup="filterSeoSearch(this.value)"
+        style="padding:5px 12px;border-radius:50px;border:1px solid var(--card-border);background:var(--card-bg);color:var(--text);font-size:12px;outline:none;flex:1;max-width:240px">
+    </div>
+  </div>
+
+  <!-- App list -->
+  <div id="yai-app-list" style="padding:0 24px 24px;max-height:70vh;overflow-y:auto">
+    <?php foreach ($seoApps as $app):
+      $sc   = $appScores[$app['id']];
+      $scN  = $sc['score'];
+      $col  = $scN >= 80 ? '#22c55e' : ($scN >= 50 ? '#f59e0b' : '#ef4444');
+      $cat  = $scN >= 80 ? 'good' : ($scN >= 50 ? 'medium' : 'critical');
+      $icon = $app['icon_path'] ? h(media_url($app['icon_path'])) : '';
+    ?>
+    <div class="yai-app-row" data-cat="<?= $cat ?>" data-name="<?= h(mb_strtolower($app['name'])) ?>">
+      <?php if ($icon): ?>
+        <img src="<?= $icon ?>" class="yai-app-icon" alt="" loading="lazy">
+      <?php else: ?>
+        <div class="yai-app-icon" style="display:flex;align-items:center;justify-content:center;font-size:18px">📱</div>
+      <?php endif; ?>
+      <div style="flex:1;min-width:0">
+        <div class="yai-app-name"><?= h($app['name']) ?></div>
+        <div class="yai-app-slug"><?= h($app['slug']) ?></div>
+        <span class="yai-expand" onclick="toggleDetails(this)">▼ تفاصيل التحليل</span>
+        <div class="yai-details">
+          <?php foreach ($sc['issues'] as $iss):
+            $sr = $iss['sr'] ?? ($iss['سr'] ?? 'ok');
+          ?>
+          <div class="yai-issue <?= $sr ?>">
+            <span class="dot"></span>
+            <?= h($iss['msg']) ?>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <div class="yai-score-bar-wrap">
+        <div class="yai-score-bar" style="width:<?= $scN ?>%;background:<?= $col ?>"></div>
+      </div>
+      <div class="yai-score-badge" style="background:<?= $col ?>22;color:<?= $col ?>"><?= $scN ?></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <a href="admin.php?page=edit-app&id=<?= $app['id'] ?>" class="btn btn-sm" style="font-size:11px;padding:3px 10px;border-radius:6px;background:var(--primary);color:#fff;border:none;text-decoration:none;white-space:nowrap">✏️ تعديل</a>
+        <?php if ($scN < 80): ?>
+        <button onclick="aiFixApp(<?= $app['id'] ?>,'<?= h($app['name']) ?>',this)"
+          class="btn btn-sm" style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(99,102,241,.15);color:#6366f1;border:1px solid rgba(99,102,241,.3);cursor:pointer;white-space:nowrap">🤖 إصلاح AI</button>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<!-- Checklist card -->
+<div class="admin-card" style="margin-top:20px">
+  <h3 style="margin-bottom:16px;font-size:16px">📋 SEO Checklist — موقعك بالكامل</h3>
+  <?php
+  $totalApps   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+  $noTitle     = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (seo_title IS NULL OR seo_title='') AND status='published'")->fetchColumn();
+  $noDesc      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (meta_desc IS NULL OR meta_desc='') AND status='published'")->fetchColumn();
+  $noContent   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (long_description IS NULL OR long_description='') AND status='published'")->fetchColumn();
+  $noIcon      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (icon_path IS NULL OR icon_path='') AND status='published'")->fetchColumn();
+  $noDl        = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (download_url IS NULL OR download_url='') AND status='published'")->fetchColumn();
+  $hasSitemap  = file_exists(__DIR__ . '/sitemap.php');
+  $hasRobots   = file_exists(__DIR__ . '/robots.php');
+  $checks = [
+    ['label'=>"عنوان SEO لكل تطبيق ({$noTitle} بدون عنوان)", 'ok'=>$noTitle===0],
+    ['label'=>"وصف Meta لكل تطبيق ({$noDesc} بدون وصف)", 'ok'=>$noDesc===0],
+    ['label'=>"محتوى تفصيلي ({$noContent} بدون محتوى)", 'ok'=>$noContent===0],
+    ['label'=>"أيقونات التطبيقات ({$noIcon} بدون أيقونة)", 'ok'=>$noIcon===0],
+    ['label'=>"روابط تحميل ({$noDl} بدون رابط)", 'ok'=>$noDl===0],
+    ['label'=>'sitemap.php ديناميكي موجود', 'ok'=>$hasSitemap],
+    ['label'=>'robots.php ديناميكي موجود', 'ok'=>$hasRobots],
+    ['label'=>"إجمالي {$totalApps} تطبيق منشور", 'ok'=>$totalApps>0],
+  ];
+  foreach ($checks as $chk): $icon = $chk['ok'] ? '✅' : '❌'; ?>
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--card-border);font-size:13px">
+    <span style="font-size:16px"><?= $icon ?></span>
+    <span style="color:<?= $chk['ok']?'var(--text)':'#ef4444' ?>"><?= h($chk['label']) ?></span>
+  </div>
+  <?php endforeach; ?>
+  <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+    <a href="admin.php?page=bulk-content" class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:13px">📝 توليد محتوى بالجملة</a>
+    <a href="admin.php?page=sitemap-health" class="btn btn-sm" style="background:var(--card-bg);border:1px solid var(--card-border);padding:7px 14px;border-radius:8px;font-size:13px;color:var(--text);text-decoration:none">🗺️ فحص صحة Sitemap</a>
+    <a href="press.php?plugin=yai-seo-pro" class="btn btn-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:13px;text-decoration:none">⚡ إعدادات SEO Pro</a>
+  </div>
+</div>
+
+<script>
+(function(){
+function toggleDetails(el){
+  var d=el.nextElementSibling;
+  if(!d)return;
+  var open=d.style.display==='block';
+  d.style.display=open?'none':'block';
+  el.textContent=open?'▼ تفاصيل التحليل':'▲ إخفاء التفاصيل';
+}
+window.toggleDetails=toggleDetails;
+
+function filterSeo(btn, cat){
+  document.querySelectorAll('.yai-filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.yai-app-row').forEach(row=>{
+    row.style.display = (cat==='all'||row.dataset.cat===cat)?'':'none';
+  });
+}
+window.filterSeo=filterSeo;
+
+function filterSeoSearch(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.yai-app-row').forEach(row=>{
+    row.style.display = (!q||row.dataset.name.includes(q))?'':'none';
+  });
+}
+window.filterSeoSearch=filterSeoSearch;
+
+// AI fix single app
+function aiFixApp(id, name, btn){
+  btn.disabled=true; btn.textContent='⏳ جاري...';
+  fetch('admin.php?ajax=generate&id='+id, {
+    method:'POST',
+    body: new URLSearchParams({_csrf:<?= json_encode(csrf_token()) ?>, regenerate:1})
+  })
+  .then(r=>{
+    if(r.headers.get('content-type')&&r.headers.get('content-type').includes('text/event-stream')){
+      btn.textContent='✅ جاري الإنشاء...';
+      // SSE — just reload after brief wait
+      setTimeout(()=>location.reload(), 4000);
+    } else {
+      return r.json().then(d=>{
+        btn.textContent = d.success||d.ok ? '✅ تم' : '❌ خطأ';
+        if(d.success||d.ok) setTimeout(()=>location.reload(),1500);
+        else setTimeout(()=>{btn.disabled=false;btn.textContent='🤖 إصلاح AI';},2000);
+      });
+    }
+  })
+  .catch(()=>{ btn.disabled=false; btn.textContent='🤖 إصلاح AI'; });
+}
+window.aiFixApp=aiFixApp;
+
+// Bulk AI fix — iterate over all critical/medium apps
+function runBulkSeoFix(){
+  var rows=Array.from(document.querySelectorAll('.yai-app-row[data-cat="critical"],.yai-app-row[data-cat="medium"]'));
+  if(!rows.length){alert('✅ جميع التطبيقات درجاتها ممتازة!');return;}
+  var prog=document.getElementById('yai-bulk-progress');
+  var bar=document.getElementById('yai-bulk-bar');
+  var pct=document.getElementById('yai-bulk-pct');
+  var lbl=document.getElementById('yai-bulk-label');
+  prog.style.display='flex';
+  var i=0,total=rows.length;
+  function next(){
+    if(i>=total){
+      lbl.textContent='✅ اكتمل الإصلاح!';
+      setTimeout(()=>location.reload(),1800);
+      return;
+    }
+    var row=rows[i];
+    var fixBtn=row.querySelector('button[onclick*="aiFixApp"]');
+    if(fixBtn) fixBtn.click();
+    var name=row.dataset.name||'...';
+    lbl.textContent='جاري إصلاح: '+name+' ('+( i+1)+'/'+total+')';
+    var p=Math.round((i+1)/total*100);
+    bar.style.width=p+'%';
+    pct.textContent=p+'%';
+    i++;
+    setTimeout(next, 4500);
+  }
+  next();
+}
+window.runBulkSeoFix=runBulkSeoFix;
 })();
 </script>
 <?php endif; ?>

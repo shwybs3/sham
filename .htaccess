@@ -59,6 +59,9 @@ ErrorDocument 404 /404.php
   # so LiteSpeed/Apache serve it directly without triggering anti-bot rules
   RewriteRule ^admin/?$ admin.php [L,QSA,NS]
 
+  # Press Pro: plugin management system
+  RewriteRule ^press/?$ press.php [L,QSA,NS]
+
   # Blog post: /blog/{slug} → blog-post.php
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
