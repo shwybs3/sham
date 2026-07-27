@@ -737,6 +737,52 @@ function ensure_schema(PDO $pdo): array {
     }
     $log[] = 'domains';
 
+    // ── YAI Notifications ─────────────────────────────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS notifications (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      type        ENUM('security','seo','domain','system','app','error','vpn') NOT NULL DEFAULT 'system',
+      title       VARCHAR(255) NOT NULL,
+      body        TEXT NOT NULL,
+      severity    ENUM('info','warning','critical') NOT NULL DEFAULT 'info',
+      is_read     TINYINT(1) NOT NULL DEFAULT 0,
+      auto_fixed  TINYINT(1) NOT NULL DEFAULT 0,
+      fix_details TEXT DEFAULT NULL,
+      url         VARCHAR(512) DEFAULT NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_is_read (is_read),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'notifications';
+
+    // ── Sitemap URL health log ─────────────────────────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS sitemap_url_log (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      url         VARCHAR(512) NOT NULL,
+      http_code   SMALLINT UNSIGNED DEFAULT NULL,
+      redirects_to VARCHAR(512) DEFAULT NULL,
+      checked_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      is_healthy  TINYINT(1) NOT NULL DEFAULT 0,
+      UNIQUE KEY uq_url (url(255)),
+      INDEX idx_healthy (is_healthy),
+      INDEX idx_checked (checked_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'sitemap_url_log';
+
+    // ── IP reputation cache (VPN/proxy detection) ─────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS evil_ip_cache (
+      ip          VARCHAR(45) NOT NULL PRIMARY KEY,
+      is_vpn      TINYINT(1) NOT NULL DEFAULT 0,
+      is_proxy    TINYINT(1) NOT NULL DEFAULT 0,
+      is_tor      TINYINT(1) NOT NULL DEFAULT 0,
+      country     VARCHAR(10) DEFAULT NULL,
+      asn         VARCHAR(20) DEFAULT NULL,
+      isp         VARCHAR(128) DEFAULT NULL,
+      cached_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_vpn (is_vpn),
+      INDEX idx_cached (cached_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'evil_ip_cache';
+
     return $log;
 }
 ensure_schema($pdo);
@@ -949,6 +995,19 @@ function waf_check(PDO $pdo): void {
 
 function waf_block(PDO $pdo, string $ip, string $type, string $detail): never {
     log_security_event($pdo, 'waf_block_' . $type, 'critical', $detail . " from $ip");
+    // YAI notification for critical attack types
+    static $_wafNotified = [];
+    $notifKey = $ip . '_' . $type;
+    if (!isset($_wafNotified[$notifKey])) {
+        $_wafNotified[$notifKey] = true;
+        $typeLabels = ['sqli'=>'SQL Injection','xss'=>'XSS','path_traversal'=>'Path Traversal',
+                       'null_byte'=>'Null Byte Injection','code_injection'=>'PHP Injection','cmd_injection'=>'Command Injection'];
+        $label = $typeLabels[$type] ?? strtoupper($type);
+        yai_push($pdo, 'security', "⚠️ هجوم WAF محظور: {$label}",
+            "IP: {$ip}\nالنوع: {$label}\nالتفاصيل: " . substr($detail, 0, 300),
+            'critical', defined('SITE_URL') ? SITE_URL . '/admin.php?page=evil' : '', true,
+            "تم حظر الطلب وتسجيله في سجل الأمان. IP: {$ip}");
+    }
     // Auto-ban repeat offenders (3rd WAF block = temp ban)
     try {
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM security_log WHERE ip=? AND event_type LIKE 'waf_block_%' AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
@@ -1175,6 +1234,9 @@ function evil_check_ban(PDO $pdo): void {
     if (!evil_is_enabled($pdo, 'ban')) return;
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
     if (!$ip) return;
+
+    // VPN/proxy check — runs before ban check; auto-bans and adds to evil_ip_cache
+    evil_check_vpn($pdo);
 
     // Handle CAPTCHA verification POST from the ban-challenge page
     if (!empty($_POST['evil_captcha_verify'])) {
@@ -4157,4 +4219,110 @@ function ad_slot(): string {
         . $slotAttr
         . ' data-ad-format="auto" data-full-width-responsive="true"></ins>'
         . '<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// YAI — Yassota AI Intelligence System
+// Smart notification push + auto-fix tracking
+// ═══════════════════════════════════════════════════════════════════════════
+
+function yai_push(PDO $pdo, string $type, string $title, string $body,
+                  string $severity = 'info', string $url = '',
+                  bool $autoFixed = false, string $fixDetails = ''): void {
+    try {
+        $pdo->prepare("INSERT INTO notifications (type,title,body,severity,is_read,auto_fixed,fix_details,url)
+                       VALUES (?,?,?,?,0,?,?,?)")
+            ->execute([$type, $title, $body, $severity,
+                       $autoFixed ? 1 : 0, $fixDetails ?: null, $url ?: null]);
+    } catch (Throwable) {}
+}
+
+function yai_unread_count(PDO $pdo): int {
+    try {
+        return (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE is_read=0")->fetchColumn();
+    } catch (Throwable) { return 0; }
+}
+
+// Bumps the sitemap last-modified token so the next request regenerates it.
+// Also records a YAI notification for SEO tracking.
+function sitemap_touch(PDO $pdo, string $reason = ''): void {
+    try {
+        set_cfg($pdo, 'sitemap_touched_at', date('Y-m-d H:i:s'));
+        // Optionally clear a cached sitemap file if it exists
+        $cacheFile = __DIR__ . '/uploads/.cache/sitemap.xml';
+        if (file_exists($cacheFile)) @unlink($cacheFile);
+    } catch (Throwable) {}
+}
+
+// VPN / proxy detection via ip-api.com (free, 45 req/min, no API key needed).
+// Returns true if the IP is flagged as VPN, proxy, or Tor.
+// Results cached in evil_ip_cache table for 24h to avoid rate limits.
+function evil_check_vpn(PDO $pdo): bool {
+    if (evil_is_admin_ip()) return false;
+    if (get_cfg($pdo, 'evil_vpn_check_enabled', '1') !== '1') return false;
+
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!$ip || $ip === '127.0.0.1' || $ip === '::1') return false;
+
+    // Check cache (24h TTL)
+    try {
+        $cached = $pdo->prepare("SELECT * FROM evil_ip_cache WHERE ip=? AND cached_at > DATE_SUB(NOW(), INTERVAL 24 HOUR) LIMIT 1");
+        $cached->execute([$ip]);
+        $row = $cached->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            return (bool)($row['is_vpn'] || $row['is_proxy'] || $row['is_tor']);
+        }
+    } catch (Throwable) {}
+
+    // ip-api.com free lookup — fields: proxy,hosting,query,country,as,isp
+    $ch = curl_init("http://ip-api.com/json/{$ip}?fields=status,proxy,hosting,query,country,as,isp");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 4,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_USERAGENT      => 'yassota-security/1.0',
+    ]);
+    $raw  = curl_exec($ch);
+    $err  = curl_error($ch);
+    curl_close($ch);
+
+    if ($err || !$raw) return false;
+
+    $data    = @json_decode($raw, true);
+    if (!$data || ($data['status'] ?? '') !== 'success') return false;
+
+    $isVpn   = !empty($data['proxy']);
+    $isProxy = !empty($data['proxy']);
+    $isTor   = !empty($data['hosting']) && str_contains(strtolower($data['isp'] ?? ''), 'tor');
+
+    // Cache result
+    try {
+        $pdo->prepare("INSERT INTO evil_ip_cache (ip,is_vpn,is_proxy,is_tor,country,asn,isp,cached_at)
+                       VALUES (?,?,?,?,?,?,?,NOW())
+                       ON DUPLICATE KEY UPDATE
+                         is_vpn=VALUES(is_vpn),is_proxy=VALUES(is_proxy),is_tor=VALUES(is_tor),
+                         country=VALUES(country),asn=VALUES(asn),isp=VALUES(isp),cached_at=NOW()")
+            ->execute([$ip, $isVpn?1:0, $isProxy?1:0, $isTor?1:0,
+                       $data['country'] ?? null, $data['as'] ?? null, $data['isp'] ?? null]);
+    } catch (Throwable) {}
+
+    $detected = $isVpn || $isProxy || $isTor;
+
+    if ($detected) {
+        // Auto-ban and push YAI notification
+        $type    = $isVpn ? 'VPN' : ($isTor ? 'Tor' : 'Proxy');
+        $country = $data['country'] ?? 'Unknown';
+        $isp     = $data['isp'] ?? 'Unknown';
+        try {
+            evil_ban_ip($pdo, $ip, "vpn_proxy_detected: {$type}");
+        } catch (Throwable) {}
+        yai_push($pdo, 'vpn',
+            "🛡️ تم اكتشاف {$type} وحظره تلقائياً",
+            "IP: {$ip} | البلد: {$country} | مزود الخدمة: {$isp}\nالنوع: {$type}\nتم الحظر التلقائي وإضافة IP إلى قائمة الحظر.",
+            'warning', url('admin.php?page=evil'), true,
+            "تم حظر {$ip} تلقائياً عبر قاعدة بيانات VPN/Proxy. النوع: {$type}"
+        );
+    }
+
+    return $detected;
 }

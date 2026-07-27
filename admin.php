@@ -3329,6 +3329,7 @@ if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
     hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
     $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([(int)$_GET['del']]);
     bump_cache_version($pdo);
+    sitemap_touch($pdo, 'app_deleted');
     header('Location: admin.php?page=apps&msg=deleted'); exit;
 }
 
@@ -3612,6 +3613,9 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
         bump_cache_version($pdo);
+        if (($d['status'] ?? '') === 'published' || ($existing['status'] ?? '') === 'published') {
+            sitemap_touch($pdo, 'app_updated');
+        }
         // Notify Telegram only when transitioning to published — deferred until
         // AFTER the HTTP response is flushed so the admin never sees a freeze.
         if (!$wasPublished && $requestedStatus === 'published') {
@@ -3655,8 +3659,10 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
         $newId = (int)$pdo->lastInsertId();
         bump_cache_version($pdo);
+        if ($requestedStatus === 'published') sitemap_touch($pdo, 'app_published');
         if ($requestedStatus === 'published' && $newId) {
             $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id={$newId}")->fetch(PDO::FETCH_ASSOC) : array_merge($d, ['id' => $newId]);
+            yai_push($pdo, 'app', '📱 تطبيق جديد تم نشره', 'التطبيق: ' . ($d['name']??'') . "\nتم الإضافة إلى Sitemap وإشعار محركات البحث.", 'info', app_url($d['slug']??''));
             $notifyApp = is_array($saved) ? $saved : array_merge($d, ['id' => $newId]);
             $translateLangs = array_filter(array_map('trim', explode(',', get_cfg($pdo,'auto_translate_langs',''))));
             register_shutdown_function(function() use ($pdo, $notifyApp, $translateLangs) {
@@ -5814,6 +5820,30 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_full_setup' && is_admin())
         $steps[] = ['step'=>'ssl','status'=>'skipped','msg'=>'cPanel غير مُعدَّ — فعّل SSL يدوياً'];
     }
 
+    // Step 4: Deploy dark template to domain docroot
+    $templateSrc = __DIR__ . '/domain-template/index.php';
+    if (file_exists($templateSrc) && isset($absRoot) && $absRoot) {
+        try {
+            // Determine real absolute docroot path
+            $deployTarget = (str_starts_with($absRoot, '/') ? $absRoot : (rtrim(get_cfg($pdo,'server_doc_root',''), '/') . '/' . $absRoot));
+            if (is_dir($deployTarget) || @mkdir($deployTarget, 0755, true)) {
+                $tplContent = file_get_contents($templateSrc);
+                file_put_contents($deployTarget . '/index.php', $tplContent);
+                // Deploy .htaccess for routing
+                file_put_contents($deployTarget . '/.htaccess',
+                    "Options -Indexes\nRewriteEngine On\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule ^ index.php [L]\n");
+                $steps[] = ['step'=>'deploy_template','status'=>'ok','msg'=>'تم نشر قالب الموقع الداكن في: ' . $deployTarget];
+                yai_push($pdo, 'domain', "🌐 نطاق جديد تم إعداده", "النطاق: {$domain}\nالمسار: {$deployTarget}\nالوضع: {$siteMode}", 'info', url('admin.php?page=hosting-manager'), true, 'تم نشر القالب وإضافة النطاق تلقائياً');
+            } else {
+                $steps[] = ['step'=>'deploy_template','status'=>'warning','msg'=>'المجلد غير موجود ولا يمكن إنشاؤه: ' . $deployTarget];
+            }
+        } catch (\Throwable $te) {
+            $steps[] = ['step'=>'deploy_template','status'=>'warning','msg'=>'تعذر نشر القالب: ' . $te->getMessage()];
+        }
+    } else {
+        $steps[] = ['step'=>'deploy_template','status'=>'skipped','msg'=>'ملف القالب غير موجود أو المسار غير محدد'];
+    }
+
     echo json_encode(['ok'=>$finalOk,'steps'=>$steps,'summary'=>$finalOk?'تم إعداد النطاق بنجاح':'اكتملت بعض الخطوات مع تحذيرات','domain'=>$domain]);
     exit;
 }
@@ -5978,15 +6008,112 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'bulk_domain_scan' && is_admin()) 
     exit;
 }
 
+// ── YAI Notifications fetch ──────────────────────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'notifications_fetch' && is_admin()) {
+    $limit  = min((int)($_GET['limit'] ?? 30), 100);
+    $unread = isset($_GET['unread_only']) && $_GET['unread_only'] === '1';
+    $where  = $unread ? 'WHERE is_read=0' : '';
+    $rows   = $pdo->query("SELECT * FROM notifications {$where} ORDER BY created_at DESC LIMIT {$limit}")
+                  ->fetchAll(PDO::FETCH_ASSOC);
+    $count  = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE is_read=0")->fetchColumn();
+    echo json_encode(['ok'=>true,'items'=>$rows,'unread'=>$count]);
+    exit;
+}
+
+// ── YAI Notifications mark read ──────────────────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'notifications_mark_read' && is_admin()) {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    if (!empty($body['id'])) {
+        $pdo->prepare("UPDATE notifications SET is_read=1 WHERE id=?")->execute([(int)$body['id']]);
+    } else {
+        $pdo->exec("UPDATE notifications SET is_read=1 WHERE is_read=0");
+    }
+    $count = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE is_read=0")->fetchColumn();
+    echo json_encode(['ok'=>true,'unread'=>$count]);
+    exit;
+}
+
+// ── YAI Notifications delete ────────────────────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'notifications_delete' && is_admin()) {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    if (!empty($body['id'])) {
+        $pdo->prepare("DELETE FROM notifications WHERE id=?")->execute([(int)$body['id']]);
+    } else {
+        $pdo->exec("DELETE FROM notifications WHERE is_read=1");
+    }
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+// ── Sitemap health check (single URL batch) ───────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_health_check' && is_admin()) {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    $urls = array_slice((array)($body['urls'] ?? []), 0, 20); // max 20 per call
+    $results = [];
+    foreach ($urls as $url) {
+        $url = trim($url);
+        if (!$url) continue;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_FOLLOWLOCATION => false, // we want redirect detection
+            CURLOPT_NOBODY         => true,
+            CURLOPT_USERAGENT      => 'yassota-sitemap-checker/1.0',
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        curl_exec($ch);
+        $code    = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $redir   = curl_getinfo($ch, CURLINFO_REDIRECT_URL) ?: null;
+        curl_close($ch);
+        $healthy = ($code >= 200 && $code < 300);
+        // Update/insert into sitemap_url_log
+        try {
+            $pdo->prepare("INSERT INTO sitemap_url_log (url,http_code,redirects_to,checked_at,is_healthy)
+                           VALUES (?,?,?,NOW(),?)
+                           ON DUPLICATE KEY UPDATE http_code=VALUES(http_code),redirects_to=VALUES(redirects_to),checked_at=NOW(),is_healthy=VALUES(is_healthy)")
+                ->execute([$url, $code, $redir, $healthy ? 1 : 0]);
+        } catch (Throwable) {}
+        $results[] = ['url'=>$url,'code'=>$code,'healthy'=>$healthy,'redirects_to'=>$redir];
+    }
+    echo json_encode(['ok'=>true,'results'=>$results]);
+    exit;
+}
+
+// ── Sitemap health prune dead URLs ────────────────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_prune' && is_admin()) {
+    // Remove apps with 404/dead slugs from published status
+    $dead = $pdo->query("SELECT url FROM sitemap_url_log WHERE is_healthy=0 AND http_code NOT IN (0,301,302,307,308)")->fetchAll(PDO::FETCH_COLUMN);
+    $pruned = 0;
+    foreach ($dead as $deadUrl) {
+        // Try to extract slug from URL pattern /app/SLUG
+        if (preg_match('#/app/([^/?#]+)#', $deadUrl, $m)) {
+            $slug = urldecode($m[1]);
+            $pdo->prepare("UPDATE apps SET status='draft' WHERE slug=? AND status='published'")->execute([$slug]);
+            $pruned++;
+        }
+    }
+    sitemap_touch($pdo, 'prune');
+    yai_push($pdo, 'seo', "🗺️ تنظيف Sitemap", "تم تغيير {$pruned} تطبيق إلى مسودة بسبب روابط معطوبة في Sitemap.", 'info',
+              url('admin.php?page=sitemap-health'), true, "تم تحويل {$pruned} تطبيق من published إلى draft");
+    echo json_encode(['ok'=>true,'pruned'=>$pruned]);
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    MAIN ADMIN LAYOUT
    ══════════════════════════════════════════════════════ */
 // Critical security event count for nav badge
 $_navEvilCount = 0;
+$_navYaiCount  = 0;
 try {
     $tblList = array_column($pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_NUM), 0);
     if (in_array('security_log', $tblList)) {
         $_navEvilCount = (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical' AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)")->fetchColumn();
+    }
+    if (in_array('notifications', $tblList)) {
+        $_navYaiCount = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE is_read=0")->fetchColumn();
     }
 } catch (\Throwable $e) { $_navEvilCount = 0; }
 
@@ -6014,6 +6141,8 @@ $navLinks = [
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'indexnow-log'   => ['label'=>'سجل الفهرسة', 'icon'=>'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'],
     'indexing-tools' => ['label'=>'أدوات الفهرسة', 'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7'],
+    'notifications' => ['label'=>'🔔 إشعارات YAI', 'icon'=>'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', 'badge'=>$_navYaiCount],
+    'sitemap-health' => ['label'=>'🗺️ صحة Sitemap', 'icon'=>'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7'],
     'evil'      => ['label'=>'🛡️ نظام Evil للحماية', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'badge'=>$_navEvilCount],
     'security'  => ['label'=>'الحماية والأمان', 'icon'=>'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
     'seo-scoring' => ['label'=>'تقييم فرص SEO', 'icon'=>'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'],
@@ -6044,9 +6173,19 @@ $navLinks = [
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="12" cy="19" r="2.1"/></svg>
   </button>
   <div class="admin-logo" style="padding:0;border:none;margin:0;font-size:16px">yass<span>ota</span></div>
-  <a href="admin.php?page=logout" style="color:var(--danger)">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9"/></svg>
-  </a>
+  <div style="display:flex;align-items:center;gap:8px">
+    <a href="admin.php?page=notifications" style="position:relative;color:var(--text-muted)" title="إشعارات YAI">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      <?php if ($_navYaiCount > 0): ?>
+      <span id="yai-bell-badge" style="position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;border-radius:9px;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;text-align:center;padding:0 3px"><?= min($_navYaiCount,99) ?></span>
+      <?php else: ?>
+      <span id="yai-bell-badge" style="position:absolute;top:-4px;left:-4px;background:#ef4444;color:#fff;border-radius:9px;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;text-align:center;padding:0 3px;display:none">0</span>
+      <?php endif; ?>
+    </a>
+    <a href="admin.php?page=logout" style="color:var(--danger)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9"/></svg>
+    </a>
+  </div>
 </div>
 <div class="admin-sidebar-overlay" id="admin-sidebar-overlay"></div>
 
@@ -15002,6 +15141,212 @@ async function clearOldLogs(){
   });
 
   loadDir('');
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'notifications'): ?>
+<?php
+// Mark all as read when viewing the page
+$pdo->exec("UPDATE notifications SET is_read=1 WHERE is_read=0");
+$notifs = $pdo->query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+$severityColors = ['info'=>'#38bdf8','warning'=>'#f59e0b','critical'=>'#ef4444'];
+$typeIcons = [
+    'security'=>'🛡️','vpn'=>'🔒','seo'=>'📊','domain'=>'🌐','system'=>'⚙️','app'=>'📱','error'=>'❌'
+];
+?>
+<div class="admin-card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <span style="font-size:24px">🔔</span>
+    <div>
+      <h2 style="margin:0;font-size:20px">إشعارات Yassota AI</h2>
+      <p style="margin:0;color:var(--text-muted);font-size:13px">جميع الأحداث والتنبيهات الذكية للموقع</p>
+    </div>
+    <div style="margin-right:auto;display:flex;gap:8px">
+      <button onclick="deleteRead()" class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">🗑️ حذف المقروءة</button>
+    </div>
+  </div>
+  <?php if (empty($notifs)): ?>
+  <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+    <div style="font-size:48px;margin-bottom:12px">🔕</div>
+    <p>لا توجد إشعارات حتى الآن</p>
+  </div>
+  <?php else: ?>
+  <div id="notif-list">
+  <?php foreach ($notifs as $n): ?>
+  <div class="notif-item" data-id="<?= (int)$n['id'] ?>" style="display:flex;gap:12px;padding:14px;border-bottom:1px solid var(--border);border-right:3px solid <?= h($severityColors[$n['severity']] ?? '#38bdf8') ?>">
+    <div style="font-size:22px;flex-shrink:0"><?= $typeIcons[$n['type']] ?? '📌' ?></div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <strong style="font-size:14px"><?= h($n['title']) ?></strong>
+        <span style="background:<?= h($severityColors[$n['severity']] ?? '#38bdf8') ?>;color:#000;border-radius:4px;font-size:10px;font-weight:700;padding:2px 6px"><?= h($n['severity']) ?></span>
+        <?php if ($n['auto_fixed']): ?>
+        <span style="background:#22c55e;color:#000;border-radius:4px;font-size:10px;font-weight:700;padding:2px 6px">✅ تم الإصلاح تلقائياً</span>
+        <?php endif; ?>
+      </div>
+      <p style="margin:4px 0;color:var(--text-muted);font-size:13px;white-space:pre-line"><?= h($n['body']) ?></p>
+      <?php if ($n['fix_details']): ?>
+      <p style="margin:4px 0;color:#22c55e;font-size:12px">📋 <?= h($n['fix_details']) ?></p>
+      <?php endif; ?>
+      <?php if ($n['url']): ?>
+      <a href="<?= h($n['url']) ?>" style="color:var(--primary);font-size:12px">🔗 عرض التفاصيل</a>
+      <?php endif; ?>
+      <div style="color:var(--text-muted);font-size:11px;margin-top:4px"><?= h($n['created_at']) ?></div>
+    </div>
+    <button onclick="deleteNotif(<?= (int)$n['id'] ?>,this)" title="حذف" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:4px;flex-shrink:0">✕</button>
+  </div>
+  <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
+<script>
+function deleteNotif(id, btn) {
+  fetch('admin.php?ajax=notifications_delete', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(()=>{
+    btn.closest('.notif-item').remove();
+  });
+}
+function deleteRead() {
+  if (!confirm('حذف جميع الإشعارات المقروءة؟')) return;
+  fetch('admin.php?ajax=notifications_delete', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  }).then(()=>location.reload());
+}
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'sitemap-health'): ?>
+<?php
+$sitemapApps  = $pdo->query("SELECT slug, name, updated_at FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
+$loggedUrls   = $pdo->query("SELECT * FROM sitemap_url_log ORDER BY checked_at DESC LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
+$totalHealthy = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=1")->fetchColumn();
+$totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=0 AND http_code > 0")->fetchColumn();
+?>
+<div class="admin-card">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <span style="font-size:24px">🗺️</span>
+    <div>
+      <h2 style="margin:0;font-size:20px">صحة Sitemap</h2>
+      <p style="margin:0;color:var(--text-muted);font-size:13px">فحص وتنظيف المسارات — <?= count($sitemapApps) ?> تطبيق منشور</p>
+    </div>
+    <div style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="runHealthCheck()" id="btn-check" class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">🔍 فحص المسارات</button>
+      <button onclick="runPrune()" class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">🗑️ تنظيف المعطوب</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px">
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:#22c55e"><?= $totalHealthy ?></div>
+      <div style="font-size:12px;color:var(--text-muted)">سليمة</div>
+    </div>
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:#ef4444"><?= $totalDead ?></div>
+      <div style="font-size:12px;color:var(--text-muted)">معطوبة</div>
+    </div>
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
+      <div style="font-size:24px;font-weight:700;color:var(--primary)"><?= count($sitemapApps) ?></div>
+      <div style="font-size:12px;color:var(--text-muted)">تطبيقات منشورة</div>
+    </div>
+  </div>
+
+  <!-- Progress area -->
+  <div id="check-progress" style="display:none;margin-bottom:16px">
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:13px">جارٍ الفحص...</span>
+        <span id="check-count" style="font-size:13px;color:var(--text-muted)">0 / 0</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:6px">
+        <div id="check-bar" style="background:var(--primary);border-radius:4px;height:6px;width:0%;transition:width 0.3s"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div style="overflow-x:auto">
+    <table class="admin-table" id="health-table">
+      <thead><tr>
+        <th>المسار</th><th>الكود</th><th>الحالة</th><th>إعادة التوجيه</th><th>آخر فحص</th>
+      </tr></thead>
+      <tbody id="health-body">
+      <?php if (empty($loggedUrls)): ?>
+      <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:30px">لم يتم الفحص بعد — اضغط "فحص المسارات"</td></tr>
+      <?php else: foreach ($loggedUrls as $lu): ?>
+      <tr>
+        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <a href="<?= h($lu['url']) ?>" target="_blank" style="color:var(--primary);font-size:12px"><?= h($lu['url']) ?></a>
+        </td>
+        <td><span style="font-weight:700;color:<?= $lu['is_healthy'] ? '#22c55e' : '#ef4444' ?>"><?= (int)$lu['http_code'] ?></span></td>
+        <td><?= $lu['is_healthy'] ? '<span style="color:#22c55e">✅ سليم</span>' : '<span style="color:#ef4444">❌ معطوب</span>' ?></td>
+        <td style="font-size:11px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis"><?= h($lu['redirects_to'] ?? '—') ?></td>
+        <td style="font-size:11px;color:var(--text-muted)"><?= h($lu['checked_at']) ?></td>
+      </tr>
+      <?php endforeach; endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function(){
+  var appUrls = <?= json_encode(array_values(array_map(fn($a) => SITE_URL . '/app/' . $a['slug'], $sitemapApps))) ?>;
+  var staticUrls = ['<?= SITE_URL ?>/', '<?= SITE_URL ?>/blog', '<?= SITE_URL ?>/about',
+                    '<?= SITE_URL ?>/contact', '<?= SITE_URL ?>/privacy-policy', '<?= SITE_URL ?>/terms'];
+  var allUrls = staticUrls.concat(appUrls);
+
+  async function runHealthCheck() {
+    var btn = document.getElementById('btn-check');
+    btn.disabled = true;
+    btn.textContent = '⏳ جارٍ الفحص...';
+    document.getElementById('check-progress').style.display = 'block';
+    document.getElementById('health-body').innerHTML = '';
+    var total = allUrls.length;
+    var done  = 0;
+    var batchSize = 10;
+
+    for (var i = 0; i < allUrls.length; i += batchSize) {
+      var batch = allUrls.slice(i, i + batchSize);
+      try {
+        var resp = await fetch('admin.php?ajax=sitemap_health_check', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({urls: batch})
+        });
+        var data = await resp.json();
+        if (data.results) {
+          data.results.forEach(function(r){
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="'+r.url+'" target="_blank" style="color:var(--primary);font-size:12px">'+r.url+'</a></td>'
+              + '<td><span style="font-weight:700;color:'+(r.healthy?'#22c55e':'#ef4444')+'">'+r.code+'</span></td>'
+              + '<td>'+(r.healthy?'<span style="color:#22c55e">✅ سليم</span>':'<span style="color:#ef4444">❌ معطوب</span>')+'</td>'
+              + '<td style="font-size:11px;color:var(--text-muted)">'+(r.redirects_to||'—')+'</td>'
+              + '<td style="font-size:11px;color:var(--text-muted)">الآن</td>';
+            document.getElementById('health-body').appendChild(tr);
+          });
+        }
+      } catch(e) {}
+      done += batch.length;
+      document.getElementById('check-count').textContent = done + ' / ' + total;
+      document.getElementById('check-bar').style.width = Math.round(done/total*100) + '%';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🔍 فحص المسارات';
+  }
+
+  async function runPrune() {
+    if (!confirm('تنظيف التطبيقات ذات الروابط المعطوبة وتحويلها إلى مسودة؟')) return;
+    var resp = await fetch('admin.php?ajax=sitemap_prune', {method:'POST'});
+    var data = await resp.json();
+    alert('تم تنظيف ' + (data.pruned||0) + ' تطبيق');
+    location.reload();
+  }
+
+  window.runHealthCheck = runHealthCheck;
+  window.runPrune = runPrune;
 })();
 </script>
 <?php endif; ?>
