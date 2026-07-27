@@ -8,25 +8,31 @@ header('Content-Type: application/xml; charset=utf-8');
 header('X-Robots-Tag: noindex');
 
 // ── التطبيقات المنشورة ──
-$allApps = $pdo->query(
-    "SELECT id, slug, name, seo_title, meta_desc, meta_description,
-            long_description, icon_path, download_url, updated_at
-     FROM apps
-     WHERE status='published'
-     ORDER BY updated_at DESC"
-)->fetchAll();
+$allApps = [];
+try {
+    $allApps = $pdo->query(
+        "SELECT id, slug, name, seo_title, meta_desc, meta_description,
+                long_description, icon_path, download_url, updated_at
+         FROM apps
+         WHERE status='published'
+         ORDER BY updated_at DESC"
+    )->fetchAll();
+} catch (\Throwable $e) { $allApps = []; }
 
 // فلتر Layos ≥ 50٪
 $apps    = [];
 $skipped = 0;
 foreach ($allApps as $a) {
-    // merge meta_desc aliases
-    if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
-    $result = layos_score_app($a);
-    if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
-        $apps[] = $a;
-    } else {
-        $skipped++;
+    try {
+        if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
+        $result = layos_score_app($a);
+        if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
+            $apps[] = $a;
+        } else {
+            $skipped++;
+        }
+    } catch (\Throwable $e) {
+        $apps[] = $a; // on scoring error, include app by default
     }
 }
 
@@ -61,10 +67,13 @@ $developers = $pdo->query(
 )->fetchAll(PDO::FETCH_COLUMN);
 
 // ── مقالات المدونة ──
-$blogPosts = $pdo->query(
-    "SELECT slug, updated_at FROM blog_posts
-     WHERE status='published' ORDER BY updated_at DESC LIMIT 200"
-)->fetchAll();
+$blogPosts = [];
+try {
+    $blogPosts = $pdo->query(
+        "SELECT slug, updated_at FROM blog_posts
+         WHERE status='published' ORDER BY updated_at DESC LIMIT 200"
+    )->fetchAll();
+} catch (\Throwable $e) { $blogPosts = []; }
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
