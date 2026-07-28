@@ -15805,15 +15805,19 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
    ════════════════════════════════════════════ */
 
 // فحص التطبيقات
-$allApps = $pdo->query(
-    "SELECT id, slug, name, seo_title, meta_desc, meta_description,
-            long_description, icon_path, download_url, updated_at
-     FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 300"
-)->fetchAll();
+$allApps = [];
+try {
+    $allApps = $pdo->query(
+        "SELECT id, slug, name, seo_title, meta_description,
+                long_description, icon_path, download_url, updated_at
+         FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 300"
+    )->fetchAll();
+} catch (\Throwable $e) { $allApps = []; }
 
 $appResults = [];
 foreach ($allApps as $a) {
-    if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
+    // normalize key alias used by layos_score_app
+    $a['meta_desc'] = $a['meta_description'] ?? '';
     $sc = layos_score_app($a);
     $ov = layos_get_override($pdo, 'app', (int)$a['id']);
     $appResults[] = ['data' => $a, 'score' => $sc, 'override' => $ov,
@@ -15822,13 +15826,16 @@ foreach ($allApps as $a) {
 usort($appResults, fn($a,$b) => $a['score']['score'] <=> $b['score']['score']);
 
 // فحص المقالات
-$rawArts = $pdo->query(
-    "SELECT ar.id, ar.title, ar.slug, ar.body, ar.meta_description, ar.seo_title,
-            ar.created_at, ar.app_id, a.name AS app_name, a.icon_path
-     FROM app_articles ar JOIN apps a ON ar.app_id=a.id
-     WHERE a.status='published'
-     ORDER BY ar.created_at DESC LIMIT 400"
-)->fetchAll();
+$rawArts = [];
+try {
+    $rawArts = $pdo->query(
+        "SELECT ar.id, ar.title, ar.slug, ar.body, ar.meta_description, ar.seo_title,
+                ar.created_at, ar.app_id, a.name AS app_name, a.icon_path
+         FROM app_articles ar JOIN apps a ON ar.app_id=a.id
+         WHERE a.status='published'
+         ORDER BY ar.created_at DESC LIMIT 400"
+    )->fetchAll();
+} catch (\Throwable $e) { $rawArts = []; }
 
 $artResults = [];
 foreach ($rawArts as $art) {
@@ -16291,12 +16298,14 @@ $medium    = count($appScores) - $critical - $good;
 <div class="admin-card" style="margin-top:20px">
   <h3 style="margin-bottom:16px;font-size:16px">📋 SEO Checklist — موقعك بالكامل</h3>
   <?php
+  try {
   $totalApps   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
   $noTitle     = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (seo_title IS NULL OR seo_title='') AND status='published'")->fetchColumn();
-  $noDesc      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (meta_desc IS NULL OR meta_desc='') AND status='published'")->fetchColumn();
+  $noDesc      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (meta_description IS NULL OR meta_description='') AND status='published'")->fetchColumn();
   $noContent   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (long_description IS NULL OR long_description='') AND status='published'")->fetchColumn();
   $noIcon      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (icon_path IS NULL OR icon_path='') AND status='published'")->fetchColumn();
   $noDl        = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE (download_url IS NULL OR download_url='') AND status='published'")->fetchColumn();
+  } catch (\Throwable $e) { $totalApps=$noTitle=$noDesc=$noContent=$noIcon=$noDl=0; }
   $hasSitemap  = file_exists(__DIR__ . '/sitemap.php');
   $hasRobots   = file_exists(__DIR__ . '/robots.php');
   $checks = [
