@@ -9,16 +9,21 @@
  */
 
 // ── Config / DB bootstrap ───────────────────────────────────────────────────
-$_base = $_SERVER['DOCUMENT_ROOT'];
-// Try loading local config from domain root, then walk up one level (main site)
-foreach ([$_base . '/config.local.php', dirname($_base) . '/config.local.php'] as $_lc) {
-    if (file_exists($_lc)) { require_once $_lc; break; }
+// Walk up from docroot up to 4 levels to find the main site's config.php.
+// For cPanel subdomains (docroot: /home/user/sub.domain.com/public_html)
+// the main site config is at /home/user/public_html/config.php — 3 levels up.
+$_b = $_SERVER['DOCUMENT_ROOT'];
+$_cfgFound = false;
+for ($_i = 0; $_i < 5; $_i++) {
+    if (file_exists($_b . '/config.php')) {
+        if (file_exists($_b . '/config.local.php')) require_once $_b . '/config.local.php';
+        require_once $_b . '/config.php';
+        $_cfgFound = true;
+        break;
+    }
+    $_b = dirname($_b);
 }
-// Load main config from domain root or parent
-foreach ([$_base . '/config.php', dirname($_base) . '/config.php'] as $_cfg) {
-    if (file_exists($_cfg)) { require_once $_cfg; break; }
-}
-if (!isset($pdo)) { http_response_code(503); die('Configuration not found'); }
+if (!$_cfgFound || !isset($pdo)) { http_response_code(503); die('Configuration not found'); }
 
 // ── Domain settings ─────────────────────────────────────────────────────────
 $domainHost = strtolower($_SERVER['HTTP_HOST'] ?? '');
