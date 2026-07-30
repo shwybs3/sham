@@ -768,6 +768,35 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'sitemap_url_log';
 
+    // ── Admin activity log ─────────────────────────────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS admin_activity_log (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      admin_id   INT NOT NULL,
+      username   VARCHAR(80) NOT NULL DEFAULT '',
+      action     VARCHAR(80) NOT NULL,
+      object_type VARCHAR(40) DEFAULT NULL COMMENT 'app|blog_post|comment|setting',
+      object_id  INT DEFAULT NULL,
+      object_name VARCHAR(220) DEFAULT NULL,
+      detail     TEXT DEFAULT NULL,
+      ip         VARCHAR(45) DEFAULT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_admin (admin_id),
+      INDEX idx_action (action),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'admin_activity_log';
+
+    // Additive columns for admins table
+    foreach ([
+        ['role',          "ENUM('superadmin','editor','moderator') NOT NULL DEFAULT 'superadmin'"],
+        ['display_name',  "VARCHAR(120) DEFAULT NULL"],
+        ['last_login_at', "DATETIME DEFAULT NULL"],
+        ['last_login_ip', "VARCHAR(45) DEFAULT NULL"],
+    ] as [$col, $def]) {
+        $exists = $pdo->query("SHOW COLUMNS FROM admins LIKE '$col'")->rowCount();
+        if (!$exists) { $pdo->exec("ALTER TABLE admins ADD COLUMN $col $def"); $log[] = "admins.$col"; }
+    }
+
     // ── IP reputation cache (VPN/proxy detection) ─────────────────────────
     $pdo->exec("CREATE TABLE IF NOT EXISTS evil_ip_cache (
       ip          VARCHAR(45) NOT NULL PRIMARY KEY,
@@ -3774,6 +3803,18 @@ function is_admin(): bool { return !empty($_SESSION['admin_id']); }
 
 function require_admin(): void {
     if (!is_admin()) { header('Location: ' . url('admin.php?page=login')); exit; }
+}
+
+function log_admin_action(PDO $pdo, string $action, string $objType = '', int $objId = 0, string $objName = '', string $detail = ''): void {
+    try {
+        $adminId   = (int)($_SESSION['admin_id']   ?? 0);
+        $username  = $_SESSION['admin_user'] ?? '';
+        $ip        = $_SERVER['REMOTE_ADDR'] ?? '';
+        $pdo->prepare(
+            "INSERT INTO admin_activity_log (admin_id,username,action,object_type,object_id,object_name,detail,ip,created_at)
+             VALUES (?,?,?,?,?,?,?,?,NOW())"
+        )->execute([$adminId, $username, $action, $objType ?: null, $objId ?: null, $objName ?: null, $detail ?: null, $ip]);
+    } catch (\Throwable $e) {}
 }
 
 function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? ''; }

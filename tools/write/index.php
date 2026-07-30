@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'كاتب المحتوى العربي بالذكاء الاصطناعي','url'=>TOOLS_BASE_URL.'/','description'=>'أنشئ محتوى عربي احترافي بالذكاء الاصطناعي — مقالات وأوصاف منتجات وبريد إلكتروني مجاناً','applicationCategory'=>'WritingApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'كاتب المحتوى العربي بالذكاء الاصطناعي','url'=>TOOLS_BASE_URL.'/tools/write/','description'=>'أنشئ محتوى عربي احترافي بالذكاء الاصطناعي — مقالات وأوصاف منتجات وبريد إلكتروني مجاناً','applicationCategory'=>'WritingApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('كاتب المحتوى العربي بالذكاء الاصطناعي | yassota أدوات','أنشئ مقالات ومنشورات وأوصاف منتجات باللغة العربية بالذكاء الاصطناعي — مجاناً وبجودة احترافية',$schema,'#0891b2');
 tool_header();
 ?>

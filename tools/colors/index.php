@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'منتقي الألوان وتوليد لوحات الألوان','url'=>TOOLS_BASE_URL.'/','description'=>'اختر لوناً وولّد تلقائياً لوحة ألوان متناسقة مجاناً','applicationCategory'=>'DesignApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'منتقي الألوان وتوليد لوحات الألوان','url'=>TOOLS_BASE_URL.'/tools/colors/','description'=>'اختر لوناً وولّد تلقائياً لوحة ألوان متناسقة مجاناً','applicationCategory'=>'DesignApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('منتقي الألوان — لوحة ألوان متناسقة مجانية | yassota أدوات','اختر أي لون وحوّله فوراً إلى قيم HEX و RGB و HSL ولوحة ألوان كاملة — مجاناً في متصفحك',$schema,'#7c3aed');
 tool_header();
 ?>

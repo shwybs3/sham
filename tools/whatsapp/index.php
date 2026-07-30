@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد روابط واتساب','url'=>TOOLS_BASE_URL.'/','description'=>'أنشئ رابط واتساب مباشر برقم وأي رسالة مجاناً بدون حفظ الرقم','applicationCategory'=>'CommunicationApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد روابط واتساب','url'=>TOOLS_BASE_URL.'/tools/whatsapp/','description'=>'أنشئ رابط واتساب مباشر برقم وأي رسالة مجاناً بدون حفظ الرقم','applicationCategory'=>'CommunicationApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('مولّد رابط واتساب مباشر — بدون حفظ الرقم | yassota أدوات','أنشئ رابط واتساب مباشر لأي رقم ورسالة مخصصة — مثالي للأعمال والتسويق، مجاني 100%',$schema,'#16a34a');
 tool_header();
 ?>

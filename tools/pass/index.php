@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد كلمات المرور القوية','url'=>TOOLS_BASE_URL.'/','description'=>'أنشئ كلمة مرور قوية وآمنة مجاناً باختياراتك','applicationCategory'=>'SecurityApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد كلمات المرور القوية','url'=>TOOLS_BASE_URL.'/tools/pass/','description'=>'أنشئ كلمة مرور قوية وآمنة مجاناً باختياراتك','applicationCategory'=>'SecurityApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('مولّد كلمات المرور القوية | yassota أدوات','أنشئ كلمة مرور قوية وعشوائية في ثانية واحدة — مجاناً وبأمان تام في متصفحك',$schema,'#dc2626');
 tool_header();
 ?>

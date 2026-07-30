@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد الهاشتاق بالذكاء الاصطناعي','url'=>TOOLS_BASE_URL.'/','description'=>'أنشئ هاشتاقات احترافية لإنستغرام وتيك توك وتويتر بالذكاء الاصطناعي مجاناً','applicationCategory'=>'MarketingApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مولّد الهاشتاق بالذكاء الاصطناعي','url'=>TOOLS_BASE_URL.'/tools/hashtag/','description'=>'أنشئ هاشتاقات احترافية لإنستغرام وتيك توك وتويتر بالذكاء الاصطناعي مجاناً','applicationCategory'=>'MarketingApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('مولّد الهاشتاق بالذكاء الاصطناعي — إنستغرام وتيك توك | yassota أدوات','أنشئ هاشتاقات احترافية ومتنوعة لمنصاتك بالذكاء الاصطناعي — مجاناً لإنستغرام وتيك توك وتويتر',$schema,'#e11d48');
 tool_header();
 ?>

@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['img'])) {
     }
 }
 
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'تغيير حجم الصورة مجاناً','url'=>TOOLS_BASE_URL.'/','description'=>'غيّر أبعاد الصورة بدقة وحوّلها إلى WebP أو JPG أو PNG مجاناً','applicationCategory'=>'UtilitiesApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'تغيير حجم الصورة مجاناً','url'=>TOOLS_BASE_URL.'/tools/resize/','description'=>'غيّر أبعاد الصورة بدقة وحوّلها إلى WebP أو JPG أو PNG مجاناً','applicationCategory'=>'UtilitiesApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('تغيير حجم الصورة مجاناً — Resize Image | yassota أدوات','غيّر أبعاد صورتك بدقة وحوّلها إلى WebP أو JPG أو PNG مع الحفاظ على النسبة — مجاناً وبدون تسجيل',$schema,'#dc2626');
 tool_header();
 ?>

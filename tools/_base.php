@@ -9,9 +9,18 @@ define('ADSENSE_PUB', 'ca-pub-5506877998492189');
 $toolHost = $_SERVER['HTTP_HOST'] ?? '';
 $toolSlug = explode('.', $toolHost)[0] ?? 'tools';
 
+/** Returns the canonical URL for this tool page, derived from the request URI. */
+function tool_canonical_url(): string {
+    $base   = rtrim(TOOLS_BASE_URL, '/');
+    $reqUri = rtrim(strtok($_SERVER['REQUEST_URI'] ?? '/', '?'), '/');
+    // Normalise: ensure path starts with /tools/ when served from main site
+    return $base . $reqUri . '/';
+}
+
 function tool_head(string $title, string $desc, string $schema = '', string $color = '#2563eb'): void {
-    $adsensePub = ADSENSE_PUB;
-    $siteUrl    = rtrim(TOOLS_BASE_URL, '/');
+    $adsensePub  = ADSENSE_PUB;
+    $siteUrl     = rtrim(TOOLS_BASE_URL, '/');
+    $canonical   = tool_canonical_url();
     $schemaBlock = $schema ? "\n<script type=\"application/ld+json\">$schema</script>" : '';
     echo <<<HTML
 <!DOCTYPE html>
@@ -24,12 +33,13 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 <meta property="og:title" content="$title">
 <meta property="og:description" content="$desc">
 <meta property="og:type" content="website">
+<meta property="og:url" content="$canonical">
 <meta property="og:site_name" content="yassota أدوات">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="$title">
 <meta name="twitter:description" content="$desc">
 <meta name="theme-color" content="$color">
-<link rel="canonical" href="$siteUrl/">
+<link rel="canonical" href="$canonical">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=$adsensePub" crossorigin="anonymous"></script>
 $schemaBlock
 <style>

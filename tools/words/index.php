@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'عدّاد الكلمات وتحليل النص العربي','url'=>TOOLS_BASE_URL.'/','description'=>'عدّ كلمات النص العربي وحلّله فورياً — الكلمات والأحرف والجمل مجاناً','applicationCategory'=>'UtilitiesApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'عدّاد الكلمات وتحليل النص العربي','url'=>TOOLS_BASE_URL.'/tools/words/','description'=>'عدّ كلمات النص العربي وحلّله فورياً — الكلمات والأحرف والجمل مجاناً','applicationCategory'=>'UtilitiesApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('عدّاد الكلمات العربي — تحليل النص مجاناً | yassota أدوات','عدّ كلمات وأحرف وجمل نصك العربي فوراً — مع إحصاءات متقدمة وتحديد الكلمات الأكثر تكراراً',$schema,'#059669');
 tool_header();
 ?>

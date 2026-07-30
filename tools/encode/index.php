@@ -1,6 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
-$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مشفّر Base64 وURL وHash','url'=>TOOLS_BASE_URL.'/','description'=>'شفّر وفكّ تشفير النصوص بـ Base64 وURL وMD5 وSHA مجاناً','applicationCategory'=>'DeveloperApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
+$schema = json_encode(['@context'=>'https://schema.org','@type'=>'WebApplication','name'=>'مشفّر Base64 وURL وHash','url'=>TOOLS_BASE_URL.'/tools/encode/','description'=>'شفّر وفكّ تشفير النصوص بـ Base64 وURL وMD5 وSHA مجاناً','applicationCategory'=>'DeveloperApplication','operatingSystem'=>'All','offers'=>['@type'=>'Offer','price'=>'0','priceCurrency'=>'USD']]);
 tool_head('مشفّر وفاكّ تشفير Base64 وURL وHash | yassota أدوات','شفّر وفكّ تشفير Base64 وURL وأنشئ MD5 وSHA-1 وSHA-256 — أداة مجانية للمطورين تعمل في المتصفح',$schema,'#0891b2');
 tool_header();
 ?>

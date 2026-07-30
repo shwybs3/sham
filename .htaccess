@@ -1,5 +1,5 @@
 Options -Indexes
-DirectoryIndex index.php
+DirectoryIndex index.php index.html
 ErrorDocument 404 /404.php
 
 # Allow large APK uploads (up to 500MB) — only applied if PHP runs under Apache mod_php
@@ -126,8 +126,8 @@ ErrorDocument 404 /404.php
   RewriteRule ^([^/]+)/apk/?$ app.php?slug=$1 [L,QSA]
 
   # Landing pages: /landing/{lang}/{slug}/ -> landing/{lang}/{slug}/index.html
+  # Note: no !-d condition — fire even when directory exists (DirectoryIndex handles index.html)
   RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^landing/([a-z]{2})/([^/]+)/?$ landing/$1/$2/index.html [L]
 
   # Price, calculator, and tools pages — must come BEFORE the app-slug catch-all

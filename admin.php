@@ -3216,6 +3216,8 @@ if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_id'] = $admin['id'];
             $_SESSION['admin_user'] = $admin['username'];
             log_security_event($pdo, 'login_success', 'info', "Admin login from $clientIp");
+            try { $pdo->prepare("UPDATE admins SET last_login_at=NOW(),last_login_ip=? WHERE id=?")->execute([$clientIp, $admin['id']]); } catch (\Throwable $e) {}
+            log_admin_action($pdo, 'login', 'admin', (int)$admin['id'], $admin['username']);
             header('Location: admin.php'); exit;
         }
         // Wrong credentials — record failure and get lockout
@@ -3327,8 +3329,12 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 // ─── Delete app ───
 if ($page === 'apps' && isset($_GET['del']) && isset($_GET['t']) &&
     hash_equals($_SESSION['csrf'] ?? '', $_GET['t'])) {
-    $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([(int)$_GET['del']]);
+    $delId = (int)$_GET['del'];
+    $delName = '';
+    try { $delName = $pdo->prepare("SELECT name FROM apps WHERE id=?")->execute([$delId]) ? ($pdo->query("SELECT name FROM apps WHERE id=$delId")->fetchColumn() ?: '') : ''; } catch (\Throwable $e) {}
+    $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([$delId]);
     bump_cache_version($pdo);
+    log_admin_action($pdo, 'delete_app', 'app', $delId, $delName);
     sitemap_touch($pdo, 'app_deleted');
     header('Location: admin.php?page=apps&msg=deleted'); exit;
 }
@@ -3409,6 +3415,7 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             } catch (\Throwable $e) {}
         }
         bump_cache_version($pdo);
+        log_admin_action($pdo, $wasPublished ? 'edit_blog_post' : 'publish_blog_post', 'blog_post', $id, $d['title']??'', $d['status']);
         // Ping IndexNow for the new/updated article URL
         if ($d['status'] === 'published' && $id) {
             try {
@@ -3629,6 +3636,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $d['id'] = $appId;
         $pdo->prepare("UPDATE apps SET $sets WHERE id=:id")->execute($d);
         bump_cache_version($pdo);
+        log_admin_action($pdo, ($d['status']??'')===($existing['status']??'') ? 'edit_app' : 'status_change_app', 'app', $appId, $d['name']??'', ($d['status']??''));
         if (($d['status'] ?? '') === 'published' || ($existing['status'] ?? '') === 'published') {
             sitemap_touch($pdo, 'app_updated');
         }
@@ -3675,6 +3683,7 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $pdo->prepare("INSERT INTO apps ($cols) VALUES ($vals)")->execute($d);
         $newId = (int)$pdo->lastInsertId();
         bump_cache_version($pdo);
+        log_admin_action($pdo, 'add_app', 'app', $newId, $d['name']??'', $requestedStatus);
         if ($requestedStatus === 'published') sitemap_touch($pdo, 'app_published');
         if ($requestedStatus === 'published' && $newId) {
             $saved = $pdo->prepare("SELECT * FROM apps WHERE id=?")->execute([$newId]) ? $pdo->query("SELECT * FROM apps WHERE id={$newId}")->fetch(PDO::FETCH_ASSOC) : array_merge($d, ['id' => $newId]);
@@ -6763,6 +6772,7 @@ $navLinks = [
     'domain-broadcast' => ['label'=>'📡 نشر متعدد الدومينات', 'icon'=>'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0'],
     'subdomain-manager' => ['label'=>'🌐 إنشاء دومينات فرعية', 'icon'=>'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'],
     'ad-networks' => ['label'=>'شبكات الإعلانات & AdSense', 'icon'=>'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
+    'admin-users' => ['label'=>'👤 المشرفون وسجل النشاط', 'icon'=>'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M9 7a4 4 0 100 8 4 4 0 000-8z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
 ];
@@ -10188,6 +10198,182 @@ function toggleTips(key) {
   var el = document.getElementById('tips-'+key);
   if (el) el.style.display = el.style.display==='none' ? 'table-row' : 'none';
 }
+</script>
+
+<?php
+/* ─────────────── ADMIN USERS + ACTIVITY LOG ─────────────── */
+elseif ($page === 'admin-users'):
+// Handle add admin
+$adminMsg = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    if (!empty($_POST['new_username']) && !empty($_POST['new_password'])) {
+        $nu = trim($_POST['new_username']);
+        $np = $_POST['new_password'];
+        if (strlen($nu) < 3 || strlen($np) < 8) {
+            $adminMsg = 'اسم المستخدم 3 أحرف على الأقل وكلمة المرور 8 أحرف.';
+        } else {
+            try {
+                $pdo->prepare("INSERT INTO admins (username,password_hash,display_name,role) VALUES (?,?,?,?)")
+                    ->execute([$nu, password_hash($np, PASSWORD_DEFAULT), trim($_POST['display_name']??''), 'editor']);
+                log_admin_action($pdo, 'add_admin', 'admin', (int)$pdo->lastInsertId(), $nu);
+                $adminMsg = 'تم إضافة المشرف بنجاح.';
+            } catch (\Throwable $e) {
+                $adminMsg = 'فشل الإضافة: ' . h($e->getMessage());
+            }
+        }
+    } elseif (!empty($_POST['change_pass_id']) && !empty($_POST['change_pass'])) {
+        $cpId = (int)$_POST['change_pass_id'];
+        $cpPw = $_POST['change_pass'];
+        if (strlen($cpPw) < 8) { $adminMsg = 'كلمة المرور 8 أحرف على الأقل.'; }
+        else {
+            $pdo->prepare("UPDATE admins SET password_hash=? WHERE id=?")->execute([password_hash($cpPw, PASSWORD_DEFAULT), $cpId]);
+            log_admin_action($pdo, 'change_admin_password', 'admin', $cpId, '', '');
+            $adminMsg = 'تم تغيير كلمة المرور.';
+        }
+    }
+}
+if (isset($_GET['del_admin']) && (int)$_GET['del_admin'] > 0 && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+    $daId = (int)$_GET['del_admin'];
+    if ($daId !== (int)($_SESSION['admin_id'] ?? 0)) {
+        $pdo->prepare("DELETE FROM admins WHERE id=?")->execute([$daId]);
+        log_admin_action($pdo, 'delete_admin', 'admin', $daId, '');
+        $adminMsg = 'تم حذف المشرف.';
+    } else { $adminMsg = 'لا يمكنك حذف حسابك الحالي.'; }
+}
+$admins  = [];
+try { $admins = $pdo->query("SELECT id,username,display_name,role,last_login_at,last_login_ip,created_at FROM admins ORDER BY id")->fetchAll(); } catch (\Throwable $e) {}
+$actLog  = [];
+try { $actLog = $pdo->query("SELECT * FROM admin_activity_log ORDER BY created_at DESC LIMIT 200")->fetchAll(); } catch (\Throwable $e) {}
+$actActionLabels = [
+  'login'               => 'تسجيل دخول',
+  'add_app'             => 'إضافة تطبيق',
+  'edit_app'            => 'تعديل تطبيق',
+  'status_change_app'   => 'تغيير حالة تطبيق',
+  'delete_app'          => 'حذف تطبيق',
+  'publish_blog_post'   => 'نشر مقالة',
+  'edit_blog_post'      => 'تعديل مقالة',
+  'add_admin'           => 'إضافة مشرف',
+  'delete_admin'        => 'حذف مشرف',
+  'change_admin_password'=> 'تغيير كلمة مرور',
+];
+$csrf = $_SESSION['csrf'] ?? '';
+?>
+<div class="page-header"><h1 class="page-title">المشرفون وسجل النشاط</h1></div>
+
+<?php if ($adminMsg): ?>
+<div style="background:<?= str_starts_with($adminMsg,'تم') ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)' ?>;border:1px solid <?= str_starts_with($adminMsg,'تم') ? '#22c55e44' : '#ef444444' ?>;border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;color:var(--fg)">
+  <?= h($adminMsg) ?>
+</div>
+<?php endif; ?>
+
+<!-- Admins List -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header"><div class="card-title">قائمة المشرفين</div></div>
+  <div style="overflow-x:auto">
+    <table class="data-table">
+      <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم المعروض</th><th>الصلاحية</th><th>آخر دخول</th><th>IP</th><th>تاريخ الإنشاء</th><th>إجراء</th></tr></thead>
+      <tbody>
+        <?php foreach ($admins as $adm): ?>
+        <tr>
+          <td><?= $adm['id'] ?></td>
+          <td><strong><?= h($adm['username']) ?></strong> <?php if ($adm['id'] == ($_SESSION['admin_id']??0)): ?><span class="badge badge-cyan">أنت</span><?php endif; ?></td>
+          <td><?= h($adm['display_name'] ?: '—') ?></td>
+          <td><span class="badge badge-<?= $adm['role']==='superadmin' ? 'purple' : 'muted' ?>"><?= h($adm['role']) ?></span></td>
+          <td style="font-size:12px;color:var(--muted)"><?= $adm['last_login_at'] ? date('d/m/Y H:i', strtotime($adm['last_login_at'])) : '—' ?></td>
+          <td style="font-size:12px;font-family:var(--f-mono);color:var(--muted)"><?= h($adm['last_login_ip'] ?: '—') ?></td>
+          <td style="font-size:12px;color:var(--muted)"><?= date('d/m/Y', strtotime($adm['created_at'])) ?></td>
+          <td>
+            <form method="post" style="display:inline" onsubmit="var p=prompt('كلمة المرور الجديدة (8 أحرف+)');if(!p){return false;}this.change_pass.value=p;">
+              <?= csrf_field() ?>
+              <input type="hidden" name="change_pass_id" value="<?= $adm['id'] ?>">
+              <input type="hidden" name="change_pass" value="">
+              <button type="submit" class="btn btn-sm" style="background:var(--navy-600)">🔑 تغيير كلمة المرور</button>
+            </form>
+            <?php if ($adm['id'] != ($_SESSION['admin_id']??0)): ?>
+            <a href="admin.php?page=admin-users&del_admin=<?= $adm['id'] ?>&t=<?= urlencode($csrf) ?>"
+               onclick="return confirm('حذف هذا المشرف؟')"
+               style="display:inline-flex;align-items:center;padding:5px 10px;background:rgba(239,68,68,.12);border:1px solid #ef444444;border-radius:6px;color:#ef4444;font-size:12px;text-decoration:none;margin-right:4px">
+              🗑 حذف
+            </a>
+            <?php endif; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Admin -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header"><div class="card-title">إضافة مشرف جديد</div></div>
+  <form method="post" style="padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end">
+    <?= csrf_field() ?>
+    <div>
+      <label class="form-label">اسم المستخدم</label>
+      <input name="new_username" class="form-input" placeholder="admin2" required minlength="3">
+    </div>
+    <div>
+      <label class="form-label">الاسم المعروض (اختياري)</label>
+      <input name="display_name" class="form-input" placeholder="محمد الأمين">
+    </div>
+    <div>
+      <label class="form-label">كلمة المرور</label>
+      <input name="new_password" type="password" class="form-input" placeholder="8 أحرف على الأقل" required minlength="8">
+    </div>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn btn-primary">إضافة مشرف</button>
+    </div>
+  </form>
+</div>
+
+<!-- Activity Log -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">سجل النشاط (آخر 200 إجراء)</div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="log-filter" class="form-input" style="width:200px;padding:6px 10px;font-size:13px" placeholder="ابحث في السجل...">
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="data-table" id="activity-log-table">
+      <thead><tr><th>#</th><th>التاريخ</th><th>المشرف</th><th>الإجراء</th><th>النوع</th><th>الاسم</th><th>IP</th></tr></thead>
+      <tbody>
+        <?php foreach ($actLog as $log): ?>
+        <tr>
+          <td style="color:var(--muted);font-size:11px"><?= $log['id'] ?></td>
+          <td style="font-size:12px;white-space:nowrap;color:var(--muted)"><?= date('d/m/Y H:i:s', strtotime($log['created_at'])) ?></td>
+          <td><strong style="font-size:13px"><?= h($log['username'] ?: '#' . $log['admin_id']) ?></strong></td>
+          <td>
+            <?php
+            $aLabel = $actActionLabels[$log['action']] ?? $log['action'];
+            $aBadge = match(true) {
+                str_contains($log['action'],'delete') => 'badge-red',
+                str_contains($log['action'],'add') || str_contains($log['action'],'publish') => 'badge-cyan',
+                default => 'badge-muted',
+            };
+            ?>
+            <span class="badge <?= $aBadge ?>"><?= h($aLabel) ?></span>
+          </td>
+          <td style="font-size:12px;color:var(--muted)"><?= h($log['object_type'] ?: '—') ?></td>
+          <td style="font-size:13px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?= h($log['object_name']??'') ?>"><?= h($log['object_name'] ?: '—') ?></td>
+          <td style="font-size:11px;font-family:var(--f-mono);color:var(--muted)"><?= h($log['ip'] ?: '—') ?></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (empty($actLog)): ?>
+        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">لا يوجد سجل نشاط بعد</td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+document.getElementById('log-filter').addEventListener('input', function(){
+  var q = this.value.toLowerCase();
+  document.querySelectorAll('#activity-log-table tbody tr').forEach(function(tr){
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
 </script>
 
 <?php
