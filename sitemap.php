@@ -25,53 +25,65 @@ $skipped = 0;
 foreach ($allApps as $a) {
     try {
         if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
-        $result = layos_score_app($a);
-        if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
-            $apps[] = $a;
+        if (function_exists('layos_score_app') && function_exists('layos_should_index')) {
+            $result = layos_score_app($a);
+            if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
+                $apps[] = $a;
+            } else {
+                $skipped++;
+            }
         } else {
-            $skipped++;
+            $apps[] = $a;
         }
     } catch (\Throwable $e) {
-        $apps[] = $a; // on scoring error, include app by default
+        $apps[] = $a;
     }
 }
 
 // إشعار YAI عند استبعاد تطبيقات (مرة كل 12 ساعة)
 if ($skipped > 0) {
-    $lastNotify = get_cfg($pdo, 'layos_sitemap_notify_at', '');
-    if (!$lastNotify || strtotime($lastNotify) < strtotime('-12 hours')) {
-        yai_push($pdo, 'seo',
-            "🗺️ Layos: {$skipped} تطبيق مستبعد من Sitemap",
-            "تم استبعاد {$skipped} تطبيق من sitemap.xml لأن نقاط جودتهم أقل من 50٪.\n" .
-            "يؤدي وجودهم في الخريطة إلى تدهور سمعة الموقع في Google.\n" .
-            "افتح لوحة Layos Security لإصلاحها تلقائياً.",
-            'warning', url('admin.php?page=layos'), false, ''
-        );
-        set_cfg($pdo, 'layos_sitemap_notify_at', date('Y-m-d H:i:s'));
-    }
+    try {
+        $lastNotify = get_cfg($pdo, 'layos_sitemap_notify_at', '');
+        if (!$lastNotify || strtotime($lastNotify) < strtotime('-12 hours')) {
+            if (function_exists('yai_push')) {
+                yai_push($pdo, 'seo',
+                    "🗺️ Layos: {$skipped} تطبيق مستبعد من Sitemap",
+                    "تم استبعاد {$skipped} تطبيق من sitemap.xml لأن نقاط جودتهم أقل من 50٪.",
+                    'warning', url('admin.php?page=layos'), false, ''
+                );
+            }
+            set_cfg($pdo, 'layos_sitemap_notify_at', date('Y-m-d H:i:s'));
+        }
+    } catch (\Throwable $e) {}
 }
 
 // ── التصنيفات التي فيها تطبيقات مقبولة ──
-$cats = $pdo->query(
-    "SELECT DISTINCT c.slug
-     FROM categories c
-     INNER JOIN apps a ON a.category_slug = c.slug AND a.status='published'
-     WHERE c.slug IS NOT NULL AND c.slug <> ''"
-)->fetchAll();
+$cats = [];
+try {
+    $cats = $pdo->query(
+        "SELECT DISTINCT c.slug
+         FROM categories c
+         INNER JOIN apps a ON a.category_slug = c.slug AND a.status='published'
+         WHERE c.slug IS NOT NULL AND c.slug <> ''"
+    )->fetchAll();
+} catch (\Throwable $e) { $cats = []; }
 
 // ── المطورون ──
-$developers = $pdo->query(
-    "SELECT DISTINCT developer FROM apps
-     WHERE status='published' AND developer IS NOT NULL AND developer <> ''
-     LIMIT 50"
-)->fetchAll(PDO::FETCH_COLUMN);
+$developers = [];
+try {
+    $developers = $pdo->query(
+        "SELECT DISTINCT developer FROM apps
+         WHERE status='published' AND developer IS NOT NULL AND developer <> ''
+         LIMIT 50"
+    )->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) { $developers = []; }
 
 // ── مقالات المدونة ──
 $blogPosts = [];
 try {
     $blogPosts = $pdo->query(
         "SELECT slug, updated_at FROM blog_posts
-         WHERE status='published' ORDER BY updated_at DESC LIMIT 200"
+         WHERE status='published' ORDER BY updated_at DESC LIMIT 500"
     )->fetchAll();
 } catch (\Throwable $e) { $blogPosts = []; }
 
@@ -85,6 +97,11 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url><loc><?= SITE_URL ?>/top?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/updates</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/blog</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/exchange</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/gold</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/calculators</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/solar</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/tools</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc><?= SITE_URL ?>/about</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
   <url><loc><?= SITE_URL ?>/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc><?= SITE_URL ?>/terms</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>

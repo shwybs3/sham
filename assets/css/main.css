@@ -1741,3 +1741,41 @@ button, input, select, textarea { font-family: inherit; }
   .reveal, .reveal-stagger { transition: none; opacity: 1; transform: none; }
   .hero-banner::before, .hero-banner::after { animation: none; }
 }
+
+/* ── Desktop nav dropdown menus ── */
+.nav-dropdown-wrap { position: relative; display: inline-block; }
+.nav-dropdown-wrap > a svg { vertical-align: middle; transition: transform .2s ease; }
+.nav-dropdown-wrap:hover > a svg { transform: rotate(180deg); }
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18);
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  z-index: 999;
+}
+.nav-dropdown-wrap:hover .nav-dropdown,
+.nav-dropdown-wrap:focus-within .nav-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.nav-dropdown a {
+  display: block;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--fg);
+  border-radius: 8px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background .15s;
+}
+.nav-dropdown a:hover { background: var(--bg); color: var(--cyan); }

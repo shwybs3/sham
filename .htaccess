@@ -111,7 +111,7 @@ ErrorDocument 404 /404.php
   RewriteRule ^disclosure/?$ disclosure.php [L]
 
   # 301 redirects for old .php links to static pages
-  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca|disclosure)\.php[\s?] [NC]
+  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca|disclosure|exchange|gold|calculators|solar)\.php[\s?] [NC]
   RewriteRule ^(.+)\.php$ /$1 [R=301,L]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
@@ -129,6 +129,16 @@ ErrorDocument 404 /404.php
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^landing/([a-z]{2})/([^/]+)/?$ landing/$1/$2/index.html [L]
+
+  # Price, calculator, and tools pages — must come BEFORE the app-slug catch-all
+  RewriteRule ^exchange/?$ exchange.php [L,QSA]
+  RewriteRule ^gold/?$ gold.php [L,QSA]
+  RewriteRule ^calculators/?$ calculators.php [L,QSA]
+  RewriteRule ^solar/?$ solar.php [L,QSA]
+  RewriteRule ^tools/?$ tools/index.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^tools/([^/]+)/?$ tools/$1/index.php [L,QSA]
 
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f

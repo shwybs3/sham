@@ -120,8 +120,26 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
     <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
     <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
+    <div style="position:relative;display:inline-block" class="nav-dropdown-wrap">
+      <a href="<?= h(url('exchange')) ?>" class="<?= in_array($activeNav,['exchange','gold']) ? 'active' : '' ?>" style="display:flex;align-items:center;gap:3px">
+        الأسعار <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </a>
+      <div class="nav-dropdown">
+        <a href="<?= h(url('exchange')) ?>">أسعار الصرف</a>
+        <a href="<?= h(url('gold')) ?>">أسعار الذهب</a>
+      </div>
+    </div>
+    <div style="position:relative;display:inline-block" class="nav-dropdown-wrap">
+      <a href="<?= h(url('calculators')) ?>" class="<?= in_array($activeNav,['calculators','solar']) ? 'active' : '' ?>" style="display:flex;align-items:center;gap:3px">
+        حاسبات <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </a>
+      <div class="nav-dropdown">
+        <a href="<?= h(url('calculators')) ?>">حاسبات البناء</a>
+        <a href="<?= h(url('solar')) ?>">حاسبة الطاقة الشمسية</a>
+      </div>
+    </div>
+    <a href="<?= h(url('tools')) ?>" class="<?= $activeNav === 'tools' ? 'active' : '' ?>">أدوات</a>
     <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>">المدونة</a>
-    <a href="<?= h(url('about')) ?>" class="<?= $activeNav === 'about' ? 'active' : '' ?>">من نحن</a>
   </nav>
 
   <!-- Mobile-only buttons — hidden on desktop, shown by CSS at ≤1024px -->
@@ -146,6 +164,30 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="/?cat=apps" class="mobile-nav-link <?= $activeNav === 'apps' ? 'active' : '' ?>"><?= partial_icon('apps') ?> تطبيقات</a>
     <a href="/?cat=games" class="mobile-nav-link <?= $activeNav === 'games' ? 'active' : '' ?>"><?= partial_icon('games') ?> ألعاب</a>
     <a href="<?= h(url('top?by=downloads')) ?>" class="mobile-nav-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">الأسعار</div>
+    <a href="<?= h(url('exchange')) ?>" class="mobile-nav-link <?= $activeNav === 'exchange' ? 'active' : '' ?>">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+      أسعار الصرف
+    </a>
+    <a href="<?= h(url('gold')) ?>" class="mobile-nav-link <?= $activeNav === 'gold' ? 'active' : '' ?>">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      أسعار الذهب
+    </a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">حاسبات</div>
+    <a href="<?= h(url('calculators')) ?>" class="mobile-nav-link <?= $activeNav === 'calculators' ? 'active' : '' ?>">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/></svg>
+      حاسبات البناء
+    </a>
+    <a href="<?= h(url('solar')) ?>" class="mobile-nav-link <?= $activeNav === 'solar' ? 'active' : '' ?>">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+      الطاقة الشمسية
+    </a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">أدوات الويب</div>
+    <a href="<?= h(url('tools')) ?>" class="mobile-nav-link <?= $activeNav === 'tools' ? 'active' : '' ?>">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+      جميع الأدوات (20 أداة)
+    </a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">المحتوى</div>
     <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
     <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> المدونة</a>
     <a href="<?= h(url('about')) ?>" class="mobile-nav-link"><?= partial_icon('info') ?> من نحن</a>
@@ -299,6 +341,11 @@ function render_site_footer(): void { ?>
             url('top?by=views')     => 'الأكثر زيارة',
             url('updates')          => 'آخر التحديثات',
             url('blog')             => 'المدونة',
+            url('tools')            => 'أدوات الويب (20+)',
+            url('exchange')         => 'أسعار الصرف',
+            url('gold')             => 'أسعار الذهب',
+            url('calculators')      => 'حاسبات البناء',
+            url('solar')            => 'الطاقة الشمسية',
             url('rss')              => 'RSS',
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"

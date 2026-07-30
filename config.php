@@ -3025,6 +3025,140 @@ function cpanel_create_subdomain(PDO $pdo, array $app): array {
 }
 
 /**
+ * Create a subdomain for a blog article (e.g. article-slug.yassota.com).
+ * Mirrors cpanel_create_subdomain() but targets the blog_posts table and
+ * generates an article-specific landing page instead of an app landing page.
+ */
+function create_article_subdomain(PDO $pdo, array $post): array {
+    $slug = $post['slug'] ?? '';
+    if (!$slug) return ['ok'=>false,'error'=>'No slug'];
+
+    $apiUrl  = rtrim(get_cfg($pdo,'cpanel_url','') ?: get_cfg($pdo,'cpanel_api_url',''), '/');
+    $user    = get_cfg($pdo,'cpanel_user','');
+    $token   = get_cfg($pdo,'cpanel_api_token','');
+    $srvBase = rtrim(get_cfg($pdo,'server_doc_root','') ?: get_cfg($pdo,'cpanel_docroot_base',''), '/');
+    if (!$srvBase) $srvBase = '/home/' . ($user ?: 'yassqfkf');
+
+    $siteHost = parse_url(defined('SITE_URL') ? SITE_URL : '', PHP_URL_HOST) ?: '';
+    if (!$siteHost) return ['ok'=>false,'error'=>'SITE_URL غير مُعرَّف'];
+
+    $subName    = substr(preg_replace('/[^a-z0-9\-]/', '-', strtolower($slug)), 0, 50);
+    $fullDom    = $subName . '.' . $siteHost;
+    $subUrl     = 'https://' . $fullDom . '/';
+    $docRootRel = "public_html/{$fullDom}";
+    $docRoot    = $srvBase . '/' . $docRootRel;
+    $siteUrl    = rtrim(defined('SITE_URL') ? SITE_URL : 'https://' . $siteHost, '/');
+    $articleUrl = $siteUrl . '/article/' . rawurlencode($slug);
+
+    $steps = [];
+
+    // 1. Create subdomain via cPanel
+    if ($apiUrl && $token) {
+        $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+        curl_setopt_array($ch,[
+            CURLOPT_RETURNTRANSFER=>true, CURLOPT_POST=>true,
+            CURLOPT_TIMEOUT=>15, CURLOPT_SSL_VERIFYPEER=>false,
+            CURLOPT_HTTPHEADER=>["Authorization: cpanel {$user}:{$token}"],
+            CURLOPT_POSTFIELDS=>http_build_query([
+                'domain'=>$subName,'rootdomain'=>$siteHost,'dir'=>$docRootRel,
+            ]),
+        ]);
+        $res = curl_exec($ch); $cErr = curl_error($ch); curl_close($ch);
+        if (!$cErr) {
+            $data = @json_decode((string)$res,true);
+            $cpOk = (int)($data['result']['status'] ?? $data['status'] ?? 0) === 1;
+            if (!$cpOk) {
+                $msg = $data['result']['errors'][0] ?? $data['errors'][0] ?? 'cPanel error';
+                $alreadyEx = stripos((string)$msg,'exist')!==false || stripos((string)$msg,'already')!==false;
+                if (!$alreadyEx) $steps[] = "⚠ cPanel: {$msg}";
+            }
+        }
+        $ch2 = curl_init("{$apiUrl}/execute/SSL/start_autossl_check");
+        curl_setopt_array($ch2,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>8,
+            CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'',
+            CURLOPT_HTTPHEADER=>["Authorization: cpanel {$user}:{$token}"]]);
+        curl_exec($ch2); curl_close($ch2);
+    }
+
+    // 2. Write satellite files
+    @mkdir($docRoot, 0755, true);
+
+    $title   = h($post['title'] ?? $slug);
+    $excerpt = h(mb_substr(strip_tags($post['excerpt'] ?? $post['content'] ?? ''), 0, 200));
+    $siteName = h(get_cfg($pdo,'site_name','yassota'));
+    $icon = h(get_cfg($pdo,'site_logo', $siteUrl . '/assets/img/logo.png'));
+
+    $indexHtml = "<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\">
+<head>
+<meta charset=\"UTF-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>{$title} | {$siteName}</title>
+<meta name=\"description\" content=\"{$excerpt}\">
+<link rel=\"canonical\" href=\"{$articleUrl}\">
+<meta property=\"og:title\" content=\"{$title}\">
+<meta property=\"og:description\" content=\"{$excerpt}\">
+<meta property=\"og:url\" content=\"{$articleUrl}\">
+<meta property=\"og:site_name\" content=\"{$siteName}\">
+<meta name=\"robots\" content=\"index,follow\">
+<meta http-equiv=\"refresh\" content=\"0;url={$articleUrl}\">
+<script>window.location.replace(" . json_encode($articleUrl) . ");</script>
+</head>
+<body style=\"font-family:Arial,sans-serif;direction:rtl;text-align:center;padding:40px;color:#333\">
+<h1>{$title}</h1>
+<p>{$excerpt}</p>
+<p>جارٍ التحويل إلى المقالة… <a href=\"{$articleUrl}\">اضغط هنا</a> إذا لم يتم التحويل تلقائياً.</p>
+</body>
+</html>";
+    @file_put_contents("{$docRoot}/index.html", $indexHtml);
+
+    $sitemapXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" .
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" .
+        "  <url><loc>{$subUrl}</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>\n" .
+        "  <url><loc>{$articleUrl}</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n" .
+        "</urlset>";
+    @file_put_contents("{$docRoot}/sitemap.xml", $sitemapXml);
+
+    $robotsTxt = "User-agent: *\nAllow: /\nSitemap: {$subUrl}sitemap.xml\n";
+    @file_put_contents("{$docRoot}/robots.txt", $robotsTxt);
+
+    $htaccess = "Options -Indexes\nDirectoryIndex index.html\n\n" .
+        "RewriteEngine On\n" .
+        "RewriteCond %{HTTPS} off\n" .
+        "RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]\n";
+    @file_put_contents("{$docRoot}/.htaccess", $htaccess);
+
+    // 3. Record in domains table
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS domains (
+            id INT AUTO_INCREMENT PRIMARY KEY, full_domain VARCHAR(255) NOT NULL UNIQUE,
+            category_slug VARCHAR(100) DEFAULT NULL, site_mode VARCHAR(50) DEFAULT 'landing',
+            status VARCHAR(20) DEFAULT 'active', doc_root VARCHAR(500) DEFAULT NULL,
+            force_https TINYINT(1) DEFAULT 1, last_deployed_at DATETIME DEFAULT NOW(),
+            created_at DATETIME DEFAULT NOW()
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        try { $pdo->exec("ALTER TABLE domains ADD COLUMN last_deployed_at DATETIME NULL"); } catch(\Throwable $e){}
+        $pdo->prepare(
+            "INSERT INTO domains (full_domain,site_mode,status,doc_root,force_https,last_deployed_at)
+             VALUES (?,'article','active',?,1,NOW())
+             ON DUPLICATE KEY UPDATE status='active',doc_root=VALUES(doc_root),last_deployed_at=NOW()"
+        )->execute([$fullDom, $docRootRel]);
+    } catch (\Throwable $e) { $steps[] = "⚠ DB: " . $e->getMessage(); }
+
+    // 4. Update blog_posts table
+    try {
+        try { $pdo->exec("ALTER TABLE blog_posts ADD COLUMN subdomain_url VARCHAR(500) DEFAULT NULL"); } catch(\Throwable $e){}
+        $pdo->prepare("UPDATE blog_posts SET subdomain_url=? WHERE id=?")
+            ->execute([$subUrl, (int)$post['id']]);
+    } catch (\Throwable $e) {}
+
+    // 5. Ping
+    ping_search_engines($pdo, $subUrl);
+    ping_search_engines($pdo, $articleUrl);
+
+    return ['ok'=>true,'subdomain_url'=>$subUrl,'domain'=>$fullDom,'steps'=>$steps];
+}
+
+/**
  * Google Indexing API: submit URLs for immediate indexing.
  * Requires: google_indexing_json setting (base64-encoded service account JSON)
  * and google_indexing_type setting ('URL_UPDATED' or 'URL_DELETED').

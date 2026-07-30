@@ -3389,7 +3389,9 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             'body' => $bodyVal,
             'status' => ($_POST['status'] ?? 'draft') === 'published' ? 'published' : 'draft',
         ];
+        $wasPublished = false;
         if ($id) {
+            try { $wasPublished = ($pdo->query("SELECT status FROM blog_posts WHERE id=$id")->fetchColumn() ?? '') === 'published'; } catch (\Throwable $e) {}
             $sets = implode(', ', array_map(fn($k) => "$k=:$k", array_keys($d)));
             $d['id'] = $id;
             $pdo->prepare("UPDATE blog_posts SET $sets WHERE id=:id")->execute($d);
@@ -3399,7 +3401,21 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             $pdo->prepare("INSERT INTO blog_posts ($cols) VALUES ($vals)")->execute($d);
             $id = (int)$pdo->lastInsertId();
         }
+        // Create subdomain when an article is first published
+        if ($d['status'] === 'published' && !$wasPublished && $id && function_exists('create_article_subdomain')) {
+            try {
+                $postRow = $pdo->query("SELECT * FROM blog_posts WHERE id=$id")->fetch();
+                if ($postRow) create_article_subdomain($pdo, $postRow);
+            } catch (\Throwable $e) {}
+        }
         bump_cache_version($pdo);
+        // Ping IndexNow for the new/updated article URL
+        if ($d['status'] === 'published' && $id) {
+            try {
+                $pSlug = $pdo->query("SELECT slug FROM blog_posts WHERE id=$id")->fetchColumn();
+                if ($pSlug && function_exists('ping_search_engines')) ping_search_engines($pdo, blog_post_url($pSlug));
+            } catch (\Throwable $e) {}
+        }
         header('Location: admin.php?page=blog&msg=saved'); exit;
     }
 }
@@ -9617,13 +9633,18 @@ elseif ($page === 'database'):
 elseif ($page === 'ad-networks'):
 
 // ── Collect real site metrics ──────────────────────────────────────────────
-$publishedCount   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
-$avgDescLen       = (int)$pdo->query("SELECT IFNULL(AVG(CHAR_LENGTH(long_description)),0) FROM apps WHERE status='published' AND long_description IS NOT NULL AND long_description!='' ")->fetchColumn();
-$hasIcon          = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND icon_path IS NOT NULL AND icon_path!=''")->fetchColumn();
-$catCount         = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
-$commentsCount    = (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn();
-$blogCount        = 0;
-try { $blogCount = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(); } catch (Throwable $e) {}
+$publishedCount = 0;
+try { $publishedCount = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(); } catch (\Throwable $e) {}
+$avgDescLen = 0;
+try { $avgDescLen = (int)$pdo->query("SELECT IFNULL(AVG(CHAR_LENGTH(long_description)),0) FROM apps WHERE status='published' AND long_description IS NOT NULL AND long_description!=''")->fetchColumn(); } catch (\Throwable $e) {}
+$hasIcon = 0;
+try { $hasIcon = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND icon_path IS NOT NULL AND icon_path!=''")->fetchColumn(); } catch (\Throwable $e) {}
+$catCount = 0;
+try { $catCount = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn(); } catch (\Throwable $e) {}
+$commentsCount = 0;
+try { $commentsCount = (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn(); } catch (\Throwable $e) {}
+$blogCount = 0;
+try { $blogCount = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(); } catch (\Throwable $e) {}
 $siteUrl          = rtrim(get_cfg($pdo,'site_url',''), '/');
 $isHttps          = str_starts_with($siteUrl, 'https://');
 $hasAdsenseId     = !empty(get_cfg($pdo,'adsense_publisher_id',''));
@@ -9632,16 +9653,18 @@ $hasTerms         = file_exists(__DIR__.'/terms.php');
 $hasContact       = file_exists(__DIR__.'/contact.php');
 $hasSitemap       = file_exists(__DIR__.'/sitemap.php');
 $hasRobots        = file_exists(__DIR__.'/robots.php') || file_exists(__DIR__.'/robots.txt');
-$cookieBanner     = true; // built in
+$cookieBanner     = true;
 $hasCookiePolicy  = file_exists(__DIR__.'/cookie-policy.php');
 $hasDmca          = file_exists(__DIR__.'/dmca.php');
 $hasRss           = file_exists(__DIR__.'/rss.php');
-$appsMissingDesc  = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (long_description IS NULL OR CHAR_LENGTH(long_description)<200)")->fetchColumn();
+$appsMissingDesc  = 0;
+try { $appsMissingDesc = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (long_description IS NULL OR CHAR_LENGTH(long_description)<200)")->fetchColumn(); } catch (\Throwable $e) {}
 $duplicateApps    = 0;
-try { $duplicateApps = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT name,COUNT(*) c FROM apps GROUP BY name HAVING c>1) t")->fetchColumn(); } catch (Throwable $e) {}
+try { $duplicateApps = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT name,COUNT(*) c FROM apps GROUP BY name HAVING c>1) t")->fetchColumn(); } catch (\Throwable $e) {}
 $totalMonthlyViews = 0;
-try { $totalMonthlyViews = (int)$pdo->query("SELECT COUNT(*) FROM page_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(); } catch (Throwable $e) {}
-$appsWithSeoTitle = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND seo_title IS NOT NULL AND seo_title!=''")->fetchColumn();
+try { $totalMonthlyViews = (int)$pdo->query("SELECT COUNT(*) FROM page_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")->fetchColumn(); } catch (\Throwable $e) {}
+$appsWithSeoTitle = 0;
+try { $appsWithSeoTitle = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND seo_title IS NOT NULL AND seo_title!=''")->fetchColumn(); } catch (\Throwable $e) {}
 
 // ── Build eligibility checklist ────────────────────────────────────────────
 // Returns ['pass','warn','fail'] with detailed checks
@@ -11981,16 +12004,26 @@ function addResultRow(r) {
 /* ─────────────── WEB TOOLS SUBDOMAIN MANAGER ─────────────── */
 elseif ($page === 'tools-manager'):
 $webTools = [
-  ['slug'=>'compress','name'=>'ضاغط الصور','desc'=>'ضغط JPG/PNG/WebP وتحويلها إلى WebP'],
-  ['slug'=>'resize',  'name'=>'تغيير حجم الصورة','desc'=>'تغيير أبعاد الصور مع الحفاظ على الجودة'],
-  ['slug'=>'qr',      'name'=>'مولّد QR Code','desc'=>'توليد رموز QR من أي نص أو رابط'],
-  ['slug'=>'pass',    'name'=>'مولّد كلمات المرور','desc'=>'كلمات مرور قوية وآمنة'],
-  ['slug'=>'colors',  'name'=>'منتقي الألوان','desc'=>'لوحة ألوان متناسقة مع HEX/RGB/HSL'],
-  ['slug'=>'encode',  'name'=>'مشفّر Base64/URL','desc'=>'تشفير وفك تشفير النصوص وحساب Hash'],
-  ['slug'=>'words',   'name'=>'عدّاد الكلمات','desc'=>'تحليل النصوص العربية إحصائياً'],
-  ['slug'=>'whatsapp','name'=>'روابط واتساب','desc'=>'إنشاء روابط واتساب مباشرة بدون حفظ'],
-  ['slug'=>'write',   'name'=>'كاتب المحتوى AI','desc'=>'توليد محتوى عربي بالذكاء الاصطناعي'],
-  ['slug'=>'hashtag', 'name'=>'مولّد الهاشتاق AI','desc'=>'هاشتاقات إنستغرام وتيك توك بالذكاء الاصطناعي'],
+  ['slug'=>'compress',   'name'=>'ضاغط الصور',        'desc'=>'ضغط JPG/PNG/WebP وتحويلها إلى WebP'],
+  ['slug'=>'resize',     'name'=>'تغيير حجم الصورة',  'desc'=>'تغيير أبعاد الصور مع الحفاظ على الجودة'],
+  ['slug'=>'img-crop',   'name'=>'قص الصور',           'desc'=>'قص وتحديد منطقة من الصورة بنسب جاهزة'],
+  ['slug'=>'img-convert','name'=>'تحويل تنسيق الصور', 'desc'=>'تحويل الصور بين WebP/JPG/PNG دفعةً واحدة'],
+  ['slug'=>'ocr',        'name'=>'استخراج النصوص OCR', 'desc'=>'قراءة النصوص العربية والإنجليزية من الصور'],
+  ['slug'=>'pdf-merge',  'name'=>'دمج ملفات PDF',      'desc'=>'دمج عدة ملفات PDF في ملف واحد'],
+  ['slug'=>'pdf-split',  'name'=>'تقسيم PDF',           'desc'=>'استخراج صفحات أو نطاقات من ملف PDF'],
+  ['slug'=>'pdf-compress','name'=>'ضغط PDF',            'desc'=>'تقليل حجم ملفات PDF مع الحفاظ على الجودة'],
+  ['slug'=>'currency',   'name'=>'محوّل العملات',       'desc'=>'تحويل العملات بأسعار صرف لحظية'],
+  ['slug'=>'gold-calc',  'name'=>'حاسبة الذهب',        'desc'=>'حساب سعر الذهب بالجرام لجميع العيارات'],
+  ['slug'=>'json-fmt',   'name'=>'منسّق JSON',          'desc'=>'تنسيق وتحقق وضغط ملفات JSON'],
+  ['slug'=>'encode',     'name'=>'مشفّر Base64/URL',   'desc'=>'تشفير وفك تشفير النصوص وحساب Hash'],
+  ['slug'=>'qr',         'name'=>'مولّد QR Code',       'desc'=>'توليد رموز QR من أي نص أو رابط'],
+  ['slug'=>'pass',       'name'=>'مولّد كلمات المرور', 'desc'=>'كلمات مرور قوية وآمنة'],
+  ['slug'=>'unit',       'name'=>'محوّل الوحدات',       'desc'=>'تحويل الطول والوزن والحرارة والمساحة وغيرها'],
+  ['slug'=>'colors',     'name'=>'منتقي الألوان',       'desc'=>'لوحة ألوان متناسقة مع HEX/RGB/HSL'],
+  ['slug'=>'words',      'name'=>'عدّاد الكلمات',       'desc'=>'تحليل النصوص العربية إحصائياً'],
+  ['slug'=>'whatsapp',   'name'=>'روابط واتساب',        'desc'=>'إنشاء روابط واتساب مباشرة بدون حفظ'],
+  ['slug'=>'write',      'name'=>'كاتب المحتوى AI',    'desc'=>'توليد محتوى عربي بالذكاء الاصطناعي'],
+  ['slug'=>'hashtag',    'name'=>'مولّد الهاشتاق AI',  'desc'=>'هاشتاقات إنستغرام وتيك توك بالذكاء الاصطناعي'],
 ];
 $siteUrl = rtrim(get_cfg($pdo,'site_url') ?: 'https://yassota.com', '/');
 $domain  = parse_url($siteUrl, PHP_URL_HOST) ?: 'yassota.com';
@@ -12064,6 +12097,16 @@ $docRoot = rtrim(get_cfg($pdo,'server_doc_root') ?: '/home/'.get_cfg($pdo,'cpane
   <div id="reg-log" style="margin-top:14px;font-size:12px;font-family:monospace;background:var(--bg);border-radius:8px;padding:12px;display:none;max-height:200px;overflow-y:auto;white-space:pre-wrap;direction:ltr"></div>
 </div>
 
+<div id="subdomain-limit-notice" style="display:none;margin-top:16px;padding:16px;background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.4);border-radius:12px">
+  <strong style="color:#92400e;font-size:14px">⚠️ تم الوصول إلى الحد الأقصى للنطاقات الفرعية في خطة الاستضافة</strong>
+  <p style="font-size:13px;color:var(--fg);margin:8px 0 4px">لا يمكن إضافة نطاقات فرعية جديدة لأن خطتك الحالية بلغت حدها الأقصى. الحلول المتاحة:</p>
+  <ul style="font-size:13px;color:var(--fg);padding-right:20px;margin:0">
+    <li style="margin-bottom:4px"><strong>الحل 1 (موصى به):</strong> الأدوات تعمل الآن مباشرةً عبر <code style="direction:ltr;display:inline-block"><?= h($siteUrl) ?>/tools/slug/</code> — يمكنك استخدامها دون نطاقات فرعية</li>
+    <li style="margin-bottom:4px"><strong>الحل 2:</strong> رفّع خطة الاستضافة لدى مزودك (cPanel → Upgrade) للحصول على نطاقات فرعية غير محدودة</li>
+    <li><strong>الحل 3:</strong> احذف بعض النطاقات الفرعية غير المستخدمة من cPanel → Subdomains، ثم أعد التسجيل هنا</li>
+  </ul>
+</div>
+
 <script>
 function selectAllTools(on) {
   document.querySelectorAll('.tool-chk').forEach(function(c){c.checked=on;});
@@ -12076,9 +12119,14 @@ function registerSelected() {
   btn.disabled = true; btn.textContent = '⏳ جارٍ التسجيل...';
   var log = document.getElementById('reg-log');
   log.style.display = 'block'; log.textContent = '';
+  var limitHit = false;
   var i = 0;
   function next() {
-    if (i >= slugs.length) { btn.disabled=false; btn.textContent='تسجيل المحدّد في cPanel'; return; }
+    if (i >= slugs.length) {
+      btn.disabled=false; btn.textContent='تسجيل المحدّد في cPanel';
+      if (limitHit) document.getElementById('subdomain-limit-notice').style.display='block';
+      return;
+    }
     var slug = slugs[i]; i++;
     var st = document.getElementById('status-'+slug);
     if (st) { st.style.color='#f59e0b'; st.textContent='⏳ جارٍ...'; }
@@ -12086,14 +12134,17 @@ function registerSelected() {
     fetch('admin.php?ajax=create_subdomain', {method:'POST', body:fd})
       .then(function(r){return r.json();})
       .then(function(d){
+        var errMsg = d.error || 'فشل';
+        var isLimit = /exceed|maximum|limit|allowed/i.test(errMsg);
+        if (isLimit) { limitHit = true; errMsg = 'تم تجاوز الحد الأقصى للنطاقات الفرعية'; }
         if (st) {
           if (d.ok) { st.style.color='#22c55e'; st.textContent='✓ مُسجَّل'; }
-          else { st.style.color='#ef4444'; st.textContent='✗ '+( d.error||'فشل'); }
+          else { st.style.color='#ef4444'; st.textContent='✗ ' + errMsg; }
         }
-        log.textContent += '['+slug+'] '+(d.ok?'✓ '+d.subdomain:'✗ '+(d.error||'خطأ'))+'\n';
-        setTimeout(next, 800);
+        log.textContent += '['+slug+'] '+(d.ok?'✓ '+d.subdomain:'✗ '+errMsg)+'\n';
+        setTimeout(next, 600);
       })
-      .catch(function(){ if(st){st.style.color='#ef4444';st.textContent='خطأ شبكة';} setTimeout(next,800); });
+      .catch(function(){ if(st){st.style.color='#ef4444';st.textContent='خطأ شبكة';} setTimeout(next,600); });
   }
   next();
 }
