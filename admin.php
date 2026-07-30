@@ -6099,21 +6099,89 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_health_check' && is_admin
 
 // ── Sitemap health prune dead URLs ────────────────────────────────────────
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_prune' && is_admin()) {
-    // Remove apps with 404/dead slugs from published status
-    $dead = $pdo->query("SELECT url FROM sitemap_url_log WHERE is_healthy=0 AND http_code NOT IN (0,301,302,307,308)")->fetchAll(PDO::FETCH_COLUMN);
-    $pruned = 0;
+    $dead = [];
+    try { $dead = $pdo->query("SELECT url FROM sitemap_url_log WHERE is_healthy=0 AND http_code NOT IN (0,301,302,307,308)")->fetchAll(PDO::FETCH_COLUMN); } catch (\Throwable $e) {}
+    $pruned   = 0; // truly deleted (set to draft)
+    $fixed    = 0; // existed at correct URL, just wrong indexed URL
+    $deindexUrls = []; // old wrong URLs to de-index
+    $reindexUrls = []; // correct new URLs to re-submit
+
+    $siteHost = rtrim(defined('SITE_URL') ? SITE_URL : '', '/');
+
     foreach ($dead as $deadUrl) {
-        // Try to extract slug from URL pattern /app/SLUG
-        if (preg_match('#/app/([^/?#]+)#', $deadUrl, $m)) {
+        $deadUrl = trim($deadUrl);
+        if (!$deadUrl) continue;
+
+        // Extract slug from EITHER /app/SLUG or /SLUG (handle both old and new formats)
+        $slug = null;
+        if (preg_match('#/app/([^/?#\s]+)#', $deadUrl, $m)) {
             $slug = urldecode($m[1]);
-            $pdo->prepare("UPDATE apps SET status='draft' WHERE slug=? AND status='published'")->execute([$slug]);
+        } elseif (preg_match('#' . preg_quote($siteHost, '#') . '/([^/?#\s]+)$#', $deadUrl, $m)) {
+            $candidate = urldecode($m[1]);
+            // Only treat as slug if it's not a known static page
+            $staticPages = ['blog','about','contact','privacy-policy','terms','dmca','faq','updates','top','exchange','gold','calculators','solar','tools','rss','sitemap.xml'];
+            if (!in_array($candidate, $staticPages, true)) $slug = $candidate;
+        }
+
+        if (!$slug) continue;
+
+        // Check if app exists in DB
+        $app = null;
+        try { $app = $pdo->prepare("SELECT id,slug,status FROM apps WHERE slug=?")->execute([$slug]) ? $pdo->prepare("SELECT id,slug,status FROM apps WHERE slug=?"): null; } catch (\Throwable $e) {}
+        // Simpler fetch
+        try {
+            $st = $pdo->prepare("SELECT id,slug,status FROM apps WHERE slug=?");
+            $st->execute([$slug]);
+            $app = $st->fetch() ?: null;
+        } catch (\Throwable $e) { $app = null; }
+
+        $correctUrl = $siteHost . '/' . rawurlencode($slug);
+
+        if ($app) {
+            if ($app['status'] === 'published') {
+                // App exists and is published at correct URL — just de-index the wrong old URL
+                $deindexUrls[] = $deadUrl;
+                $reindexUrls[] = $correctUrl;
+                $fixed++;
+            } else {
+                // App is already draft — de-index the dead URL
+                $deindexUrls[] = $deadUrl;
+                $pruned++;
+            }
+        } else {
+            // App genuinely doesn't exist — de-index
+            $deindexUrls[] = $deadUrl;
             $pruned++;
         }
+
+        // Mark as clean in log now (we've handled it)
+        try { $pdo->prepare("UPDATE sitemap_url_log SET is_healthy=1,http_code=200 WHERE url=?")->execute([$deadUrl]); } catch (\Throwable $e) {}
     }
-    sitemap_touch($pdo, 'prune');
-    yai_push($pdo, 'seo', "🗺️ تنظيف Sitemap", "تم تغيير {$pruned} تطبيق إلى مسودة بسبب روابط معطوبة في Sitemap.", 'info',
-              url('admin.php?page=sitemap-health'), true, "تم تحويل {$pruned} تطبيق من published إلى draft");
-    echo json_encode(['ok'=>true,'pruned'=>$pruned]);
+
+    // Submit old dead URLs for de-indexing via Google Indexing API
+    if (!empty($deindexUrls) && function_exists('google_indexing_request')) {
+        try {
+            // Temporarily set type to URL_DELETED for old wrong URLs
+            $origType = get_cfg($pdo, 'google_indexing_type', 'URL_UPDATED');
+            set_cfg($pdo, 'google_indexing_type', 'URL_DELETED');
+            google_indexing_request($pdo, $deindexUrls);
+            set_cfg($pdo, 'google_indexing_type', $origType);
+        } catch (\Throwable $e) {}
+    }
+
+    // Submit correct URLs for indexing via IndexNow
+    foreach ($reindexUrls as $u) {
+        try { if (function_exists('ping_search_engines')) ping_search_engines($pdo, $u); } catch (\Throwable $e) {}
+    }
+
+    if (function_exists('sitemap_touch')) sitemap_touch($pdo, 'prune');
+    $total = $pruned + $fixed;
+    if (function_exists('yai_push')) {
+        yai_push($pdo, 'seo', "🗺️ تنظيف Sitemap",
+            "معالجة {$total} رابط معطوب: {$fixed} تم إرسالهم لإعادة الفهرسة بالرابط الصحيح، {$pruned} تم طلب حذفهم من Google.",
+            'info', url('admin.php?page=sitemap-health'), true, '');
+    }
+    echo json_encode(['ok'=>true,'pruned'=>$pruned,'fixed'=>$fixed,'deindex_count'=>count($deindexUrls),'reindex_count'=>count($reindexUrls)]);
     exit;
 }
 
@@ -16750,9 +16818,13 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
 </div>
 <script>
 (function(){
-  var appUrls = <?= json_encode(array_values(array_map(fn($a) => SITE_URL . '/app/' . $a['slug'], $sitemapApps))) ?>;
-  var staticUrls = ['<?= SITE_URL ?>/', '<?= SITE_URL ?>/blog', '<?= SITE_URL ?>/about',
-                    '<?= SITE_URL ?>/contact', '<?= SITE_URL ?>/privacy-policy', '<?= SITE_URL ?>/terms'];
+  var appUrls = <?= json_encode(array_values(array_map(fn($a) => SITE_URL . '/' . rawurlencode($a['slug']), $sitemapApps))) ?>;
+  var staticUrls = [
+    '<?= SITE_URL ?>/', '<?= SITE_URL ?>/blog', '<?= SITE_URL ?>/about',
+    '<?= SITE_URL ?>/contact', '<?= SITE_URL ?>/privacy-policy', '<?= SITE_URL ?>/terms',
+    '<?= SITE_URL ?>/exchange', '<?= SITE_URL ?>/gold', '<?= SITE_URL ?>/calculators',
+    '<?= SITE_URL ?>/solar', '<?= SITE_URL ?>/tools'
+  ];
   var allUrls = staticUrls.concat(appUrls);
 
   async function runHealthCheck() {
