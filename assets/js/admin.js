@@ -1586,3 +1586,62 @@ function cpExpand(lang) {
   const ta = document.getElementById('cp-textarea-' + lang);
   if (ta) ta.classList.toggle('cp-expanded');
 }
+
+/* ── Find APK Download Sources ────────────────────── */
+async function findDlSources() {
+  const pkg = (document.querySelector('[name="package_name"]')?.value || '').trim();
+  if (!pkg) { alert('أدخل اسم الحزمة (package_name) أولاً'); return; }
+
+  const panel = document.getElementById('dl-sources-panel');
+  const status = document.getElementById('dl-sources-status');
+  const list = document.getElementById('dl-sources-list');
+  const btn = document.getElementById('btn-find-dl-sources');
+
+  panel.style.display = 'block';
+  list.innerHTML = '';
+  status.textContent = '⏳ جارٍ فحص 10 مصادر للتحميل…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('admin.php?ajax=find_dl_sources&pkg=' + encodeURIComponent(pkg));
+    const d = await r.json();
+    if (!d.ok) { status.textContent = '❌ ' + (d.error || 'خطأ'); btn.disabled = false; return; }
+
+    const working = d.sources.filter(s => s.ok);
+    status.textContent = `✅ ${working.length} مصدر يعمل من أصل ${d.sources.length}`;
+
+    // Auto-fill mirror fields with first 3 working sources
+    const fDl  = document.getElementById('f-download-url');
+    const fM2  = document.getElementById('f-mirror2-url');
+    const fM3  = document.getElementById('f-mirror3-url');
+    if (working[0] && fDl && !fDl.value) fDl.value = working[0].url;
+    if (working[1] && fM2 && !fM2.value) fM2.value = working[1].url;
+    if (working[2] && fM3 && !fM3.value) fM3.value = working[2].url;
+
+    list.innerHTML = d.sources.map(s => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:${s.ok?'#f0fdf4':'#fff8f8'};border:1px solid ${s.ok?'#86efac':'#fca5a5'}">
+        <span style="font-size:14px">${s.ok ? '✅' : '❌'}</span>
+        <span style="flex:1;font-size:12px;color:#0f172a;font-weight:${s.direct?700:400}">${s.label}${s.direct?' (APK مباشر)':''}</span>
+        <span style="font-size:10px;color:#94a3b8">HTTP ${s.http}</span>
+        ${s.ok ? `<button type="button" onclick="useDlSource('${s.url.replace(/'/g,"\\'")}',this)" style="background:#2563eb;color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer">استخدم</button>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    status.textContent = '❌ خطأ في الاتصال';
+  }
+  btn.disabled = false;
+}
+
+function useDlSource(url, btn) {
+  const targets = [
+    document.getElementById('f-download-url'),
+    document.getElementById('f-mirror2-url'),
+    document.getElementById('f-mirror3-url'),
+  ];
+  const target = targets.find(t => t && !t.value) || targets[0];
+  if (target) {
+    target.value = url;
+    btn.textContent = '✓';
+    btn.style.background = '#16a34a';
+    setTimeout(() => { btn.textContent = 'استخدم'; btn.style.background = '#2563eb'; }, 1500);
+  }
+}

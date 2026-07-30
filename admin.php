@@ -2860,6 +2860,84 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_apk' && is_admin()) {
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Probe 10 APK download sources for a package name
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'find_dl_sources' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $pkg = trim($_GET['pkg'] ?? '');
+    if (!$pkg || !preg_match('/^[a-zA-Z][a-zA-Z0-9_\.]{2,150}$/', $pkg)) {
+        echo json_encode(['ok' => false, 'error' => 'اسم الحزمة غير صالح']); exit;
+    }
+
+    // 10 APK download sources — ordered by reliability
+    $sources = [
+        ['label' => 'APKPure (arm64)', 'url' => "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=arm64-v8a&sv=21", 'direct' => true],
+        ['label' => 'APKPure (arm32)', 'url' => "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=armeabi-v7a&sv=21", 'direct' => true],
+        ['label' => 'APKPure (x86_64)','url' => "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest&nc=x86_64&sv=21", 'direct' => true],
+        ['label' => 'APKPure (universal)', 'url' => "https://d.apkpure.com/b/APK/{$pkg}?versionCode=latest", 'direct' => true],
+        ['label' => 'Google Play',    'url' => "https://play.google.com/store/apps/details?id={$pkg}&hl=ar", 'direct' => false],
+        ['label' => 'APKCombo',       'url' => "https://apkcombo.com/apk-downloader/?package={$pkg}", 'direct' => false],
+        ['label' => 'APKMonk',        'url' => "https://www.apkmonk.com/app/{$pkg}/", 'direct' => false],
+        ['label' => 'APKFab',         'url' => "https://apkfab.com/{$pkg}/", 'direct' => false],
+        ['label' => 'Aptoide',        'url' => "https://en.aptoide.com/store/app/apk/{$pkg}", 'direct' => false],
+        ['label' => 'APK-DL',         'url' => "https://apk-dl.com/{$pkg}/", 'direct' => false],
+    ];
+
+    $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36';
+    $results = [];
+
+    $mh = curl_multi_init();
+    $handles = [];
+    foreach ($sources as $i => $src) {
+        $ch = curl_init($src['url']);
+        curl_setopt_array($ch, [
+            CURLOPT_NOBODY         => !$src['direct'], // HEAD for non-direct, GET for direct (need redirect)
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_TIMEOUT        => 6,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_USERAGENT      => $ua,
+            CURLOPT_SSL_VERIFYPEER => true,
+            // Range: just check first byte for direct download URLs
+            CURLOPT_HTTPHEADER     => $src['direct'] ? ['Range: bytes=0-0'] : [],
+        ]);
+        curl_multi_add_handle($mh, $ch);
+        $handles[$i] = $ch;
+    }
+
+    // Run all probes in parallel
+    $running = null;
+    do { curl_multi_exec($mh, $running); } while ($running > 0);
+
+    foreach ($handles as $i => $ch) {
+        $http     = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        $ok = ($http >= 200 && $http < 400) || $http === 206; // 206 = Partial Content for Range requests
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+        $results[] = [
+            'label'  => $sources[$i]['label'],
+            'url'    => $sources[$i]['url'],
+            'direct' => $sources[$i]['direct'],
+            'ok'     => $ok,
+            'http'   => $http,
+        ];
+    }
+    curl_multi_close($mh);
+
+    // Sort: working direct downloads first, then working pages, then failed
+    usort($results, function($a, $b) {
+        if ($a['ok'] !== $b['ok']) return $a['ok'] ? -1 : 1;
+        if ($a['direct'] !== $b['direct']) return $a['direct'] ? -1 : 1;
+        return 0;
+    });
+
+    echo json_encode(['ok' => true, 'sources' => $results], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Download APK from URL server-side (SSE streaming progress)
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'download_url_apk' && is_admin()) {
@@ -7547,17 +7625,28 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 
     <!-- External URL section -->
     <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">رابط التحميل الخارجي (Google Play / CDN)</label>
-      <input class="form-input" type="text" name="download_url" value="<?= h($app['download_url']??'') ?>" placeholder="https://play.google.com/store/apps/details?id=...">
+      <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <span>رابط التحميل الخارجي (Google Play / CDN)</span>
+        <button type="button" id="btn-find-dl-sources" onclick="findDlSources()" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          بحث 10 مصادر
+        </button>
+      </label>
+      <input class="form-input" type="text" id="f-download-url" name="download_url" value="<?= h($app['download_url']??'') ?>" placeholder="https://play.google.com/store/apps/details?id=...">
+      <!-- Sources result panel -->
+      <div id="dl-sources-panel" style="display:none;margin-top:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px">
+        <div id="dl-sources-status" style="font-size:12px;color:#64748b;margin-bottom:8px"></div>
+        <div id="dl-sources-list" style="display:flex;flex-direction:column;gap:5px"></div>
+      </div>
     </div>
     <div class="form-grid">
       <div class="form-group">
         <label class="form-label">مرآة 2 (اختياري)</label>
-        <input class="form-input" type="text" name="mirror2_url" value="<?= h($app['mirror2_url']??'') ?>">
+        <input class="form-input" type="text" id="f-mirror2-url" name="mirror2_url" value="<?= h($app['mirror2_url']??'') ?>">
       </div>
       <div class="form-group">
         <label class="form-label">مرآة 3 (اختياري)</label>
-        <input class="form-input" type="text" name="mirror3_url" value="<?= h($app['mirror3_url']??'') ?>">
+        <input class="form-input" type="text" id="f-mirror3-url" name="mirror3_url" value="<?= h($app['mirror3_url']??'') ?>">
       </div>
     </div>
   </div>

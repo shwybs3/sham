@@ -461,42 +461,43 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
           معلومات التطبيق
         </div>
+        <?php
+          // Build info cells as array to control even/odd layout
+          $apkSizeBytes  = $app['apk_size_bytes'] ?? null;
+          $fileSizeMb    = $apkSizeBytes ? round($apkSizeBytes / 1048576, 2) : ($app['size_mb'] ?: null);
+          // Strip accidental "Android" prefix already in android_version field
+          $androidVer    = trim(preg_replace('/^android\s*/i', '', $app['android_version'] ?? ''));
+          $arabicMonths  = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+          $fmtDate = function(?string $d) use ($arabicMonths): string {
+              if (!$d) return '';
+              $ts = strtotime($d);
+              return $ts ? (date('j', $ts) . ' ' . $arabicMonths[(int)date('n', $ts) - 1] . ' ' . date('Y', $ts)) : '';
+          };
+          $infoCells = [];
+          if ($displayVersion)         $infoCells[] = ['الإصدار',      '<span dir="ltr">' . h($displayVersion) . '</span>'];
+          if ($fileSizeMb)             $infoCells[] = ['الحجم',        '<span dir="ltr">' . h($fileSizeMb) . ' MB</span>'];
+          if ($catName)                $infoCells[] = ['التصنيف',      h($catName)];
+          if ($app['developer'])       $infoCells[] = ['المطوّر',      h($app['developer'])];
+          $infoCells[]                              = ['النظام',       'Android'];
+          $infoCells[]                              = ['الترخيص',      h($app['license'] ?? 'مجاني')];
+          if ($androidVer)             $infoCells[] = ['أدنى إصدار',   'Android ' . h($androidVer) . '+'];
+          $fileType = !empty($app['apk_path']) ? 'APK' : 'APK/XAPK';
+          $infoCells[]                              = ['نوع الملف',    $fileType];
+          if ($app['downloads'] > 0)   $infoCells[] = ['التحميلات',    '<span dir="ltr">+' . number_format($app['downloads']) . '</span>'];
+          if (!empty($app['updated_at']))  $infoCells[] = ['آخر تحديث',  $fmtDate($app['updated_at'])];
+          if (!empty($app['release_date'])) $infoCells[] = ['تاريخ الإصدار', $fmtDate($app['release_date'])];
+          // If odd count, last paired cell spans 2 columns to avoid orphaned grid cell
+          $cellCount = count($infoCells);
+        ?>
         <div class="dlp-meta-grid">
-          <?php if ($displayVersion): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">الإصدار</div><div class="dlp-meta-val"><?= h($displayVersion) ?></div></div>
-          <?php endif; ?>
-          <?php
-            $apkSizeBytes = $app['apk_size_bytes'] ?? null;
-            $fileSizeMb   = $apkSizeBytes ? round($apkSizeBytes / 1048576, 2) : ($app['size_mb'] ?: null);
-          ?>
-          <?php if ($fileSizeMb): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">الحجم</div><div class="dlp-meta-val"><?= h($fileSizeMb) ?> MB</div></div>
-          <?php endif; ?>
-          <?php if ($catName): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">التصنيف</div><div class="dlp-meta-val"><?= h($catName) ?></div></div>
-          <?php endif; ?>
-          <?php if ($app['developer']): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">المطوّر</div><div class="dlp-meta-val"><?= h($app['developer']) ?></div></div>
-          <?php endif; ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">النظام</div><div class="dlp-meta-val">Android</div></div>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">الترخيص</div><div class="dlp-meta-val">مجاني</div></div>
-          <?php if (!empty($app['android_version'])): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">أدنى إصدار</div><div class="dlp-meta-val">Android <?= h($app['android_version']) ?>+</div></div>
-          <?php endif; ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">نوع الملف</div><div class="dlp-meta-val"><?= !empty($app['apk_path']) ? 'APK' : 'APK/XAPK' ?></div></div>
-          <?php if ($app['downloads'] > 0): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">التحميلات</div><div class="dlp-meta-val"><?= number_format($app['downloads']) ?>+</div></div>
-          <?php endif; ?>
-          <?php if (!empty($app['updated_at'])): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">آخر تحديث</div><div class="dlp-meta-val"><?= date('j M Y', strtotime($app['updated_at'])) ?></div></div>
-          <?php endif; ?>
-          <?php if (!empty($app['release_date'])): ?>
-          <div class="dlp-meta-cell"><div class="dlp-meta-key">تاريخ الإصدار</div><div class="dlp-meta-val"><?= date('j M Y', strtotime($app['release_date'])) ?></div></div>
-          <?php endif; ?>
+          <?php foreach ($infoCells as $i => [$key, $val]): ?>
+          <?php $span = ($i === $cellCount - 1 && $cellCount % 2 !== 0) ? ' style="grid-column:1/-1"' : ''; ?>
+          <div class="dlp-meta-cell"<?= $span ?>><div class="dlp-meta-key"><?= $key ?></div><div class="dlp-meta-val"><?= $val ?></div></div>
+          <?php endforeach; ?>
           <?php if (!empty($app['package_name'])): ?>
           <div class="dlp-meta-cell" style="grid-column:1/-1">
-            <div class="dlp-meta-key">Package</div>
-            <div class="dlp-meta-val" style="font-family:var(--f-mono);font-size:11px;word-break:break-all"><?= h($app['package_name']) ?></div>
+            <div class="dlp-meta-key">اسم الحزمة</div>
+            <div class="dlp-meta-val" style="font-family:var(--f-mono);font-size:11px;word-break:break-all;direction:ltr;text-align:left"><?= h($app['package_name']) ?></div>
           </div>
           <?php endif; ?>
         </div>
