@@ -287,9 +287,9 @@ function wave(): string {
   <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل " . $app['name'] . ($app['version'] ? " v{$app['version']}" : '') . " لـ Android مجاناً — " . ($app['short_description'] ?: "أحدث إصدار APK آمن وموثوق متاح على yassota.com")) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
   <?php
-    $descLen = mb_strlen(strip_tags($app['long_description'] ?? ''));
-    $hasContent = $descLen >= 150 || !empty($app['short_description']);
-    $robotsApp  = $hasContent ? 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1' : 'noindex,follow';
+    // All published apps are indexable — the admin approved them for publication.
+    // The old 150-char threshold blocked most new apps from Google indexing.
+    $robotsApp = 'index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1';
   ?>
   <meta name="robots" content="<?= $robotsApp ?>">
   <link rel="canonical" href="<?= h(app_url($app['slug'])) ?>">

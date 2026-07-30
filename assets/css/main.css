@@ -1608,3 +1608,136 @@ button, input, select, textarea { font-family: inherit; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .stat-cell-num { font-size: 22px; }
 }
+
+/* ══════════════════════════════════════════════════
+   THEME v2 — enhanced visual polish
+══════════════════════════════════════════════════ */
+
+/* ── App card: gradient top-line shimmer on hover ── */
+.app-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 50%, var(--indigo) 100%);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  opacity: 0;
+  transition: opacity .25s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+.app-card:hover::before { opacity: 1; }
+
+/* ── Icon glow strengthened on hover ── */
+.app-card:hover .app-card-icon {
+  box-shadow: 0 6px 22px rgba(124,58,237,.4);
+}
+
+/* ── Card name: readable size on tablet+ ── */
+@media (min-width: 640px) {
+  .app-card-name { font-size: 13.5px; }
+  .app-card-body { padding: 12px 13px 14px; }
+  .app-card-icon { width: 68px; height: 68px; }
+}
+
+/* ── Wider card grid on large screens ── */
+@media (min-width: 1280px) {
+  .apps-grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); }
+}
+
+/* ── Download button: emerald → indigo (green = action) ── */
+.btn-dl-card {
+  background: linear-gradient(135deg, #059669 0%, #4f46e5 100%);
+  box-shadow: 0 4px 14px rgba(5,150,105,.35);
+  animation: pulseGlowGreen 2.8s ease-in-out infinite;
+}
+.btn-dl-card:hover {
+  box-shadow: 0 8px 26px rgba(5,150,105,.55);
+  animation: none;
+}
+@keyframes pulseGlowGreen {
+  0%, 100% { box-shadow: 0 4px 14px rgba(5,150,105,.35); }
+  50%       { box-shadow: 0 4px 28px rgba(5,150,105,.6), 0 0 0 5px rgba(5,150,105,.12); }
+}
+
+/* ── Hero banner: deeper, more dramatic gradient ── */
+.hero-banner {
+  background: linear-gradient(135deg, #06101f 0%, #0c1e40 40%, #180d4a 78%, #2d1b69 100%);
+  box-shadow: 0 10px 40px rgba(6,16,31,.35), 0 2px 8px rgba(6,16,31,.2);
+}
+
+/* ── Stat cells: accent top border per position ── */
+.stat-cell {
+  border-top: 3px solid transparent;
+  transition: border-top-color var(--transition), box-shadow var(--transition);
+}
+.stat-cell:nth-child(1) { border-top-color: var(--cyan); }
+.stat-cell:nth-child(2) { border-top-color: var(--purple); }
+.stat-cell:nth-child(3) { border-top-color: var(--orange); }
+.stat-cell:nth-child(4) { border-top-color: var(--success); }
+.stat-cell:hover { box-shadow: var(--shadow-md); }
+
+/* ── Stat number: subtle gradient text ── */
+.stat-cell-num {
+  background: linear-gradient(135deg, var(--indigo), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Section heading bar: taller gradient ── */
+.section-title::before {
+  width: 4px;
+  height: 22px;
+  background: linear-gradient(180deg, var(--cyan) 0%, var(--purple) 60%, var(--indigo) 100%);
+}
+
+/* ── App hero icon: soft glow ring ── */
+.app-hero-icon {
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(14,165,233,.15);
+}
+
+/* ── Screenshots: taller on tablet+ ── */
+@media (min-width: 640px) {
+  .screenshots-rail img { height: 240px; border-radius: 12px; }
+}
+
+/* ── Sidebar widget: left accent rail (RTL = border-right) ── */
+.sidebar-widget {
+  border-right: 3px solid rgba(14,165,233,.18);
+}
+
+/* ── Cat tab icon bounce ── */
+.cat-tab svg { transition: transform var(--transition); }
+.cat-tab:hover svg { transform: scale(1.18); }
+
+/* ── Blog card: gradient top line (same as app card) ── */
+.blog-card:hover::before { opacity: 1; }
+
+/* ── Featured carousel icon: glow ── */
+.fc-icon {
+  box-shadow: 0 4px 18px rgba(15,23,42,.15);
+  transition: box-shadow .25s ease;
+}
+.fc-slide.active .fc-icon {
+  box-shadow: 0 6px 24px rgba(124,58,237,.3);
+}
+
+/* ── Page-wrap top spacing tweak ── */
+.page-wrap { padding-top: 28px; }
+
+/* ── Footer: subtle top gradient line ── */
+.site-footer {
+  border-top: 2px solid transparent;
+  background-image: linear-gradient(var(--header-bg), var(--header-bg)),
+                    linear-gradient(90deg, var(--cyan), var(--purple));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+/* ── Reduced-motion: disable all decorative animations ── */
+@media (prefers-reduced-motion: reduce) {
+  .btn-dl-card, .btn-slim-dl, .countdown-circle { animation: none; }
+  .reveal, .reveal-stagger { transition: none; opacity: 1; transform: none; }
+  .hero-banner::before, .hero-banner::after { animation: none; }
+}

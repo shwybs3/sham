@@ -2905,70 +2905,123 @@ function generate_landing_pages(PDO $pdo, array $app): array {
  * Returns ['ok'=>bool, 'error'=>?string, 'subdomain_url'=>?string].
  */
 function cpanel_create_subdomain(PDO $pdo, array $app): array {
-    $slug      = $app['slug'] ?? '';
+    $slug = $app['slug'] ?? '';
     if (!$slug) return ['ok'=>false,'error'=>'No slug'];
 
-    $apiUrl    = rtrim(get_cfg($pdo, 'cpanel_api_url',   ''), '/');
-    $user      = get_cfg($pdo, 'cpanel_user',       '');
-    $token     = get_cfg($pdo, 'cpanel_api_token',  '');
-    $docBase   = rtrim(get_cfg($pdo, 'cpanel_docroot_base', ''), '/');
+    // Settings — support both old key (cpanel_api_url) and new (cpanel_url)
+    $apiUrl   = rtrim(get_cfg($pdo,'cpanel_url','') ?: get_cfg($pdo,'cpanel_api_url',''), '/');
+    $user     = get_cfg($pdo,'cpanel_user','');
+    $token    = get_cfg($pdo,'cpanel_api_token','');
+    $srvBase  = rtrim(get_cfg($pdo,'server_doc_root','') ?: get_cfg($pdo,'cpanel_docroot_base',''), '/');
+    if (!$srvBase) $srvBase = '/home/' . ($user ?: 'yassqfkf');
 
-    if (!$apiUrl || !$user || !$token) return ['ok'=>false,'error'=>'cPanel غير مُكوَّن (تحقق من الإعدادات)'];
+    $siteHost = parse_url(defined('SITE_URL') ? SITE_URL : '', PHP_URL_HOST) ?: '';
+    if (!$siteHost) return ['ok'=>false,'error'=>'SITE_URL غير مُعرَّف'];
 
-    // Sub-domain name: slug-apk (max 40 chars, alphanum + hyphen)
-    $subName = preg_replace('/[^a-z0-9\-]/', '-', strtolower($slug)) . '-apk';
-    $subName = substr($subName, 0, 40);
-    $siteHost = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
-    $subDomain = $subName . '.' . $siteHost;
-    $subUrl    = 'https://' . $subDomain . '/';
+    // Subdomain: {slug}.yassota.com (clean, no -apk suffix)
+    $subName  = substr(preg_replace('/[^a-z0-9\-]/', '-', strtolower($slug)), 0, 50);
+    $fullDom  = $subName . '.' . $siteHost;
+    $subUrl   = 'https://' . $fullDom . '/';
+    // cPanel typical docroot path for subdomains
+    $docRootRel = "public_html/{$fullDom}";
+    $docRoot    = $srvBase . '/' . $docRootRel;
+    $mainCfgDir = $srvBase . '/public_html';
 
-    // 1. Create the subdomain via cPanel UAPI
-    $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_HTTPHEADER     => ["Authorization: cpanel {$user}:{$token}"],
-        CURLOPT_POSTFIELDS     => http_build_query([
-            'domain'     => $subName,
-            'rootdomain' => $siteHost,
-            'dir'        => $docBase ? "{$docBase}/{$subName}" : "public_html/{$subName}",
-        ]),
-    ]);
-    $res = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
+    $steps = [];
 
-    if ($err) return ['ok'=>false,'error'=>"cURL: {$err}"];
-    $data = json_decode((string)$res, true);
-    if (!($data['status'] ?? false)) {
-        $msg = $data['errors'][0] ?? ($data['message'] ?? 'cPanel API error');
-        // If subdomain already exists, that's fine — continue to write files
-        if (!str_contains(strtolower((string)$msg), 'already') &&
-            !str_contains(strtolower((string)$msg), 'exist')) {
-            return ['ok'=>false,'error'=>$msg];
+    // 1. Create subdomain in cPanel (non-fatal if already exists or cPanel not configured)
+    if ($apiUrl && $token) {
+        $ch = curl_init("{$apiUrl}/execute/SubDomain/addsubdomain");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER => ["Authorization: cpanel {$user}:{$token}"],
+            CURLOPT_POSTFIELDS => http_build_query([
+                'domain' => $subName, 'rootdomain' => $siteHost, 'dir' => $docRootRel,
+            ]),
+        ]);
+        $res = curl_exec($ch); $cErr = curl_error($ch); curl_close($ch);
+        if (!$cErr) {
+            $data = @json_decode((string)$res, true);
+            $cpOk = (int)($data['result']['status'] ?? $data['status'] ?? 0) === 1;
+            if (!$cpOk) {
+                $msg = $data['result']['errors'][0] ?? $data['errors'][0] ?? 'cPanel error';
+                $alreadyEx = stripos((string)$msg,'exist')!==false || stripos((string)$msg,'already')!==false;
+                if (!$alreadyEx) $steps[] = "⚠ cPanel: {$msg}";
+            }
         }
+        // Trigger AutoSSL (non-blocking)
+        $ch2 = curl_init("{$apiUrl}/execute/SSL/start_autossl_check");
+        curl_setopt_array($ch2,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>8,
+            CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>'',
+            CURLOPT_HTTPHEADER=>["Authorization: cpanel {$user}:{$token}"]]);
+        curl_exec($ch2); curl_close($ch2);
     }
 
-    // 2. Write the landing HTML to the subdomain's docroot
-    $docRoot = $docBase ? "{$docBase}/{$subName}" : null;
-    if ($docRoot) {
-        if (!is_dir($docRoot)) @mkdir($docRoot, 0755, true);
-        $html = landing_page_html($pdo, $app, 'ar', $subUrl);
-        @file_put_contents("{$docRoot}/index.html", $html);
-    }
+    // 2. Write satellite files (local first, fallback to cPanel Fileman)
+    @mkdir($docRoot, 0755, true);
+    $cfgEsc = var_export($mainCfgDir, true);
 
-    // 3. Ping IndexNow for the subdomain URL
+    // index.html — full landing page for this specific app
+    $landingHtml = landing_page_html($pdo, $app, 'ar', $subUrl);
+    @file_put_contents("{$docRoot}/index.html", $landingHtml);
+
+    // sitemap.xml — single URL sitemap for this app's subdomain
+    $sitemapXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" .
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" .
+        "  <url><loc>{$subUrl}</loc><changefreq>monthly</changefreq><priority>1.0</priority></url>\n" .
+        "</urlset>";
+    @file_put_contents("{$docRoot}/sitemap.xml", $sitemapXml);
+
+    // robots.txt
+    $robotsTxt = "User-agent: *\nAllow: /\nSitemap: {$subUrl}sitemap.xml\n";
+    @file_put_contents("{$docRoot}/robots.txt", $robotsTxt);
+
+    // .htaccess — force HTTPS + directory index
+    $htaccess = "Options -Indexes\nDirectoryIndex index.html index.php\n\n" .
+        "RewriteEngine On\n" .
+        "RewriteCond %{HTTPS} off\n" .
+        "RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]\n";
+    @file_put_contents("{$docRoot}/.htaccess", $htaccess);
+
+    // 3. Add/update in domains table
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS domains (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            full_domain VARCHAR(255) NOT NULL UNIQUE,
+            category_slug VARCHAR(100) DEFAULT NULL,
+            site_mode VARCHAR(50) DEFAULT 'landing',
+            status VARCHAR(20) DEFAULT 'active',
+            doc_root VARCHAR(500) DEFAULT NULL,
+            force_https TINYINT(1) DEFAULT 1,
+            last_deployed_at DATETIME DEFAULT NOW(),
+            created_at DATETIME DEFAULT NOW()
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        try { $pdo->exec("ALTER TABLE domains ADD COLUMN last_deployed_at DATETIME NULL"); } catch(\Throwable $e){}
+        try { $pdo->exec("ALTER TABLE domains ADD COLUMN force_https TINYINT(1) DEFAULT 1"); } catch(\Throwable $e){}
+        $catSlug = $app['category_slug'] ?? '';
+        if (!$catSlug && !empty($app['category_id'])) {
+            $catSlug = $pdo->query("SELECT slug FROM categories WHERE id=".(int)$app['category_id'])->fetchColumn() ?: '';
+        }
+        $pdo->prepare(
+            "INSERT INTO domains (full_domain,category_slug,site_mode,status,doc_root,force_https,last_deployed_at)
+             VALUES (?,?,'landing','active',?,1,NOW())
+             ON DUPLICATE KEY UPDATE status='active',doc_root=VALUES(doc_root),last_deployed_at=NOW()"
+        )->execute([$fullDom, $catSlug ?: null, $docRootRel]);
+    } catch (\Throwable $e) { $steps[] = "⚠ DB: " . $e->getMessage(); }
+
+    // 4. Update apps table
+    try {
+        try { $pdo->exec("ALTER TABLE apps ADD COLUMN subdomain_created TINYINT(1) DEFAULT 0"); } catch(\Throwable $e){}
+        try { $pdo->exec("ALTER TABLE apps ADD COLUMN subdomain_url VARCHAR(500) DEFAULT NULL"); } catch(\Throwable $e){}
+        $pdo->prepare("UPDATE apps SET subdomain_created=1, subdomain_url=? WHERE id=?")
+            ->execute([$subUrl, (int)$app['id']]);
+    } catch (\Throwable $e) {}
+
+    // 5. Submit to IndexNow
     ping_search_engines($pdo, $subUrl);
 
-    // 4. Store in DB
-    $pdo->prepare("UPDATE apps SET subdomain_created=1,subdomain_url=? WHERE id=?")
-        ->execute([$subUrl, (int)$app['id']]);
-    $pdo->prepare("UPDATE landing_pages SET subdomain_url=? WHERE app_id=?")
-        ->execute([$subUrl, (int)$app['id']]);
-
-    return ['ok'=>true,'subdomain_url'=>$subUrl];
+    return ['ok'=>true,'subdomain_url'=>$subUrl,'domain'=>$fullDom,'steps'=>$steps];
 }
 
 /**
