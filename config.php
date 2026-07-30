@@ -349,6 +349,18 @@ function ensure_schema(PDO $pdo): array {
     // release_date: official app release date shown in Schema.org datePublished
     if (!in_array('release_date', $appCols))
         @$pdo->exec("ALTER TABLE apps ADD COLUMN release_date DATE NULL AFTER updated_at");
+    // tags: comma-separated keywords/topics (differs from SEO keywords — used for UI tag chips)
+    if (!in_array('tags', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN tags VARCHAR(500) NULL AFTER keywords");
+    // content_rating: PEGI / ESRB / Google Play content rating label
+    if (!in_array('content_rating', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN content_rating VARCHAR(50) NULL DEFAULT 'للجميع' AFTER size_mb");
+    // price_usd: paid apps price (0 or NULL = free)
+    if (!in_array('price_usd', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN price_usd DECIMAL(6,2) NULL DEFAULT NULL AFTER license");
+    // is_game: distinguishes games from regular apps for category/schema differentiation
+    if (!in_array('is_game', $appCols))
+        @$pdo->exec("ALTER TABLE apps ADD COLUMN is_game TINYINT(1) NOT NULL DEFAULT 0 AFTER needs_update");
 
     // Comments: add ip column if missing
     $commentCols = $pdo->query("SHOW COLUMNS FROM comments")->fetchAll(PDO::FETCH_COLUMN);

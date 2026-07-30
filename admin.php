@@ -3617,6 +3617,10 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         'faq'               => json_encode($faq, JSON_UNESCAPED_UNICODE),
         'badge'             => in_array($_POST['badge'] ?? '', ['','new','updated','hot','choice'], true) ? ($_POST['badge'] ?? '') : '',
         'release_date'      => !empty($_POST['release_date']) ? $_POST['release_date'] : null,
+        'tags'              => trim($_POST['tags'] ?? ''),
+        'content_rating'    => trim($_POST['content_rating'] ?? 'للجميع'),
+        'price_usd'         => !empty($_POST['price_usd']) ? (float)$_POST['price_usd'] : null,
+        'is_game'           => isset($_POST['is_game']) ? 1 : 0,
     ];
 
     if ($isEdit && $appId) {
@@ -7132,6 +7136,18 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
   <div class="ai-status" id="ai-status"></div>
 </div>
 
+<!-- Fill All Fields with AI — one-click button -->
+<div style="margin-bottom:16px;text-align:center">
+  <button type="button" id="btn-fill-all-ai"
+    style="background:linear-gradient(135deg,var(--purple),var(--cyan));color:#fff;border:none;border-radius:12px;padding:14px 32px;font-size:15px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(99,102,241,.35);transition:opacity .2s"
+    onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    ملء جميع الحقول بالذكاء الاصطناعي
+    <span style="font-size:11px;opacity:.8;font-weight:600">(يستخدم اسم التطبيق المدخل)</span>
+  </button>
+  <div id="fill-all-status" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
+</div>
+
 <div id="app-save-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.75);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px">
   <div style="background:var(--surface);border:1px solid var(--border-c);border-radius:16px;padding:32px 40px;text-align:center;min-width:280px">
     <div style="font-size:15px;font-weight:700;color:var(--white);margin-bottom:16px">جارٍ الحفظ...</div>
@@ -7178,6 +7194,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
               <svg id="sti-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </span>
             عنوان SEO Title
+            <button type="button" class="btn-field-ai" data-field="seo_title" title="توليد بالذكاء الاصطناعي">✨</button>
           </span>
           <span id="seo-title-counter" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em">
             <span id="sti-used"><?= mb_strlen($app['seo_title']??'','UTF-8') ?></span> / 60
@@ -7195,7 +7212,10 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       </div>
       <div class="form-group">
         <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-          <span>الكلمات المفتاحية</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            الكلمات المفتاحية
+            <button type="button" class="btn-field-ai" data-field="keywords" title="توليد بالذكاء الاصطناعي">✨</button>
+          </span>
           <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
             <span id="kw-used"><?= mb_strlen($app['keywords']??'','UTF-8') ?></span> / 255
           </span>
@@ -7211,6 +7231,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
               <svg id="sdi-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
             Meta Description
+            <button type="button" class="btn-field-ai" data-field="meta_description" title="توليد بالذكاء الاصطناعي">✨</button>
           </span>
           <span id="seo-desc-counter" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
             <span id="sdi-used"><?= mb_strlen($app['meta_description']??'','UTF-8') ?></span> / 160
@@ -7228,7 +7249,10 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       </div>
       <div class="form-group full">
         <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-          <span>وصف قصير</span>
+          <span style="display:flex;align-items:center;gap:6px">
+            وصف قصير
+            <button type="button" class="btn-field-ai" data-field="short_description" title="توليد بالذكاء الاصطناعي">✨</button>
+          </span>
           <span style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums">
             <span id="sd-used"><?= mb_strlen($app['short_description']??'','UTF-8') ?></span> / 200
           </span>
@@ -7241,6 +7265,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <span style="display:flex;align-items:center;gap:8px">
             وصف مطوّل
+            <button type="button" class="btn-field-ai" data-field="long_description" title="توليد بالذكاء الاصطناعي">✨</button>
             <span id="desc-word-count" style="color:var(--muted);font-weight:400;font-size:12px"></span>
             <span id="ld-used-badge" style="font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)"><span id="ld-chars">0</span> حرف</span>
           </span>
@@ -7335,6 +7360,29 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       <div class="form-group full">
         <label class="form-label">ما الجديد في هذا الإصدار</label>
         <textarea class="form-textarea" id="f-whats-new" name="whats_new" rows="3"><?= h($app['whats_new']??'') ?></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">تصنيف المحتوى</label>
+        <select class="form-select" name="content_rating">
+          <?php foreach(['للجميع','4+','9+','12+','17+','18+','PEGI 3','PEGI 7','PEGI 12','PEGI 16','PEGI 18'] as $cr): ?>
+            <option value="<?= $cr ?>" <?= ($app['content_rating']??'للجميع')===$cr?'selected':'' ?>><?= $cr ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">السعر (USD) — 0 أو فارغ = مجاني</label>
+        <input class="form-input" type="number" step="0.01" min="0" name="price_usd" value="<?= h($app['price_usd']??'') ?>" placeholder="0.00">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">الوسوم / التاغات (مفصولة بفاصلة)</label>
+        <input class="form-input" id="f-tags" type="text" name="tags" value="<?= h($app['tags']??'') ?>" placeholder="مثال: تعليم, أطفال, ترفيه">
+        <div class="form-hint">تُعرض كشرائط أسفل وصف التطبيق — تساعد المستخدمين على اكتشاف تطبيقات مشابهة</div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <input type="checkbox" name="is_game" value="1" <?= !empty($app['is_game'])?'checked':'' ?> style="width:16px;height:16px">
+          <span>هذا التطبيق لعبة (VideoGame) — يُؤثر على Schema.org وصفحات التصنيف</span>
+        </label>
       </div>
     </div>
   </div>

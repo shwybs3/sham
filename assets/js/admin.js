@@ -214,6 +214,96 @@ document.addEventListener('DOMContentLoaded', () => {
       fill('faq-list', 'faq', data.faq, true);
     }
 
+    /* ── Fill All Fields with AI (one-click) ── */
+    const fillAllBtn = document.getElementById('btn-fill-all-ai');
+    const fillAllStatus = document.getElementById('fill-all-status');
+    if (fillAllBtn) {
+      fillAllBtn.addEventListener('click', () => {
+        const name = (document.getElementById('f-name')?.value || document.getElementById('ai-name')?.value || '').trim();
+        if (!name) { alert('اكتب اسم التطبيق في حقل "اسم التطبيق" أولاً'); return; }
+        if (aiNameInput) aiNameInput.value = name;
+        fillAllBtn.disabled = true;
+        fillAllBtn.style.opacity = '.6';
+        if (fillAllStatus) { fillAllStatus.style.display = 'block'; fillAllStatus.textContent = '⏳ جارٍ توليد جميع البيانات…'; }
+        if (aiStatus) { aiStatus.textContent = '⏳ جارٍ التوليد…'; aiStatus.style.color = ''; }
+        if (aiLogPanel) { aiLogPanel.innerHTML = ''; aiLogPanel.style.display = 'block'; }
+
+        fetch('admin.php?ajax=generate_sse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+        }).then(res => {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          function read() {
+            reader.read().then(({ done, value }) => {
+              if (done) { fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1'; return; }
+              buf += decoder.decode(value, { stream: true });
+              const parts = buf.split('\n\n');
+              buf = parts.pop();
+              parts.forEach(block => {
+                let eventType = 'message', dataStr = '';
+                block.split('\n').forEach(l => {
+                  if (l.startsWith('event: ')) eventType = l.slice(7).trim();
+                  if (l.startsWith('data: ')) dataStr = l.slice(6).trim();
+                });
+                if (!dataStr) return;
+                let d; try { d = JSON.parse(dataStr); } catch(e) { return; }
+                if (eventType === 'log') {
+                  if (aiLogPanel) addLog(d.msg, d.type);
+                  if (fillAllStatus) fillAllStatus.textContent = '⏳ ' + d.msg;
+                } else if (eventType === 'done') {
+                  fillAiData(d);
+                  const msg = '✅ اكتملت — موديل: ' + (d.used_model || '?');
+                  if (fillAllStatus) fillAllStatus.textContent = msg;
+                  if (aiStatus) { aiStatus.textContent = msg; aiStatus.style.color = 'var(--success)'; }
+                  fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
+                } else if (eventType === 'error') {
+                  const msg = '❌ ' + (d.msg || 'فشل التوليد');
+                  if (fillAllStatus) fillAllStatus.textContent = msg;
+                  if (aiStatus) { aiStatus.textContent = msg; aiStatus.style.color = 'var(--danger)'; }
+                  fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
+                }
+              });
+              read();
+            });
+          }
+          read();
+        }).catch(() => {
+          if (fillAllStatus) fillAllStatus.textContent = '❌ خطأ في الاتصال';
+          fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
+        });
+      });
+    }
+
+    /* ── Per-field AI generate buttons ── */
+    document.querySelectorAll('.btn-field-ai').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.field;
+        const name = (document.getElementById('f-name')?.value || document.getElementById('ai-name')?.value || '').trim();
+        if (!name) { alert('اكتب اسم التطبيق أولاً'); return; }
+        btn.disabled = true; btn.textContent = '⏳';
+        fetch('admin.php?ajax=generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+        }).then(r => r.json()).then(d => {
+          const fieldMap = {
+            'seo_title': 'f-seo-title', 'meta_description': 'f-meta-desc',
+            'keywords': 'f-keywords', 'short_description': 'f-short-desc',
+            'long_description': 'f-long-desc'
+          };
+          const elId = fieldMap[field];
+          if (elId) {
+            const el = document.getElementById(elId);
+            if (el && d[field] != null) { el.value = d[field]; el.dispatchEvent(new Event('input')); }
+          }
+          btn.disabled = false; btn.textContent = '✨';
+        }).catch(() => { btn.disabled = false; btn.textContent = '✨'; });
+      });
+    });
+
     aiBtn.addEventListener('click', () => {
       const name = aiNameInput?.value.trim();
       if (!name) { aiStatus.textContent = 'اكتب اسم التطبيق أولاً'; return; }
