@@ -13,7 +13,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'lookup') {
     $domain = preg_replace('/[^a-zA-Z0-9.\-]/', '', $domain);
     if (!$domain) { echo json_encode(['error' => 'اسم النطاق غير صالح']); exit; }
     $url = 'https://dns.google/resolve?name=' . urlencode($domain) . '&type=' . urlencode($type);
-    $ctx = stream_context_create(['http'=>['timeout'=>8,'user_agent'=>'Mozilla/5.0']]);
+    $ctx = stream_context_create(['http'=>['timeout'=>8,'user_agent'=>'Mozilla/5.0'],'ssl'=>['cafile'=>'/root/.ccr/ca-bundle.crt','verify_peer'=>true,'verify_peer_name'=>true]]);
     $raw = @file_get_contents($url, false, $ctx);
     if ($raw === false) {
         $ch = curl_init($url);
