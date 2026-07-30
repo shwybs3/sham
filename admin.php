@@ -9442,13 +9442,14 @@ elseif ($page === 'article-gen'):
 /* ─────────────── SITE ANALYTICS (real self-tracked data, not GSC) ─────────────── */
 elseif ($page === 'stats'):
     $days = 30;
-    $dailyRaw = $pdo->query("
+    $dailyRaw = [];
+    try { $dailyRaw = $pdo->query("
         SELECT DATE(created_at) d, event_type, COUNT(*) c
         FROM page_events
         WHERE created_at >= (NOW() - INTERVAL $days DAY)
         GROUP BY d, event_type
         ORDER BY d
-    ")->fetchAll();
+    ")->fetchAll(); } catch (\Throwable $e) {}
     $daily = [];
     for ($i = $days - 1; $i >= 0; $i--) {
         $d = date('Y-m-d', strtotime("-$i days"));
@@ -9461,23 +9462,28 @@ elseif ($page === 'stats'):
     foreach ($daily as $d) $maxDaily = max($maxDaily, $d['view'], $d['download']);
 
     $totalsAllTime = [
-        'views'            => (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM apps")->fetchColumn(),
-        'downloads'        => (int)$pdo->query("SELECT COALESCE(SUM(downloads),0) FROM apps")->fetchColumn(),
-        'apps'             => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
-        'blog'             => (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(),
-        'comments'         => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn(),
-        'pending_comments' => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='pending'")->fetchColumn(),
+        'views'            => 0, 'downloads' => 0, 'apps' => 0,
+        'blog' => 0, 'comments' => 0, 'pending_comments' => 0,
     ];
+    try { $totalsAllTime['views']    = (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM apps")->fetchColumn(); } catch (\Throwable $e) {}
+    try { $totalsAllTime['downloads']= (int)$pdo->query("SELECT COALESCE(SUM(downloads),0) FROM apps")->fetchColumn(); } catch (\Throwable $e) {}
+    try { $totalsAllTime['apps']     = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(); } catch (\Throwable $e) {}
+    try { $totalsAllTime['blog']     = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn(); } catch (\Throwable $e) {}
+    try { $totalsAllTime['comments'] = (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='approved'")->fetchColumn(); } catch (\Throwable $e) {}
+    try { $totalsAllTime['pending_comments'] = (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='pending'")->fetchColumn(); } catch (\Throwable $e) {}
     $views30     = array_sum(array_column($daily, 'view'));
     $downloads30 = array_sum(array_column($daily, 'download'));
 
-    $topViewed     = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY views DESC LIMIT 10")->fetchAll();
-    $topDownloaded = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 10")->fetchAll();
-    $topSearches   = $pdo->query("
+    $topViewed     = [];
+    $topDownloaded = [];
+    $topSearches   = [];
+    try { $topViewed     = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY views DESC LIMIT 10")->fetchAll(); } catch (\Throwable $e) {}
+    try { $topDownloaded = $pdo->query("SELECT name,slug,views,downloads FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 10")->fetchAll(); } catch (\Throwable $e) {}
+    try { $topSearches   = $pdo->query("
         SELECT meta, COUNT(*) c FROM page_events
         WHERE event_type='search' AND created_at >= (NOW() - INTERVAL $days DAY) AND meta IS NOT NULL AND meta<>''
         GROUP BY meta ORDER BY c DESC LIMIT 10
-    ")->fetchAll();
+    ")->fetchAll(); } catch (\Throwable $e) {}
 
     /* Country stats from visitor_profiles */
     try {
@@ -9806,13 +9812,13 @@ $checks = [
         $blogCount >= 5 ? 'ممتاز' : 'أضف 5+ مقالات في قسم المدونة تشرح التطبيقات وتُقارنها.'],
 ];
 
-// Calculate overall score
-$totalWeight = array_sum(array_column($checks, 3));
+// Calculate overall score  ($checks format: [id, status, weight(2), title(3), details, fix])
+$totalWeight = array_sum(array_column($checks, 2));
 $earnedWeight = 0;
 $passCount = 0; $warnCount = 0; $failCount = 0;
 foreach ($checks as $c) {
-    if ($c[1]==='pass') { $earnedWeight += $c[3]; $passCount++; }
-    elseif ($c[1]==='warn') { $earnedWeight += $c[3]*0.5; $warnCount++; }
+    if ($c[1]==='pass') { $earnedWeight += $c[2]; $passCount++; }
+    elseif ($c[1]==='warn') { $earnedWeight += $c[2]*0.5; $warnCount++; }
     else $failCount++;
 }
 $eligibilityPct = $totalWeight > 0 ? round($earnedWeight/$totalWeight*100) : 0;
