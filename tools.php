@@ -226,6 +226,41 @@ if ($slug) {
       </div>
     </div>
     <?php endif; ?>
+
+    <!-- Related Apps -->
+    <?php
+      $relatedApps = [];
+      try {
+        $relatedApps = $pdo->query(
+          "SELECT id, slug, name, icon_path FROM apps WHERE status='published' ORDER BY RAND() LIMIT 4"
+        )->fetchAll();
+      } catch (\Throwable $e) { $relatedApps = []; }
+    ?>
+    <?php if (!empty($relatedApps)): ?>
+    <div class="tool-section" style="background:linear-gradient(135deg, rgba(34,197,94,.08), rgba(59,130,246,.08));border-left:4px solid #22c55e">
+      <h3 style="margin-top:0">تطبيقات قد تهمك</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px">
+        <?php foreach ($relatedApps as $app): ?>
+        <a href="<?= h(app_url($app['slug'])) ?>"
+           style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;background:var(--surface);border:1px solid var(--border-c);border-radius:8px;text-decoration:none;transition:.2s"
+           onmouseover="this.style.borderColor='rgba(34,197,94,.4)';this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.borderColor='var(--border-c)';this.style.transform=''">
+          <?php if (!empty($app['icon_path'])): ?>
+          <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" style="width:40px;height:40px;border-radius:6px">
+          <?php else: ?>
+          <div style="width:40px;height:40px;border-radius:6px;background:var(--border-c);display:flex;align-items:center;justify-content:center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+          </div>
+          <?php endif; ?>
+          <div style="font-size:12px;font-weight:600;color:var(--fg);text-align:center;line-height:1.3"><?= h(mb_substr($app['name'], 0, 25)) ?></div>
+        </a>
+        <?php endforeach; ?>
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <a href="/" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600">عرض جميع التطبيقات <?= partial_icon('arrow-r') ?></a>
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <?php require_once __DIR__ . '/partials.php'; footer(); ?>
@@ -285,6 +320,45 @@ if ($slug) {
       </a>
       <?php endforeach; ?>
     </div>
+    <?php endif; ?>
+
+    <!-- Related Apps Section -->
+    <?php if (!empty($tools)):
+      $relatedApps = [];
+      try {
+        $relatedApps = $pdo->query(
+          "SELECT id, slug, name, icon_path FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 6"
+        )->fetchAll();
+      } catch (\Throwable $e) { $relatedApps = []; }
+    ?>
+    <?php if (!empty($relatedApps)): ?>
+    <div style="margin-top:60px;padding:30px;background:linear-gradient(135deg, rgba(34,197,94,.08), rgba(59,130,246,.08));border:1px solid rgba(34,197,94,.2);border-radius:12px">
+      <h2 style="font-size:24px;margin:0 0 20px;color:var(--fg)">تطبيقات مشهورة قد تهمك</h2>
+      <p style="color:var(--muted);margin:0 0 20px">استكمل تجربتك باستخدام أفضل التطبيقات الأكثر تحميلاً</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px">
+        <?php foreach ($relatedApps as $app): ?>
+        <a href="<?= h(app_url($app['slug'])) ?>"
+           style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;background:var(--surface);border:1px solid var(--border-c);border-radius:10px;text-decoration:none;transition:.2s"
+           onmouseover="this.style.borderColor='rgba(34,197,94,.4)';this.style.transform='translateY(-4px)';this.style.boxShadow='0 4px 12px rgba(34,197,94,.1)'"
+           onmouseout="this.style.borderColor='var(--border-c)';this.style.transform='';this.style.boxShadow=''">
+          <?php if (!empty($app['icon_path'])): ?>
+          <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" style="width:48px;height:48px;border-radius:8px">
+          <?php else: ?>
+          <div style="width:48px;height:48px;border-radius:8px;background:var(--border-c);display:flex;align-items:center;justify-content:center">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+          </div>
+          <?php endif; ?>
+          <div style="font-size:13px;font-weight:600;color:var(--fg);text-align:center;line-height:1.3"><?= h(mb_substr($app['name'], 0, 30)) ?></div>
+        </a>
+        <?php endforeach; ?>
+      </div>
+      <div style="text-align:center;margin-top:20px">
+        <a href="/" style="display:inline-block;padding:10px 20px;background:var(--primary);color:white;text-decoration:none;border-radius:6px;font-weight:600;transition:.2s"
+           onmouseover="this.style.opacity='.85'"
+           onmouseout="this.style.opacity='1'">عرض جميع التطبيقات</a>
+      </div>
+    </div>
+    <?php endif; ?>
     <?php endif; ?>
   </div>
 
