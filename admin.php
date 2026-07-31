@@ -14789,10 +14789,15 @@ $existingSubNames = array_map(fn($d) => explode('.', $d['full_domain'])[0], $smD
     <p>لا توجد دومينات بعد — استخدم الإنشاء السريع أعلاه</p>
   </div>
   <?php else: ?>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+    <button onclick="smBulkDelete()" class="btn-sm" style="background:#ef4444;color:#fff;padding:6px 14px">🗑 حذف المحدد</button>
+    <span id="sm-selected-count" style="font-size:12px;color:var(--muted)"></span>
+  </div>
   <div style="overflow-x:auto">
   <table class="sm-table" style="width:100%;border-collapse:collapse">
     <thead>
       <tr>
+        <th style="width:36px;text-align:center"><input type="checkbox" id="sm-select-all" onchange="smToggleAll(this.checked)" title="تحديد الكل"></th>
         <th style="text-align:right">الدومين</th>
         <th style="text-align:right">القسم</th>
         <th style="text-align:right">الحالة</th>
@@ -14807,6 +14812,7 @@ $existingSubNames = array_map(fn($d) => explode('.', $d['full_domain'])[0], $smD
       $https    = !empty($dom['force_https']);
     ?>
     <tr id="sm-row-<?= $dom['id'] ?>">
+      <td style="text-align:center"><input type="checkbox" class="sm-row-cb" value="<?= $dom['id'] ?>" onchange="smUpdateSelectedCount()"></td>
       <td>
         <div style="font-family:monospace;font-weight:700;color:var(--primary)"><?= h($dom['full_domain']) ?></div>
         <?php if($dom['doc_root']): ?>
@@ -14827,6 +14833,7 @@ $existingSubNames = array_map(fn($d) => explode('.', $d['full_domain'])[0], $smD
           <button onclick="smDeployOne(<?= $dom['id'] ?>)" class="btn-sm" style="background:var(--primary);color:#fff">📡 نشر</button>
           <a href="https://<?= h($dom['full_domain']) ?>" target="_blank" class="btn-sm">🔗 معاينة</a>
           <a href="https://<?= h($dom['full_domain']) ?>/sitemap.php" target="_blank" class="btn-sm">🗺️</a>
+          <button onclick="smDeleteOne(<?= $dom['id'] ?>, '<?= h(addslashes($dom['full_domain'])) ?>')" class="btn-sm" style="background:#fef2f2;color:#ef4444;border:1px solid #fecaca">🗑</button>
         </div>
         <div id="sm-row-log-<?= $dom['id'] ?>" class="sm-log"></div>
       </td>
@@ -14856,6 +14863,43 @@ function smLog(el, msg, ok) {
   ln.textContent = msg;
   d.appendChild(ln);
   d.scrollTop = d.scrollHeight;
+}
+
+function smToggleAll(checked) {
+  document.querySelectorAll('.sm-row-cb').forEach(cb => cb.checked = checked);
+  smUpdateSelectedCount();
+}
+function smUpdateSelectedCount() {
+  var n = document.querySelectorAll('.sm-row-cb:checked').length;
+  var el = document.getElementById('sm-selected-count');
+  if (el) el.textContent = n > 0 ? ('محدد: ' + n) : '';
+  var sa = document.getElementById('sm-select-all');
+  if (sa) { var total = document.querySelectorAll('.sm-row-cb').length; sa.indeterminate = n>0&&n<total; sa.checked = n===total&&total>0; }
+}
+function smDeleteOne(id, domain) {
+  if (!confirm('حذف ' + domain + '؟')) return;
+  fetch('admin.php?ajax=domain_delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:parseInt(id)})})
+    .then(r=>r.json()).then(d=>{
+      if (d.ok) {
+        var row = document.getElementById('sm-row-'+id);
+        if (row) row.remove();
+        smUpdateSelectedCount();
+      } else { alert('فشل الحذف'); }
+    }).catch(()=>alert('فشل الحذف'));
+}
+function smBulkDelete() {
+  var ids = Array.from(document.querySelectorAll('.sm-row-cb:checked')).map(cb=>parseInt(cb.value));
+  if (!ids.length) { alert('لم تحدد أي دومين'); return; }
+  if (!confirm('حذف ' + ids.length + ' دومين؟')) return;
+  var done = 0;
+  ids.forEach(function(id) {
+    fetch('admin.php?ajax=domain_delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id})})
+      .then(r=>r.json()).then(d=>{
+        if (d.ok) { var row=document.getElementById('sm-row-'+id); if(row) row.remove(); }
+        done++;
+        if (done===ids.length) smUpdateSelectedCount();
+      });
+  });
 }
 
 function smDoCreate(sub, cat, ssl, https, deploy, logEl) {

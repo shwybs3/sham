@@ -540,6 +540,20 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
+    if ($aj === 'export_plugin_settings') {
+        $slug = preg_replace('/[^a-z0-9\-]/', '', $_GET['slug'] ?? '');
+        if (!$slug) { echo json_encode(['ok'=>false,'error'=>'slug missing']); exit; }
+        $plugin = null;
+        foreach ($PLUGINS as $p) { if ($p['slug'] === $slug) { $plugin = $p; break; } }
+        if (!$plugin) { echo json_encode(['ok'=>false,'error'=>'plugin not found']); exit; }
+        $out = ['plugin'=>$slug,'exported_at'=>date('c'),'settings'=>[]];
+        foreach ($plugin['settings'] ?? [] as $f) {
+            $out['settings'][$f['key']] = pp_get($pdo, $slug, $f['key'], $f['default'] ?? '');
+        }
+        echo json_encode(['ok'=>true,'settings'=>$out]);
+        exit;
+    }
+
     if ($aj === 'plugin_stats') {
         $total    = count($PLUGINS);
         $active   = 0;
@@ -1028,6 +1042,10 @@ a { color: inherit; text-decoration: none; }
         onclick="togglePlugin('<?= $slug ?>', <?= $isActive?'false':'true' ?>)">
         <?= $isActive ? '⏸ تعطيل الإضافة' : '▶ تفعيل الإضافة' ?>
       </button>
+      <button class="pp-btn" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2)"
+        onclick="exportPluginSettings('<?= $slug ?>')">
+        ⬇ تحميل الإعدادات
+      </button>
     </div>
   </div>
 </div>
@@ -1217,6 +1235,21 @@ function showToast(msg, type='success') {
   t.className = 'show ' + type;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+function exportPluginSettings(slug) {
+  fetch('press.php?ajax=export_plugin_settings&slug=' + encodeURIComponent(slug))
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { showToast('فشل التصدير', 'error'); return; }
+      const blob = new Blob([JSON.stringify(d.settings, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = slug + '-settings.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    })
+    .catch(() => showToast('فشل التصدير', 'error'));
 }
 
 function togglePlugin(slug, activate, toggleEl) {
