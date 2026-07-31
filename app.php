@@ -458,36 +458,33 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
           <?php
             $b = $app['badge'] ?? '';
             if (!$b && !empty($app['created_at']) && strtotime($app['created_at']) > strtotime('-7 days')) $b = 'new';
-            $bmap = ['new'=>['🆕 جديد','#16a34a','rgba(22,163,74,.12)'],'updated'=>['🔄 محدّث','#2563eb','rgba(37,99,235,.1)'],'hot'=>['🔥 رائج','#dc2626','rgba(220,38,38,.1)'],'choice'=>['⭐ اختيار المحرر','#b45309','rgba(245,158,11,.1)']];
+            $bmap = ['new'=>['🆕 '.__('badge_new'),'#16a34a','rgba(22,163,74,.12)'],'updated'=>['🔄 '.__('badge_updated'),'#2563eb','rgba(37,99,235,.1)'],'hot'=>['🔥 '.__('badge_hot'),'#dc2626','rgba(220,38,38,.1)'],'choice'=>['⭐ '.__('badge_choice'),'#b45309','rgba(245,158,11,.1)']];
             if (isset($bmap[$b])): [$bt,$bc,$bb] = $bmap[$b]; ?>
           <span class="badge" style="background:<?= $bb ?>;color:<?= $bc ?>;font-weight:700"><?= $bt ?></span>
           <?php endif; ?>
           <?php if ($app['license']): ?><span class="badge badge-cyan"><?= h($app['license']) ?></span><?php endif; ?>
           <?php if (!empty($app['apk_path']) && in_array($app['download_source']??'playstore', ['apk','both'])): ?>
-          <span class="badge" style="background:rgba(25,135,84,.12);color:#198754;border:1px solid rgba(25,135,84,.25)">📦 APK مستضاف</span>
+          <span class="badge" style="background:rgba(25,135,84,.12);color:#198754;border:1px solid rgba(25,135,84,.25)">📦 <?= __('hosted_apk') ?></span>
           <?php endif; ?>
         </div>
 
         <div class="app-hero-actions">
-          <?php
-          // 3-step funnel: Button 1 → mid-description (Button 2, 5s) → bottom zone (Button 3 → download.php)
-          $hasDlMethod = !empty($app['download_url']) || !empty($app['apk_path']);
-          $hasMidBtn   = $hasDlMethod && mb_strlen($app['long_description'] ?? '') > 600;
-          $btn1Target  = $hasMidBtn ? '#dl-mid-zone' : '#dl-quick-zone';
-          ?>
-          <a href="<?= $btn1Target ?>" class="btn-download-hero" onclick="document.getElementById('<?= ltrim($btn1Target,'#') ?>').scrollIntoView({behavior:'smooth',block:'center'});<?php if($hasMidBtn): ?>if(window._dlMidStart)window._dlMidStart();<?php endif; ?>return false;">
-            <?= svgi('download') ?> تحميل مجاني
+          <?php $hasDlMethod = !empty($app['download_url']) || !empty($app['apk_path']); ?>
+          <?php if ($hasDlMethod): ?>
+          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
+            <?= svgi('download') ?> <?= __('free_download') ?>
           </a>
+          <?php endif; ?>
           <?php if (!empty($app['playstore_url'])): ?>
           <a href="<?= h($app['playstore_url']) ?>" target="_blank" rel="nofollow noopener" class="btn-mirror" title="فتح صفحة التطبيق على Google Play">
             <?= svgi('playstore') ?> Google Play
           </a>
           <?php endif; ?>
           <?php if ($app['mirror2_url']): ?>
-          <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 2</a>
+          <a href="<?= h(download_url($app['slug'], 2)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> <?= __('mirror_2') ?></a>
           <?php endif; ?>
           <?php if ($app['mirror3_url']): ?>
-          <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> مرآة 3</a>
+          <a href="<?= h(download_url($app['slug'], 3)) ?>" class="btn-mirror" data-hardnav="1"><?= svgi('mirror') ?> <?= __('mirror_3') ?></a>
           <?php endif; ?>
         </div>
       </div>
@@ -510,15 +507,15 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
     $pkgName = $app['package_name'] ?? '';
     $metas = [
-        ['label'=>'المطور',        'val'=>$app['developer'],                                              'class'=>'', 'link'=>$app['developer'] ? url('developer/'.rawurlencode($app['developer'])) : null],
-        ['label'=>'الإصدار',       'val'=>$app['version'],                                               'class'=>'version', 'link'=>null],
-        ['label'=>'إصدار بلاي',   'val'=>$playStoreVersion,                                              'class'=>'version', 'link'=>null],
-        ['label'=>'يتطلب أندرويد','val'=>$app['android_version'],                                        'class'=>'', 'link'=>null],
-        ['label'=>'الحجم',         'val'=>(!empty($app['apk_size_bytes']) ? format_apk_size((int)$app['apk_size_bytes']) : ($app['size_mb'] ? $app['size_mb'].' MB' : null)), 'class'=>'size', 'link'=>null],
-        ['label'=>'الترخيص',       'val'=>$app['license'],                                               'class'=>'', 'link'=>null],
-        ['label'=>'اسم الحزمة',    'val'=>$pkgName ?: null,                                              'class'=>'', 'link'=>$pkgName ? 'https://play.google.com/store/apps/details?id='.rawurlencode($pkgName) : null, 'mono'=>true, 'external'=>true],
-        ['label'=>'التحميلات',     'val'=>$app['downloads'] > 0 ? number_format($app['downloads']) : null,'class'=>'', 'link'=>null],
-        ['label'=>'آخر تحديث',    'val'=>!empty($app['apk_uploaded_at']) ? date('Y-m-d', strtotime($app['apk_uploaded_at'])) : null, 'class'=>'', 'link'=>null],
+        ['label'=>__('developer'),  'val'=>$app['developer'],                                              'class'=>'', 'link'=>$app['developer'] ? url('developer/'.rawurlencode($app['developer'])) : null],
+        ['label'=>__('version'),    'val'=>$app['version'],                                               'class'=>'version', 'link'=>null],
+        ['label'=>'Play ' . __('version'), 'val'=>$playStoreVersion,                                     'class'=>'version', 'link'=>null],
+        ['label'=>__('android'),    'val'=>$app['android_version'],                                       'class'=>'', 'link'=>null],
+        ['label'=>__('size'),       'val'=>(!empty($app['apk_size_bytes']) ? format_apk_size((int)$app['apk_size_bytes']) : ($app['size_mb'] ? $app['size_mb'].' MB' : null)), 'class'=>'size', 'link'=>null],
+        ['label'=>'License',        'val'=>$app['license'],                                               'class'=>'', 'link'=>null],
+        ['label'=>'Package',        'val'=>$pkgName ?: null,                                              'class'=>'', 'link'=>$pkgName ? 'https://play.google.com/store/apps/details?id='.rawurlencode($pkgName) : null, 'mono'=>true, 'external'=>true],
+        ['label'=>'Downloads',      'val'=>$app['downloads'] > 0 ? number_format($app['downloads']) : null,'class'=>'', 'link'=>null],
+        ['label'=>'Last Update',    'val'=>!empty($app['apk_uploaded_at']) ? date('Y-m-d', strtotime($app['apk_uploaded_at'])) : null, 'class'=>'', 'link'=>null],
     ];
     foreach ($metas as $m): if (!$m['val']) continue; ?>
     <div class="meta-item reveal">
@@ -659,7 +656,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Screenshots -->
   <?php if ($screenshots): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">صور من التطبيق</span></div>
+    <div class="section-head"><span class="section-title"><?= __('screenshots') ?></span></div>
     <div class="screenshots-scroll">
       <?php foreach ($screenshots as $i => $ss): $ssUrl = (str_starts_with($ss,'http')||str_starts_with($ss,'//')) ? $ss : media_url($ss); ?>
       <div class="screenshot-thumb">
@@ -696,7 +693,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   ?>
   <?php $descIsLong = mb_strlen($descFirst) > 480; ?>
   <div class="section-box">
-    <div class="section-head"><span class="section-title">الوصف</span></div>
+    <div class="section-head"><span class="section-title"><?= __('description') ?></span></div>
     <div class="<?= $descIsLong ? 'app-desc-clamp' : '' ?>" id="app-desc-body" style="color:var(--muted);font-size:14px;line-height:1.85">
       <?= nl2br(h($descFirst)) ?>
     </div>
@@ -706,75 +703,14 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
       اقرأ المزيد
     </button>
     <?php endif; ?>
-    <?php if ($hasMidBtn): ?>
-    <!-- Button 2: mid-description, 5s countdown → scrolls to Button 3 (bottom zone) -->
-    <div id="dl-mid-zone" style="margin:24px 0;padding:20px;background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(124,58,237,.07));border:1px solid rgba(37,99,235,.2);border-radius:14px;text-align:center">
-      <p style="margin:0 0 12px;font-size:13px;color:var(--muted)">زر التحميل سيتفعل خلال ثوانٍ قليلة...</p>
-      <button id="dl-mid-btn" disabled
-        style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:50px;
-               font-size:16px;font-weight:800;border:none;cursor:not-allowed;font-family:var(--f-head);
-               background:linear-gradient(135deg,#374151,#4b5563);color:#9ca3af;min-width:240px;justify-content:center">
-        <?= svgi('download') ?>
-        <span id="dl-mid-label">جاري تجهيز الرابط... <span id="dl-mid-count">5</span>ث</span>
-      </button>
-    </div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85;margin-top:8px">
-      <?= nl2br(h($descSecond)) ?>
-    </div>
-    <?php else: ?>
-    <?php if ($hasDlMethod): ?>
-    <div style="margin-top:20px;text-align:center">
-      <a href="#dl-quick-zone" class="btn-download-hero" style="display:inline-flex;font-size:15px;padding:13px 28px;text-decoration:none"
-         onclick="document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});if(window._dlBtn2Countdown)window._dlBtn2Countdown();return false;">
-        <?= svgi('download') ?> تحميل <?= h($app['name']) ?> مجاناً
-      </a>
-    </div>
-    <?php endif; ?>
-    <?php endif; ?>
   </div>
   <?= wave() ?>
-  <?php endif; ?>
-  <?php if ($hasMidBtn): ?>
-  <script>
-  (function(){
-    var btn = document.getElementById('dl-mid-btn');
-    var countEl = document.getElementById('dl-mid-count');
-    var labelEl = document.getElementById('dl-mid-label');
-    var started = false;
-    function start(){
-      if(started) return; started = true;
-      var n = 5;
-      var iv = setInterval(function(){
-        n--;
-        if(countEl) countEl.textContent = n;
-        if(n <= 0){
-          clearInterval(iv);
-          btn.disabled = false;
-          btn.style.cssText = 'display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:50px;font-size:16px;font-weight:800;border:none;cursor:pointer;font-family:var(--f-head);background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;box-shadow:0 6px 20px rgba(37,99,235,.28);min-width:240px;justify-content:center';
-          if(labelEl) labelEl.textContent = '⬇ اضغط لمتابعة التحميل';
-          btn.onclick = function(){
-            document.getElementById('dl-quick-zone').scrollIntoView({behavior:'smooth',block:'center'});
-            if(window._dlBtn2Countdown) window._dlBtn2Countdown();
-          };
-        }
-      }, 1000);
-    }
-    window._dlMidStart = start;
-    // Auto-trigger when scrolled into view
-    if('IntersectionObserver' in window){
-      var obs = new IntersectionObserver(function(e){ if(e[0]&&e[0].isIntersecting){ start(); obs.disconnect(); }},{threshold:0.2});
-      obs.observe(btn);
-    } else {
-      setTimeout(start, 800);
-    }
-  })();
-  </script>
   <?php endif; ?>
 
   <!-- Features -->
   <?php if ($features): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">المميزات</span></div>
+    <div class="section-head"><span class="section-title"><?= __('features') ?></span></div>
     <div class="features-grid">
       <?php foreach ($features as $i => $feat): ?>
       <div class="feature-card reveal">
@@ -799,7 +735,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Pros / Cons -->
   <?php if ($pros || $cons): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">الإيجابيات والسلبيات</span></div>
+    <div class="section-head"><span class="section-title"><?= __('pros_cons') ?></span></div>
     <div class="pros-cons-grid">
       <div class="pros-box">
         <div class="pros-cons-title pros">
@@ -828,7 +764,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Install Steps -->
   <?php if ($installSteps): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">طريقة التثبيت</span></div>
+    <div class="section-head"><span class="section-title"><?= __('install_steps') ?></span></div>
     <div class="install-steps">
       <?php foreach ($installSteps as $i => $step): ?>
       <div class="install-step reveal">
@@ -846,7 +782,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- What's New -->
   <?php if ($whatsNew !== ''): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">ما الجديد</span></div>
+    <div class="section-head"><span class="section-title"><?= __('whats_new') ?></span></div>
     <p style="color:var(--muted);font-size:14px;line-height:1.8"><?= nl2br(h($whatsNew)) ?></p>
   </div>
   <?= wave() ?>
@@ -855,7 +791,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- FAQ -->
   <?php if ($faq): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">الأسئلة الشائعة</span></div>
+    <div class="section-head"><span class="section-title"><?= __('faq') ?></span></div>
     <div class="faq-list">
       <?php foreach ($faq as $i => $item): ?>
       <div class="faq-item <?= $i === 0 ? 'open' : '' ?>">
@@ -875,7 +811,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Changelog / Version History + Comparison -->
   <?php if ($versionHistory): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">سجل التحديثات ومقارنة الإصدارات</span></div>
+    <div class="section-head"><span class="section-title"><?= __('version_history') ?></span></div>
     <div style="overflow-x:auto">
       <table class="admin-table" style="width:100%;min-width:480px">
         <thead><tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th><th></th></tr></thead>
@@ -901,34 +837,19 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Quick download zone — Button 2 (4-second countdown before going to download page) -->
-  <div id="dl-quick-zone" class="quick-actions-zone">
-
-    <?php if (!empty($app['download_url']) || !empty($app['apk_path'])): ?>
-    <!-- Button 2: countdown, then becomes clickable link to download.php -->
-    <div id="dl-btn2-wrap" style="text-align:center;margin-bottom:12px">
-      <button id="dl-btn2"
-        data-href="<?= h(download_url($app['slug'])) ?>"
-        disabled
-        style="display:inline-flex;align-items:center;gap:12px;padding:15px 36px;border-radius:50px;
-               font-family:var(--f-head);font-size:17px;font-weight:900;border:none;cursor:not-allowed;
-               background:linear-gradient(135deg,#374151,#4b5563);color:#9ca3af;transition:all .3s;
-               box-shadow:none;min-width:260px;justify-content:center">
-        <?= svgi('download') ?>
-        <span id="dl-btn2-label">جاري تجهيز الرابط... <span id="dl-btn2-count">4</span>ث</span>
-      </button>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px">انتظر ثوانٍ قليلة لتفعيل زر التحميل</div>
-    </div>
-    <?php else: ?>
-    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-slim-dl" data-hardnav="1">
-      <?= svgi('download') ?> تحميل <?= h($app['name']) ?><?= $app['version'] ? ' (v'.h($app['version']).')' : '' ?>
+  <!-- Download zone — direct APKPure-style button -->
+  <div class="quick-actions-zone">
+    <?php if ($hasDlMethod): ?>
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1"
+       style="display:inline-flex;width:100%;max-width:340px;justify-content:center;font-size:16px;padding:15px 28px">
+      <?= svgi('download') ?> <?= __('download') ?> <?= h($app['name']) ?><?= $app['version'] ? ' v'.h($app['version']) : '' ?>
     </a>
     <?php endif; ?>
 
     <?php $dlVersions = array_filter($versionHistory, fn($v) => !empty($v['download_url'])); ?>
     <?php if ($dlVersions): ?>
     <details class="prev-versions-slim">
-      <summary>📦 الإصدارات السابقة (<?= count($dlVersions) ?>) — جميعها جاهزة للتحميل</summary>
+      <summary>📦 الإصدارات السابقة (<?= count($dlVersions) ?>)</summary>
       <div class="prev-versions-list">
         <?php foreach ($dlVersions as $v): ?>
         <a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="prev-version-chip" data-hardnav="1">
@@ -948,52 +869,10 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     </a>
     <?php endif; ?>
   </div>
-  <!-- Button 2 countdown script -->
-  <script>
-  (function(){
-    var btn2 = document.getElementById('dl-btn2');
-    if (!btn2) return;
-    var countEl = document.getElementById('dl-btn2-count');
-    var labelEl = document.getElementById('dl-btn2-label');
-    var secs = 4, started = false;
-    function startCountdown() {
-      if (started) return; started = true;
-      var n = secs;
-      var iv = setInterval(function(){
-        n--;
-        if (countEl) countEl.textContent = n;
-        if (n <= 0) {
-          clearInterval(iv);
-          btn2.disabled = false;
-          btn2.style.cssText = 'display:inline-flex;align-items:center;gap:12px;padding:15px 36px;border-radius:50px;font-family:var(--f-head);font-size:17px;font-weight:900;border:none;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;transition:all .3s;box-shadow:0 6px 20px rgba(37,99,235,.28);min-width:260px;justify-content:center';
-          if (labelEl) labelEl.textContent = 'اضغط هنا للتحميل';
-          var btn2Fired = false;
-          btn2.addEventListener('click', function(){
-            if (btn2Fired) return; btn2Fired = true;
-            var href = btn2.getAttribute('data-href');
-            if (href) { window.location.href = href; }
-          });
-        }
-      }, 1000);
-    }
-    // Auto-start when element enters viewport
-    if ('IntersectionObserver' in window) {
-      var obs = new IntersectionObserver(function(entries){
-        if (entries[0] && entries[0].isIntersecting) { startCountdown(); obs.disconnect(); }
-      }, {threshold:0.1});
-      obs.observe(btn2);
-    } else {
-      // Fallback for browsers without IntersectionObserver (Opera Mini, old Firefox)
-      setTimeout(startCountdown, 800);
-    }
-    // Also trigger from Button 1 click
-    window._dlBtn2Countdown = startCountdown;
-  })();
-  </script>
 
   <!-- Comments & Ratings -->
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">التعليقات والتقييمات (<?= $commentCount ?>)</span></div>
+    <div class="section-head"><span class="section-title"><?= __('ratings_reviews') ?> (<?= $commentCount ?>)</span></div>
 
     <?php if ($comments): ?>
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
@@ -1039,7 +918,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Privacy Policy -->
   <?php if ($privacyPolicy !== ''): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">سياسة الخصوصية</span></div>
+    <div class="section-head"><span class="section-title"><?= __('privacy') ?></span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($privacyPolicy)) ?></div>
   </div>
   <?= wave() ?>
@@ -1048,7 +927,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Terms of Use -->
   <?php if ($termsContent !== ''): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">شروط الاستخدام</span></div>
+    <div class="section-head"><span class="section-title"><?= __('terms') ?></span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($termsContent)) ?></div>
   </div>
   <?= wave() ?>
@@ -1057,7 +936,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Related Articles -->
   <?php if ($relatedArticles): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">مقالات ذات صلة بـ <?= h($app['name']) ?></span></div>
+    <div class="section-head"><span class="section-title"><?= __('related_articles') ?> — <?= h($app['name']) ?></span></div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <?php foreach ($relatedArticles as $art): ?>
       <a href="<?= h(article_url($art['slug'])) ?>" class="sidebar-link" style="border:1px solid var(--border-c);border-radius:10px;padding:14px 16px">
@@ -1071,7 +950,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
   <!-- Related Apps -->
   <?php if ($relatedApps): ?>
-  <div class="section-head reveal"><span class="section-title">تطبيقات مشابهة</span></div>
+  <div class="section-head reveal"><span class="section-title"><?= __('similar_apps') ?></span></div>
   <div class="apps-grid">
     <?php foreach ($relatedApps as $r): ?>
     <div class="app-card reveal">
@@ -1098,7 +977,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
   <!-- Alternatives -->
   <?php if ($alternatives || $devAlternatives): ?>
-  <div class="section-head reveal"><span class="section-title">البدائل</span></div>
+  <div class="section-head reveal"><span class="section-title"><?= __('alternatives') ?></span></div>
   <div class="apps-grid">
     <?php foreach (array_merge($alternatives, $devAlternatives) as $r): ?>
     <div class="app-card reveal">

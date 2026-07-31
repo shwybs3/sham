@@ -1,6 +1,85 @@
 <?php
 require_once dirname(__DIR__) . '/_base.php';
 
+/* ── SYP Telegram notification helpers ──────────────────────────────────
+   Self-contained: reads config.local.php constants only (no side-effects),
+   opens its own short-lived PDO, sends via curl. All errors are swallowed. */
+function _syp_pdo(): ?PDO {
+    $lcfg = dirname(dirname(__DIR__)) . '/config.local.php';
+    if (!file_exists($lcfg)) return null;
+    if (!defined('DB_HOST')) @include_once $lcfg;
+    try {
+        return new PDO(
+            'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+            DB_USER, DB_PASS,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 3]
+        );
+    } catch (Throwable $e) { return null; }
+}
+function _syp_cfg(PDO $pdo, string $k): string {
+    try {
+        $s = $pdo->prepare("SELECT value FROM settings WHERE `key`=? LIMIT 1");
+        $s->execute([$k]);
+        return (string)($s->fetchColumn() ?? '');
+    } catch (Throwable $e) { return ''; }
+}
+function _syp_notify(float $syp, array $rates): void {
+    if (!function_exists('curl_init')) return;
+    $rfFile = sys_get_temp_dir() . '/yas_syp_tg_last_rate.txt';
+    $tsFile = sys_get_temp_dir() . '/yas_syp_tg_last_sent.txt';
+    $lastRate = (float)(@file_get_contents($rfFile) ?: '0');
+    $lastSent = (int)(@file_get_contents($tsFile)  ?: '0');
+    $rateChanged = ($lastRate > 0) && (abs($syp - $lastRate) >= 20);
+    $timeExpired = (time() - $lastSent) >= 21600; // 6 hours
+    if (!$rateChanged && !$timeExpired) return;
+
+    $pdo = _syp_pdo();
+    if (!$pdo) return;
+    $token  = _syp_cfg($pdo, 'telegram_bot_token');
+    $chatId = _syp_cfg($pdo, 'telegram_channel_id');
+    if (!$token || !$chatId) return;
+
+    $flags = ['USD'=>'🇺🇸','EUR'=>'🇪🇺','SAR'=>'🇸🇦','AED'=>'🇦🇪','KWD'=>'🇰🇼',
+              'GBP'=>'🇬🇧','TRY'=>'🇹🇷','IQD'=>'🇮🇶','LBP'=>'🇱🇧','EGP'=>'🇪🇬','JOD'=>'🇯🇴'];
+    $names = ['USD'=>'الدولار الأمريكي','EUR'=>'اليورو','SAR'=>'الريال السعودي',
+              'AED'=>'الدرهم الإماراتي','KWD'=>'الدينار الكويتي','GBP'=>'الجنيه الإسترليني',
+              'TRY'=>'الليرة التركية','IQD'=>'الدينار العراقي','LBP'=>'الليرة اللبنانية',
+              'EGP'=>'الجنيه المصري','JOD'=>'الدينار الأردني'];
+
+    $reason = $rateChanged
+        ? '⚡ تغيّر السعر ' . ($syp > $lastRate ? '↑' : '↓') . ' ' . number_format(abs($syp - $lastRate), 0) . ' ل.س'
+        : '🕐 تحديث دوري (كل 6 ساعات)';
+
+    $lines = ["💱 <b>تحديث سعر الليرة السورية</b>", $reason, ''];
+    foreach ($flags as $code => $flag) {
+        $val = $rates[$code] ?? null;
+        if ($val === null) continue;
+        $fmt = $val >= 100 ? number_format($val, 0) : number_format($val, 2);
+        $lines[] = "{$flag} {$names[$code]}: <b>{$fmt} ل.س</b>";
+    }
+    $lines[] = '';
+    $lines[] = '📅 ' . date('Y-m-d H:i');
+    $lines[] = '⚠️ أسعار السوق الموازي — للاستخدام المرجعي فقط';
+    $lines[] = '🔗 ' . TOOLS_BASE_URL . '/tools/syp/';
+
+    $ch = curl_init("https://api.telegram.org/bot{$token}/sendMessage");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+        CURLOPT_TIMEOUT => 4, CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode([
+            'chat_id' => $chatId, 'text' => implode("\n", $lines), 'parse_mode' => 'HTML',
+        ]),
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+    $d = json_decode((string)$res, true);
+    if (!empty($d['ok'])) {
+        @file_put_contents($rfFile, (string)$syp);
+        @file_put_contents($tsFile, (string)time());
+    }
+}
+
 /* ── Server-side SYP rates proxy ── */
 if (isset($_GET['action']) && $_GET['action'] === 'syp') {
     header('Content-Type: application/json; charset=utf-8');
@@ -58,6 +137,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'syp') {
     ]);
     file_put_contents($cacheFile, $out);
     echo $out;
+    // Telegram: notify if rate changed ≥20 ل.س OR 6 hours since last send
+    try { _syp_notify($syp_per_usd, $rates); } catch (Throwable $_e) {}
     exit;
 }
 

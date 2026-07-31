@@ -123,6 +123,10 @@ $dlCaptchaType = 'none';
 if ($turnstileSiteKey)      $dlCaptchaType = 'turnstile';
 elseif ($v2SiteKey)         $dlCaptchaType = 'v2';
 elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
+
+// Built-in math CAPTCHA — always required, no external keys needed
+$mathA = rand(2, 9);
+$mathB = rand(1, 8);
 ?>
 <!DOCTYPE html>
 <html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
@@ -317,7 +321,18 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
       }
       ?>
 
+      <!-- Built-in math CAPTCHA — always shown before download buttons -->
       <?php if ($dlSlots): ?>
+      <div id="math-gate" class="dlp-math-gate">
+        <p style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)"><?= __('captcha_q') ?></p>
+        <div class="dlp-math-row">
+          <span class="dlp-math-q"><?= $mathA ?> + <?= $mathB ?> = ?</span>
+          <input type="number" id="math-ans" class="dlp-math-input" min="1" max="99" autocomplete="off" inputmode="numeric" placeholder="...">
+          <button type="button" onclick="dlCheckMath()" class="dlp-math-btn"><?= __('captcha_verify') ?></button>
+        </div>
+        <p id="math-error" style="display:none;color:var(--danger);font-size:12px;margin:6px 0 0"><?= __('captcha_wrong') ?></p>
+      </div>
+      <div id="dl-buttons-wrap" style="pointer-events:none;opacity:.4;transition:opacity .3s">
       <div class="dlp-accordion" id="dl-accordion">
         <?php foreach ($dlSlots as $si => $slot): ?>
         <div class="dlp-acc-item<?= $slot['open'] ? ' open' : '' ?>" id="dlacc-<?= $si ?>">
@@ -374,6 +389,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
         </div>
         <?php endforeach; ?>
       </div>
+      </div><!-- /dl-buttons-wrap -->
       <?php else: ?>
       <div class="dlp-no-link">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
@@ -590,7 +606,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
           </svg>
         </div>
         <h3>تحميل الملف</h3>
-        <p>اضغط زر التحميل وانتظر انتهاء العدّ التنازلي لبدء التحميل تلقائياً</p>
+        <p>أجب عن سؤال التحقق ثم اضغط زر التحميل لبدء التحميل مباشرة</p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">2</div>
@@ -678,6 +694,26 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 <?php render_cookie_banner(); ?>
 
 <script>
+/* ── Math CAPTCHA ── */
+(function(){
+  var _a = <?= $mathA ?>, _b = <?= $mathB ?>;
+  var wrap = document.getElementById('dl-buttons-wrap');
+  function unlock() {
+    var g = document.getElementById('math-gate');
+    if (g) { g.style.display = 'none'; }
+    if (wrap) { wrap.style.pointerEvents = 'auto'; wrap.style.opacity = '1'; }
+  }
+  window.dlCheckMath = function() {
+    var val = parseInt((document.getElementById('math-ans')||{}).value, 10);
+    var err = document.getElementById('math-error');
+    if (val === _a + _b) { unlock(); }
+    else { if (err) err.style.display = ''; }
+  };
+  // Also trigger on Enter key
+  var inp = document.getElementById('math-ans');
+  if (inp) inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') window.dlCheckMath(); });
+})();
+
 /* ── Download page JS: immediate download, accordion, captcha ── */
 const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>;
 <?php if ($dlCaptchaType === 'v3'): ?>const DL_V3_SITE_KEY = <?= json_encode($v3SiteKey) ?>;<?php endif; ?>

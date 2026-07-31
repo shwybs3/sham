@@ -156,88 +156,55 @@
   width: 100%; min-width: 0;
 }
 
-/* ── Countdown card ── */
-.dlp-countdown-card {
-  background: #ffffff;
+/* ── Built-in Math CAPTCHA ── */
+.dlp-math-gate {
   background: var(--surface);
-  border: 1px solid rgba(15,23,42,.08);
   border: 1px solid var(--border-c);
-  border-radius: 22px;
-  padding: 36px 28px;
+  border-radius: 14px;
+  padding: 16px 20px 14px;
+  margin-bottom: 12px;
   text-align: center;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 4px 16px rgba(15,23,42,.09);
-  box-shadow: var(--shadow-md);
 }
-.dlp-countdown-card::before {
-  content: '';
-  position: absolute; top:0;right:0;bottom:0;left:0;
-  background: radial-gradient(ellipse at 50% -10%, rgba(14,165,233,.05) 0%, transparent 65%);
-  pointer-events: none;
+.dlp-math-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
-.dlp-countdown-header {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  font-size: 14px; color: var(--muted);
-  margin-bottom: 32px;
-}
-.dlp-pulse-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--cyan);
-  animation: pulse-dot 1.2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-  0%,100% { transform: scale(1); opacity: 1; }
-  50%      { transform: scale(1.5); opacity: .5; }
-}
-
-/* Ring */
-.dlp-ring-wrap {
-  position: relative; display: inline-block;
-  width: 160px; height: 160px;
-  margin-bottom: 28px;
-}
-.dlp-ring-svg {
-  width: 160px; height: 160px;
-  transform: rotate(-90deg);
-}
-.dlp-ring-bg {
-  fill: none;
-  stroke: rgba(14,165,233,.07);
-  stroke-width: 7;
-}
-.dlp-ring-prog {
-  fill: none;
-  stroke: var(--cyan);
-  stroke-width: 7;
-  stroke-linecap: round;
-  transition: stroke-dashoffset .95s linear;
-  filter: drop-shadow(0 0 6px rgba(14,165,233,.55));
-}
-.dlp-ring-inner {
-  position: absolute; top:0;right:0;bottom:0;left:0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-}
-.dlp-count {
+.dlp-math-q {
   font-family: var(--f-mono);
-  font-size: 52px; font-weight: 800;
-  color: var(--cyan); line-height: 1;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 2px;
 }
-.dlp-count-label { font-size: 13px; color: var(--muted); margin-top: 2px; }
-
-/* Progress bar */
-.dlp-progress-bar {
-  width: 100%; height: 6px;
-  background: rgba(14,165,233,.07);
-  border-radius: 3px; overflow: hidden;
-  margin-bottom: 32px;
+.dlp-math-input {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-c);
+  border-radius: 8px;
+  font-size: 18px;
+  font-family: var(--f-mono);
+  text-align: center;
+  background: var(--surface-2, var(--surface));
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s;
 }
-.dlp-progress-fill {
-  height: 100%; width: 0%;
-  background: linear-gradient(90deg, var(--cyan), var(--purple));
-  border-radius: 3px;
-  transition: width 1s linear;
+.dlp-math-input:focus { border-color: var(--cyan); }
+.dlp-math-btn {
+  padding: 8px 20px;
+  background: var(--cyan);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .2s;
 }
+.dlp-math-btn:hover { opacity: .85; }
 
 /* CAPTCHA wrap — smooth reveal, always in layout flow */
 .dl-cap-hidden {
