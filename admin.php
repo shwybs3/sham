@@ -2947,6 +2947,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'find_dl_sources' && is_admin()) {
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'quick_publish' && is_admin()) {
     @set_time_limit(120);
     header('Content-Type: application/json; charset=utf-8');
+    try {
     $input   = json_decode(file_get_contents('php://input'), true);
     $query   = trim($input['query'] ?? '');
     $publish = !empty($input['publish']); // true = published, false = draft
@@ -3071,6 +3072,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'quick_publish' && is_admin()) {
         'edit_url' => 'admin.php?page=edit-app&id=' . $newId,
         'view_url' => rtrim(SITE_URL, '/') . '/' . rawurlencode($slug) . '/apk',
     ], JSON_UNESCAPED_UNICODE);
+    } catch (\Throwable $e) {
+        echo json_encode(['ok'=>false,'error'=>'خطأ داخلي: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
     exit;
 }
 

@@ -1041,13 +1041,17 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <div class="apps-grid">
     <?php foreach ($relatedApps as $r): ?>
     <div class="app-card reveal">
-      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
-        <?php if ($r['icon_path']): ?>
-          <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
-        <?php endif; ?>
-        <div class="app-card-name"><?= h($r['name']) ?></div>
-        <div class="app-card-meta">
-          <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+      <a class="app-card-inner" href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
+        <div class="app-card-body" style="padding-top:14px">
+          <?php if ($r['icon_path']): ?>
+            <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy" style="margin:0 auto 10px">
+          <?php else: ?>
+            <div class="app-card-icon-placeholder" style="margin:0 auto 10px"></div>
+          <?php endif; ?>
+          <div class="app-card-name"><?= h($r['name']) ?></div>
+          <div class="app-card-meta">
+            <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+          </div>
         </div>
       </a>
       <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
@@ -1064,13 +1068,17 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <div class="apps-grid">
     <?php foreach (array_merge($alternatives, $devAlternatives) as $r): ?>
     <div class="app-card reveal">
-      <a href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
-        <?php if ($r['icon_path']): ?>
-          <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy">
-        <?php endif; ?>
-        <div class="app-card-name"><?= h($r['name']) ?></div>
-        <div class="app-card-meta">
-          <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+      <a class="app-card-inner" href="<?= h(app_url($r['slug'])) ?>" data-hardnav="1">
+        <div class="app-card-body" style="padding-top:14px">
+          <?php if ($r['icon_path']): ?>
+            <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="app-card-icon" loading="lazy" style="margin:0 auto 10px">
+          <?php else: ?>
+            <div class="app-card-icon-placeholder" style="margin:0 auto 10px"></div>
+          <?php endif; ?>
+          <div class="app-card-name"><?= h($r['name']) ?></div>
+          <div class="app-card-meta">
+            <div class="app-card-rating"><?= svgi('star') ?> <?= h($r['rating']) ?></div>
+          </div>
         </div>
       </a>
       <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">

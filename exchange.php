@@ -163,7 +163,7 @@ $schema = json_encode([
         <tbody id="full-tbody"><tr><td colspan="3" style="text-align:center;padding:20px;color:var(--muted)">جارٍ التحميل...</td></tr></tbody>
       </table>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin-top:8px">المصدر: Frankfurter.app · تُحدَّث يومياً · <a href="<?= h(url('gold')) ?>" style="color:var(--cyan)">سعر الذهب اليوم</a></p>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px">المصدر: fawazahmed0 / ExchangeRate-API · تُحدَّث يومياً · <a href="<?= h(url('gold')) ?>" style="color:var(--cyan)">سعر الذهب اليوم</a></p>
   </div>
 </div>
 
@@ -178,15 +178,35 @@ var rates = {}, curNames = {
   NGN:'نيرة نيجيرية',RUB:'روبل روسي',BRL:'ريال برازيلي',MXN:'بيسو مكسيكي',
 };
 
-fetch('https://api.frankfurter.app/latest?base=USD')
-  .then(function(r){return r.json();})
-  .then(function(d){
-    rates = d.rates; rates['USD'] = 1;
+// Primary: fawazahmed0 via jsDelivr (free CDN, includes SYP, no key needed)
+// Fallback: open.er-api.com (free, no key)
+function loadRates() {
+  return fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json')
+    .then(function(r){ return r.ok ? r.json() : Promise.reject('http '+r.status); })
+    .then(function(d){
+      var raw = d.usd || {};
+      Object.keys(raw).forEach(function(k){ rates[k.toUpperCase()] = raw[k]; });
+      rates['USD'] = 1;
+      return rates;
+    });
+}
+function loadRatesFallback() {
+  return fetch('https://open.er-api.com/v6/latest/USD')
+    .then(function(r){ return r.ok ? r.json() : Promise.reject('http '+r.status); })
+    .then(function(d){
+      if (!d.rates) return Promise.reject('no rates');
+      rates = d.rates; rates['USD'] = 1;
+      return rates;
+    });
+}
+
+(loadRates().catch(loadRatesFallback))
+  .then(function(){
     document.getElementById('cv-loading').style.display = 'none';
     document.getElementById('cv-result').style.display = 'block';
-    updateCards(); doConvert(); buildFullTable(d.rates);
+    updateCards(); doConvert(); buildFullTable();
   })
-  .catch(function(){ document.getElementById('cv-loading').textContent = 'تعذّر تحميل الأسعار'; });
+  .catch(function(e){ document.getElementById('cv-loading').textContent = 'تعذّر تحميل الأسعار'; console.error(e); });
 
 function updateCards() {
   var toShow = ['EUR','GBP','SAR','AED','EGP','KWD','QAR','BHD','OMR','JOD','MAD','TRY'];
@@ -221,12 +241,15 @@ function fmt(n) {
   return n.toLocaleString('ar-SA', {minimumFractionDigits:2,maximumFractionDigits:4});
 }
 
-function buildFullTable(r) {
+function buildFullTable() {
   var tbody = document.getElementById('full-tbody');
   tbody.innerHTML = '';
-  Object.entries(r).sort(function(a,b){ return a[0].localeCompare(b[0]); }).forEach(function(e){
-    tbody.innerHTML += '<tr style="border-bottom:1px solid var(--border-c)"><td style="padding:8px 12px;font-weight:700;direction:ltr">'+e[0]+'</td><td style="padding:8px 12px;color:var(--muted)">'+( curNames[e[0]]||e[0])+'</td><td style="padding:8px 12px;font-variant-numeric:tabular-nums;direction:ltr">'+e[1].toFixed(4)+'</td></tr>';
-  });
+  Object.entries(rates).filter(function(e){ return e[0] !== 'USD'; })
+    .sort(function(a,b){ return a[0].localeCompare(b[0]); })
+    .forEach(function(e){
+      var val = typeof e[1] === 'number' ? e[1].toFixed(4) : e[1];
+      tbody.innerHTML += '<tr style="border-bottom:1px solid var(--border-c)"><td style="padding:8px 12px;font-weight:700;direction:ltr">'+e[0]+'</td><td style="padding:8px 12px;color:var(--muted)">'+(curNames[e[0]]||e[0])+'</td><td style="padding:8px 12px;font-variant-numeric:tabular-nums;direction:ltr">'+val+'</td></tr>';
+    });
 }
 </script>
 </body>

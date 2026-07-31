@@ -281,10 +281,10 @@ $orgSchema = json_encode([
   <!-- ── Web Tools Section (all 20 tools) ── -->
   <?php if (!$search && !$catSlug): ?>
   <?= partial_wave() ?>
-  <section style="margin-top:8px" id="web-tools">
-    <div class="section-head reveal">
+  <section style="margin-top:16px;padding:20px;background:var(--surface);border:1px solid var(--border-c);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)" id="web-tools">
+    <div class="section-head reveal" style="margin-bottom:4px">
       <span class="section-title">أدوات ويب مجانية</span>
-      <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none">عرض الكل <?= partial_icon('arrow-r') ?></a>
+      <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600">عرض الكل (50+) <?= partial_icon('arrow-r') ?></a>
     </div>
     <?php
     $webToolGroups = [
@@ -342,9 +342,9 @@ $orgSchema = json_encode([
     </div>
     <?php endforeach; ?>
     <div style="text-align:center;margin-top:14px" class="reveal">
-      <a href="<?= h(url('tools')) ?>" style="display:inline-flex;align-items:center;gap:6px;padding:10px 22px;background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);color:var(--cyan);font-size:13px;font-weight:600;text-decoration:none;transition:border-color .2s"
-         onmouseover="this.style.borderColor='rgba(6,182,212,.4)'" onmouseout="this.style.borderColor='var(--border-c)'">
-        <?= partial_icon('globe') ?> جميع الأدوات (20 أداة مجانية)
+      <a href="<?= h(url('tools')) ?>" style="display:inline-flex;align-items:center;gap:6px;padding:10px 22px;background:var(--surface);border:1.5px solid var(--border-p);border-radius:var(--radius-lg);color:var(--cyan);font-size:13px;font-weight:700;text-decoration:none;transition:border-color .2s,background .2s;box-shadow:var(--shadow-sm)"
+         onmouseover="this.style.borderColor='var(--cyan)';this.style.background='rgba(14,165,233,.06)'" onmouseout="this.style.borderColor='var(--border-p)';this.style.background='var(--surface)'">
+        <?= partial_icon('globe') ?> عرض جميع الأدوات المجانية (50+)
       </a>
     </div>
   </section>
