@@ -1619,6 +1619,12 @@ function visitor_record_download(PDO $pdo): void {
 function captcha_should_challenge(PDO $pdo): string {
     if (evil_is_admin_ip()) return 'none';
 
+    // Allow search engine bots to crawl without CAPTCHA
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    if (preg_match('/(googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram|viber|pinterest)/i', $ua)) {
+        return 'none';
+    }
+
     $turnstileSite = trim(get_cfg($pdo, 'turnstile_site_key'));
     $v3Site = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
     $v2Site = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));

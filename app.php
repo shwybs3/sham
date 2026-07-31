@@ -123,14 +123,14 @@ $articlesStmt->execute([$app['id']]);
 $relatedArticles = $articlesStmt->fetchAll();
 
 // Version history (populated when the admin edits an app with "save as new version" checked)
-$versionsStmt = $pdo->prepare("SELECT * FROM app_versions WHERE app_id=? ORDER BY created_at DESC");
+$versionsStmt = $pdo->prepare("SELECT id, version, changelog, download_url, created_at FROM app_versions WHERE app_id=? ORDER BY created_at DESC");
 $versionsStmt->execute([$app['id']]);
 $versionHistory = $versionsStmt->fetchAll();
 
 $tgUrl = get_cfg($pdo, 'telegram_channel_url', '');
 
 // Approved comments + rating aggregate
-$commentsStmt = $pdo->prepare("SELECT * FROM comments WHERE app_id=? AND status='approved' ORDER BY created_at DESC LIMIT 50");
+$commentsStmt = $pdo->prepare("SELECT id, name, rating, body, created_at FROM comments WHERE app_id=? AND status='approved' ORDER BY created_at DESC LIMIT 50");
 $commentsStmt->execute([$app['id']]);
 $comments = $commentsStmt->fetchAll();
 $commentCount = count($comments);
