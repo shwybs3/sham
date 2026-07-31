@@ -156,55 +156,6 @@
   width: 100%; min-width: 0;
 }
 
-/* ── Built-in Math CAPTCHA ── */
-.dlp-math-gate {
-  background: var(--surface);
-  border: 1px solid var(--border-c);
-  border-radius: 14px;
-  padding: 16px 20px 14px;
-  margin-bottom: 12px;
-  text-align: center;
-}
-.dlp-math-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.dlp-math-q {
-  font-family: var(--f-mono);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--cyan);
-  letter-spacing: 2px;
-}
-.dlp-math-input {
-  width: 80px;
-  padding: 8px 12px;
-  border: 1.5px solid var(--border-c);
-  border-radius: 8px;
-  font-size: 18px;
-  font-family: var(--f-mono);
-  text-align: center;
-  background: var(--surface-2, var(--surface));
-  color: var(--text);
-  outline: none;
-  transition: border-color .2s;
-}
-.dlp-math-input:focus { border-color: var(--cyan); }
-.dlp-math-btn {
-  padding: 8px 20px;
-  background: var(--cyan);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity .2s;
-}
-.dlp-math-btn:hover { opacity: .85; }
 
 /* CAPTCHA wrap — smooth reveal, always in layout flow */
 .dl-cap-hidden {

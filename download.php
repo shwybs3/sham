@@ -117,16 +117,12 @@ $turnstileSiteKey = trim(get_cfg($pdo, 'turnstile_site_key'));
 $v3SiteKey        = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
 $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
 
-// Download button CAPTCHA — ALWAYS required when any key is configured,
-// regardless of visitor risk level. Prefers Turnstile → v2 → v3.
+// Download button CAPTCHA — ALWAYS required when Turnstile is configured.
+// Falls back to reCAPTCHA v2/v3 if only those keys are set.
 $dlCaptchaType = 'none';
 if ($turnstileSiteKey)      $dlCaptchaType = 'turnstile';
 elseif ($v2SiteKey)         $dlCaptchaType = 'v2';
 elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
-
-// Built-in math CAPTCHA — always required, no external keys needed
-$mathA = rand(2, 9);
-$mathB = rand(1, 8);
 ?>
 <!DOCTYPE html>
 <html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
@@ -321,18 +317,17 @@ $mathB = rand(1, 8);
       }
       ?>
 
-      <!-- Built-in math CAPTCHA — always shown before download buttons -->
       <?php if ($dlSlots): ?>
-      <div id="math-gate" class="dlp-math-gate">
-        <p style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)"><?= __('captcha_q') ?></p>
-        <div class="dlp-math-row">
-          <span class="dlp-math-q"><?= $mathA ?> + <?= $mathB ?> = ?</span>
-          <input type="number" id="math-ans" class="dlp-math-input" min="1" max="99" autocomplete="off" inputmode="numeric" placeholder="...">
-          <button type="button" onclick="dlCheckMath()" class="dlp-math-btn"><?= __('captcha_verify') ?></button>
+      <?php if ($dlCaptchaType === 'turnstile'): ?>
+      <div id="cf-dl-gate" style="margin-bottom:14px;padding:18px 16px;background:var(--surface);border:1px solid var(--border-c);border-radius:14px;text-align:center">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;font-weight:600">للتحميل يرجى إتمام التحقق من Cloudflare</p>
+        <div style="display:flex;justify-content:center">
+          <div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlTurnstileSolved" data-theme="auto" data-size="normal"></div>
         </div>
-        <p id="math-error" style="display:none;color:var(--danger);font-size:12px;margin:6px 0 0"><?= __('captcha_wrong') ?></p>
+        <p style="font-size:11px;color:var(--muted);margin:10px 0 0">🔒 محمي بواسطة Cloudflare Turnstile</p>
       </div>
-      <div id="dl-buttons-wrap" style="pointer-events:none;opacity:.4;transition:opacity .3s">
+      <?php endif; ?>
+      <div id="dl-buttons-wrap"<?= $dlCaptchaType === 'turnstile' ? ' style="pointer-events:none;opacity:.4;transition:opacity .3s"' : '' ?>>
       <div class="dlp-accordion" id="dl-accordion">
         <?php foreach ($dlSlots as $si => $slot): ?>
         <div class="dlp-acc-item<?= $slot['open'] ? ' open' : '' ?>" id="dlacc-<?= $si ?>">
@@ -606,7 +601,7 @@ $mathB = rand(1, 8);
           </svg>
         </div>
         <h3>تحميل الملف</h3>
-        <p>أجب عن سؤال التحقق ثم اضغط زر التحميل لبدء التحميل مباشرة</p>
+        <p>أتمّ التحقق من Cloudflare ثم اضغط زر التحميل لبدء التحميل مباشرة</p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">2</div>
@@ -694,25 +689,34 @@ $mathB = rand(1, 8);
 <?php render_cookie_banner(); ?>
 
 <script>
-/* ── Math CAPTCHA ── */
-(function(){
-  var _a = <?= $mathA ?>, _b = <?= $mathB ?>;
-  var wrap = document.getElementById('dl-buttons-wrap');
-  function unlock() {
-    var g = document.getElementById('math-gate');
-    if (g) { g.style.display = 'none'; }
+/* ── Cloudflare Turnstile unlock ── */
+window.onDlTurnstileSolved = function(token) {
+  fetch(location.pathname + '?ajax=verify_captcha', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'token=' + encodeURIComponent(token) + '&type=turnstile'
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var gate = document.getElementById('cf-dl-gate');
+    var wrap = document.getElementById('dl-buttons-wrap');
+    if (d.ok) {
+      if (gate) { gate.style.transition = 'opacity .3s'; gate.style.opacity = '0'; setTimeout(function(){ gate.style.display = 'none'; }, 320); }
+      if (wrap) { wrap.style.pointerEvents = 'auto'; wrap.style.opacity = '1'; }
+      dlCaptchaSolved = true;
+    } else {
+      if (typeof turnstile !== 'undefined') turnstile.reset();
+    }
+  })
+  .catch(function(){
+    // Network error — unlock optimistically (CF already verified client-side)
+    var gate = document.getElementById('cf-dl-gate');
+    var wrap = document.getElementById('dl-buttons-wrap');
+    if (gate) gate.style.display = 'none';
     if (wrap) { wrap.style.pointerEvents = 'auto'; wrap.style.opacity = '1'; }
-  }
-  window.dlCheckMath = function() {
-    var val = parseInt((document.getElementById('math-ans')||{}).value, 10);
-    var err = document.getElementById('math-error');
-    if (val === _a + _b) { unlock(); }
-    else { if (err) err.style.display = ''; }
-  };
-  // Also trigger on Enter key
-  var inp = document.getElementById('math-ans');
-  if (inp) inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') window.dlCheckMath(); });
-})();
+    dlCaptchaSolved = true;
+  });
+};
 
 /* ── Download page JS: immediate download, accordion, captcha ── */
 const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>;

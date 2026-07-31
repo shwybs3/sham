@@ -907,40 +907,6 @@ button, input, select, textarea { font-family: inherit; }
 }
 .cf-turnstile-wrap .cf-turnstile { display: inline-block; }
 
-/* Download intent countdown bar */
-#dl-intent-bar {
-  position: sticky;
-  top: 62px;
-  z-index: 120;
-  background: linear-gradient(135deg, #0ea5e9 0%, #7c3aed 100%);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 20px;
-  font-size: 14px;
-  font-family: var(--f-head);
-  box-shadow: 0 4px 20px rgba(14,165,233,.35);
-  flex-wrap: wrap;
-}
-#dl-intent-bar strong { font-variant-numeric: tabular-nums; font-size: 18px; }
-#dl-intent-bar .dl-now-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,.2);
-  border: 1px solid rgba(255,255,255,.35);
-  color: #fff;
-  padding: 7px 16px;
-  border-radius: 50px;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: background .15s;
-}
-#dl-intent-bar .dl-now-btn:hover { background: rgba(255,255,255,.32); }
 
 .btn-slim-dl {
   display: inline-flex;
