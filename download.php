@@ -86,8 +86,15 @@ if ($hasLocalApk && empty($url)) {
 
 $screenshots = json_decode($app['screenshots'] ?? '[]', true) ?: [];
 $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
-$countdownSecs = max(3, min(30, (int)(get_cfg($pdo, 'download_countdown_secs', '12') ?: 12)));
 $customAdCode  = get_cfg($pdo, 'download_custom_ad_code', '');
+
+// Fetch previous version history for the accordion
+$versionHistory = [];
+try {
+    $vhStmt = $pdo->prepare("SELECT id, version, changelog, download_url, created_at FROM app_versions WHERE app_id=? ORDER BY created_at DESC LIMIT 10");
+    $vhStmt->execute([$app['id']]);
+    $versionHistory = $vhStmt->fetchAll();
+} catch (Throwable $e) {}
 
 // Related apps (same category)
 $relatedApps = [];
@@ -205,13 +212,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 </script>
 <?php endif; ?>
 
-<header class="site-header">
-  <a href="<?= h(url('')) ?>" class="logo">yass<span style="color:var(--purple)">ota</span></a>
-  <nav class="header-nav">
-    <a href="<?= h(url('')) ?>">الرئيسية</a>
-    <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
-  </nav>
-</header>
+<?php render_site_header('', ''); ?>
 
 <div class="dlp-wrap">
 
@@ -267,24 +268,6 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
     </div>
   </div>
 
-  <!-- ── Steps indicator ── -->
-  <div class="dlp-steps">
-    <div class="dlp-step done" id="step1">
-      <div class="dlp-step-dot">✓</div>
-      <div class="dlp-step-label">التحقق من الرابط</div>
-    </div>
-    <div class="dlp-step-line"></div>
-    <div class="dlp-step active" id="step2">
-      <div class="dlp-step-dot">2</div>
-      <div class="dlp-step-label">تجهيز التحميل</div>
-    </div>
-    <div class="dlp-step-line"></div>
-    <div class="dlp-step" id="step3">
-      <div class="dlp-step-dot">3</div>
-      <div class="dlp-step-label">التحميل جاهز</div>
-    </div>
-  </div>
-
   <!-- ── Top ad ── -->
   <div class="ad-zone"><?= ad_slot() ?></div>
 
@@ -294,77 +277,108 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
     <!-- LEFT: Download column -->
     <div class="dlp-download-col">
 
-      <!-- Countdown card -->
-      <div class="dlp-countdown-card" id="dl-timer-section">
-        <?php if ($hasLink): ?>
+      <!-- ══ VERSION ACCORDION (liteapks style) ══ -->
+      <?php
+      // Build a list of "release slots": current first, then archived versions
+      $dlSlots = [];
 
-        <div class="dlp-countdown-header">
-          <div class="dlp-pulse-dot"></div>
-          <span id="dl-status-text">جاري تجهيز رابط التحميل الآمن...</span>
-        </div>
+      if ($hasLink) {
+          // Main/current slot
+          $mirrors = [];
+          $mirrorLabels = ['مرآة 2', 'مرآة 3'];
+          foreach ([2 => $app['mirror2_url'] ?? '', 3 => $app['mirror3_url'] ?? ''] as $n => $mu) {
+              if ($mu) $mirrors[] = ['label' => $mirrorLabels[$n-2], 'url' => download_url($app['slug'], $n), 'ext' => false];
+          }
+          $primaryLabel = $hasLocalApk ? 'تحميل APK' : (str_contains($url, 'play.google.com') ? 'Google Play' : 'تحميل APK');
+          $primaryUrl   = $hasLocalApk ? url('download.php?slug='.urlencode($app['slug']).'&apk=1') : $url;
+          $dlSlots[] = [
+              'version'  => $displayVersion ?: 'الإصدار الحالي',
+              'notes'    => $app['whats_new'] ?? '',
+              'buttons'  => array_merge(
+                  [['label' => $primaryLabel, 'url' => $primaryUrl, 'primary' => true, 'local' => $hasLocalApk]],
+                  array_map(fn($m) => ['label' => $m['label'], 'url' => $m['url'], 'primary' => false, 'local' => false], $mirrors)
+              ),
+              'date'     => $app['updated_at'] ?? '',
+              'open'     => true,
+          ];
+      }
 
-        <div class="dlp-ring-wrap">
-          <svg class="dlp-ring-svg" viewBox="0 0 120 120">
-            <circle class="dlp-ring-bg" cx="60" cy="60" r="52"/>
-            <circle class="dlp-ring-prog" id="ring-prog" cx="60" cy="60" r="52"
-              stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
-          </svg>
-          <div class="dlp-ring-inner">
-            <div class="dlp-count" id="dl-count"><?= $countdownSecs ?></div>
-            <div class="dlp-count-label">ثانية</div>
-          </div>
-        </div>
+      foreach ($versionHistory as $vh) {
+          if (empty($vh['download_url'])) continue;
+          $dlSlots[] = [
+              'version' => $vh['version'] ?: '—',
+              'notes'   => $vh['changelog'] ?? '',
+              'buttons' => [['label' => 'تحميل APK', 'url' => download_url($app['slug']).'&ver='.$vh['id'], 'primary' => true, 'local' => false]],
+              'date'    => $vh['created_at'] ?? '',
+              'open'    => false,
+          ];
+      }
+      ?>
 
-        <div class="dlp-progress-bar">
-          <div class="dlp-progress-fill" id="dl-progress"></div>
-        </div>
-
-        <?php if ($dlCaptchaType !== 'none'): ?>
-        <div id="dl-captcha-wrap" class="dl-cap-hidden" aria-hidden="true">
-          <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            حل التحقق أدناه لبدء التحميل
-          </p>
-          <?php if ($dlCaptchaType === 'turnstile'): ?>
-          <div style="display:flex;justify-content:center">
-            <div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlCaptchaSolved" data-theme="light" data-size="normal"></div>
-          </div>
-          <?php elseif ($dlCaptchaType === 'v2'): ?>
-          <div style="display:flex;justify-content:center">
-            <div class="g-recaptcha" data-sitekey="<?= h($v2SiteKey) ?>" data-callback="onDlCaptchaSolvedV2"></div>
-          </div>
-          <?php elseif ($dlCaptchaType === 'v3'): ?>
-          <button id="dl-captcha-v3-btn" onclick="runDlV3Captcha()"
-                  style="background:var(--cyan);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            تحقق وابدأ التحميل
+      <?php if ($dlSlots): ?>
+      <div class="dlp-accordion" id="dl-accordion">
+        <?php foreach ($dlSlots as $si => $slot): ?>
+        <div class="dlp-acc-item<?= $slot['open'] ? ' open' : '' ?>" id="dlacc-<?= $si ?>">
+          <button class="dlp-acc-head" type="button" onclick="dlAccToggle(<?= $si ?>)">
+            <div class="dlp-acc-vtag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <?= h($slot['version']) ?>
+            </div>
+            <?php if ($slot['date']): ?>
+            <span class="dlp-acc-date"><?= date('j M Y', strtotime($slot['date'])) ?></span>
+            <?php endif; ?>
+            <svg class="dlp-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
           </button>
-          <?php endif; ?>
+          <div class="dlp-acc-body">
+            <?php if ($slot['notes']): ?>
+            <div class="dlp-acc-notes"><?= nl2br(h(mb_substr(strip_tags($slot['notes']), 0, 300))) ?></div>
+            <?php endif; ?>
+            <div class="dlp-acc-btns">
+              <?php foreach ($slot['buttons'] as $btn): ?>
+              <?php if ($dlCaptchaType !== 'none' && $slot['open']): ?>
+              <!-- Captcha-gated: unlock via JS -->
+              <button type="button" class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>"
+                      onclick="dlStartDownload('<?= h($btn['url']) ?>', <?= $btn['local'] ? 'true' : 'false' ?>)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+                <span><?= h($btn['label']) ?></span>
+                <?php if ($app['size_mb']): ?><span class="dlp-dl-size"><?= h($app['size_mb']) ?> MB</span><?php endif; ?>
+              </button>
+              <?php else: ?>
+              <a class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>"
+                 href="<?= h($btn['url']) ?>"
+                 <?= $btn['local'] ? 'download' : 'target="_blank" rel="noopener nofollow"' ?>
+                 data-hardnav="1"
+                 onclick="<?= ($slot['open'] && !$btn['local']) ? 'dlFireDownload(this);return false;' : '' ?>">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+                <span><?= h($btn['label']) ?></span>
+                <?php if ($app['size_mb'] && $btn['primary']): ?><span class="dlp-dl-size"><?= h($app['size_mb']) ?> MB</span><?php endif; ?>
+              </a>
+              <?php endif; ?>
+              <?php endforeach; ?>
+            </div>
+            <?php if ($dlCaptchaType !== 'none' && $slot['open']): ?>
+            <div id="dl-captcha-wrap" class="dl-cap-hidden" style="margin-top:12px;text-align:center" aria-hidden="true">
+              <p style="font-size:12px;color:var(--muted);margin:0 0 10px">للمتابعة، يرجى التحقق من هويتك</p>
+              <?php if ($dlCaptchaType === 'turnstile'): ?>
+              <div style="display:flex;justify-content:center"><div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlCaptchaSolved" data-theme="light" data-size="normal"></div></div>
+              <?php elseif ($dlCaptchaType === 'v2'): ?>
+              <div style="display:flex;justify-content:center"><div class="g-recaptcha" data-sitekey="<?= h($v2SiteKey) ?>" data-callback="onDlCaptchaSolvedV2"></div></div>
+              <?php else: ?>
+              <button id="dl-captcha-v3-btn" onclick="runDlV3Captcha()" style="background:var(--cyan);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-size:13px;cursor:pointer">تحقق وابدأ التحميل</button>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
+          </div>
         </div>
-        <?php endif; ?>
-
-        <?php $manualUrl = $hasLocalApk ? h(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : h($url); ?>
-        <a id="btn-manual" href="<?= $manualUrl ?>" class="dlp-btn-download dl-btn-hidden"
-           <?= $hasLocalApk ? 'download' : '' ?> data-hardnav="1"
-           tabindex="-1" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
-            <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
-          </svg>
-          <?= $hasLocalApk ? 'تحميل APK مباشرةً' : 'اضغط هنا لبدء التحميل' ?>
-        </a>
-        <p class="dlp-manual-hint dl-btn-hidden" id="manual-label">
-          لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
-        </p>
-
-        <?php else: ?>
-        <div class="dlp-no-link">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-          <strong>رابط التحميل غير متوفر حالياً</strong>
-          <p>سيقوم فريق yassota بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.</p>
-        </div>
-        <?php endif; ?>
+        <?php endforeach; ?>
       </div>
+      <?php else: ?>
+      <div class="dlp-no-link">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <strong>رابط التحميل غير متوفر حالياً</strong>
+        <p>سيقوم فريق yassota بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.</p>
+      </div>
+      <?php endif; ?>
 
       <!-- Trust badges -->
       <div class="dlp-trust">
@@ -661,125 +675,71 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 <?php render_cookie_banner(); ?>
 
 <script>
-const DOWNLOAD_URL    = <?= $hasLocalApk ? json_encode(url('download.php?slug='.urlencode($app['slug']).'&apk=1')) : json_encode($url) ?>;
-const HAS_LINK        = <?= $hasLink ? 'true' : 'false' ?>;
-const IS_LOCAL_APK    = <?= $hasLocalApk ? 'true' : 'false' ?>;
-const TOTAL           = <?= $countdownSecs ?>;
-const CIRC            = 326.73;
-const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>; // 'none'|'turnstile'|'v2'|'v3'
-<?php if ($dlCaptchaType === 'v3'): ?>
-const DL_V3_SITE_KEY  = <?= json_encode($v3SiteKey) ?>;
-<?php endif; ?>
+/* ── Download page JS: immediate download, accordion, captcha ── */
+const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>;
+<?php if ($dlCaptchaType === 'v3'): ?>const DL_V3_SITE_KEY = <?= json_encode($v3SiteKey) ?>;<?php endif; ?>
 
-let remaining          = TOTAL;
-let dlTimerDone        = false;   // timer reached zero
-let dlCaptchaSolved    = (DL_CAPTCHA_TYPE === 'none'); // no captcha = auto-solved
+var dlCaptchaSolved  = (DL_CAPTCHA_TYPE === 'none');
+var dlPendingUrl     = null;
+var dlPendingLocal   = false;
+const dlVerifyUrl    = location.pathname + '?ajax=verify_captcha';
+const captchaWrap    = document.getElementById('dl-captcha-wrap');
 
-const countEl       = document.getElementById('dl-count');
-const statusText    = document.getElementById('dl-status-text');
-const progressEl    = document.getElementById('dl-progress');
-const ringProg      = document.getElementById('ring-prog');
-const btnManual     = document.getElementById('btn-manual');
-const manualLbl     = document.getElementById('manual-label');
-const captchaWrap   = document.getElementById('dl-captcha-wrap');
-const step2         = document.getElementById('step2');
-const step3         = document.getElementById('step3');
-const dlCaptchaVerifyUrl = location.pathname + '?ajax=verify_captcha';
-
-// Called after both timer AND captcha are ready
-function triggerDownload() {
-  if (!dlTimerDone || !dlCaptchaSolved) return;
-
-  if (statusText) statusText.innerHTML = '<strong style="color:var(--success)">✓ جاهز للتحميل!</strong>';
-
-  // Auto-fire the download
-  const a = document.createElement('a');
-  a.href = DOWNLOAD_URL;
-  if (IS_LOCAL_APK) {
-    a.download = '';
-  } else {
-    a.target = '_blank';
-    a.rel = 'noopener nofollow';
+/* Fire an anchor-based download (direct, no auto-fire on page load) */
+function dlFireDownload(el) {
+  var href = el.href;
+  var local = !!el.download;
+  if (DL_CAPTCHA_TYPE !== 'none' && !dlCaptchaSolved) {
+    dlPendingUrl   = href;
+    dlPendingLocal = local;
+    if (captchaWrap) { captchaWrap.classList.remove('dl-cap-hidden'); captchaWrap.removeAttribute('aria-hidden'); }
+    return;
   }
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-  // Reveal manual button without scrolling the page
-  setTimeout(function() {
-    if (btnManual) {
-      btnManual.classList.remove('dl-btn-hidden');
-      btnManual.removeAttribute('tabindex');
-      btnManual.removeAttribute('aria-hidden');
-    }
-    if (manualLbl) manualLbl.classList.remove('dl-btn-hidden');
-  }, 1400);
+  doDownload(href, local);
 }
 
-// Called when any CAPTCHA widget fires its callback
+/* Captcha-gated button (no href) */
+function dlStartDownload(url, local) {
+  if (DL_CAPTCHA_TYPE !== 'none' && !dlCaptchaSolved) {
+    dlPendingUrl   = url;
+    dlPendingLocal = local;
+    if (captchaWrap) { captchaWrap.classList.remove('dl-cap-hidden'); captchaWrap.removeAttribute('aria-hidden'); }
+    return;
+  }
+  doDownload(url, local);
+}
+
+function doDownload(url, local) {
+  var a = document.createElement('a');
+  a.href = url;
+  if (local) { a.download = ''; } else { a.target = '_blank'; a.rel = 'noopener nofollow'; }
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
 function dlCaptchaUnlock(token, type) {
   dlCaptchaSolved = true;
   if (captchaWrap) captchaWrap.classList.add('dl-cap-hidden');
-  triggerDownload();
-  fetch(dlCaptchaVerifyUrl, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'token=' + encodeURIComponent(token) + '&type=' + encodeURIComponent(type)
-  }).catch(function(){});
+  fetch(dlVerifyUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'token='+encodeURIComponent(token)+'&type='+encodeURIComponent(type) }).catch(function(){});
+  if (dlPendingUrl) { doDownload(dlPendingUrl, dlPendingLocal); dlPendingUrl = null; }
 }
 
-// Turnstile callback
-window.onDlCaptchaSolved = function(token) { dlCaptchaUnlock(token, 'turnstile'); };
-// reCAPTCHA v2 callback
-window.onDlCaptchaSolvedV2 = function(token) { dlCaptchaUnlock(token, 'v2'); };
+window.onDlCaptchaSolved    = function(t){ dlCaptchaUnlock(t, 'turnstile'); };
+window.onDlCaptchaSolvedV2  = function(t){ dlCaptchaUnlock(t, 'v2'); };
 <?php if ($dlCaptchaType === 'v3'): ?>
 window.runDlV3Captcha = function() {
   var btn = document.getElementById('dl-captcha-v3-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التحقق…'; }
-  grecaptcha.ready(function(){
-    grecaptcha.execute(DL_V3_SITE_KEY, {action:'download'}).then(function(token){
-      dlCaptchaUnlock(token, 'v3');
-    });
-  });
+  grecaptcha.ready(function(){ grecaptcha.execute(DL_V3_SITE_KEY, {action:'download'}).then(function(t){ dlCaptchaUnlock(t,'v3'); }); });
 };
 <?php endif; ?>
 
-function tick() {
-  remaining--;
-  const pct = (TOTAL - remaining) / TOTAL;
-  if (countEl) countEl.textContent = remaining;
-  if (progressEl) progressEl.style.width = (pct * 100) + '%';
-  if (ringProg) ringProg.style.strokeDashoffset = CIRC * (1 - pct);
-
-  if (remaining <= 0) {
-    dlTimerDone = true;
-
-    if (step2) { step2.classList.remove('active'); step2.classList.add('done'); step2.querySelector('.dlp-step-dot').textContent = '✓'; }
-    if (step3) { step3.classList.add('active'); }
-    if (countEl) { countEl.textContent = '✓'; countEl.style.fontSize = '28px'; }
-
-    if (!dlCaptchaSolved) {
-      // Show CAPTCHA — user must solve before download fires
-      if (captchaWrap) {
-        captchaWrap.classList.remove('dl-cap-hidden');
-        captchaWrap.removeAttribute('aria-hidden');
-      }
-      <?php if ($dlCaptchaType === 'v3'): ?>
-      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ اضغط زر التحقق أدناه لبدء التحميل</strong>';
-      <?php else: ?>
-      if (statusText) statusText.innerHTML = '<strong style="color:#f59e0b">⬇ أكمل التحقق أدناه لبدء التحميل</strong>';
-      <?php endif; ?>
-    } else {
-      // No captcha required — download immediately
-      triggerDownload();
-    }
-  }
-}
-
-if (HAS_LINK && countEl) {
-  if (ringProg) ringProg.style.strokeDashoffset = CIRC;
-  const timer = setInterval(function() {
-    if (remaining <= 0) { clearInterval(timer); return; }
-    tick();
-  }, 1000);
+/* Accordion toggle */
+function dlAccToggle(i) {
+  var item  = document.getElementById('dlacc-' + i);
+  var isOpen = item.classList.contains('open');
+  document.querySelectorAll('.dlp-acc-item').forEach(function(el){ el.classList.remove('open'); });
+  if (!isOpen) item.classList.add('open');
 }
 </script>
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>

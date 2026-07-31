@@ -441,6 +441,27 @@ function ensure_schema(PDO $pdo): array {
         }
     } catch (Throwable $e) { /* non-critical */ }
 
+    // Compound performance indexes — dramatically speed up the most common
+    // query patterns (status + sort by downloads/views/created_at).
+    // SHOW INDEX returns one row per index part; fetch key_name column.
+    try {
+        $existingIdx = $pdo->query("SHOW INDEX FROM apps")->fetchAll(PDO::FETCH_ASSOC);
+        $existingIdx = array_column($existingIdx, 'Key_name');
+        if (!in_array('idx_status_dl', $existingIdx))
+            @$pdo->exec("ALTER TABLE apps ADD INDEX idx_status_dl (status, downloads)");
+        if (!in_array('idx_status_views', $existingIdx))
+            @$pdo->exec("ALTER TABLE apps ADD INDEX idx_status_views (status, views)");
+        if (!in_array('idx_status_cat_dl', $existingIdx))
+            @$pdo->exec("ALTER TABLE apps ADD INDEX idx_status_cat_dl (status, category_id, downloads)");
+        if (!in_array('idx_status_created', $existingIdx))
+            @$pdo->exec("ALTER TABLE apps ADD INDEX idx_status_created (status, created_at)");
+    } catch (Throwable $e) { /* non-critical */ }
+
+    // Prune old page_events rows (keep 90 days) to prevent unbounded table growth.
+    // LIMIT 5000 ensures this finishes in milliseconds even on huge tables.
+    try { @$pdo->exec("DELETE FROM page_events WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY) LIMIT 5000"); }
+    catch (Throwable $e) { /* non-critical */ }
+
     // Seed default categories if the table is empty
     $count = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
     if ($count === 0) {

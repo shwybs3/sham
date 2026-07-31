@@ -693,11 +693,18 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
       $descSecond = mb_substr($longDescription, $splitAt);
   }
   ?>
+  <?php $descIsLong = mb_strlen($descFirst) > 480; ?>
   <div class="section-box">
     <div class="section-head"><span class="section-title">الوصف</span></div>
-    <div style="color:var(--muted);font-size:14px;line-height:1.85">
+    <div class="<?= $descIsLong ? 'app-desc-clamp' : '' ?>" id="app-desc-body" style="color:var(--muted);font-size:14px;line-height:1.85">
       <?= nl2br(h($descFirst)) ?>
     </div>
+    <?php if ($descIsLong): ?>
+    <button type="button" class="btn-desc-toggle" id="btn-desc-more" onclick="(function(b,w){var exp=w.classList.toggle('expanded');b.classList.toggle('expanded',exp);b.innerHTML=exp?'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;18 15 12 9 6 15&quot;/></svg> عرض أقل':'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;6 9 12 15 18 9&quot;/></svg> اقرأ المزيد';})(this,document.getElementById('app-desc-body'))">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      اقرأ المزيد
+    </button>
+    <?php endif; ?>
     <?php if ($hasMidBtn): ?>
     <!-- Button 2: mid-description, 5s countdown → scrolls to Button 3 (bottom zone) -->
     <div id="dl-mid-zone" style="margin:24px 0;padding:20px;background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(124,58,237,.07));border:1px solid rgba(37,99,235,.2);border-radius:14px;text-align:center">

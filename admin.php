@@ -3426,6 +3426,10 @@ if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     if (!csrf_check()) { $error = 'جلسة غير صالحة'; }
+    elseif (!evil_is_admin_ip() && trim(get_cfg($pdo, 'turnstile_secret_key')) !== '' &&
+            !captcha_verify_turnstile($pdo, $_POST['cf-turnstile-response'] ?? '')) {
+        $error = 'فشل التحقق الأمني من Cloudflare. حاول مرة أخرى.';
+    }
     else {
         $stmt = $pdo->prepare("SELECT * FROM admins WHERE username=?");
         $stmt->execute([trim($_POST['username'] ?? '')]);
@@ -4016,12 +4020,33 @@ if ($page === 'dashboard') {
     $stats = [
         'apps'      => (int)$pdo->query("SELECT COUNT(*) FROM apps")->fetchColumn(),
         'published' => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn(),
+        'drafts'    => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='draft'")->fetchColumn(),
         'views'     => (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM apps")->fetchColumn(),
         'downloads' => (int)$pdo->query("SELECT COALESCE(SUM(downloads),0) FROM apps")->fetchColumn(),
+        'comments_pending' => (int)$pdo->query("SELECT COUNT(*) FROM comments WHERE status='pending'")->fetchColumn(),
+        'security_today'   => (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical' AND DATE(created_at)=CURDATE()")->fetchColumn(),
+        'indexed'          => (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn(),
     ];
-    $recentApps = $pdo->query("SELECT a.*,c.name AS cat FROM apps a LEFT JOIN categories c ON a.category_id=c.id ORDER BY a.created_at DESC LIMIT 8")->fetchAll();
-    $topApps    = $pdo->query("SELECT name,slug,views,downloads FROM apps ORDER BY views DESC LIMIT 5")->fetchAll();
+    // Top apps (use compound index idx_status_views)
+    $topApps = $pdo->query("SELECT name,slug,icon_path,views,downloads,category_id FROM apps WHERE status='published' ORDER BY views DESC LIMIT 8")->fetchAll();
+    $maxViews = max(1, (int)($topApps[0]['views'] ?? 1));
+    // Recent additions
+    $recentApps = $pdo->query("SELECT a.id,a.name,a.slug,a.status,a.created_at,c.name AS cat FROM apps a LEFT JOIN categories c ON a.category_id=c.id ORDER BY a.created_at DESC LIMIT 6")->fetchAll();
+    // Needs update
     $needsUpdateApps = $pdo->query("SELECT id,name,slug,version,updated_at FROM apps WHERE needs_update=1 ORDER BY updated_at ASC LIMIT 10")->fetchAll();
+    // 7-day trend: views per day
+    try {
+        $trendRows = $pdo->query("SELECT DATE(created_at) AS d, COUNT(*) AS n FROM page_events WHERE event_type='view' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) GROUP BY d ORDER BY d")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { $trendRows = []; }
+    // Fill gaps for the 7-day window
+    $trendMap = [];
+    foreach ($trendRows as $r) $trendMap[$r['d']] = (int)$r['n'];
+    $trendData = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $d = date('Y-m-d', strtotime("-{$i} days"));
+        $trendData[] = $trendMap[$d] ?? 0;
+    }
+    $trendMax = max(1, max($trendData));
 }
 
 if (isset($_GET['msg'])) {
@@ -4047,6 +4072,10 @@ if ($page === 'login'): ?>
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
+  <?php $loginTurnstileKey = trim(get_cfg($pdo, 'turnstile_site_key', '')); ?>
+  <?php if ($loginTurnstileKey): ?>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <?php endif; ?>
 </head>
 <body>
 <div class="admin-login">
@@ -4060,10 +4089,15 @@ if ($page === 'login'): ?>
         <label class="form-label">اسم المستخدم</label>
         <input class="form-input" type="text" name="username" required autofocus>
       </div>
-      <div class="form-group" style="margin-bottom:24px">
+      <div class="form-group" style="margin-bottom:20px">
         <label class="form-label">كلمة المرور</label>
         <input class="form-input" type="password" name="password" required>
       </div>
+      <?php if ($loginTurnstileKey): ?>
+      <div style="display:flex;justify-content:center;margin-bottom:18px">
+        <div class="cf-turnstile" data-sitekey="<?= h($loginTurnstileKey) ?>" data-theme="light"></div>
+      </div>
+      <?php endif; ?>
       <button type="submit" class="btn-save" style="width:100%;justify-content:center">دخول</button>
     </form>
   </div>
@@ -7124,85 +7158,180 @@ if (!function_exists('seoDescHint')) {
 /* ─────────────── DASHBOARD ─────────────── */
 if ($page === 'dashboard'): ?>
 
-<div class="admin-header">
-  <h1>لوحة التحكم</h1>
-  <a href="admin.php?page=add-app" class="btn-save">+ إضافة تطبيق</a>
-</div>
-
-<div class="admin-stats">
-  <div class="stat-card"><div class="stat-num"><?= number_format($stats['apps']) ?></div><div class="stat-label">إجمالي التطبيقات</div></div>
-  <div class="stat-card"><div class="stat-num" style="color:var(--success)"><?= number_format($stats['published']) ?></div><div class="stat-label">منشور</div></div>
-  <div class="stat-card"><div class="stat-num"><?= number_format($stats['views']) ?></div><div class="stat-label">إجمالي المشاهدات</div></div>
-  <div class="stat-card"><div class="stat-num" style="color:var(--purple)"><?= number_format($stats['downloads']) ?></div><div class="stat-label">إجمالي التحميلات</div></div>
-  <div class="stat-card" style="border-color:rgba(6,182,212,.3)">
-    <div class="stat-num" style="color:var(--cyan)"><?= (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND index_status='indexed'")->fetchColumn() ?></div>
-    <div class="stat-label">تطبيق مفهرَس</div>
+<div class="admin-header" style="margin-bottom:0">
+  <div>
+    <h1 style="font-size:20px;font-weight:800;margin:0">لوحة التحكم</h1>
+    <p style="color:var(--muted);font-size:12px;margin:2px 0 0"><?= date('l، j F Y') ?></p>
   </div>
-  <div class="stat-card" style="border-color:rgba(239,68,68,.3)">
-    <div class="stat-num" style="color:var(--danger)"><?= (int)$pdo->query("SELECT COUNT(*) FROM security_log WHERE severity='critical' AND DATE(created_at)=CURDATE()")->fetchColumn() ?></div>
-    <div class="stat-label">تنبيهات أمان اليوم</div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="<?= h(url('')) ?>" target="_blank" class="btn-edit" style="font-size:12px">🌐 الموقع</a>
+    <a href="admin.php?page=add-app" class="btn-save" style="font-size:13px;padding:9px 18px">+ إضافة تطبيق</a>
   </div>
 </div>
 
-<div class="dashboard-grid">
-  <div class="panel">
-    <h2>الأكثر زيارة</h2>
-    <table class="admin-table responsive-cards">
-      <thead><tr><th>التطبيق</th><th>مشاهدات</th><th>تحميلات</th></tr></thead>
-      <tbody>
-        <?php foreach ($topApps as $a): ?>
-        <tr>
-          <td data-label="التطبيق"><?= h($a['name']) ?></td>
-          <td data-label="مشاهدات" style="font-family:var(--f-mono)"><?= number_format($a['views']) ?></td>
-          <td data-label="تحميلات" style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (!$topApps): ?><tr><td colspan="3" style="color:var(--muted)">لا توجد بيانات بعد</td></tr><?php endif; ?>
-      </tbody>
-    </table>
+<!-- KPI Row -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:18px">
+  <?php
+  $kpis = [
+    ['label'=>'إجمالي التطبيقات','val'=>$stats['apps'],'icon'=>'M5 2a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-5-5H5z','col'=>'#3b82f6','bg'=>'rgba(59,130,246,.12)'],
+    ['label'=>'منشور','val'=>$stats['published'],'icon'=>'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z','col'=>'#22c55e','bg'=>'rgba(34,197,94,.12)'],
+    ['label'=>'مسودات','val'=>$stats['drafts'],'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z','col'=>'#f59e0b','bg'=>'rgba(245,158,11,.12)'],
+    ['label'=>'إجمالي المشاهدات','val'=>$stats['views'],'icon'=>'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z','col'=>'#06b6d4','bg'=>'rgba(6,182,212,.12)'],
+    ['label'=>'إجمالي التحميلات','val'=>$stats['downloads'],'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4','col'=>'#a855f7','bg'=>'rgba(168,85,247,.12)'],
+    ['label'=>'تعليقات معلقة','val'=>$stats['comments_pending'],'icon'=>'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z','col'=>$stats['comments_pending']>0?'#f97316':'#64748b','bg'=>$stats['comments_pending']>0?'rgba(249,115,22,.12)':'rgba(100,116,139,.08)','link'=>'admin.php?page=comments'],
+    ['label'=>'مفهرَس','val'=>$stats['indexed'],'icon'=>'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z','col'=>'#10b981','bg'=>'rgba(16,185,129,.12)'],
+    ['label'=>'تنبيهات أمان','val'=>$stats['security_today'],'icon'=>'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z','col'=>$stats['security_today']>0?'#ef4444':'#64748b','bg'=>$stats['security_today']>0?'rgba(239,68,68,.12)':'rgba(100,116,139,.08)','link'=>'admin.php?page=security'],
+  ];
+  foreach ($kpis as $kpi):
+    $tag = isset($kpi['link']) ? 'a href="'.$kpi['link'].'"' : 'div';
+    $close = isset($kpi['link']) ? 'a' : 'div';
+  ?>
+  <<?= $tag ?> style="background:var(--panel);border:1px solid var(--border-c);border-radius:14px;padding:16px 14px;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 4px 18px rgba(0,0,0,.12)'" onmouseleave="this.style.boxShadow=''">
+    <div style="width:36px;height:36px;border-radius:10px;background:<?= $kpi['bg'] ?>;display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="<?= $kpi['col'] ?>" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="<?= $kpi['icon'] ?>"/></svg>
+    </div>
+    <div>
+      <div style="font-size:22px;font-weight:800;font-family:var(--f-mono);color:<?= $kpi['col'] ?>;line-height:1"><?= number_format($kpi['val']) ?></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px"><?= $kpi['label'] ?></div>
+    </div>
+  </<?= $close ?>>
+  <?php endforeach; ?>
+</div>
+
+<!-- 7-day trend sparkline -->
+<div class="panel" style="margin-top:16px;padding:18px 20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <h2 style="margin:0;font-size:14px">المشاهدات — آخر 7 أيام</h2>
+    <span style="font-size:11px;color:var(--muted)"><?= number_format(array_sum($trendData)) ?> مشاهدة</span>
   </div>
+  <svg viewBox="0 0 420 60" preserveAspectRatio="none" style="width:100%;height:60px;display:block" aria-hidden="true">
+    <?php
+    $pts = count($trendData);
+    $w   = 420; $h = 60; $pad = 4;
+    $xs  = []; $ys = [];
+    for ($i = 0; $i < $pts; $i++) {
+        $xs[] = $pad + ($i / ($pts - 1)) * ($w - $pad * 2);
+        $ys[] = $h - $pad - (($trendMax > 0 ? $trendData[$i] / $trendMax : 0) * ($h - $pad * 2));
+    }
+    // Area fill
+    $poly = implode(' ', array_map(fn($i) => $xs[$i].','.$ys[$i], range(0, $pts-1)));
+    $area = $poly . " {$xs[$pts-1]},{$h} {$xs[0]},{$h}";
+    echo '<defs><linearGradient id="spg" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity=".25"/><stop offset="100%" stop-color="#3b82f6" stop-opacity=".01"/></linearGradient></defs>';
+    echo '<polygon points="'.$area.'" fill="url(#spg)"/>';
+    echo '<polyline points="'.$poly.'" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+    // Dots at each point
+    foreach ($xs as $i => $x) {
+        $y = $ys[$i];
+        $label = date('j/n', strtotime("-".(6-$i)." days"));
+        echo "<circle cx=\"$x\" cy=\"$y\" r=\"3.5\" fill=\"#3b82f6\" opacity=\".85\"><title>$label: ".number_format($trendData[$i])." مشاهدة</title></circle>";
+    }
+    ?>
+  </svg>
+  <div style="display:flex;justify-content:space-between;margin-top:4px">
+    <?php for ($i = 6; $i >= 0; $i--): ?>
+    <span style="font-size:9px;color:var(--muted)"><?= date('j/n', strtotime("-{$i} days")) ?></span>
+    <?php endfor; ?>
+  </div>
+</div>
+
+<!-- Main 2-col grid -->
+<div class="dashboard-grid" style="margin-top:16px">
+
+  <!-- Top apps with progress bars -->
   <div class="panel">
-    <h2>أحدث الإضافات</h2>
-    <table class="admin-table responsive-cards">
-      <thead><tr><th>التطبيق</th><th>التصنيف</th><th>الحالة</th></tr></thead>
-      <tbody>
-        <?php foreach ($recentApps as $a): ?>
-        <tr>
-          <td data-label="التطبيق"><?= h($a['name']) ?></td>
-          <td data-label="التصنيف" style="font-size:11px;color:var(--muted)"><?= h($a['cat'] ?? '—') ?></td>
-          <td data-label="الحالة"><span class="status-badge status-<?= $a['status'] ?>"><?= $a['status'] === 'published' ? 'منشور' : 'مسودة' ?></span></td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0;font-size:14px">الأكثر زيارة</h2>
+      <a href="admin.php?page=apps" style="font-size:11px;color:var(--cyan)">عرض الكل</a>
+    </div>
+    <?php foreach ($topApps as $a): ?>
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-c)">
+      <?php if (!empty($a['icon_path'])): ?>
+      <img src="<?= h(media_url($a['icon_path'])) ?>" alt="" width="32" height="32" style="border-radius:8px;object-fit:cover;flex-shrink:0" loading="lazy">
+      <?php else: ?>
+      <div style="width:32px;height:32px;border-radius:8px;background:var(--navy-600);flex-shrink:0"></div>
+      <?php endif; ?>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= h($a['name']) ?></div>
+        <div style="height:4px;background:var(--navy-600);border-radius:2px;margin-top:4px;overflow:hidden">
+          <div style="height:100%;width:<?= round(min(100, ($a['views']/$maxViews)*100)) ?>%;background:linear-gradient(90deg,#3b82f6,#7c3aed);border-radius:2px;transition:width .3s"></div>
+        </div>
+      </div>
+      <div style="text-align:left;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700;font-family:var(--f-mono);color:var(--cyan)"><?= number_format($a['views']) ?></div>
+        <div style="font-size:10px;color:var(--muted)"><?= number_format($a['downloads']) ?> ↓</div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+    <?php if (!$topApps): ?><p style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">لا توجد بيانات بعد</p><?php endif; ?>
+  </div>
+
+  <!-- Recent apps + quick actions -->
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    <!-- Quick actions -->
+    <div class="panel" style="padding:14px">
+      <h2 style="margin:0 0 12px;font-size:13px;color:var(--muted)">إجراءات سريعة</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <a href="admin.php?page=add-app" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:10px;color:#60a5fa;font-size:12px;font-weight:600;text-decoration:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة تطبيق
+        </a>
+        <a href="admin.php?page=comments" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:<?= $stats['comments_pending']>0?'rgba(249,115,22,.1)':'rgba(100,116,139,.08)' ?>;border:1px solid <?= $stats['comments_pending']>0?'rgba(249,115,22,.2)':'var(--border-c)' ?>;border-radius:10px;color:<?= $stats['comments_pending']>0?'#fb923c':'var(--muted)' ?>;font-size:12px;font-weight:600;text-decoration:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> تعليقات <?= $stats['comments_pending']>0?"({$stats['comments_pending']})":'' ?>
+        </a>
+        <a href="admin.php?page=bulk-generate" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:10px;color:#c084fc;font-size:12px;font-weight:600;text-decoration:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> توليد تطبيقات
+        </a>
+        <a href="admin.php?page=settings" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(100,116,139,.08);border:1px solid var(--border-c);border-radius:10px;color:var(--muted);font-size:12px;font-weight:600;text-decoration:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg> الإعدادات
+        </a>
+      </div>
+    </div>
+
+    <!-- Recent apps -->
+    <div class="panel" style="padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h2 style="margin:0;font-size:13px">أحدث الإضافات</h2>
+        <a href="admin.php?page=apps" style="font-size:11px;color:var(--cyan)">عرض الكل</a>
+      </div>
+      <?php foreach ($recentApps as $a): ?>
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-c)">
+        <span class="status-badge status-<?= $a['status'] ?>" style="flex-shrink:0;font-size:9px;padding:2px 7px"><?= $a['status'] === 'published' ? 'منشور' : 'مسودة' ?></span>
+        <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>" style="flex:1;font-size:12px;font-weight:600;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none" title="<?= h($a['name']) ?>"><?= h($a['name']) ?></a>
+        <span style="font-size:10px;color:var(--muted);flex-shrink:0"><?= h(time_ago($a['created_at'])) ?></span>
+      </div>
+      <?php endforeach; ?>
+    </div>
+
   </div>
 </div>
 
 <?php if ($needsUpdateApps): ?>
-<div class="panel" style="border-color:rgba(251,191,36,.3);margin-top:20px">
-  <h2 style="color:#fbbf24">⚠️ تطبيقات تحتاج تحديث (<?= count($needsUpdateApps) ?>)</h2>
-  <table class="admin-table responsive-cards">
-    <thead><tr><th>التطبيق</th><th>الإصدار الحالي</th><th>آخر تحديث</th><th>إجراء</th></tr></thead>
-    <tbody>
-      <?php foreach ($needsUpdateApps as $a): ?>
-      <tr>
-        <td data-label="التطبيق" style="font-weight:700"><?= h($a['name']) ?></td>
-        <td data-label="الإصدار" style="font-family:var(--f-mono)"><?= h($a['version'] ?: '—') ?></td>
-        <td data-label="آخر تحديث" style="color:var(--muted);font-size:12px"><?= h(time_ago($a['updated_at'])) ?></td>
-        <td data-label="إجراء" class="td-actions">
-          <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>" class="btn-edit">تحديث الآن</a>
-        </td>
-      </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
+<div class="panel" style="border-right:3px solid #f59e0b;margin-top:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h2 style="margin:0;font-size:14px;color:#f59e0b">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px"><path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      تطبيقات تحتاج تحديث
+    </h2>
+    <span style="background:rgba(245,158,11,.15);color:#f59e0b;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700"><?= count($needsUpdateApps) ?></span>
+  </div>
+  <?php foreach ($needsUpdateApps as $a): ?>
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-c)">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= h($a['name']) ?></div>
+      <div style="font-size:10px;color:var(--muted)"><?= $a['version'] ? 'v'.h($a['version']) : '' ?> — <?= h(time_ago($a['updated_at'])) ?></div>
+    </div>
+    <a href="admin.php?page=edit-app&id=<?= $a['id'] ?>" class="btn-edit" style="font-size:11px;padding:5px 12px;flex-shrink:0">تحديث</a>
+  </div>
+  <?php endforeach; ?>
 </div>
 <?php endif; ?>
 
-<div class="panel" style="margin-top:20px">
-  <h2>أدوات SEO الجماعية</h2>
-  <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
-    إعادة توليد عنوان SEO ووصف Meta والكلمات المفتاحية لكل التطبيقات المنشورة دفعة واحدة بالذكاء الاصطناعي — مفيد بعد تغيير استراتيجية الكلمات المفتاحية.
+<div class="panel" style="margin-top:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h2 style="margin:0;font-size:14px">أدوات SEO الجماعية</h2>
+  </div>
+  <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
+    إعادة توليد عنوان SEO ووصف Meta والكلمات المفتاحية لكل التطبيقات المنشورة بالذكاء الاصطناعي.
   </p>
   <button type="button" id="btn-bulk-seo" class="btn-ai">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
