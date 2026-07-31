@@ -7,6 +7,6 @@ Allow: /
 Disallow: /admin.php
 Disallow: /install/
 Disallow: /config.php
-Disallow: /uploads/.cache/
+Disallow: /data/
 
-Sitemap: <?= SITE_URL ?>/sitemap.php
+Sitemap: <?= siteUrl('sitemap.php') ?>

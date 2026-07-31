@@ -1,33 +1,35 @@
 <?php
-/**
- * شغّل هذا الملف مرة واحدة فقط لإنشاء حساب الأدمن
- * الاستخدام: https://yoursite.com/install/create-admin.php?u=admin&p=YourPassword123
- * احذف الملف فوراً بعد التنفيذ
- */
+/* ============================================================
+   إنشاء/تحديث حساب الأدمن — شغّله مرة واحدة فقط بعد الرفع
+   ثم احذف هذا الملف (أو مجلد install/) بالكامل من السيرفر فوراً
+
+   الاستخدام (مرة واحدة، من المتصفح):
+   https://yourdomain.com/install/create-admin.php?u=admin&p=كلمة_مرور_قوية_جداً
+   ============================================================ */
+
 require_once __DIR__ . '/../config.php';
+
+header('Content-Type: text/plain; charset=utf-8');
 
 $u = trim($_GET['u'] ?? '');
 $p = trim($_GET['p'] ?? '');
 
-if (!$u || !$p) {
-    die('<div style="font:14px monospace;padding:2rem;background:#f5f7fb;color:#2563eb">
-    الاستخدام: ?u=username&p=password (8 أحرف على الأقل)</div>');
+if ($u === '' || $p === '') {
+    http_response_code(400);
+    exit("الاستخدام: create-admin.php?u=اسم_المستخدم&p=كلمة_مرور_قوية (10 أحرف على الأقل)\nمثال: create-admin.php?u=admin&p=MyStr0ngP@ss2026");
 }
-if (strlen($p) < 8) {
-    die('<div style="font:14px monospace;padding:2rem;background:#f5f7fb;color:#dc2626">كلمة المرور يجب أن تكون 8 أحرف على الأقل</div>');
+if (strlen($p) < 10) {
+    http_response_code(400);
+    exit("كلمة المرور قصيرة جداً — استخدم 10 أحرف على الأقل تتضمن أرقاماً ورموزاً.");
+}
+if (!preg_match('/^[A-Za-z0-9_.-]{3,80}$/', $u)) {
+    http_response_code(400);
+    exit("اسم مستخدم غير صالح — استخدم أحرفاً/أرقاماً إنجليزية فقط.");
 }
 
-$check = $pdo->prepare("SELECT COUNT(*) FROM admins WHERE username=?");
-$check->execute([$u]);
-if ($check->fetchColumn() > 0) {
-    die('<div style="font:14px monospace;padding:2rem;background:#f5f7fb;color:#dc2626">اسم المستخدم موجود مسبقاً</div>');
-}
+createOrUpdateAdmin($u, $p);
 
-$pdo->prepare("INSERT INTO admins (username,password_hash) VALUES(?,?)")
-    ->execute([$u, password_hash($p, PASSWORD_DEFAULT)]);
-
-echo '<div style="font:14px monospace;padding:2rem;background:#f5f7fb;color:#16a34a">
-✓ تم إنشاء حساب الأدمن بنجاح<br><br>
-<a href="../admin.php" style="color:#2563eb">→ ادخل للوحة التحكم</a><br><br>
-<span style="color:#dc2626">⚠️ احذف هذا الملف (install/create-admin.php) الآن من السيرفر فوراً!</span>
-</div>';
+echo "تم إنشاء/تحديث حساب الأدمن بنجاح.\n";
+echo "اسم المستخدم: $u\n";
+echo "\n⚠️  مهم جداً: احذف هذا الملف (install/create-admin.php) من السيرفر الآن قبل أي شيء آخر.\n";
+echo "سجّل الدخول من: " . siteUrl('admin.php') . "\n";

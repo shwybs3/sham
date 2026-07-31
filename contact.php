@@ -1,106 +1,84 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/partials.php';
+require_once __DIR__.'/config.php';
 
-$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . parse_url(SITE_URL, PHP_URL_HOST);
-$sent = false;
-$error = '';
+$success = false;
+$error   = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!empty($_POST['website'])) {
-        // Honeypot field — bots fill every input, real users never see it (hidden via CSS).
-        $sent = true; // pretend success, don't store, don't tip off the bot
-    } elseif (!csrf_check()) {
-        $error = 'جلسة غير صالحة، أعد تحميل الصفحة وحاول مجدداً.';
+if ($_SERVER['REQUEST_METHOD']==='POST') {
+    $name    = clean($_POST['name'] ?? '');
+    $email   = filter_var(trim($_POST['email']??''), FILTER_VALIDATE_EMAIL);
+    $subject = clean($_POST['subject'] ?? '');
+    $msg     = clean($_POST['message'] ?? '');
+    $honeypot = trim($_POST['website'] ?? ''); // حقل خفي — إن مُلئ فهو بوت
+
+    if ($honeypot !== '') {
+        $success = true; // نتظاهر بالنجاح دون تخزين أي شيء
+    } elseif (!csrfCheck()) {
+        $error = t('انتهت صلاحية الجلسة، أعد تحميل الصفحة','Session expired, reload the page');
+    } elseif (rateLimited('contact')) {
+        $error = t('عدد رسائل كبير خلال فترة قصيرة، يرجى المحاولة لاحقاً','Too many messages in a short time, please try again later');
+    } elseif (!verifyCaptcha()) {
+        $error = t('يرجى إتمام التحقق الأمني (CAPTCHA)','Please complete the security check (CAPTCHA)');
+    } elseif (!$name || !$email || !$msg) {
+        $error = t('يرجى تعبئة جميع الحقول المطلوبة','Please fill in all required fields');
     } else {
-        $name    = trim($_POST['name'] ?? '');
-        $email   = trim($_POST['email'] ?? '');
-        $subject = trim($_POST['subject'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        if (!$name || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$message) {
-            $error = 'يرجى تعبئة الاسم والبريد الإلكتروني الصحيح والرسالة.';
-        } else {
-            $pdo->prepare("INSERT INTO contact_messages (name,email,subject,message) VALUES (?,?,?,?)")
-                ->execute([$name, $email, $subject, $message]);
-            notify_admin($pdo, "رسالة تواصل جديدة: {$subject}", "من: {$name} <{$email}>\n\n{$message}");
-            $sent = true;
-        }
+        db()->prepare("INSERT INTO contact_messages(name,email,subject,message) VALUES(?,?,?,?)")
+            ->execute([$name,$email,$subject,$msg]);
+        $success = true;
     }
 }
 
-$seoTitle = 'اتصل بنا — yassota';
-$metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقتراح أو بلاغ.';
+$pageTitle = t('تواصل معنا','Contact Us');
+require_once __DIR__.'/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <?= nav_guard_script() ?>
-  <meta charset="UTF-8">
-  <?= head_extras($pdo) ?>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($seoTitle) ?></title>
-  <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('contact.php')) ?>">
-  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
-</head>
-<body>
+<main class="contact-page">
+  <div class="section-header">
+    <h2><?= t('تواصل <span>معنا</span>','Contact <span>Us</span>') ?></h2>
+    <div class="section-divider"></div>
+    <p><?= t('لديك سؤال قبل الشراء؟ راسلنا وسنرد خلال ساعات','Have a question before buying? Message us and we\'ll reply within hours') ?></p>
+  </div>
 
-<?php render_site_header(); ?>
-
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
-
-<main class="main-content">
-  <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="/" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>اتصل بنا</span>
-  </nav>
-
-  <div class="section-head reveal"><span class="section-title">اتصل بنا</span></div>
-
-  <div class="section-box reveal" style="max-width:640px">
-    <p style="color:var(--muted);font-size:14px;line-height:1.8;margin-bottom:20px">
-      لأي استفسار، اقتراح تطبيق، بلاغ عن رابط لا يعمل، أو طلب إزالة محتوى (DMCA)، راسلنا مباشرة على
-      <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a>
-      أو عبر النموذج التالي:
-    </p>
-
-    <?php if ($sent): ?>
-      <div class="alert alert-success" style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:var(--success);padding:14px 18px;border-radius:10px;margin-bottom:16px">
-        ✅ تم إرسال رسالتك بنجاح، سنتواصل معك قريباً إن لزم الأمر.
-      </div>
+  <div class="contact-card">
+    <?php if ($success): ?>
+    <div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> <?= t('تم إرسال رسالتك بنجاح، سنتواصل معك قريباً.','Your message has been sent, we will reach out soon.') ?></div>
     <?php else: ?>
-      <?php if ($error): ?>
-        <div class="alert alert-error" style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:16px"><?= h($error) ?></div>
-      <?php endif; ?>
-      <form method="post" action="contact.php" style="display:flex;flex-direction:column;gap:14px">
-        <?= csrf_field() ?>
-        <input type="text" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px" aria-hidden="true">
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:var(--muted)">الاسم</label>
-          <input type="text" name="name" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:var(--muted)">البريد الإلكتروني</label>
-          <input type="email" name="email" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:var(--muted)">الموضوع (اختياري)</label>
-          <input type="text" name="subject" style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:var(--muted)">الرسالة</label>
-          <textarea name="message" rows="6" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical"></textarea>
-        </div>
-        <button type="submit" class="btn-primary" style="align-self:flex-start">إرسال</button>
-      </form>
+    <?php if ($error): ?>
+    <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> <?= $error ?></div>
     <?php endif; ?>
+    <form method="POST" class="admin-form">
+      <?php csrfField(); ?>
+      <div style="position:absolute;left:-9999px;" aria-hidden="true">
+        <label>Website</label>
+        <input type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label><?= t('الاسم *','Name *') ?></label>
+        <input type="text" name="name" required value="<?= clean($_POST['name']??'') ?>">
+      </div>
+      <div class="form-group">
+        <label><?= t('البريد الإلكتروني *','Email *') ?></label>
+        <input type="email" name="email" required value="<?= clean($_POST['email']??'') ?>">
+      </div>
+      <div class="form-group">
+        <label><?= t('الموضوع','Subject') ?></label>
+        <input type="text" name="subject" value="<?= clean($_POST['subject']??'') ?>">
+      </div>
+      <div class="form-group">
+        <label><?= t('الرسالة *','Message *') ?></label>
+        <textarea name="message" rows="5" required maxlength="3000"><?= clean($_POST['message']??'') ?></textarea>
+      </div>
+      <?php renderCaptcha(); ?>
+      <button type="submit" class="btn btn-primary w-full" style="justify-content:center;">
+        <i class="fa-solid fa-paper-plane"></i> <?= t('إرسال','Send') ?>
+      </button>
+    </form>
+    <?php endif; ?>
+
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);text-align:center;">
+      <a href="<?= clean(setting('telegram','#')) ?>" target="_blank" rel="noopener" class="btn btn-outline">
+        <i class="fa-brands fa-telegram"></i> <?= t('أو تواصل معنا عبر تيليغرام','Or reach us on Telegram') ?>
+      </a>
+    </div>
   </div>
 </main>
-</div>
-
-<?php render_site_footer(); ?>
-<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
-</body>
-</html>
+<?php require_once __DIR__.'/footer.php'; ?>
