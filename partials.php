@@ -103,9 +103,9 @@ function partial_wave(): string {
 /* ── Header (logo, search, top nav) ── */
 function render_site_header(string $search = '', string $activeNav = 'home'): void { ?>
 <header class="site-header">
-  <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:2px">
-    <span>yas<span style="color:var(--purple)">sota</span></span>
-    <span style="font-size:9px;font-weight:500;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;font-family:var(--f-body)">دليل تطبيقات أندرويد</span>
+  <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:3px">
+    <span><span class="logo-yas">yas</span><span class="logo-sota">sota</span></span>
+    <span class="logo-tagline">دليل تطبيقات أندرويد</span>
   </a>
 
   <div class="header-search-wrap">
@@ -145,8 +145,12 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
   <!-- Mobile-only buttons — hidden on desktop, shown by CSS at ≤1024px -->
   <div class="header-mobile-btns">
     <button type="button" class="header-icon-btn mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
-    <button type="button" class="header-icon-btn" id="nav-toggle" aria-label="القائمة" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <button type="button" class="header-icon-btn header-menu-btn" id="nav-toggle" aria-label="القائمة" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+        <circle cx="9" cy="3"  r="2.1"/>
+        <circle cx="9" cy="9"  r="2.1"/>
+        <circle cx="9" cy="15" r="2.1"/>
+      </svg>
     </button>
   </div>
 </header>

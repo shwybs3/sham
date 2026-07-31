@@ -82,6 +82,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   max-width: 100vw;
+  padding-top: 62px;
 }
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
@@ -91,14 +92,23 @@ button, input, select, textarea { font-family: inherit; }
    SITE HEADER  (dark navy — brand anchor)
 ══════════════════════════════════════════════════ */
 .site-header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 200;
-  background: var(--header-bg);
+  /* Colored top accent bar via border-top trick */
+  border-top: 3px solid transparent;
+  background-image:
+    linear-gradient(var(--header-bg), var(--header-bg)),
+    linear-gradient(90deg, #22d3ee 0%, #7c3aed 50%, #f97316 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   border-bottom: 1px solid var(--header-border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  /* layout — header-inner doesn't exist in PHP; site-header is the flex container */
+  box-shadow: 0 2px 24px rgba(0,0,0,.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  /* layout */
   display: flex;
   align-items: center;
   gap: 16px;
@@ -125,6 +135,38 @@ button, input, select, textarea { font-family: inherit; }
   text-decoration: none;
 }
 .site-logo span { color: var(--orange); }
+
+/* Gradient logo classes */
+.logo-yas {
+  background: linear-gradient(135deg, #22c55e 0%, #3b82f6 55%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-sota { color: var(--purple); -webkit-text-fill-color: var(--purple); }
+.logo-tagline {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.6px;
+  color: rgba(255,255,255,.45);
+  text-transform: uppercase;
+  font-family: var(--f-body);
+  line-height: 1;
+}
+
+/* Kebab menu btn — slightly larger target, brighter on hover */
+.header-menu-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.09);
+}
+.header-menu-btn:hover {
+  background: rgba(255,255,255,.18);
+  color: #fff;
+  border-color: rgba(255,255,255,.28);
+}
 
 /* Search wrapper — takes flex space on desktop, hidden on mobile */
 .header-search-wrap {
@@ -1644,6 +1686,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 @media (max-width: 640px) {
+  body { padding-top: 54px; }
   .site-header { padding: 0 14px; height: 54px; }
   .mobile-search-dropdown { top: 54px; }
   .cat-tabs-bar { top: 54px; }
