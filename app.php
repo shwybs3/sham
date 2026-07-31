@@ -287,8 +287,13 @@ function wave(): string {
     </svg>';
 }
 ?>
+<?php
+$_appLang = $app['lang_code'] ?? 'ar';
+$_isRtl   = in_array($_appLang, ['ar','fa','ur','he','yi','dv','ps','sd','ug','ks'], true);
+$_htmlDir = $_isRtl ? 'rtl' : 'ltr';
+?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= h($_appLang) ?>" dir="<?= $_htmlDir ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

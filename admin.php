@@ -483,10 +483,13 @@ function build_html_page(array $app): string {
     ]))], JSON_UNESCAPED_UNICODE);
 
     // ── Build the page ──────────────────────────────────────────────────────────
+    $pageLang = $app['lang_code'] ?? 'ar';
+    $pageRtl  = in_array($pageLang, ['ar','fa','ur','he','yi','dv','ps','sd','ug','ks'], true);
+    $pageDir  = $pageRtl ? 'rtl' : 'ltr';
     ob_start();
     ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= htmlspecialchars($pageLang, ENT_QUOTES, 'UTF-8') ?>" dir="<?= $pageDir ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -521,7 +524,7 @@ function build_html_page(array $app): string {
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;direction:rtl}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;direction:<?= $pageDir ?>}
 a{color:var(--primary);text-decoration:none}
 a:hover{text-decoration:underline}
 img{max-width:100%;height:auto}
@@ -2934,6 +2937,140 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'find_dl_sources' && is_admin()) {
     });
 
     echo json_encode(['ok' => true, 'sources' => $results], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
+   AJAX: Quick Publish — enter app name or package → full pipeline
+   in seconds: PS scrape + AI content + icon + save + publish.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'quick_publish' && is_admin()) {
+    @set_time_limit(120);
+    header('Content-Type: application/json; charset=utf-8');
+    $input   = json_decode(file_get_contents('php://input'), true);
+    $query   = trim($input['query'] ?? '');
+    $publish = !empty($input['publish']); // true = published, false = draft
+    if (!$query) { echo json_encode(['ok'=>false,'error'=>'أدخل اسم التطبيق أو اسم الحزمة']); exit; }
+
+    // Detect if query is a package name (e.g. com.example.app)
+    $isPkg = preg_match('/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*){1,}$/', $query);
+    $packageId = $isPkg ? $query : null;
+    $psUrl     = null;
+
+    if (!$isPkg) {
+        // Search Play Store by name
+        $psUrl = playstore_search($query);
+        if ($psUrl && preg_match('/[?&]id=([\w.]+)/i', $psUrl, $pkm)) {
+            $packageId = $pkm[1];
+        }
+    } else {
+        $psUrl = 'https://play.google.com/store/apps/details?id=' . urlencode($packageId) . '&hl=ar&gl=SA';
+    }
+
+    // Full scrape + optional AI enrichment
+    $data = $packageId ? fetch_playstore_full($pdo, $packageId, true) : null;
+
+    // Fallback: AI-only if Play Store not found
+    if (!$data) {
+        $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+        if (!$keys) { echo json_encode(['ok'=>false,'error'=>'لم يُعثر على بيانات في Play Store ولا مفتاح OpenRouter متاح']); exit; }
+        $models = build_model_rotation($pdo);
+        $seoStd = seo_prompt_standards();
+        $fallbackPrompt = "أنت خبير محتوى تطبيقات أندرويد. التطبيق: \"{$query}\"\n{$seoStd}\nأعد JSON صالح فقط:\n{\"name\":\"\",\"seo_title\":\"\",\"meta_description\":\"\",\"keywords\":\"\",\"short_description\":\"\",\"long_description\":\"\",\"developer\":\"\",\"version\":\"\",\"android_version\":\"\",\"size_mb\":\"\",\"license\":\"Free\",\"package_name\":\"\",\"rating\":4.5,\"whats_new\":\"\",\"features\":[],\"pros\":[],\"cons\":[],\"install_steps\":[],\"faq\":[]}";
+        $r = openrouter_call_rotating($keys, $models, $fallbackPrompt, 60, 4000);
+        $data = ($r['ok'] && $r['content']) ? (ai_extract_json($r['content']) ?: []) : [];
+        if (!$data) { echo json_encode(['ok'=>false,'error'=>'تعذّر جلب بيانات التطبيق — حاول مرة أخرى']); exit; }
+        $data = clean_utf8_deep($data);
+    }
+
+    $name = trim($data['name'] ?? $query) ?: $query;
+    $slug = unique_slug($pdo, $name);
+
+    // Resolve category
+    $catSlugGuess = ($data['category'] ?? '');
+    $catId = null;
+    if ($catSlugGuess) {
+        $cs = $pdo->prepare("SELECT id FROM categories WHERE slug=? OR name=? LIMIT 1");
+        $cs->execute([$catSlugGuess, $catSlugGuess]);
+        $catId = $cs->fetchColumn() ?: null;
+    }
+    if (!$catId) {
+        $catId = $pdo->query("SELECT id FROM categories ORDER BY id ASC LIMIT 1")->fetchColumn() ?: null;
+    }
+
+    $features     = array_values(array_filter((array)($data['features'] ?? [])));
+    $pros         = array_values(array_filter((array)($data['pros'] ?? [])));
+    $cons         = array_values(array_filter((array)($data['cons'] ?? [])));
+    $installSteps = array_values(array_filter((array)($data['install_steps'] ?? [])));
+    $faq          = is_array($data['faq'] ?? null) ? array_values(array_filter($data['faq'])) : [];
+    $iconPath     = $data['icon_path'] ?? null;
+    $screenshots  = $data['screenshots'] ?? [];
+
+    // Screenshots: import up to 5 remote screenshot URLs
+    $shotPaths = [];
+    if (!empty($screenshots) && is_array($screenshots)) {
+        $shotDir = __DIR__ . '/uploads/screenshots';
+        if (!is_dir($shotDir)) @mkdir($shotDir, 0755, true);
+        foreach (array_slice($screenshots, 0, 5) as $ssUrl) {
+            $ssData = @file_get_contents($ssUrl, false, stream_context_create(['http'=>['timeout'=>8,'user_agent'=>'Mozilla/5.0']]));
+            if ($ssData && strlen($ssData) > 2000) {
+                $fname = $slug . '-ss-' . count($shotPaths) . '-' . time() . '.webp';
+                $dest  = $shotDir . '/' . $fname;
+                if (file_put_contents($dest, $ssData)) $shotPaths[] = 'uploads/screenshots/' . $fname;
+            }
+        }
+    }
+
+    $status = $publish ? 'published' : 'draft';
+    // Force draft if no download link
+    $dlUrl = trim($data['download_url'] ?? $data['apk_url'] ?? '');
+    if (!$dlUrl && $publish) $status = 'draft';
+
+    $seoTitle = seo_title_clamp(trim($data['seo_title'] ?? ''));
+    $pdo->prepare("INSERT INTO apps
+        (name,slug,category_id,developer,version,android_version,size_mb,license,package_name,
+         icon_path,screenshot_paths,short_description,long_description,features,pros,cons,
+         install_steps,faq,whats_new,playstore_url,download_url,rating,seo_title,meta_description,
+         keywords,status,lang_code,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'".addslashes($status)."','ar',NOW(),NOW())")
+        ->execute([
+            $name, $slug, $catId,
+            trim($data['developer'] ?? ''),
+            trim($data['version'] ?? ''),
+            trim($data['android_version'] ?? ''),
+            trim($data['size_mb'] ?? ''),
+            trim($data['license'] ?? 'Free'),
+            trim($data['package_name'] ?? ($packageId ?? '')),
+            $iconPath,
+            $shotPaths ? json_encode($shotPaths, JSON_UNESCAPED_UNICODE) : null,
+            trim($data['short_description'] ?? ''),
+            trim($data['long_description'] ?? ''),
+            json_encode($features, JSON_UNESCAPED_UNICODE),
+            json_encode($pros, JSON_UNESCAPED_UNICODE),
+            json_encode($cons, JSON_UNESCAPED_UNICODE),
+            json_encode($installSteps, JSON_UNESCAPED_UNICODE),
+            json_encode($faq, JSON_UNESCAPED_UNICODE),
+            trim($data['whats_new'] ?? ''),
+            $psUrl,
+            $dlUrl,
+            (float)($data['rating'] ?? 4.5),
+            $seoTitle,
+            trim($data['meta_description'] ?? ''),
+            trim($data['keywords'] ?? ''),
+        ]);
+    $newId = (int)$pdo->lastInsertId();
+
+    echo json_encode([
+        'ok'       => true,
+        'id'       => $newId,
+        'name'     => $name,
+        'slug'     => $slug,
+        'status'   => $status,
+        'has_icon' => (bool)$iconPath,
+        'has_dl'   => (bool)$dlUrl,
+        'edit_url' => 'admin.php?page=edit-app&id=' . $newId,
+        'view_url' => rtrim(SITE_URL, '/') . '/' . rawurlencode($slug) . '/apk',
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -6875,6 +7012,10 @@ $navLinks = [
   </button>
   <div class="admin-logo" style="padding:0;border:none;margin:0;font-size:16px">yass<span>ota</span></div>
   <div style="display:flex;align-items:center;gap:8px">
+    <button onclick="openQuickPublish()" style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" title="رفع سريع">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      سريع
+    </button>
     <a href="admin.php?page=notifications" style="position:relative;color:var(--text-muted)" title="إشعارات YAI">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
       <?php if ($_navYaiCount > 0): ?>
@@ -6895,6 +7036,10 @@ $navLinks = [
 <!-- ═══ SIDEBAR ═══ -->
 <aside class="admin-sidebar" id="admin-sidebar">
   <div class="admin-logo">yass<span>ota</span></div>
+  <button onclick="openQuickPublish()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 32px);margin:0 16px 12px;padding:10px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--primary),var(--purple));color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.3px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    ⚡ رفع تطبيق بثواني
+  </button>
   <nav class="admin-nav">
     <?php foreach ($navLinks as $key => $nav): ?>
     <a href="admin.php?page=<?= $key ?>" class="<?= $page === $key ? 'active' : '' ?>" style="position:relative">
@@ -11742,7 +11887,7 @@ elseif ($page === 'html-pages'):
     <h1>صفحات HTML للفهرسة</h1>
     <p style="color:var(--muted);font-size:13px;margin-top:4px">أنشئ صفحة HTML لكل تطبيق — تُضاف تلقائياً إلى sitemap وتُقدَّم لمحركات البحث عبر IndexNow</p>
   </div>
-  <button id="bulk-gen-btn" onclick="startBulkGen()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:14px;cursor:pointer;font-weight:600">
+  <button id="bulk-gen-btn" onclick="startBulkGen()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--primary),var(--purple));color:#fff;font-size:14px;cursor:pointer;font-weight:600">
     ⚡ توليد جميع الصفحات
   </button>
 </div>
@@ -11750,23 +11895,23 @@ elseif ($page === 'html-pages'):
 <!-- Stats row -->
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px">
   <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:#2563eb" id="stat-generated"><?= $generated ?></div>
+    <div style="font-size:32px;font-weight:800;color:var(--primary)" id="stat-generated"><?= $generated ?></div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">صفحات مُنشأة</div>
   </div>
   <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:#64748b"><?= $totalApps ?></div>
+    <div style="font-size:32px;font-weight:800;color:var(--muted)"><?= $totalApps ?></div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">إجمالي التطبيقات المنشورة</div>
   </div>
   <div class="panel" style="text-align:center;padding:20px">
-    <div style="font-size:32px;font-weight:800;color:<?= $generated>=$totalApps?'#22c55e':'#f59e0b' ?>" id="stat-remaining"><?= max(0,$totalApps-$generated) ?></div>
+    <div style="font-size:32px;font-weight:800;color:<?= $generated>=$totalApps?'var(--success)':'var(--warning)' ?>" id="stat-remaining"><?= max(0,$totalApps-$generated) ?></div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">تحتاج توليد</div>
   </div>
   <div class="panel" style="padding:20px;display:flex;flex-direction:column;justify-content:center;gap:8px">
     <?php $inKey = get_cfg($pdo,'indexnow_key'); ?>
     <?php if ($inKey): ?>
-    <span style="color:#22c55e;font-size:13px">✓ IndexNow مفعَّل — الصفحات الجديدة تُرسَل تلقائياً</span>
+    <span style="color:var(--success);font-size:13px">✓ IndexNow مفعَّل — الصفحات الجديدة تُرسَل تلقائياً</span>
     <?php else: ?>
-    <span style="color:#f59e0b;font-size:13px">⚠ IndexNow غير مفعَّل — فعِّله في الإعدادات</span>
+    <span style="color:var(--warning);font-size:13px">⚠ IndexNow غير مفعَّل — فعِّله في الإعدادات</span>
     <?php endif; ?>
     <?php $pagesUrl = rtrim(SITE_URL,'/').'/pages/'; ?>
     <a href="<?= h($pagesUrl) ?>" target="_blank" style="font-size:12px;color:var(--muted)">📂 /pages/ على الموقع</a>
@@ -11780,8 +11925,8 @@ elseif ($page === 'html-pages'):
     <strong id="bulk-status-text">جارٍ التوليد…</strong>
     <span id="bulk-counter" style="font-size:13px;color:var(--muted)"></span>
   </div>
-  <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden">
-    <div id="bulk-bar" style="height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:4px;width:0;transition:width .3s"></div>
+  <div style="height:8px;background:var(--border-c);border-radius:4px;overflow:hidden">
+    <div id="bulk-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),var(--purple));border-radius:4px;width:0;transition:width .3s"></div>
   </div>
   <div id="bulk-current-app" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
 </div>
@@ -11824,14 +11969,14 @@ elseif ($page === 'html-pages'):
       </td>
       <td>
         <?php if ($exists): ?>
-        <span style="background:rgba(34,197,94,.1);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>
+        <span style="background:rgba(22,163,74,.1);color:var(--success);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>
         <?php else: ?>
-        <span style="background:rgba(245,158,11,.1);color:#f59e0b;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">⏳ لم يُنشأ</span>
+        <span style="background:rgba(217,119,6,.1);color:var(--warning);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">⏳ لم يُنشأ</span>
         <?php endif; ?>
       </td>
       <td>
         <button onclick="genOnePage('<?= $safeSlug ?>', this)"
-                style="padding:5px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;cursor:pointer;color:#2563eb">
+                style="padding:5px 14px;border-radius:8px;border:1px solid var(--border-c);background:var(--surface);font-size:12px;cursor:pointer;color:var(--primary)">
           <?= $exists ? '🔄 إعادة توليد' : '⚡ توليد' ?>
         </button>
       </td>
@@ -11850,11 +11995,11 @@ function genOnePage(slug, btn) {
   }).then(r=>r.json()).then(d=>{
     if(d.ok){
       btn.textContent='✓ مُنشأ';
-      btn.style.color='#22c55e';
-      btn.style.borderColor='#22c55e';
+      btn.style.color='var(--success)';
+      btn.style.borderColor='var(--success)';
       var tr=btn.closest('tr');
       var td=tr ? tr.querySelector('td:nth-child(3)') : null;
-      if(td)td.innerHTML='<span style="background:rgba(34,197,94,.1);color:#22c55e;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>';
+      if(td)td.innerHTML='<span style="background:rgba(22,163,74,.1);color:var(--success);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✓ مُنشأ</span>';
       var tdL=tr ? tr.querySelector('td:nth-child(2)') : null;
       if(tdL&&d.url)tdL.innerHTML='<a href="'+d.url+'" target="_blank" style="font-size:12px;color:var(--primary);word-break:break-all">'+d.file+'</a>';
       var st=document.getElementById('stat-generated');
@@ -18065,6 +18210,171 @@ document.addEventListener('DOMContentLoaded', function(){
   el = document.getElementById('indexnow_key');
   if (el && el.value) validateInKey(el);
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     QUICK PUBLISH MODAL
+     ═══════════════════════════════════════════════ -->
+<div id="qp-overlay" onclick="if(event.target===this)closeQuickPublish()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;padding:28px;position:relative">
+    <button onclick="closeQuickPublish()" style="position:absolute;top:14px;left:14px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:20px;line-height:1">✕</button>
+    <h2 style="font-size:18px;font-weight:800;margin-bottom:6px;color:var(--text)">⚡ رفع تطبيق بثواني</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">أدخل اسم التطبيق أو اسم الحزمة (Package Name) — يُجلب كل شيء تلقائياً من Play Store والذكاء الاصطناعي</p>
+
+    <div id="qp-form-area">
+      <input id="qp-input" type="text"
+             placeholder="مثال: WhatsApp  أو  com.whatsapp"
+             style="width:100%;padding:12px 14px;border:2px solid var(--border-c);border-radius:10px;font-size:15px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;margin-bottom:14px;display:block"
+             onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border-c)'"
+             onkeydown="if(event.key==='Enter')startQuickPublish()">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:18px">
+        <input type="checkbox" id="qp-publish-now" checked style="width:16px;height:16px;accent-color:var(--primary)">
+        نشر فوراً (وإلا يُحفظ كمسودة)
+      </label>
+      <button onclick="startQuickPublish()"
+              style="width:100%;padding:13px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--primary),var(--purple));color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+        ⚡ رفع الآن
+      </button>
+    </div>
+
+    <div id="qp-progress" style="display:none">
+      <div style="margin-bottom:18px">
+        <div id="qps-scrape" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;margin-bottom:6px;opacity:.45">
+          <span class="qp-icon" style="font-size:20px;min-width:24px">⏳</span>
+          <div><div style="font-size:13px;font-weight:600">جلب بيانات Play Store</div><div style="font-size:11px;color:var(--muted)">الاسم، الأيقونة، الوصف…</div></div>
+        </div>
+        <div id="qps-ai" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;margin-bottom:6px;opacity:.45">
+          <span class="qp-icon" style="font-size:20px;min-width:24px">⏳</span>
+          <div><div style="font-size:13px;font-weight:600">توليد محتوى بالذكاء الاصطناعي</div><div style="font-size:11px;color:var(--muted)">SEO، وصف مطوّل، FAQ…</div></div>
+        </div>
+        <div id="qps-save" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;opacity:.45">
+          <span class="qp-icon" style="font-size:20px;min-width:24px">⏳</span>
+          <div><div style="font-size:13px;font-weight:600">حفظ ونشر التطبيق</div><div style="font-size:11px;color:var(--muted)">الإضافة إلى قاعدة البيانات…</div></div>
+        </div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:13px" id="qp-spinner-wrap">
+        <div style="display:inline-block;width:28px;height:28px;border:3px solid var(--border-c);border-top-color:var(--primary);border-radius:50%;animation:qp-spin 1s linear infinite;margin-bottom:8px"></div><br>
+        <span id="qp-status-txt">جارٍ التحضير…</span>
+      </div>
+    </div>
+
+    <div id="qp-result" style="display:none;text-align:center;padding:10px 0">
+      <div id="qp-result-icon" style="font-size:48px;margin-bottom:10px">✅</div>
+      <div id="qp-result-msg" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px;white-space:pre-line"></div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <a id="qp-edit-link" href="#" style="padding:10px 20px;border-radius:8px;background:var(--primary);color:#fff;font-weight:600;font-size:13px;text-decoration:none">✏️ تعديل</a>
+        <a id="qp-view-link" href="#" target="_blank" style="padding:10px 20px;border-radius:8px;background:var(--surface-3);color:var(--text);font-weight:600;font-size:13px;text-decoration:none;border:1px solid var(--border-c)">👁 عرض</a>
+        <button onclick="resetQuickPublish()" style="padding:10px 20px;border-radius:8px;background:var(--surface-3);border:1px solid var(--border-c);color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">➕ رفع آخر</button>
+      </div>
+    </div>
+
+    <div id="qp-error" style="display:none;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.3);border-radius:8px;padding:12px 16px;color:#dc2626;font-size:13px;margin-top:12px"></div>
+  </div>
+</div>
+
+<style>@keyframes qp-spin{to{transform:rotate(360deg)}}</style>
+
+<script>
+(function(){
+  function openQuickPublish(){
+    var ov=document.getElementById('qp-overlay');
+    ov.style.display='flex';
+    resetQuickPublish();
+    setTimeout(function(){var inp=document.getElementById('qp-input');if(inp)inp.focus();},80);
+  }
+  function closeQuickPublish(){
+    document.getElementById('qp-overlay').style.display='none';
+  }
+  function resetQuickPublish(){
+    document.getElementById('qp-form-area').style.display='';
+    document.getElementById('qp-progress').style.display='none';
+    document.getElementById('qp-result').style.display='none';
+    document.getElementById('qp-error').style.display='none';
+    var inp=document.getElementById('qp-input');
+    if(inp)inp.value='';
+    var cb=document.getElementById('qp-publish-now');
+    if(cb)cb.checked=true;
+    ['scrape','ai','save'].forEach(function(s){
+      var el=document.getElementById('qps-'+s);
+      if(el){el.querySelector('.qp-icon').textContent='⏳';el.style.opacity='.45';el.style.background='';}
+    });
+    var sw=document.getElementById('qp-spinner-wrap');
+    if(sw)sw.style.display='';
+  }
+  function setStep(id,state){
+    var el=document.getElementById('qps-'+id);
+    if(!el)return;
+    el.style.opacity='1';
+    var icon=el.querySelector('.qp-icon');
+    if(state==='running'){icon.textContent='🔄';el.style.background='rgba(14,165,233,.08)';}
+    else if(state==='done'){icon.textContent='✅';el.style.background='rgba(22,163,74,.08)';}
+    else if(state==='error'){icon.textContent='❌';el.style.background='rgba(220,38,38,.08)';}
+  }
+  async function startQuickPublish(){
+    var query=(document.getElementById('qp-input').value||'').trim();
+    var publish=document.getElementById('qp-publish-now').checked;
+    if(!query){document.getElementById('qp-input').focus();return;}
+
+    document.getElementById('qp-form-area').style.display='none';
+    document.getElementById('qp-progress').style.display='';
+    document.getElementById('qp-error').style.display='none';
+    document.getElementById('qp-result').style.display='none';
+    ['scrape','ai','save'].forEach(function(s){
+      var el=document.getElementById('qps-'+s);
+      if(el){el.querySelector('.qp-icon').textContent='⏳';el.style.opacity='.45';el.style.background='';}
+    });
+
+    var statusEl=document.getElementById('qp-status-txt');
+    statusEl.textContent='يجلب بيانات Play Store…';
+    setStep('scrape','running');
+
+    var t1=setTimeout(function(){setStep('scrape','done');setStep('ai','running');statusEl.textContent='يولّد المحتوى بالذكاء الاصطناعي…';},7000);
+    var t2=setTimeout(function(){setStep('ai','done');setStep('save','running');statusEl.textContent='يحفظ التطبيق…';},55000);
+
+    try{
+      var res=await fetch('admin.php?ajax=quick_publish',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({query:query,publish:publish})
+      });
+      clearTimeout(t1);clearTimeout(t2);
+      var d=await res.json();
+
+      if(!d.ok){
+        setStep('scrape','error');
+        document.getElementById('qp-progress').style.display='none';
+        var errEl=document.getElementById('qp-error');
+        errEl.style.display='';errEl.textContent=d.error||'حدث خطأ غير معروف';
+        document.getElementById('qp-form-area').style.display='';
+        return;
+      }
+      setStep('scrape','done');setStep('ai','done');setStep('save','done');
+      document.getElementById('qp-spinner-wrap').style.display='none';
+      setTimeout(function(){
+        document.getElementById('qp-progress').style.display='none';
+        document.getElementById('qp-result').style.display='';
+        var statusLabel=d.status==='published'?'✅ تم النشر!':'📝 محفوظ كمسودة';
+        var dlNote=d.has_dl?'':'\n⚠ لا يوجد رابط تحميل — أضفه يدوياً';
+        document.getElementById('qp-result-msg').textContent=d.name+'\n'+statusLabel+dlNote;
+        document.getElementById('qp-edit-link').href=d.edit_url;
+        document.getElementById('qp-view-link').href=d.view_url;
+        document.getElementById('qp-result-icon').textContent=d.status==='published'?'🚀':'📝';
+      },600);
+    }catch(e){
+      clearTimeout(t1);clearTimeout(t2);
+      document.getElementById('qp-progress').style.display='none';
+      var errEl=document.getElementById('qp-error');
+      errEl.style.display='';errEl.textContent='خطأ في الاتصال: '+e.message;
+      document.getElementById('qp-form-area').style.display='';
+    }
+  }
+  // Export to global scope
+  window.openQuickPublish=openQuickPublish;
+  window.closeQuickPublish=closeQuickPublish;
+  window.resetQuickPublish=resetQuickPublish;
+  window.startQuickPublish=startQuickPublish;
+})();
 </script>
 </body>
 </html>
