@@ -4,6 +4,7 @@ require_once __DIR__ . '/partials.php';
 
 evil_check_ban($pdo);
 waf_check($pdo);
+public_cache_headers(120);
 
 $slug    = trim($_GET['slug'] ?? '');
 // Language: ?lang=XX param takes priority; otherwise auto-detect from subdomain

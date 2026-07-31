@@ -3,6 +3,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $today   = isset($_GET['today']);
+public_cache_headers(30);
 if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
 $page    = max(1, (int)($_GET['page'] ?? 1));

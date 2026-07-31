@@ -4,6 +4,7 @@ require_once __DIR__ . '/partials.php';
 
 evil_check_ban($pdo);
 waf_check($pdo);
+public_cache_headers(60);
 
 // ── Legacy URL 301 redirects ─────────────────────────────────────────────────
 // Old query-string format indexed by Google: ?page=app&id=N, ?page=apps, etc.
@@ -181,32 +182,6 @@ $orgSchema = json_encode([
   <div class="ad-zone">
     <?= ad_slot() ?>
   </div>
-
-  <!-- ── Hero Banner (homepage only) ── -->
-  <?php if (!$search && !$catSlug): ?>
-  <div class="home-hero reveal">
-    <div class="home-hero-title">اكتشف أفضل تطبيقات أندرويد <?= partial_icon('smartphone', 20) ?></div>
-    <p class="home-hero-sub">دليل تحريري عربي مستقل · مراجعات احترافية · روابط آمنة من Google Play · تحديث يومي</p>
-    <div class="home-hero-stats">
-      <div class="home-hero-stat">
-        <span class="home-hero-stat-num"><?= $totalApps > 0 ? number_format($totalApps) . '+' : '100+' ?></span>
-        <span class="home-hero-stat-lbl">تطبيق مراجَع</span>
-      </div>
-      <div class="home-hero-stat">
-        <span class="home-hero-stat-num"><?= count($categories) ?>+</span>
-        <span class="home-hero-stat-lbl">تصنيف</span>
-      </div>
-      <div class="home-hero-stat">
-        <span class="home-hero-stat-num">يومي</span>
-        <span class="home-hero-stat-lbl">تحديث المحتوى</span>
-      </div>
-      <div class="home-hero-stat">
-        <span class="home-hero-stat-num">100%</span>
-        <span class="home-hero-stat-lbl">روابط آمنة</span>
-      </div>
-    </div>
-  </div>
-  <?php endif; ?>
 
   <!-- ── Apps Grid ── -->
   <div class="section-head reveal" id="apps-grid">

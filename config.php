@@ -1755,6 +1755,18 @@ function page_cache_end(PDO $pdo, string $key): void {
     echo $html;
 }
 
+/**
+ * Send browser-side Cache-Control headers for public pages.
+ * Call before any HTML output on listing/app pages (not on admin or POST).
+ * $maxAge = seconds the browser/CDN may cache the response.
+ */
+function public_cache_headers(int $maxAge = 60): void {
+    if (headers_sent()) return;
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') return;
+    header("Cache-Control: public, max-age={$maxAge}, s-maxage={$maxAge}, stale-while-revalidate=30");
+    header('Vary: Accept-Encoding, Accept-Language');
+}
+
 function get_cfg(PDO $pdo, string $k, string $d = ''): string {
     $r = $pdo->prepare("SELECT `value` FROM settings WHERE `key`=?");
     $r->execute([$k]);

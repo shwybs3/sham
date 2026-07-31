@@ -1,61 +1,26 @@
 <?php
 /* ═══════════════════════════════════════════
-   sitemap.xml — مدعوم بـ Layos Security
-   التطبيقات تُدرج فقط إذا تجاوز تقييم الجودة 50٪
+   sitemap.xml
+   كل تطبيق بحالة "published" يُدرج في الخريطة
+   — تقييم الجودة (Layos) للإرشاد فقط وليس بوابة
    ═══════════════════════════════════════════ */
 require_once __DIR__ . '/config.php';
 header('Content-Type: application/xml; charset=utf-8');
 header('X-Robots-Tag: noindex');
+// 1-hour public cache so bots don't hammer the DB
+header('Cache-Control: public, max-age=3600, s-maxage=3600');
 
-// ── التطبيقات المنشورة ──
-$allApps = [];
+// ── كل التطبيقات المنشورة بدون استثناء ──
+$apps = [];
 try {
-    $allApps = $pdo->query(
+    $apps = $pdo->query(
         "SELECT id, slug, name, seo_title, meta_desc, meta_description,
                 long_description, icon_path, download_url, updated_at
          FROM apps
          WHERE status='published'
          ORDER BY updated_at DESC"
     )->fetchAll();
-} catch (\Throwable $e) { $allApps = []; }
-
-// فلتر Layos ≥ 50٪
-$apps    = [];
-$skipped = 0;
-foreach ($allApps as $a) {
-    try {
-        if (empty($a['meta_desc'])) $a['meta_desc'] = $a['meta_description'] ?? '';
-        if (function_exists('layos_score_app') && function_exists('layos_should_index')) {
-            $result = layos_score_app($a);
-            if (layos_should_index($pdo, 'app', (int)$a['id'], $result['can_index'])) {
-                $apps[] = $a;
-            } else {
-                $skipped++;
-            }
-        } else {
-            $apps[] = $a;
-        }
-    } catch (\Throwable $e) {
-        $apps[] = $a;
-    }
-}
-
-// إشعار YAI عند استبعاد تطبيقات (مرة كل 12 ساعة)
-if ($skipped > 0) {
-    try {
-        $lastNotify = get_cfg($pdo, 'layos_sitemap_notify_at', '');
-        if (!$lastNotify || strtotime($lastNotify) < strtotime('-12 hours')) {
-            if (function_exists('yai_push')) {
-                yai_push($pdo, 'seo',
-                    "🗺️ Layos: {$skipped} تطبيق مستبعد من Sitemap",
-                    "تم استبعاد {$skipped} تطبيق من sitemap.xml لأن نقاط جودتهم أقل من 50٪.",
-                    'warning', url('admin.php?page=layos'), false, ''
-                );
-            }
-            set_cfg($pdo, 'layos_sitemap_notify_at', date('Y-m-d H:i:s'));
-        }
-    } catch (\Throwable $e) {}
-}
+} catch (\Throwable $e) { $apps = []; }
 
 // ── التصنيفات التي فيها تطبيقات مقبولة ──
 $cats = [];
@@ -63,7 +28,7 @@ try {
     $cats = $pdo->query(
         "SELECT DISTINCT c.slug
          FROM categories c
-         INNER JOIN apps a ON a.category_slug = c.slug AND a.status='published'
+         INNER JOIN apps a ON a.category_id = c.id AND a.status='published'
          WHERE c.slug IS NOT NULL AND c.slug <> ''"
     )->fetchAll();
 } catch (\Throwable $e) { $cats = []; }

@@ -3,6 +3,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $by = ($_GET['by'] ?? 'downloads') === 'views' ? 'views' : 'downloads';
+public_cache_headers(60);
 if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
 
 $page    = max(1, (int)($_GET['page'] ?? 1));
