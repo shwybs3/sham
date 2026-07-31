@@ -50,7 +50,8 @@ $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
 
 $cacheable = ($search === '' && !detect_lang_from_subdomain() && !$_multisite);
-if ($cacheable && page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if ($cacheable && page_cache_start($pdo, $_cacheKey)) exit;
 
 $categories = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
 
@@ -274,39 +275,6 @@ $orgSchema = json_encode([
   </section>
   <?php endif; ?>
 
-  <!-- ── Web Tools Section (dynamic featured tools from DB) ── -->
-  <?php if (!$search && !$catSlug):
-    $featuredTools = [];
-    try {
-      $featuredTools = $pdo->query(
-        "SELECT slug, name, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 4"
-      )->fetchAll();
-    } catch (\Throwable $e) { $featuredTools = []; }
-  ?>
-  <?php if (!empty($featuredTools)): ?>
-  <?= partial_wave() ?>
-  <section style="margin-top:16px;padding:20px;background:var(--surface);border:1px solid var(--border-c);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)" id="web-tools">
-    <div class="section-head reveal" style="margin-bottom:12px">
-      <span class="section-title">أدوات ويب مجانية</span>
-      <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600"><?= __('see_all') ?> <?= partial_icon('arrow-r') ?></a>
-    </div>
-    <div class="featured-tools reveal">
-      <?php foreach (array_slice($featuredTools, 0, 2) as $tool): ?>
-      <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($tool['slug'])) ?>" class="featured-tool-card">
-        <div class="featured-tool-icon" style="background:rgba(99, 102, 241, 0.1)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-        </div>
-        <div>
-          <div class="featured-tool-name"><?= h($tool['name']) ?></div>
-          <div class="featured-tool-desc"><?= h(mb_substr($tool['short_description'], 0, 100)) ?></div>
-        </div>
-      </a>
-      <?php endforeach; ?>
-    </div>
-  </section>
-  <?php endif; ?>
-  <?php endif; ?>
-
   <!-- ── Why yassota (editorial values) ── -->
   <?php if (!$search && !$catSlug): ?>
   <?= partial_wave() ?>
@@ -421,4 +389,4 @@ $orgSchema = json_encode([
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
-<?php if ($cacheable) page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php if ($cacheable) page_cache_end($pdo, $_cacheKey); ?>

@@ -452,7 +452,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
         <div class="app-hero-actions">
           <?php $hasDlMethod = !empty($app['download_url']) || !empty($app['apk_path']); ?>
           <?php if ($hasDlMethod): ?>
-          <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
+          <a href="#download-cta" class="btn-download-hero" onclick="document.getElementById('download-cta')?.scrollIntoView({behavior:'smooth',block:'center'});return false;">
             <?= svgi('download') ?> <?= __('free_download') ?>
           </a>
           <?php endif; ?>
@@ -850,6 +850,25 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     </a>
     <?php endif; ?>
   </div>
+
+  <!-- Repeat download CTA (reached by scrolling from the top button) -->
+  <?php if ($hasDlMethod): ?>
+  <div id="download-cta" class="section-box reveal" style="text-align:center;background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(14,165,233,.08));border:1px solid rgba(37,99,235,.2)">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
+      <?php if ($app['icon_path']): ?>
+      <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" style="width:44px;height:44px;border-radius:12px;object-fit:cover">
+      <?php endif; ?>
+      <div style="text-align:right">
+        <div style="font-weight:800;font-size:15px"><?= h($app['name']) ?></div>
+        <?php if ($app['version']): ?><div style="font-size:12px;color:var(--muted)">v<?= h($app['version']) ?></div><?php endif; ?>
+      </div>
+    </div>
+    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1">
+      <?= svgi('download') ?> <?= __('download') ?> <?= h($app['name']) ?><?= $app['version'] ? ' v'.h($app['version']) : '' ?>
+    </a>
+  </div>
+  <?= wave() ?>
+  <?php endif; ?>
 
   <!-- Comments & Ratings -->
   <div class="section-box reveal">

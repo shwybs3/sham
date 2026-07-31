@@ -1920,8 +1920,26 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
     $appsList = implode("\n", array_map(fn($a) => "#{$a['id']} {$a['name']} ({$a['status']})", $recentApps));
     $allowedSettingKeys = ['moneytag_zone','openrouter_model','openrouter_fallback','openrouter_auto_rotate','openrouter_image_model'];
 
+    // Session-persisted conversation memory — survives across requests (and
+    // across OpenRouter key/model rotation, since it's independent of which
+    // key served the previous turn) so the assistant keeps context instead
+    // of treating every message as a fresh conversation. Capped to the last
+    // 10 turns to keep the prompt bounded.
+    if (!isset($_SESSION['assistant_history']) || !is_array($_SESSION['assistant_history'])) {
+        $_SESSION['assistant_history'] = [];
+    }
+    $historyText = '';
+    if ($_SESSION['assistant_history']) {
+        $lines = [];
+        foreach ($_SESSION['assistant_history'] as $turn) {
+            $lines[] = 'الأدمن: ' . $turn['u'];
+            $lines[] = 'ياسمين: ' . $turn['a'];
+        }
+        $historyText = "سياق المحادثة السابقة (للمرجعية فقط):\n" . implode("\n", $lines) . "\n\n";
+    }
+
     $prompt = <<<P
-أنت مساعد إدارة داخل لوحة تحكم متجر تطبيقات "yassota". لديك قدرة على تنفيذ إجراءات محدّدة فقط عبر إرجاع JSON — لا تنفّذ أي كود، ولا تكتب ملفات، فقط تختار إجراءً من القائمة المسموحة التالية:
+أنتِ "ياسمين"، مساعدة الذكاء الاصطناعي الإدارية داخل لوحة تحكم متجر تطبيقات "yassota". لديك قدرة على تنفيذ إجراءات محدّدة فقط عبر إرجاع JSON — لا تنفّذي أي كود، ولا تكتبي ملفات، فقط تختارين إجراءً من القائمة المسموحة التالية:
 
 - "chat": للرد على سؤال أو توضيح بدون أي تنفيذ. params: {}
 - "create_app_draft": ينشئ تطبيقاً جديداً كمسودة بمحتوى مولّد بالذكاء الاصطناعي (بدون رابط تحميل — يضيفه الأدمن لاحقاً). params: {"name": "اسم التطبيق"}
@@ -1934,7 +1952,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
 قائمة أحدث التطبيقات (id، الاسم، الحالة):
 {$appsList}
 
-طلب الأدمن: "{$message}"
+{$historyText}طلب الأدمن الحالي: "{$message}"
 
 أعد JSON فقط بدون أي نص إضافي أو Markdown بهذا الشكل بالضبط:
 {"action":"...","params":{...},"reply":"رد قصير بالعربية يشرح ماذا ستفعل أو رد مباشر إن كان action=chat"}
@@ -1945,8 +1963,12 @@ P;
     if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
     $decision = ai_extract_json($r['content']);
     if (!$decision || empty($decision['action'])) {
+        $_SESSION['assistant_history'][] = ['u' => $message, 'a' => trim($r['content'])];
+        $_SESSION['assistant_history'] = array_slice($_SESSION['assistant_history'], -10);
         echo json_encode(['success'=>true,'reply'=>trim($r['content']),'action'=>'chat']); exit;
     }
+    $_SESSION['assistant_history'][] = ['u' => $message, 'a' => trim($decision['reply'] ?? '')];
+    $_SESSION['assistant_history'] = array_slice($_SESSION['assistant_history'], -10);
 
     $action = $decision['action'];
     $params = $decision['params'] ?? [];

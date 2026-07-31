@@ -117,7 +117,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>تحميل <?= h($app['name']) ?><?= $displayVersion ? ' v'.h($displayVersion) : '' ?> للأندرويد — yassota</title>
+  <title><?= __('download') ?> <?= h($app['name']) ?><?= $displayVersion ? ' v'.h($displayVersion) : '' ?> <?= __('android') ?> — yassota</title>
   <meta name="robots" content="noindex,follow">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
@@ -130,42 +130,6 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
   <?php endif; ?>
 </head>
 <body>
-
-<?php if ($captchaType !== 'none'): ?>
-<div id="captcha-overlay" style="position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.92);display:flex;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:18px;padding:32px 28px;max-width:400px;width:100%;text-align:center;direction:rtl">
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.5" style="margin-bottom:14px"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-    <h2 style="margin:0 0 8px;font-size:18px;color:#0f172a">تحقق سريع</h2>
-    <p style="color:#64748b;font-size:14px;margin:0 0 20px">لحماية الموقع، نحتاج للتحقق أنك لست روبوتاً</p>
-    <div style="display:flex;justify-content:center;margin-bottom:18px">
-      <div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onCaptchaSolvedTurnstile" data-theme="light"></div>
-    </div>
-    <p style="color:#94a3b8;font-size:11px;margin:8px 0 0">محمي بواسطة Cloudflare Turnstile</p>
-  </div>
-</div>
-<script>
-(function(){
-  var overlay = document.getElementById('captcha-overlay');
-  var pageUrl = location.href;
-  function verifyCaptcha(token, type) {
-    fetch(pageUrl.split('?')[0] + '?ajax=verify_captcha', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'token=' + encodeURIComponent(token) + '&type=' + encodeURIComponent(type)
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.ok) {
-        overlay.style.transition = 'opacity .3s'; overlay.style.opacity = '0';
-        setTimeout(function(){ overlay.remove(); }, 320);
-      } else { alert('فشل التحقق، يرجى المحاولة مرة أخرى.'); }
-    });
-  }
-  window.onCaptchaSolvedTurnstile = function(token) { verifyCaptcha(token, 'turnstile'); };
-  window.onDlCaptchaSolved = function(token) { dlCaptchaUnlock(token, 'turnstile'); };
-})();
-</script>
-<?php endif; ?>
 
 <?php render_site_header('', ''); ?>
 
@@ -195,7 +159,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <?php if ($app['link_verified']): ?>
       <div class="dlp-verified">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-        رابط تم التحقق منه بواسطة فريق yassota
+        <?= __('verified_by_team') ?>
       </div>
       <?php endif; ?>
       <?php if ($app['downloads'] > 0 || (!empty($app['rating']) && $app['rating'] > 0) || $app['developer']): ?>
@@ -203,19 +167,19 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
         <?php if ($app['downloads'] > 0): ?>
         <div class="dlp-hero-stat">
           <strong><?= number_format($app['downloads']) ?>+</strong>
-          <span>تحميل</span>
+          <span><?= __('download') ?></span>
         </div>
         <?php endif; ?>
         <?php if (!empty($app['rating']) && $app['rating'] > 0): ?>
         <div class="dlp-hero-stat">
           <strong>⭐ <?= number_format($app['rating'], 1) ?></strong>
-          <span><?= !empty($app['rating_count']) ? number_format($app['rating_count']).' تقييم' : 'تقييم' ?></span>
+          <span><?= !empty($app['rating_count']) ? number_format($app['rating_count']).' '.__('rating') : __('rating') ?></span>
         </div>
         <?php endif; ?>
         <?php if ($app['developer']): ?>
         <div class="dlp-hero-stat">
           <strong><?= h($app['developer']) ?></strong>
-          <span>المطوّر</span>
+          <span><?= __('developer') ?></span>
         </div>
         <?php endif; ?>
       </div>
@@ -243,12 +207,12 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
           $_appVer = $displayVersion ? ' v' . $displayVersion : '';
           $_appLbl = $app['name'] . $_appVer;
           foreach ([2 => $app['mirror2_url'] ?? '', 3 => $app['mirror3_url'] ?? ''] as $n => $mu) {
-              if ($mu) $mirrors[] = ['label' => $_appLbl . ' — مرآة ' . $n, 'url' => download_url($app['slug'], $n), 'ext' => false];
+              if ($mu) $mirrors[] = ['label' => $_appLbl . ' — ' . __('mirror') . ' ' . $n, 'url' => download_url($app['slug'], $n), 'ext' => false];
           }
           $primaryLabel = $hasLocalApk ? $_appLbl : (str_contains($url, 'play.google.com') ? 'Google Play' : $_appLbl);
           $primaryUrl   = $hasLocalApk ? url('download.php?slug='.urlencode($app['slug']).'&apk=1') : $url;
           $dlSlots[] = [
-              'version'  => $displayVersion ?: 'الإصدار الحالي',
+              'version'  => $displayVersion ?: __('version'),
               'notes'    => $app['whats_new'] ?? '',
               'buttons'  => array_merge(
                   [['label' => $primaryLabel, 'url' => $primaryUrl, 'primary' => true, 'local' => $hasLocalApk]],
@@ -324,7 +288,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
             </div>
             <?php if ($slot['open'] && $dlCaptchaType !== 'none'): ?>
             <div id="dl-captcha-wrap-<?= $si ?>" class="dl-cap-hidden" style="margin-top:12px;text-align:center" aria-hidden="true">
-              <p style="font-size:12px;color:var(--muted);margin:0 0 10px">للمتابعة، يرجى التحقق من هويتك</p>
+              <p style="font-size:12px;color:var(--muted);margin:0 0 10px"><?= __('continue_to_verify') ?></p>
               <?php if ($dlCaptchaType === 'turnstile' && $turnstileSiteKey): ?>
               <div style="display:flex;justify-content:center"><div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlCaptchaSolved" data-theme="light" data-size="normal"></div></div>
               <?php endif; ?>
@@ -338,8 +302,8 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <?php else: ?>
       <div class="dlp-no-link">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-        <strong>رابط التحميل غير متوفر حالياً</strong>
-        <p>سيقوم فريق yassota بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.</p>
+        <strong><?= __('download_link_unavailable') ?></strong>
+        <p><?= __('download_link_unavailable_desc') ?></p>
       </div>
       <?php endif; ?>
 
@@ -347,19 +311,19 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <div class="dlp-trust">
         <div class="dlp-trust-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <div class="dlp-trust-text"><strong>رابط آمن 100%</strong><small>بروتوكول HTTPS مشفر</small></div>
+          <div class="dlp-trust-text"><strong><?= __('safe_link') ?></strong><small><?= __('https_encrypted') ?></small></div>
         </div>
         <div class="dlp-trust-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-          <div class="dlp-trust-text"><strong>خالٍ من الفيروسات</strong><small>تم فحص الملف</small></div>
+          <div class="dlp-trust-text"><strong><?= __('virus_free') ?></strong><small><?= __('file_scanned') ?></small></div>
         </div>
         <div class="dlp-trust-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7z"/><path d="M13 2v7h7"/></svg>
-          <div class="dlp-trust-text"><strong>ملف APK أصلي</strong><small>لم يُعدَّل أو يُحرَّف</small></div>
+          <div class="dlp-trust-text"><strong><?= __('original_apk') ?></strong><small><?= __('not_modified') ?></small></div>
         </div>
         <div class="dlp-trust-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          <div class="dlp-trust-text"><strong>تحميل سريع</strong><small>خوادم عالية السرعة</small></div>
+          <div class="dlp-trust-text"><strong><?= __('fast_download') ?></strong><small><?= __('high_speed_servers') ?></small></div>
         </div>
       </div>
 
@@ -368,19 +332,19 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <div class="dlp-mirrors">
         <span class="dlp-mirrors-label">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          روابط بديلة:
+          <?= __('alternative_links') ?>
         </span>
         <?php $__mv = $displayVersion ? ' v' . $displayVersion : ''; ?>
         <?php if ($app['mirror2_url']): ?>
           <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dlp-mirror-btn" data-hardnav="1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-            <?= h($app['name']) ?><?= h($__mv) ?> — مرآة 2
+            <?= h($app['name']) ?><?= h($__mv) ?> — <?= __('mirror') ?> 2
           </a>
         <?php endif; ?>
         <?php if ($app['mirror3_url']): ?>
           <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dlp-mirror-btn" data-hardnav="1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-            <?= h($app['name']) ?><?= h($__mv) ?> — مرآة 3
+            <?= h($app['name']) ?><?= h($__mv) ?> — <?= __('mirror') ?> 3
           </a>
         <?php endif; ?>
       </div>
@@ -391,14 +355,14 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <details class="dlp-hash-details">
         <summary>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          التحقق من سلامة الملف (SHA-256)
+          <?= __('verify_file_integrity') ?>
         </summary>
         <div class="dlp-hash-body">
           <?php if ($app['apk_size_bytes']): ?>
-          <div style="margin-bottom:6px"><span style="color:var(--muted)">الحجم الفعلي:</span> <strong><?= h(format_apk_size((int)$app['apk_size_bytes'])) ?></strong></div>
+          <div style="margin-bottom:6px"><span style="color:var(--muted)"><?= __('actual_size') ?></span> <strong><?= h(format_apk_size((int)$app['apk_size_bytes'])) ?></strong></div>
           <?php endif; ?>
           <div>
-            <div style="color:var(--muted);margin-bottom:4px;font-size:11px">SHA-256 (انقر للنسخ):</div>
+            <div style="color:var(--muted);margin-bottom:4px;font-size:11px">SHA-256:</div>
             <code class="dlp-hash-code" onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.dataset.copied='1';setTimeout(()=>delete this.dataset.copied,1500)})"><?= h($app['apk_hash_sha256']) ?></code>
           </div>
           <?php if ($app['apk_hash_md5']): ?>
@@ -413,17 +377,17 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
 
       <!-- Google Play link -->
       <?php if ($hasLocalApk && $downloadSource === 'both' && $app['download_url']): ?>
-      <div class="dlp-gplay">أو
+      <div class="dlp-gplay"><?= __('or_text') ?>
         <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.37.2.8.2 1.17-.01l13.64-7.84-2.86-2.86-11.95 10.71zm-1.01-21.3A2 2 0 002 3.52v16.96a2 2 0 00.17.95l.09.1 9.5-9.5v-.23l-9.59-9.34zm16.53 9.13l-2.72-1.57-3.13 3.14 3.13 3.13 2.74-1.58a2 2 0 000-3.12zM4.35.25L17.99 8.1l-2.87 2.86L4.08.37.9.25z"/></svg>
-          تحميل من Google Play
+          <?= __('download_from_playstore') ?>
         </a>
       </div>
       <?php elseif (!$hasLocalApk && !empty($app['download_url']) && str_contains($app['download_url'], 'play.google.com')): ?>
       <div class="dlp-gplay">
         <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.37.2.8.2 1.17-.01l13.64-7.84-2.86-2.86-11.95 10.71zm-1.01-21.3A2 2 0 002 3.52v16.96a2 2 0 00.17.95l.09.1 9.5-9.5v-.23l-9.59-9.34zm16.53 9.13l-2.72-1.57-3.13 3.14 3.13 3.13 2.74-1.58a2 2 0 000-3.12zM4.35.25L17.99 8.1l-2.87 2.86L4.08.37.9.25z"/></svg>
-          تحميل من Google Play ↗
+          <?= __('download_from_playstore') ?> ↗
         </a>
       </div>
       <?php endif; ?>
@@ -437,7 +401,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <div class="dlp-panel">
         <div class="dlp-panel-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-          معلومات التطبيق
+          <?= __('app_info') ?>
         </div>
         <?php
           // Build info cells as array to control even/odd layout
@@ -446,24 +410,28 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
           // Strip accidental "Android" prefix already in android_version field
           $androidVer    = trim(preg_replace('/^android\s*/i', '', $app['android_version'] ?? ''));
           $arabicMonths  = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-          $fmtDate = function(?string $d) use ($arabicMonths): string {
+          $isArDate = (defined('UI_LANG') ? UI_LANG : 'ar') === 'ar';
+          $fmtDate = function(?string $d) use ($arabicMonths, $isArDate): string {
               if (!$d) return '';
               $ts = strtotime($d);
-              return $ts ? (date('j', $ts) . ' ' . $arabicMonths[(int)date('n', $ts) - 1] . ' ' . date('Y', $ts)) : '';
+              if (!$ts) return '';
+              return $isArDate
+                  ? (date('j', $ts) . ' ' . $arabicMonths[(int)date('n', $ts) - 1] . ' ' . date('Y', $ts))
+                  : date('M j, Y', $ts);
           };
           $infoCells = [];
-          if ($displayVersion)         $infoCells[] = ['الإصدار',      '<span dir="ltr">' . h($displayVersion) . '</span>'];
-          if ($fileSizeMb)             $infoCells[] = ['الحجم',        '<span dir="ltr">' . h($fileSizeMb) . ' MB</span>'];
-          if ($catName)                $infoCells[] = ['التصنيف',      h($catName)];
-          if ($app['developer'])       $infoCells[] = ['المطوّر',      h($app['developer'])];
-          $infoCells[]                              = ['النظام',       'Android'];
-          $infoCells[]                              = ['الترخيص',      h($app['license'] ?? 'مجاني')];
-          if ($androidVer)             $infoCells[] = ['أدنى إصدار',   'Android ' . h($androidVer) . '+'];
+          if ($displayVersion)         $infoCells[] = [__('version'),      '<span dir="ltr">' . h($displayVersion) . '</span>'];
+          if ($fileSizeMb)             $infoCells[] = [__('size'),        '<span dir="ltr">' . h($fileSizeMb) . ' MB</span>'];
+          if ($catName)                $infoCells[] = [__('category'),      h($catName)];
+          if ($app['developer'])       $infoCells[] = [__('developer'),      h($app['developer'])];
+          $infoCells[]                              = [__('android'),       'Android'];
+          $infoCells[]                              = [__('license'),      h($app['license'] ?? __('free'))];
+          if ($androidVer)             $infoCells[] = [__('min_android'),   'Android ' . h($androidVer) . '+'];
           $fileType = !empty($app['apk_path']) ? 'APK' : 'APK/XAPK';
-          $infoCells[]                              = ['نوع الملف',    $fileType];
-          if ($app['downloads'] > 0)   $infoCells[] = ['التحميلات',    '<span dir="ltr">+' . number_format($app['downloads']) . '</span>'];
-          if (!empty($app['updated_at']))  $infoCells[] = ['آخر تحديث',  $fmtDate($app['updated_at'])];
-          if (!empty($app['release_date'])) $infoCells[] = ['تاريخ الإصدار', $fmtDate($app['release_date'])];
+          $infoCells[]                              = [__('file_type'),    $fileType];
+          if ($app['downloads'] > 0)   $infoCells[] = [__('downloads'),    '<span dir="ltr">+' . number_format($app['downloads']) . '</span>'];
+          if (!empty($app['updated_at']))  $infoCells[] = [__('last_update'),  $fmtDate($app['updated_at'])];
+          if (!empty($app['release_date'])) $infoCells[] = [__('release_date'), $fmtDate($app['release_date'])];
           $cellCount = count($infoCells);
         ?>
         <div class="dlp-meta-grid">
@@ -475,7 +443,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
           <?php endif; ?>
           <?php if (!empty($app['package_name'])): ?>
           <div class="dlp-meta-cell" style="grid-column:1/-1">
-            <div class="dlp-meta-key">اسم الحزمة</div>
+            <div class="dlp-meta-key"><?= __('package_name') ?></div>
             <div class="dlp-meta-val" style="font-family:var(--f-mono);font-size:11px;word-break:break-all;direction:ltr;text-align:left"><?= h($app['package_name']) ?></div>
           </div>
           <?php endif; ?>
@@ -487,15 +455,14 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <div class="dlp-panel">
         <div class="dlp-panel-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          التحقق الأمني
+          <?= __('security_check') ?>
         </div>
         <div class="dlp-panel-body" style="font-size:12px;display:flex;flex-direction:column;gap:10px">
           <?php if (!empty($app['apk_hash_sha256'])): ?>
           <div>
-            <div style="color:var(--muted);margin-bottom:3px;font-size:10px">SHA-256 (انقر للنسخ):</div>
+            <div style="color:var(--muted);margin-bottom:3px;font-size:10px">SHA-256:</div>
             <code style="display:block;background:var(--surface-2);padding:5px 8px;border-radius:6px;font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--text);font-family:var(--f-mono)"
-                  onclick="navigator.clipboard.writeText(this.textContent);this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)"
-                  title="انقر للنسخ"><?= h($app['apk_hash_sha256']) ?></code>
+                  onclick="navigator.clipboard.writeText(this.textContent);this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)"><?= h($app['apk_hash_sha256']) ?></code>
           </div>
           <?php endif; ?>
           <?php if (!empty($app['apk_hash_md5'])): ?>
@@ -509,7 +476,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
           <a href="<?= h($app['virustotal_report_url']) ?>" target="_blank" rel="nofollow noopener"
              style="color:var(--cyan);font-size:11px;display:inline-flex;align-items:center;gap:5px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
-            🛡️ تقرير VirusTotal
+            🛡️ <?= __('virustotal_report') ?>
           </a>
           <?php endif; ?>
         </div>
@@ -521,7 +488,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
       <div class="dlp-panel">
         <div class="dlp-panel-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          صور من التطبيق
+          <?= __('app_screenshots') ?>
         </div>
         <div style="padding:12px">
           <div class="dlp-screenshots-track">
@@ -539,7 +506,7 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
 
   <!-- ── Installation guide ── -->
   <div class="dlp-install-guide">
-    <h2 class="dlp-install-title">كيفية تثبيت تطبيق APK على أندرويد</h2>
+    <h2 class="dlp-install-title"><?= __('how_to_install') ?></h2>
     <div class="dlp-install-steps">
       <div class="dlp-install-step">
         <div class="dlp-install-num">1</div>
@@ -550,8 +517,8 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
         </div>
-        <h3>تحميل الملف</h3>
-        <p>أتمّ التحقق من Cloudflare ثم اضغط زر التحميل لبدء التحميل مباشرة</p>
+        <h3><?= __('download_step1_title') ?></h3>
+        <p><?= __('download_step1_desc') ?></p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">2</div>
@@ -561,8 +528,8 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
             <path d="M9 12l2 2 4-4"/>
           </svg>
         </div>
-        <h3>السماح بالتثبيت</h3>
-        <p>الإعدادات ← الأمان ← فعّل "تثبيت تطبيقات من مصادر غير معروفة"</p>
+        <h3><?= __('allow_install_title') ?></h3>
+        <p><?= __('allow_install_desc') ?></p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">3</div>
@@ -573,8 +540,8 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
             <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
           </svg>
         </div>
-        <h3>فتح ملف APK</h3>
-        <p>افتح الملف المُحمَّل من مجلد التنزيلات واضغط على "تثبيت"</p>
+        <h3><?= __('open_apk_title') ?></h3>
+        <p><?= __('open_apk_desc') ?></p>
       </div>
       <div class="dlp-install-step">
         <div class="dlp-install-num">4</div>
@@ -584,8 +551,8 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
             <polyline points="16 8 11 14 8 11"/>
           </svg>
         </div>
-        <h3>الاستمتاع بالتطبيق</h3>
-        <p>افتح التطبيق من الشاشة الرئيسية أو قائمة التطبيقات وتمتع!</p>
+        <h3><?= __('enjoy_app_title') ?></h3>
+        <p><?= __('enjoy_app_desc') ?></p>
       </div>
     </div>
   </div>
@@ -597,14 +564,14 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
   <?php if ($tgUrl): ?>
   <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="dlp-tg-btn">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-    تابع قناة yassota على تيليجرام للحصول على أحدث التطبيقات
+    <?= __('telegram_follow') ?>
   </a>
   <?php endif; ?>
 
   <!-- ── Related apps ── -->
   <?php if ($relatedApps): ?>
   <div class="dlp-related">
-    <div class="dlp-related-title">تطبيقات مشابهة قد تعجبك</div>
+    <div class="dlp-related-title"><?= __('similar_apps_you_like') ?></div>
     <div class="dlp-related-grid">
       <?php foreach ($relatedApps as $r): ?>
       <a href="<?= h(app_url($r['slug'])) ?>" class="dlp-related-card">
@@ -627,10 +594,10 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
 
   <!-- ── Footer nav ── -->
   <nav class="dlp-footer-nav">
-    <a href="<?= h(app_url($app['slug'])) ?>">← صفحة <?= h($app['name']) ?></a>
-    <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>
-    <a href="<?= h(url('terms')) ?>">الشروط</a>
-    <a href="<?= h(url('contact')) ?>">اتصل بنا</a>
+    <a href="<?= h(app_url($app['slug'])) ?>">← <?= __('app_page') ?> <?= h($app['name']) ?></a>
+    <a href="<?= h(url('privacy-policy')) ?>"><?= __('privacy_policy') ?></a>
+    <a href="<?= h(url('terms')) ?>"><?= __('terms') ?></a>
+    <a href="<?= h(url('contact')) ?>"><?= __('contact_us') ?></a>
     <a href="<?= h(url('dmca')) ?>">DMCA</a>
   </nav>
 

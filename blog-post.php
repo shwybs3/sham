@@ -18,7 +18,8 @@ if (!$post) {
     <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
-if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if (page_cache_start($pdo, $_cacheKey)) exit;
 
 // Detect code-page type — body is JSON with language sections
 $isCodePage  = $post['type'] === 'code-page';
@@ -312,4 +313,4 @@ function cpDownloadAll() {
 <?php endif; ?>
 </body>
 </html>
-<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php page_cache_end($pdo, $_cacheKey); ?>

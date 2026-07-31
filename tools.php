@@ -120,7 +120,7 @@ if ($slug) {
   <?php endif; ?>
 </head>
 <body>
-  <?php require_once __DIR__ . '/partials.php'; navbar(); ?>
+  <?php require_once __DIR__ . '/partials.php'; render_site_header('', 'tools'); ?>
 
   <div class="container" style="max-width:900px;padding:40px 20px">
     <a href="/tools" style="color: var(--muted); text-decoration: none; font-size: 14px;">← الأدوات</a>
@@ -202,6 +202,16 @@ if ($slug) {
     </div>
     <?php endif; ?>
 
+    <!-- How it started -->
+    <?php if (!empty($tool['how_it_started'])): ?>
+    <div class="tool-section">
+      <h3>كيف بدأت هذه الأداة</h3>
+      <div class="tool-content">
+        <?= nl2br(h($tool['how_it_started'])) ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <!-- FAQ -->
     <?php if (!empty($faq)): ?>
     <div class="tool-section">
@@ -263,7 +273,7 @@ if ($slug) {
     <?php endif; ?>
   </div>
 
-  <?php require_once __DIR__ . '/partials.php'; footer(); ?>
+  <?php require_once __DIR__ . '/partials.php'; render_site_footer(); ?>
 </body>
 </html><?php
 } else {
@@ -290,7 +300,7 @@ if ($slug) {
   </style>
 </head>
 <body>
-  <?php require_once __DIR__ . '/partials.php'; navbar(); ?>
+  <?php require_once __DIR__ . '/partials.php'; render_site_header('', 'tools'); ?>
 
   <div class="container" style="max-width:1200px;padding:40px 20px">
     <h1 style="font-size:32px;margin:0 0 10px">أدوات الويب المجانية</h1>
@@ -362,7 +372,7 @@ if ($slug) {
     <?php endif; ?>
   </div>
 
-  <?php require_once __DIR__ . '/partials.php'; footer(); ?>
+  <?php require_once __DIR__ . '/partials.php'; render_site_footer(); ?>
 </body>
 </html><?php
 }

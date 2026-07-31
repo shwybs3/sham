@@ -38,6 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
         'short_description' => trim($_POST['short_description'] ?? ''),
         'long_description' => trim($_POST['long_description'] ?? ''),
         'tutorials' => trim($_POST['tutorials'] ?? ''),
+        'whats_new' => trim($_POST['whats_new'] ?? ''),
+        'how_it_started' => trim($_POST['how_it_started'] ?? ''),
         'status' => in_array($_POST['status'] ?? 'draft', ['published', 'draft']) ? $_POST['status'] : 'draft',
     ];
 
@@ -52,6 +54,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
     if ($cons = $_POST['cons'] ?? '') {
         $consList = array_filter(array_map('trim', explode("\n", $cons)));
         $data['cons'] = json_encode($consList);
+    }
+    // FAQ textarea format: "Q: question" then "A: answer" (answer may span
+    // multiple lines until the next "Q:" block).
+    if ($faqRaw = trim($_POST['faq'] ?? '')) {
+        $pairs = [];
+        if (preg_match_all('/Q:\s*(.+?)\s*\R+A:\s*(.+?)(?=\R+Q:|\z)/is', $faqRaw, $m, PREG_SET_ORDER)) {
+            foreach ($m as $pair) {
+                $q = trim($pair[1]);
+                $a = trim($pair[2]);
+                if ($q && $a) $pairs[] = ['q' => $q, 'a' => $a];
+            }
+        }
+        $data['faq'] = json_encode($pairs, JSON_UNESCAPED_UNICODE);
     }
 
     if (!$data['name']) {
@@ -73,70 +88,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
 $tool = $id ? get_web_tool($pdo, $id) : null;
 $tools = list_web_tools($pdo, 'all');
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>إدارة أدوات الويب</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Tahoma, Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-    .container { max-width: 1200px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-    .header h1 { font-size: 28px; color: #333; }
-    .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; font-size: 14px; }
-    .btn:hover { background: #0056b3; }
-    .btn-danger { background: #dc3545; }
-    .btn-danger:hover { background: #c82333; }
-    .btn-success { background: #28a745; }
-    .btn-success:hover { background: #218838; }
-    .alert { padding: 15px; margin-bottom: 20px; border-radius: 5px; }
-    .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
-    .form-group input[type="text"],
-    .form-group input[type="email"],
-    .form-group textarea,
-    .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; }
-    .form-group textarea { min-height: 150px; resize: vertical; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .form-full { grid-column: 1 / -1; }
-    .tools-table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,.1); border-radius: 5px; overflow: hidden; }
-    .tools-table th { background: #f8f9fa; padding: 12px; text-align: right; font-weight: bold; color: #333; border-bottom: 2px solid #dee2e6; }
-    .tools-table td { padding: 12px; border-bottom: 1px solid #dee2e6; }
-    .tools-table tr:hover { background: #f9f9f9; }
-    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .status-published { background: #d4edda; color: #155724; }
-    .status-draft { background: #fff3cd; color: #856404; }
-    .edit-form { background: white; padding: 30px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,.1); }
-    .form-actions { display: flex; gap: 10px; margin-top: 20px; }
-    .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
-    .tab { padding: 10px 20px; cursor: pointer; border: none; background: none; font-size: 16px; color: #666; border-bottom: 3px solid transparent; }
-    .tab.active { color: #007bff; border-bottom-color: #007bff; }
-  </style>
-</head>
-<body>
+<style>
+  /* Scoped to .wt-tools-admin so it never leaks into / collides with the
+     shared admin.css classes used by the rest of the admin panel shell. */
+  .wt-tools-admin * { box-sizing: border-box; }
+  .wt-tools-admin { font-family: Tahoma, Arial, sans-serif; }
+  .wt-tools-admin .wt-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+  .wt-tools-admin .wt-topbar h1 { font-size: 22px; color: var(--text, #333); margin: 0; }
+  .wt-tools-admin .wt-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; font-size: 14px; }
+  .wt-tools-admin .wt-btn:hover { background: #0056b3; }
+  .wt-tools-admin .wt-btn-danger { background: #dc3545; }
+  .wt-tools-admin .wt-btn-danger:hover { background: #c82333; }
+  .wt-tools-admin .wt-btn-success { background: #28a745; }
+  .wt-tools-admin .wt-btn-success:hover { background: #218838; }
+  .wt-tools-admin .wt-alert { padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+  .wt-tools-admin .wt-alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+  .wt-tools-admin .wt-alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  .wt-tools-admin .form-group { margin-bottom: 15px; }
+  .wt-tools-admin .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+  .wt-tools-admin .form-group input[type="text"],
+  .wt-tools-admin .form-group input[type="email"],
+  .wt-tools-admin .form-group textarea,
+  .wt-tools-admin .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 14px; background:#fff; color:#111; }
+  .wt-tools-admin .form-group textarea { min-height: 150px; resize: vertical; }
+  .wt-tools-admin .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .wt-tools-admin .form-full { grid-column: 1 / -1; }
+  .wt-tools-admin .tools-table { width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,.1); border-radius: 5px; overflow: hidden; }
+  .wt-tools-admin .tools-table th { background: #f8f9fa; padding: 12px; text-align: right; font-weight: bold; color: #333; border-bottom: 2px solid #dee2e6; }
+  .wt-tools-admin .tools-table td { padding: 12px; border-bottom: 1px solid #dee2e6; color: #333; }
+  .wt-tools-admin .tools-table tr:hover { background: #f9f9f9; }
+  .wt-tools-admin .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+  .wt-tools-admin .status-published { background: #d4edda; color: #155724; }
+  .wt-tools-admin .status-draft { background: #fff3cd; color: #856404; }
+  .wt-tools-admin .edit-form { background: #fff; padding: 30px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,.1); }
+  .wt-tools-admin .form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  @media (max-width: 700px) {
+    .wt-tools-admin .form-grid { grid-template-columns: 1fr; }
+    .wt-tools-admin .tools-table, .wt-tools-admin .tools-table thead { display: block; }
+    .wt-tools-admin .tools-table tbody { display: block; }
+    .wt-tools-admin .tools-table tr { display: block; border-bottom: 2px solid #dee2e6; padding: 8px 0; }
+    .wt-tools-admin .tools-table thead tr { display: none; }
+    .wt-tools-admin .tools-table td { display: flex; justify-content: space-between; gap: 10px; border-bottom: none; padding: 6px 12px; }
+  }
+</style>
 
-<div class="container">
-  <div class="header">
+<div class="wt-tools-admin">
+  <div class="wt-topbar">
     <h1><?= __('manage_tools') ?></h1>
     <?php if ($action === 'list'): ?>
-    <a href="?page=web-tools&action=add" class="btn btn-success">+ <?= __('add_tool_new') ?></a>
+    <a href="?page=web-tools&action=add" class="wt-btn wt-btn-success">+ <?= __('add_tool_new') ?></a>
     <?php else: ?>
-    <a href="?page=web-tools" class="btn">← <?= __('back') ?></a>
+    <a href="?page=web-tools" class="wt-btn">← <?= __('back') ?></a>
     <?php endif; ?>
   </div>
 
   <?php if ($msg === 'added'): ?>
-  <div class="alert alert-success">✓ <?= __('added_success') ?></div>
+  <div class="wt-alert wt-alert-success">✓ <?= __('added_success') ?></div>
   <?php elseif ($msg === 'updated'): ?>
-  <div class="alert alert-success">✓ <?= __('updated_success') ?></div>
+  <div class="wt-alert wt-alert-success">✓ <?= __('updated_success') ?></div>
   <?php elseif ($msg === 'deleted'): ?>
-  <div class="alert alert-success">✓ <?= __('deleted_success') ?></div>
+  <div class="wt-alert wt-alert-success">✓ <?= __('deleted_success') ?></div>
   <?php elseif ($error): ?>
-  <div class="alert alert-danger">✗ <?= h($error) ?></div>
+  <div class="wt-alert wt-alert-danger">✗ <?= h($error) ?></div>
   <?php endif; ?>
 
   <?php if ($action === 'list'): ?>
@@ -164,8 +177,8 @@ $tools = list_web_tools($pdo, 'all');
           <td><?= number_format($t['views']) ?></td>
           <td><?= date('d M Y', strtotime($t['created_at'])) ?></td>
           <td>
-            <a href="?page=web-tools&action=edit&id=<?= $t['id'] ?>" class="btn" style="padding: 6px 12px; font-size: 12px;"><?= __('edit') ?></a>
-            <a href="?page=web-tools&action=delete&id=<?= $t['id'] ?>&t=<?= csrf_token() ?>" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="return confirm('<?= __('tool_delete_confirm') ?>')"><?= __('delete') ?></a>
+            <a href="?page=web-tools&action=edit&id=<?= $t['id'] ?>" class="wt-btn" style="padding: 6px 12px; font-size: 12px;"><?= __('edit') ?></a>
+            <a href="?page=web-tools&action=delete&id=<?= $t['id'] ?>&t=<?= csrf_token() ?>" class="wt-btn wt-btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="return confirm('<?= __('tool_delete_confirm') ?>')"><?= __('delete') ?></a>
           </td>
         </tr>
         <?php endforeach; ?>
@@ -258,16 +271,43 @@ $tools = list_web_tools($pdo, 'all');
             }
           ?></textarea>
         </div>
+
+        <div class="form-group form-full">
+          <label>ما الجديد في هذه الأداة (سجل التحديثات)</label>
+          <textarea name="whats_new" placeholder="وصف آخر التحديثات والتحسينات على الأداة..."><?= h($tool['whats_new'] ?? '') ?></textarea>
+        </div>
+
+        <div class="form-group form-full">
+          <label>كيف بدأت هذه الأداة (قصة النشأة)</label>
+          <textarea name="how_it_started" placeholder="احكِ قصة بداية هذه الأداة ولماذا تم إنشاؤها..."><?= h($tool['how_it_started'] ?? '') ?></textarea>
+        </div>
+
+        <div class="form-group form-full">
+          <label>الأسئلة الشائعة (FAQ)</label>
+          <textarea name="faq" rows="10" placeholder="Q: ما هو السؤال الأول؟&#10;A: الإجابة هنا، يمكن أن تمتد لعدة أسطر.&#10;&#10;Q: السؤال الثاني؟&#10;A: الإجابة الثانية..."><?php
+            if ($tool && !empty($tool['faq'])) {
+                $faqPairs = json_decode($tool['faq'], true) ?: [];
+                $lines = [];
+                foreach ($faqPairs as $pair) {
+                    if (!empty($pair['q']) && !empty($pair['a'])) {
+                        $lines[] = "Q: " . $pair['q'] . "\nA: " . $pair['a'];
+                    }
+                }
+                echo h(implode("\n\n", $lines));
+            }
+          ?></textarea>
+          <small style="color: #666; display: block; margin-top: 5px;">اكتب كل سؤال بصيغة "Q: السؤال" وتحته "A: الإجابة"، واترك سطراً فارغاً بين كل زوج سؤال/إجابة.</small>
+        </div>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-success">
+        <button type="submit" class="wt-btn wt-btn-success">
           <?= $tool ? '✓ حفظ التعديلات' : '+ إضافة الأداة' ?>
         </button>
-        <button type="button" class="btn btn-edit" onclick="openLivePreview()" style="background:#6366f1">
+        <button type="button" class="wt-btn" onclick="openLivePreview()" style="background:#6366f1">
           👁️ معاينة حية
         </button>
-        <a href="?page=web-tools" class="btn">← إلغاء</a>
+        <a href="?page=web-tools" class="wt-btn">← إلغاء</a>
       </div>
     </form>
 
@@ -378,6 +418,3 @@ $tools = list_web_tools($pdo, 'all');
 
   <?php endif; ?>
 </div>
-
-</body>
-</html>

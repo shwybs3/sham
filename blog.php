@@ -4,7 +4,8 @@ require_once __DIR__ . '/partials.php';
 
 $type = trim($_GET['type'] ?? '');
 if ($type !== '' && !isset(BLOG_TYPES[$type])) $type = '';
-if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if (page_cache_start($pdo, $_cacheKey)) exit;
 
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
@@ -133,4 +134,4 @@ $breadcrumbSchema = json_encode([
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
-<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php page_cache_end($pdo, $_cacheKey); ?>

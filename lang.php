@@ -147,6 +147,53 @@ $_TRANSLATIONS = [
   'added_success'     => 'تم الإضافة بنجاح',
   'updated_success'   => 'تم التحديث بنجاح',
   'deleted_success'   => 'تم الحذف بنجاح',
+  /* Download page */
+  'license'                    => 'الترخيص',
+  'downloads'                  => 'التحميلات',
+  'verified_by_team'           => 'رابط تم التحقق منه بواسطة فريق yassota',
+  'safe_link'                  => 'رابط آمن 100%',
+  'https_encrypted'            => 'بروتوكول HTTPS مشفر',
+  'virus_free'                 => 'خالٍ من الفيروسات',
+  'file_scanned'                => 'تم فحص الملف',
+  'original_apk'               => 'ملف APK أصلي',
+  'not_modified'               => 'لم يُعدَّل أو يُحرَّف',
+  'fast_download'              => 'تحميل سريع',
+  'high_speed_servers'         => 'خوادم عالية السرعة',
+  'alternative_links'          => 'روابط بديلة:',
+  'verify_file_integrity'      => 'التحقق من سلامة الملف (SHA-256)',
+  'actual_size'                => 'الحجم الفعلي:',
+  'security_check'             => 'التحقق الأمني',
+  'virustotal_report'          => 'تقرير VirusTotal',
+  'app_screenshots'            => 'صور من التطبيق',
+  'min_android'                => 'أدنى إصدار',
+  'file_type'                  => 'نوع الملف',
+  'last_update'                => 'آخر تحديث',
+  'release_date'               => 'تاريخ الإصدار',
+  'package_name'               => 'اسم الحزمة',
+  'download_link_unavailable'      => 'رابط التحميل غير متوفر حالياً',
+  'download_link_unavailable_desc' => 'سيقوم فريق yassota بإضافة رابط التحميل قريباً. تابع صفحة التطبيق للتحديثات.',
+  'how_to_install'             => 'كيفية تثبيت تطبيق APK على أندرويد',
+  'download_step1_title'       => 'تحميل الملف',
+  'download_step1_desc'        => 'أتمّ التحقق ثم اضغط زر التحميل لبدء التحميل مباشرة',
+  'allow_install_title'        => 'السماح بالتثبيت',
+  'allow_install_desc'         => 'الإعدادات ← الأمان ← فعّل "تثبيت تطبيقات من مصادر غير معروفة"',
+  'open_apk_title'             => 'فتح ملف APK',
+  'open_apk_desc'              => 'افتح الملف المُحمَّل من مجلد التنزيلات واضغط على "تثبيت"',
+  'enjoy_app_title'            => 'الاستمتاع بالتطبيق',
+  'enjoy_app_desc'             => 'افتح التطبيق من الشاشة الرئيسية أو قائمة التطبيقات وتمتع!',
+  'telegram_follow'            => 'تابع قناة yassota على تيليجرام للحصول على أحدث التطبيقات',
+  'similar_apps_you_like'      => 'تطبيقات مشابهة قد تعجبك',
+  'app_page'                   => 'صفحة',
+  'privacy_policy'             => 'سياسة الخصوصية',
+  'contact_us'                 => 'اتصل بنا',
+  'or_text'                    => 'أو',
+  'download_from_playstore'    => 'تحميل من Google Play',
+  'quick_verification'         => 'تحقق سريع',
+  'verification_protect_msg'   => 'لحماية الموقع، نحتاج للتحقق أنك لست روبوتاً',
+  'protected_by_turnstile'     => 'محمي بواسطة Cloudflare Turnstile',
+  'continue_to_verify'         => 'للمتابعة، يرجى التحقق من هويتك',
+  'no_reviews_yet'             => 'لا توجد تقييمات بعد — كن أول من يقيّم هذا التطبيق.',
+  'review_thanks'              => 'شكراً لك، تم استلام تقييمك وسيظهر بعد المراجعة.',
 ],
 
 /* ── English ───────────────────────────────────────────── */
@@ -280,6 +327,53 @@ $_TRANSLATIONS = [
   'added_success'     => 'Added successfully',
   'updated_success'   => 'Updated successfully',
   'deleted_success'   => 'Deleted successfully',
+  /* Download page */
+  'license'                    => 'License',
+  'downloads'                  => 'Downloads',
+  'verified_by_team'           => 'Link verified by the yassota team',
+  'safe_link'                  => '100% Safe Link',
+  'https_encrypted'            => 'Encrypted HTTPS protocol',
+  'virus_free'                 => 'Virus Free',
+  'file_scanned'                => 'File has been scanned',
+  'original_apk'               => 'Original APK File',
+  'not_modified'               => 'Not modified or tampered with',
+  'fast_download'              => 'Fast Download',
+  'high_speed_servers'         => 'High-speed servers',
+  'alternative_links'          => 'Alternative links:',
+  'verify_file_integrity'      => 'Verify File Integrity (SHA-256)',
+  'actual_size'                => 'Actual size:',
+  'security_check'             => 'Security Check',
+  'virustotal_report'          => 'VirusTotal Report',
+  'app_screenshots'            => 'Screenshots',
+  'min_android'                => 'Min. Android',
+  'file_type'                  => 'File Type',
+  'last_update'                => 'Last Update',
+  'release_date'               => 'Release Date',
+  'package_name'               => 'Package Name',
+  'download_link_unavailable'      => 'Download link not currently available',
+  'download_link_unavailable_desc' => 'The yassota team will add the download link soon. Follow the app page for updates.',
+  'how_to_install'             => 'How to Install an APK App on Android',
+  'download_step1_title'       => 'Download the File',
+  'download_step1_desc'        => 'Complete verification then click the download button to start downloading',
+  'allow_install_title'        => 'Allow Installation',
+  'allow_install_desc'         => 'Settings ← Security ← Enable "Install apps from unknown sources"',
+  'open_apk_title'             => 'Open the APK File',
+  'open_apk_desc'              => 'Open the downloaded file from the Downloads folder and tap "Install"',
+  'enjoy_app_title'            => 'Enjoy the App',
+  'enjoy_app_desc'             => 'Open the app from your home screen or app list and enjoy!',
+  'telegram_follow'            => 'Follow the yassota Telegram channel for the latest apps',
+  'similar_apps_you_like'      => 'Similar apps you might like',
+  'app_page'                   => 'page',
+  'privacy_policy'             => 'Privacy Policy',
+  'contact_us'                 => 'Contact Us',
+  'or_text'                    => 'Or',
+  'download_from_playstore'    => 'Download from Google Play',
+  'quick_verification'         => 'Quick Verification',
+  'verification_protect_msg'   => 'To protect the site, we need to verify you\'re not a robot',
+  'protected_by_turnstile'     => 'Protected by Cloudflare Turnstile',
+  'continue_to_verify'         => 'Please verify your identity to continue',
+  'no_reviews_yet'             => 'No reviews yet — be the first to rate this app.',
+  'review_thanks'              => 'Thank you, your review has been received and will appear after moderation.',
 ],
 
 /* ── French ────────────────────────────────────────────── */
@@ -684,7 +778,7 @@ function detect_ui_lang(): string {
 ──────────────────────────────────────────────────────────── */
 function is_rtl_lang(string $lang = ''): bool {
     global $_RTL_LANGS;
-    if (!$lang) $lang = $GLOBALS['UI_LANG'] ?? 'ar';
+    if (!$lang) $lang = defined('UI_LANG') ? UI_LANG : ($GLOBALS['UI_LANG'] ?? 'ar');
     return in_array($lang, $_RTL_LANGS, true);
 }
 
@@ -693,7 +787,7 @@ function is_rtl_lang(string $lang = ''): bool {
 ──────────────────────────────────────────────────────────── */
 function __(string $key, string $fallback = ''): string {
     global $_TRANSLATIONS;
-    $lang = $GLOBALS['UI_LANG'] ?? 'ar';
+    $lang = defined('UI_LANG') ? UI_LANG : ($GLOBALS['UI_LANG'] ?? 'ar');
     return $_TRANSLATIONS[$lang][$key]
         ?? $_TRANSLATIONS['en'][$key]
         ?? $_TRANSLATIONS['ar'][$key]

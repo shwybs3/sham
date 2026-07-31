@@ -385,6 +385,9 @@ function ensure_schema(PDO $pdo): array {
         if (!in_array('tutorials', $toolsCols)) {
             @$pdo->exec("ALTER TABLE web_tools ADD COLUMN tutorials LONGTEXT COMMENT '3-5k character tutorials/explanations' AFTER long_description");
         }
+        if (!in_array('how_it_started', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN how_it_started MEDIUMTEXT COMMENT 'origin story / how this tool started' AFTER whats_new");
+        }
     } catch (Throwable $e) {}
 
     // Additive migrations for apps table (existing installs don't have new columns)
@@ -1042,6 +1045,7 @@ function scan_file_for_threats(string $filepath, string $context = 'general'): a
    ═══════════════════════════════════════════════════════════════════ */
 function waf_check(PDO $pdo): void {
     if (evil_is_admin_ip()) return;
+    if (is_known_bot_ua()) return;
     if (get_cfg($pdo, 'evil_waf_enabled', '1') !== '1') return;
 
     $ip  = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -1273,6 +1277,16 @@ function evil_is_admin_ip(): bool {
     return (($_SERVER['REMOTE_ADDR'] ?? '') === EVIL_ADMIN_IP);
 }
 
+// Known search-engine / social-preview crawler UAs — exempt from the ban,
+// WAF, and VPN/proxy gates so indexing is never blocked. These bots crawl
+// from datacenter IP ranges that the VPN/proxy heuristic would otherwise
+// flag, and a 403/CAPTCHA response to a real crawler kills indexing.
+function is_known_bot_ua(): bool {
+    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    if (!$ua) return false;
+    return (bool)preg_match('/(googlebot|adsbot-google|mediapartners-google|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram|viber|pinterest|applebot)/i', $ua);
+}
+
 function evil_is_enabled(PDO $pdo, string $feature = 'master'): bool {
     if (evil_is_admin_ip()) return false; // exempt
     $key = $feature === 'master' ? 'evil_enabled' : "evil_{$feature}_enabled";
@@ -1349,6 +1363,7 @@ function evil_unban_ip(PDO $pdo, string $ip): void {
 // If session marker 'evil_captcha_ok' is set (CAPTCHA solved), allows through even if IP is banned.
 function evil_check_ban(PDO $pdo): void {
     if (evil_is_admin_ip()) return;
+    if (is_known_bot_ua()) return;
     if (!evil_is_enabled($pdo, 'ban')) return;
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
     if (!$ip) return;
@@ -1653,10 +1668,7 @@ function captcha_should_challenge(PDO $pdo): string {
     if (evil_is_admin_ip()) return 'none';
 
     // Allow search engine bots to crawl without CAPTCHA
-    $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    if (preg_match('/(googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram|viber|pinterest)/i', $ua)) {
-        return 'none';
-    }
+    if (is_known_bot_ua()) return 'none';
 
     $turnstileSite = trim(get_cfg($pdo, 'turnstile_site_key'));
     $v3Site = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
@@ -4679,6 +4691,7 @@ function sitemap_touch(PDO $pdo, string $reason = ''): void {
 // Results cached in evil_ip_cache table for 24h to avoid rate limits.
 function evil_check_vpn(PDO $pdo): bool {
     if (evil_is_admin_ip()) return false;
+    if (is_known_bot_ua()) return false;
     if (get_cfg($pdo, 'evil_vpn_check_enabled', '1') !== '1') return false;
 
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -4981,16 +4994,16 @@ function list_web_tools(PDO $pdo, string $status = 'published', int $limit = 999
 }
 
 function save_web_tool(PDO $pdo, array $data, int $id = 0): int {
-    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','status'], true), ARRAY_FILTER_USE_KEY);
+    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','how_it_started','status'], true), ARRAY_FILTER_USE_KEY);
 
     if (!$id) {
-        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, how_it_started, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $data['name'] ?? '', $data['slug'] ?? '', $data['seo_title'] ?? '', $data['meta_description'] ?? '',
             $data['meta_tags'] ?? '', $data['short_description'] ?? '', $data['long_description'] ?? '',
             $data['tutorials'] ?? '', $data['features'] ?? '', $data['pros'] ?? '', $data['cons'] ?? '',
-            $data['whats_new'] ?? '', $data['faq'] ?? '', $data['status'] ?? 'draft'
+            $data['whats_new'] ?? '', $data['faq'] ?? '', $data['how_it_started'] ?? '', $data['status'] ?? 'draft'
         ]);
         return (int)$pdo->lastInsertId();
     } else {
