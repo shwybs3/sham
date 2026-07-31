@@ -43,7 +43,7 @@ if ($_multisite) {
 
 /* ── Data ── */
 $page    = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 20;
+$perPage = 16;
 $offset  = ($page - 1) * $perPage;
 $catSlug = trim($_GET['cat'] ?? '');
 $search  = trim($_GET['q'] ?? '');
@@ -182,7 +182,31 @@ $orgSchema = json_encode([
     <?= ad_slot() ?>
   </div>
 
-
+  <!-- ── Hero Banner (homepage only) ── -->
+  <?php if (!$search && !$catSlug): ?>
+  <div class="home-hero reveal">
+    <div class="home-hero-title">اكتشف أفضل تطبيقات أندرويد <?= partial_icon('smartphone', 20) ?></div>
+    <p class="home-hero-sub">دليل تحريري عربي مستقل · مراجعات احترافية · روابط آمنة من Google Play · تحديث يومي</p>
+    <div class="home-hero-stats">
+      <div class="home-hero-stat">
+        <span class="home-hero-stat-num"><?= $totalApps > 0 ? number_format($totalApps) . '+' : '100+' ?></span>
+        <span class="home-hero-stat-lbl">تطبيق مراجَع</span>
+      </div>
+      <div class="home-hero-stat">
+        <span class="home-hero-stat-num"><?= count($categories) ?>+</span>
+        <span class="home-hero-stat-lbl">تصنيف</span>
+      </div>
+      <div class="home-hero-stat">
+        <span class="home-hero-stat-num">يومي</span>
+        <span class="home-hero-stat-lbl">تحديث المحتوى</span>
+      </div>
+      <div class="home-hero-stat">
+        <span class="home-hero-stat-num">100%</span>
+        <span class="home-hero-stat-lbl">روابط آمنة</span>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <!-- ── Apps Grid ── -->
   <div class="section-head reveal" id="apps-grid">
