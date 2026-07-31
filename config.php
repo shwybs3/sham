@@ -354,6 +354,30 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'indexnow_log';
 
+    // Web Tools management — database-backed tools with SEO metadata
+    $pdo->exec("CREATE TABLE IF NOT EXISTS web_tools (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(120) NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      seo_title VARCHAR(255),
+      meta_description VARCHAR(320),
+      meta_tags VARCHAR(500),
+      short_description VARCHAR(500),
+      long_description MEDIUMTEXT,
+      features JSON,
+      pros JSON,
+      cons JSON,
+      whats_new TEXT,
+      faq JSON,
+      status ENUM('published','draft') NOT NULL DEFAULT 'draft',
+      views INT DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_slug (slug),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'web_tools';
+
     // Additive migrations for apps table (existing installs don't have new columns)
     $appCols = $pdo->query("SHOW COLUMNS FROM apps")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('parent_id', $appCols))
