@@ -8,7 +8,7 @@ $seoTitle     = 'الإفصاح الإعلاني — yassota';
 $metaDesc     = 'إفصاح كامل عن طبيعة الإعلانات في موقع yassota: Google AdSense، الروابط التابعة، واستقلالية المحتوى التحريري.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

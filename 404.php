@@ -13,7 +13,7 @@ try {
 } catch (Throwable $e) { }
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <meta charset="UTF-8">
   <?php if (function_exists('head_extras')): ?><?= head_extras($pdo) ?><?php endif; ?>

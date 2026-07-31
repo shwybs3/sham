@@ -69,7 +69,7 @@ $seoTitle = 'الأسئلة الشائعة — yassota';
 $metaDesc = 'إجابات شاملة على أكثر الأسئلة شيوعاً حول موقع yassota لمراجعة تطبيقات أندرويد — التحميل والأمان والمحتوى والخصوصية.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

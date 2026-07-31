@@ -125,7 +125,7 @@ elseif ($v2SiteKey)         $dlCaptchaType = 'v2';
 elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

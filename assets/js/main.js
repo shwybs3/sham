@@ -102,68 +102,91 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ── Mobile search toggle ── */
-  const searchToggle = document.querySelector('.mobile-search-toggle');
-  const searchForm = document.querySelector('.header-search');
-  const searchWrap = searchForm?.closest('.header-search-wrap');
-  if (searchToggle && searchWrap && searchForm) {
-    searchToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = searchWrap.classList.toggle('mobile-open');
-      searchToggle.classList.toggle('active', isOpen);
-      if (isOpen) searchForm.querySelector('input')?.focus();
-    });
-    document.addEventListener('click', (e) => {
-      if (searchWrap.classList.contains('mobile-open') && !searchWrap.contains(e.target) && !e.target.closest('.mobile-search-toggle')) {
-        searchWrap.classList.remove('mobile-open');
-        searchToggle.classList.remove('active');
-      }
-    });
+  /* ── Full-screen search modal ── */
+  const searchModal      = document.getElementById('search-modal');
+  const searchModalInput = document.getElementById('search-modal-input');
+  const searchModalClose = document.getElementById('search-modal-close');
+  const searchModalRes   = document.getElementById('search-modal-results');
+  const searchToggle     = document.querySelector('.mobile-search-toggle');
+  const desktopSearchInput = document.getElementById('search-input');
+
+  function openSearchModal() {
+    if (!searchModal) return;
+    searchModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => searchModalInput?.focus());
+  }
+  function closeSearchModal() {
+    if (!searchModal) return;
+    searchModal.classList.remove('open');
+    document.body.style.overflow = '';
+    if (searchModalRes) { searchModalRes.hidden = true; searchModalRes.innerHTML = ''; }
   }
 
-  /* ── Search autocomplete ── */
-  const searchInput = document.getElementById('search-input');
-  const suggestBox = document.getElementById('search-suggestions');
-  if (searchInput && suggestBox) {
-    let debounceTimer = null;
-    let activeIndex = -1;
-    let items = [];
+  searchToggle?.addEventListener('click', (e) => { e.stopPropagation(); openSearchModal(); });
+  searchModalClose?.addEventListener('click', closeSearchModal);
+  searchModal?.addEventListener('click', (e) => { if (e.target === searchModal) closeSearchModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && searchModal?.classList.contains('open')) closeSearchModal(); });
 
-    function renderSuggestions(results) {
-      items = results;
-      activeIndex = -1;
-      if (!results.length) { suggestBox.hidden = true; suggestBox.innerHTML = ''; return; }
-      suggestBox.innerHTML = results.map(r =>
-        `<a href="${r.url}" data-hardnav="1">${r.icon ? `<img src="${r.icon}" alt="">` : ''}<span>${r.name}</span></a>`
-      ).join('');
-      suggestBox.hidden = false;
-    }
-
-    searchInput.addEventListener('input', () => {
-      clearTimeout(debounceTimer);
-      const q = searchInput.value.trim();
-      if (q.length < 2) { suggestBox.hidden = true; return; }
-      debounceTimer = setTimeout(() => {
-        fetch('search-suggest.php?q=' + encodeURIComponent(q))
+  /* ── Search autocomplete (works in modal + desktop) ── */
+  function setupAutocomplete(inputEl, resultsEl) {
+    if (!inputEl || !resultsEl) return;
+    let timer = null;
+    inputEl.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = inputEl.value.trim();
+      if (q.length < 2) { resultsEl.hidden = true; resultsEl.innerHTML = ''; return; }
+      timer = setTimeout(() => {
+        fetch('/search-suggest.php?q=' + encodeURIComponent(q))
           .then(r => r.ok ? r.json() : [])
-          .then(renderSuggestions)
+          .then(data => {
+            if (!data.length) { resultsEl.hidden = true; return; }
+            resultsEl.innerHTML = data.map(r =>
+              `<a href="${r.url}" data-hardnav="1">${r.icon ? `<img src="${r.icon}" alt="" loading="lazy">` : ''}<span>${r.name}</span></a>`
+            ).join('');
+            resultsEl.hidden = false;
+          })
           .catch(() => {});
-      }, 200);
+      }, 220);
     });
-
-    searchInput.addEventListener('keydown', (e) => {
-      const links = [...suggestBox.querySelectorAll('a')];
-      if (!links.length || suggestBox.hidden) return;
-      if (e.key === 'ArrowDown') { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, links.length - 1); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); }
-      else if (e.key === 'Enter' && activeIndex >= 0) { e.preventDefault(); links[activeIndex].click(); return; }
-      else if (e.key === 'Escape') { suggestBox.hidden = true; return; }
-      else return;
-      links.forEach((a, i) => a.classList.toggle('active', i === activeIndex));
-    });
-
     document.addEventListener('click', (e) => {
-      if (!suggestBox.contains(e.target) && e.target !== searchInput) suggestBox.hidden = true;
+      if (!resultsEl.contains(e.target) && e.target !== inputEl) resultsEl.hidden = true;
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { resultsEl.hidden = true; }
+    });
+  }
+  setupAutocomplete(searchModalInput, searchModalRes);
+  setupAutocomplete(desktopSearchInput, document.getElementById('search-suggestions'));
+
+  /* ── Text clamp — "show more" for any .text-clamp element ── */
+  document.querySelectorAll('.text-clamp').forEach(el => {
+    // Only add button if content is actually clamped
+    if (el.scrollHeight <= el.clientHeight + 4) return;
+    const btn = document.createElement('button');
+    btn.className = 'show-more-btn';
+    const isRtl = document.documentElement.dir === 'rtl';
+    btn.textContent = isRtl ? 'عرض المزيد ▾' : 'Show more ▾';
+    btn.addEventListener('click', () => {
+      const expanded = el.classList.toggle('expanded');
+      btn.textContent = expanded
+        ? (isRtl ? 'عرض أقل ▴' : 'Show less ▴')
+        : (isRtl ? 'عرض المزيد ▾' : 'Show more ▾');
+    });
+    el.insertAdjacentElement('afterend', btn);
+  });
+
+  /* ── Language switcher dropdown ── */
+  const langBtn  = document.getElementById('lang-btn');
+  const langDrop = document.getElementById('lang-dropdown');
+  if (langBtn && langDrop) {
+    langBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = langDrop.hidden;
+      langDrop.hidden = !isOpen;
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#lang-switcher')) langDrop.hidden = true;
     });
   }
 

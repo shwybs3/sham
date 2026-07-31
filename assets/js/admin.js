@@ -515,6 +515,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!data.success) { status.textContent = '❌ ' + data.error; btnImportPS.disabled = false; return; }
         const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+        // App name — only fill if empty so user-typed name isn't overwritten
+        const nameField = document.getElementById('f-name');
+        if (data.name && nameField && !nameField.value.trim()) nameField.value = data.name;
         set('f-short-desc', data.short_description);
         set('f-long-desc', data.long_description);
         set('f-pkg', data.package_name);
@@ -526,6 +529,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const playstoreField = document.querySelector('[name=playstore_url]');
         if (playstoreField) playstoreField.value = data.playstore_url || url;
         set('f-whats-new', data.whats_new);
+        // SEO fields — fill from AI-generated or fallback values
+        set('f-seo-title', data.seo_title);
+        set('f-meta-desc', data.meta_description);
+        // Keywords: fill if empty, combine name + developer
+        const kwField = document.getElementById('f-keywords');
+        if (kwField && !kwField.value.trim() && data.name) {
+          const parts = [data.name];
+          if (data.developer) parts.push(data.developer);
+          parts.push('تحميل', 'أندرويد', 'APK');
+          kwField.value = parts.join(', ');
+        }
+        // Tags: fill if empty using package category hint
+        const tagsField = document.getElementById('f-tags');
+        if (tagsField && !tagsField.value.trim() && data.name) {
+          tagsField.value = data.name + (data.developer ? ', ' + data.developer : '');
+        }
+        // Trigger SEO counter updates
+        ['f-seo-title','f-meta-desc'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.dispatchEvent(new Event('input'));
+        });
 
         // Fill AI-generated lists (pros/cons/features/install_steps)
         ['feat-list','pros-list','cons-list','steps-list'].forEach(id => {

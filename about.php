@@ -11,7 +11,7 @@ $seoTitle = 'من نحن — yassota دليل تحريري مستقل لتطبي
 $metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستقل لمراجعة تطبيقات وألعاب أندرويد. رسالتنا، معايير المراجعة، وكيف نختار التطبيقات ونحدّث محتوانا يومياً.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

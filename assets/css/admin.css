@@ -112,6 +112,16 @@ a { color: inherit; text-decoration: none; }
   color: #e2e8f0;
   border-right-color: var(--cyan);
 }
+.admin-nav-section {
+  padding: 14px 20px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: rgba(148,163,184,.5);
+  border-top: 1px solid rgba(255,255,255,.05);
+  margin-top: 4px;
+}
 
 .admin-main { flex: 1; padding: 28px; overflow: hidden; min-width: 0; }
 

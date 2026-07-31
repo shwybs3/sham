@@ -141,6 +141,15 @@ tick();
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
+/* ─── UI Language — auto-detect from device, cookie, or ?lang= param ─── */
+if (!defined('UI_LANG')) {
+    require_once __DIR__ . '/lang.php';
+    $__uiLang = detect_ui_lang();
+    define('UI_LANG', $__uiLang);
+    define('UI_DIR',  is_rtl_lang($__uiLang) ? 'rtl' : 'ltr');
+    unset($__uiLang);
+}
+
 /* ═══════════════════════════════════════════════
    Self-healing schema — creates / repairs every
    required table automatically. No manual SQL

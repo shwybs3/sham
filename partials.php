@@ -101,51 +101,72 @@ function partial_wave(): string {
 }
 
 /* ── Header (logo, search, top nav) ── */
-function render_site_header(string $search = '', string $activeNav = 'home'): void { ?>
+function render_site_header(string $search = '', string $activeNav = 'home'): void {
+    $lang  = defined('UI_LANG') ? UI_LANG : 'ar';
+    $isRtl = defined('UI_DIR')  ? (UI_DIR === 'rtl') : true;
+    $searchPh = function_exists('__') ? __('search_placeholder') : 'ابحث عن تطبيق أو لعبة...';
+    $langLabel = function_exists('lang_name') ? lang_name($lang) : strtoupper($lang);
+    $allLangs  = ['ar'=>'العربية','en'=>'English','fr'=>'Français','tr'=>'Türkçe','de'=>'Deutsch',
+                  'es'=>'Español','id'=>'Indonesia','fa'=>'فارسی','ur'=>'اردو','ru'=>'Русский',
+                  'zh'=>'中文','hi'=>'हिंदी','ko'=>'한국어','ja'=>'日本語','pt'=>'Português',
+                  'it'=>'Italiano','nl'=>'Nederlands'];
+?>
 <header class="site-header">
   <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:3px">
     <span><span class="logo-yas">yas</span><span class="logo-sota">sota</span></span>
-    <span class="logo-tagline">دليل تطبيقات أندرويد</span>
+    <span class="logo-tagline"><?= $isRtl ? 'دليل تطبيقات أندرويد' : 'Android App Guide' ?></span>
   </a>
 
   <div class="header-search-wrap">
     <form action="/" method="get" class="header-search" id="header-search-form" autocomplete="off">
-      <input type="text" name="q" id="search-input" placeholder="ابحث عن تطبيق أو لعبة..." value="<?= h($search) ?>">
+      <input type="text" name="q" id="search-input" placeholder="<?= h($searchPh) ?>" value="<?= h($search) ?>">
       <button type="submit"><?= partial_icon('search') ?></button>
     </form>
     <div id="search-suggestions" class="search-suggestions" hidden></div>
   </div>
 
   <nav class="header-nav">
-    <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>">الرئيسية</a>
-    <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>">تطبيقات</a>
-    <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>">ألعاب</a>
+    <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>"><?= function_exists('__') ? __('home') : 'الرئيسية' ?></a>
+    <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>"><?= function_exists('__') ? __('apps') : 'تطبيقات' ?></a>
+    <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>"><?= function_exists('__') ? __('games') : 'ألعاب' ?></a>
     <div style="position:relative;display:inline-block" class="nav-dropdown-wrap">
       <a href="<?= h(url('exchange')) ?>" class="<?= in_array($activeNav,['exchange','gold']) ? 'active' : '' ?>" style="display:flex;align-items:center;gap:3px">
-        الأسعار <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        <?= function_exists('__') ? __('prices') : 'الأسعار' ?> <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </a>
       <div class="nav-dropdown">
-        <a href="<?= h(url('exchange')) ?>">أسعار الصرف</a>
-        <a href="<?= h(url('gold')) ?>">أسعار الذهب</a>
+        <a href="<?= h(url('exchange')) ?>"><?= function_exists('__') ? __('exchange') : 'أسعار الصرف' ?></a>
+        <a href="<?= h(url('gold')) ?>"><?= function_exists('__') ? __('gold') : 'أسعار الذهب' ?></a>
       </div>
     </div>
     <div style="position:relative;display:inline-block" class="nav-dropdown-wrap">
       <a href="<?= h(url('calculators')) ?>" class="<?= in_array($activeNav,['calculators','solar']) ? 'active' : '' ?>" style="display:flex;align-items:center;gap:3px">
-        حاسبات <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        <?= function_exists('__') ? __('calculators') : 'حاسبات' ?> <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </a>
       <div class="nav-dropdown">
-        <a href="<?= h(url('calculators')) ?>">حاسبات البناء</a>
-        <a href="<?= h(url('solar')) ?>">حاسبة الطاقة الشمسية</a>
+        <a href="<?= h(url('calculators')) ?>"><?= function_exists('__') ? __('calculators') : 'حاسبات البناء' ?></a>
+        <a href="<?= h(url('solar')) ?>"><?= function_exists('__') ? __('solar') : 'الطاقة الشمسية' ?></a>
       </div>
     </div>
-    <a href="<?= h(url('tools')) ?>" class="<?= $activeNav === 'tools' ? 'active' : '' ?>">أدوات</a>
-    <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>">المدونة</a>
+    <a href="<?= h(url('tools')) ?>" class="<?= $activeNav === 'tools' ? 'active' : '' ?>"><?= function_exists('__') ? __('tools') : 'أدوات' ?></a>
+    <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>"><?= function_exists('__') ? __('blog') : 'المدونة' ?></a>
   </nav>
 
   <!-- Mobile-only buttons — hidden on desktop, shown by CSS at ≤1024px -->
   <div class="header-mobile-btns">
-    <button type="button" class="header-icon-btn mobile-search-toggle" id="mobile-search-toggle" aria-label="بحث"><?= partial_icon('search') ?></button>
-    <button type="button" class="header-icon-btn header-menu-btn" id="nav-toggle" aria-label="القائمة" aria-expanded="false">
+    <button type="button" class="header-icon-btn mobile-search-toggle" id="mobile-search-toggle" aria-label="<?= function_exists('__') ? __('search') : 'بحث' ?>"><?= partial_icon('search') ?></button>
+    <!-- Language switcher -->
+    <div class="lang-switcher" id="lang-switcher">
+      <button type="button" class="header-icon-btn lang-btn" id="lang-btn" title="Language / اللغة">
+        <?= partial_icon('globe', 15) ?>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-right:2px"><?= h(strtoupper($lang)) ?></span>
+      </button>
+      <div class="lang-dropdown" id="lang-dropdown" hidden>
+        <?php foreach ($allLangs as $code => $name): ?>
+        <a href="?lang=<?= $code ?>"<?= $code === $lang ? ' class="current"' : '' ?>><?= h($name) ?></a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <button type="button" class="header-icon-btn header-menu-btn" id="nav-toggle" aria-label="<?= function_exists('__') ? __('menu') : 'القائمة' ?>" aria-expanded="false">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
         <circle cx="9" cy="3"  r="2.1"/>
         <circle cx="9" cy="9"  r="2.1"/>
@@ -154,6 +175,26 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     </button>
   </div>
 </header>
+
+<!-- Full-screen search modal -->
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true">
+  <button type="button" class="search-modal-close" id="search-modal-close" aria-label="إغلاق">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="search-modal-box">
+    <form action="/" method="get" autocomplete="off">
+      <div class="search-modal-input-wrap">
+        <input type="text" name="q" id="search-modal-input"
+               placeholder="<?= h($searchPh) ?>"
+               value="<?= h($search) ?>"
+               class="search-modal-input">
+        <button type="submit" class="search-modal-submit"><?= partial_icon('search', 18) ?></button>
+      </div>
+    </form>
+    <div id="search-modal-results" class="search-modal-results" hidden></div>
+    <p class="search-modal-hint">اضغط <kbd style="background:rgba(255,255,255,.1);border-radius:5px;padding:2px 6px;font-size:11px">Esc</kbd> للإغلاق</p>
+  </div>
+</div>
 
 <!-- Mobile nav drawer — right-side panel (RTL), hidden until #nav-toggle is pressed -->
 <nav class="mobile-nav-drawer" id="mobile-nav-drawer" aria-hidden="true">

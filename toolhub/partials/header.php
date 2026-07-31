@@ -64,9 +64,9 @@
   <a href="/calculators" class="mnav-link">🏗️ حاسبات البناء</a>
   <a href="/solar"      class="mnav-link">☀️ الطاقة الشمسية</a>
   <a href="/articles"   class="mnav-link">📰 المقالات</a>
-  <div class="mnav-divider">المواقع الفرعية</div>
-  <a href="https://shorts.<?= h(parse_url(SITE_URL,PHP_URL_HOST)) ?>" class="mnav-link" target="_blank">▶️ يوتيوب شورت</a>
-  <a href="https://tiktok.<?= h(parse_url(SITE_URL,PHP_URL_HOST)) ?>" class="mnav-link" target="_blank">🎵 تيك توك</a>
-  <a href="https://ocr.<?= h(parse_url(SITE_URL,PHP_URL_HOST)) ?>"   class="mnav-link" target="_blank">📷 استخراج النصوص</a>
+  <div class="mnav-divider">أدوات ويب</div>
+  <a href="/tools/pdf-merge" class="mnav-link">📄 دمج PDF</a>
+  <a href="/tools/compress"  class="mnav-link">🖼️ ضغط الصور</a>
+  <a href="/tools/qr"        class="mnav-link">📱 مولّد QR</a>
 </nav>
 <div class="mobile-nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>

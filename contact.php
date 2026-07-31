@@ -34,7 +34,7 @@ $seoTitle = 'اتصل بنا — yassota';
 $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقتراح أو بلاغ.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

@@ -71,7 +71,7 @@ if (!isset($routes[$page])) { $page = 'home'; $uri = 'home'; }
 $page_canonical = base_url($page === 'home' ? '' : $uri);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= UI_LANG ?>" dir="<?= UI_DIR ?>">
 <?php include __DIR__.'/partials/head.php'; ?>
 <body class="page-<?= h($page) ?>">
 <?php include __DIR__.'/partials/header.php'; ?>

@@ -9,7 +9,7 @@ $seoTitle     = 'شروط الاستخدام — yassota';
 $metaDesc     = 'شروط استخدام منصة yassota الكاملة: حقوق الملكية، إخلاء المسؤولية، سياسة الإعلانات، التنزيلات، والتزامات المستخدم.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

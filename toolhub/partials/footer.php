@@ -25,13 +25,12 @@
       <a href="/solar">الطاقة الشمسية</a>
     </div>
     <div class="footer-col">
-      <h3>المواقع الفرعية</h3>
-      <?php $host = parse_url(SITE_URL, PHP_URL_HOST) ?? 'your-domain.com'; ?>
-      <a href="https://shorts.<?= h($host) ?>" target="_blank" rel="noopener">▶️ يوتيوب شورت</a>
-      <a href="https://tiktok.<?= h($host) ?>"  target="_blank" rel="noopener">🎵 تيك توك</a>
-      <a href="https://ocr.<?= h($host) ?>"    target="_blank" rel="noopener">📷 استخراج النصوص</a>
-      <a href="https://pdf.<?= h($host) ?>"    target="_blank" rel="noopener">📄 PDF</a>
-      <a href="https://translate.<?= h($host) ?>" target="_blank" rel="noopener">🌐 ترجمة</a>
+      <h3>الأدوات</h3>
+      <a href="/tools/pdf-merge">دمج PDF</a>
+      <a href="/tools/compress">ضغط الصور</a>
+      <a href="/tools/qr">مولّد QR</a>
+      <a href="/tools/currency">محوّل العملات</a>
+      <a href="/tools/pass">مولّد كلمات مرور</a>
     </div>
     <div class="footer-col">
       <h3>روابط</h3>

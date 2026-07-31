@@ -9,7 +9,7 @@ $seoTitle     = 'سياسة الخصوصية — yassota';
 $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: ما نجمعه من بيانات، كيف نستخدمها، Google AdSense، ملفات تعريف الارتباط، حقوقك وفق GDPR.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">

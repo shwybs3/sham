@@ -6,6 +6,23 @@
 
 if (file_exists(__DIR__ . '/config.local.php')) require_once __DIR__ . '/config.local.php';
 
+// ── UI Language — share the same detection as main site ──────────────────
+if (!defined('UI_LANG')) {
+    $__langFile = dirname(__DIR__) . '/lang.php';
+    if (file_exists($__langFile)) {
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        require_once $__langFile;
+        $__l = detect_ui_lang();
+        define('UI_LANG', $__l);
+        define('UI_DIR',  is_rtl_lang($__l) ? 'rtl' : 'ltr');
+        unset($__l);
+    } else {
+        define('UI_LANG', 'ar');
+        define('UI_DIR',  'rtl');
+    }
+    unset($__langFile);
+}
+
 // ── Site identity ────────────────────────────────────
 if (!defined('SITE_NAME'))    define('SITE_NAME',    'بوابة الأدوات');
 if (!defined('SITE_TAGLINE')) define('SITE_TAGLINE', 'أسعار الصرف والذهب • أدوات PDF والصور • حاسبات البناء والطاقة الشمسية');

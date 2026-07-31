@@ -89,7 +89,7 @@ $featured = $pdo->query("SELECT icon_path FROM apps WHERE status='published' ORD
 // Latest blog posts for homepage
 $latestPosts = [];
 if (!$search && !$catSlug) {
-    $latestPosts = $pdo->query("SELECT id,title,slug,type,excerpt,created_at FROM blog_posts WHERE status='published' ORDER BY created_at DESC LIMIT 3")->fetchAll();
+    $latestPosts = $pdo->query("SELECT id,title,slug,type,excerpt,created_at FROM blog_posts WHERE status='published' ORDER BY created_at DESC LIMIT 2")->fetchAll();
 }
 
 $activeNav = $catSlug === 'games' ? 'games' : ($catSlug === 'apps' ? 'apps' : 'home');
@@ -130,7 +130,7 @@ $orgSchema = json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -235,73 +235,32 @@ $orgSchema = json_encode([
   </section>
   <?php endif; ?>
 
-  <!-- ── Web Tools Section (all 20 tools) ── -->
+  <!-- ── Web Tools Section (max 2 featured tools) ── -->
   <?php if (!$search && !$catSlug): ?>
   <?= partial_wave() ?>
   <section style="margin-top:16px;padding:20px;background:var(--surface);border:1px solid var(--border-c);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)" id="web-tools">
-    <div class="section-head reveal" style="margin-bottom:4px">
+    <div class="section-head reveal" style="margin-bottom:12px">
       <span class="section-title">أدوات ويب مجانية</span>
       <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600">عرض الكل (50+) <?= partial_icon('arrow-r') ?></a>
     </div>
-    <?php
-    $webToolGroups = [
-      'ملفات PDF' => [
-        ['slug'=>'pdf-merge',  'name'=>'دمج PDF',       'desc'=>'ادمج ملفات PDF في ملف واحد مجاناً',          'clr'=>'#7c3aed','svg'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/>'],
-        ['slug'=>'pdf-split',  'name'=>'تقسيم PDF',     'desc'=>'قسّم PDF أو استخرج صفحات منه',               'clr'=>'#dc2626','svg'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/>'],
-        ['slug'=>'pdf-compress','name'=>'ضغط PDF',      'desc'=>'قلّل حجم PDF بدون فقدان الجودة',             'clr'=>'#ea580c','svg'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/>'],
-      ],
-      'أدوات الصور' => [
-        ['slug'=>'img-crop',   'name'=>'قصّ الصور',     'desc'=>'قصّ أي صورة بدقة عالية مجاناً',              'clr'=>'#0891b2','svg'=>'<path d="M6 2v14a2 2 0 002 2h14"/><path d="M18 22V8a2 2 0 00-2-2H2"/>'],
-        ['slug'=>'img-convert','name'=>'تحويل الصور',   'desc'=>'حوّل بين JPG وPNG وWebP',                    'clr'=>'#059669','svg'=>'<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'],
-        ['slug'=>'resize',     'name'=>'تغيير حجم الصور','desc'=>'غيّر أبعاد أي صورة مع الحفاظ على النسبة',  'clr'=>'#dc2626','svg'=>'<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>'],
-        ['slug'=>'compress',   'name'=>'ضغط الصور',     'desc'=>'ضغط الصور وتحويلها لـ WebP بنسبة 85%',      'clr'=>'#7c3aed','svg'=>'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'],
-        ['slug'=>'ocr',        'name'=>'OCR — قراءة النصوص','desc'=>'استخرج النص من الصور عربياً وإنجليزياً', 'clr'=>'#0891b2','svg'=>'<path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>'],
-      ],
-      'حاسبات ومحوّلات' => [
-        ['slug'=>'currency',   'name'=>'محوّل العملات', 'desc'=>'أسعار صرف حقيقية لأكثر من 150 عملة',        'clr'=>'#f59e0b','svg'=>'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>'],
-        ['slug'=>'gold-calc',  'name'=>'حاسبة الذهب',  'desc'=>'احسب سعر الذهب بجميع العيارات اليوم',       'clr'=>'#f59e0b','svg'=>'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'],
-        ['slug'=>'unit',       'name'=>'محوّل الوحدات', 'desc'=>'طول وزن حرارة مساحة وسرعة — كل شيء',       'clr'=>'#0891b2','svg'=>'<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>'],
-      ],
-      'أدوات المطورين' => [
-        ['slug'=>'json-fmt',   'name'=>'منسّق JSON',    'desc'=>'نسّق وتحقق من صحة ملفات JSON',               'clr'=>'#6366f1','svg'=>'<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'],
-        ['slug'=>'encode',     'name'=>'مشفّر Base64',  'desc'=>'شفّر وفكّ تشفير Base64 وURL وHash',          'clr'=>'#0891b2','svg'=>'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
-        ['slug'=>'colors',     'name'=>'منتقي الألوان', 'desc'=>'اختر لوناً وأنشئ لوحة ألوان متناسقة',       'clr'=>'#7c3aed','svg'=>'<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.28 0 .5-.22.5-.5a.49.49 0 00-.17-.36 6.89 6.89 0 01-1.49-2.84.5.5 0 01.48-.8 4.5 4.5 0 004.24-4.5A6 6 0 0012 2z"/>'],
-      ],
-      'أدوات الأعمال' => [
-        ['slug'=>'pass',       'name'=>'مولّد كلمات المرور','desc'=>'أنشئ كلمة مرور قوية وآمنة فوراً',        'clr'=>'#dc2626','svg'=>'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
-        ['slug'=>'qr',         'name'=>'مولّد QR Code', 'desc'=>'أنشئ رمز QR لأي رابط أو نص',                'clr'=>'#7c3aed','svg'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3"/><rect x="16" y="5" width="3" height="3"/><rect x="16" y="16" width="3" height="3"/><rect x="5" y="16" width="3" height="3"/>'],
-        ['slug'=>'whatsapp',   'name'=>'رابط واتساب',   'desc'=>'أنشئ رابط واتساب مباشر بدون حفظ الرقم',     'clr'=>'#16a34a','svg'=>'<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>'],
-        ['slug'=>'hashtag',    'name'=>'مولّد الهاشتاق', 'desc'=>'هاشتاقات احترافية بالذكاء الاصطناعي',      'clr'=>'#e11d48','svg'=>'<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>'],
-        ['slug'=>'words',      'name'=>'عدّاد الكلمات', 'desc'=>'عدّ كلمات وأحرف وجمل نصك فورياً',           'clr'=>'#059669','svg'=>'<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>'],
-        ['slug'=>'write',      'name'=>'كاتب محتوى AI', 'desc'=>'أنشئ مقالات ومحتوى عربي احترافي',           'clr'=>'#0891b2','svg'=>'<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>'],
-      ],
-    ];
-    foreach ($webToolGroups as $groupName => $tools):
-    ?>
-    <div style="margin-top:14px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-right:4px"><?= $groupName ?></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px" class="reveal">
-        <?php foreach ($tools as $t): ?>
-        <a href="<?= h(url('tools/' . $t['slug'])) ?>"
-           style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);text-decoration:none;transition:border-color .2s,transform .2s"
-           onmouseover="this.style.borderColor='<?= $t['clr'] ?>44';this.style.transform='translateY(-2px)'"
-           onmouseout="this.style.borderColor='var(--border-c)';this.style.transform=''">
-          <div style="width:38px;height:38px;border-radius:10px;background:<?= $t['clr'] ?>1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="<?= $t['clr'] ?>" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $t['svg'] ?></svg>
-          </div>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:3px"><?= h($t['name']) ?></div>
-            <div style="font-size:11px;color:var(--muted);line-height:1.5"><?= h($t['desc']) ?></div>
-          </div>
-        </a>
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <?php endforeach; ?>
-    <div style="text-align:center;margin-top:14px" class="reveal">
-      <a href="<?= h(url('tools')) ?>" style="display:inline-flex;align-items:center;gap:6px;padding:10px 22px;background:var(--surface);border:1.5px solid var(--border-p);border-radius:var(--radius-lg);color:var(--cyan);font-size:13px;font-weight:700;text-decoration:none;transition:border-color .2s,background .2s;box-shadow:var(--shadow-sm)"
-         onmouseover="this.style.borderColor='var(--cyan)';this.style.background='rgba(14,165,233,.06)'" onmouseout="this.style.borderColor='var(--border-p)';this.style.background='var(--surface)'">
-        <?= partial_icon('globe') ?> عرض جميع الأدوات المجانية (50+)
+    <div class="featured-tools reveal">
+      <a href="<?= h(url('tools/pdf-merge')) ?>" class="featured-tool-card">
+        <div class="featured-tool-icon" style="background:#7c3aed1a">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/></svg>
+        </div>
+        <div>
+          <div class="featured-tool-name">دمج PDF</div>
+          <div class="featured-tool-desc">ادمج عدة ملفات PDF في ملف واحد مجاناً وبنقرة واحدة</div>
+        </div>
+      </a>
+      <a href="<?= h(url('tools/compress')) ?>" class="featured-tool-card">
+        <div class="featured-tool-icon" style="background:#0891b21a">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div>
+          <div class="featured-tool-name">ضغط الصور</div>
+          <div class="featured-tool-desc">ضغط الصور وتحويلها لـ WebP بجودة عالية ومجاناً</div>
+        </div>
       </a>
     </div>
   </section>

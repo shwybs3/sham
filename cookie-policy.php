@@ -7,7 +7,7 @@ $seoTitle = 'سياسة ملفات تعريف الارتباط — yassota';
 $metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
