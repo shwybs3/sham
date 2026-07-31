@@ -76,6 +76,14 @@ try {
     )->fetchAll(PDO::FETCH_COLUMN);
 } catch (\Throwable $e) { $blogSlugs = []; }
 
+/* ── DB: أدوات الويب ── */
+$webToolSlugs = [];
+try {
+    $webToolSlugs = $pdo->query(
+        "SELECT slug FROM web_tools WHERE status='published' LIMIT 500"
+    )->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) { $webToolSlugs = []; }
+
 ?>
 # ── yassota robots.txt ──────────────────────────────────────────────────────
 # تم التوليد تلقائياً — <?= date('Y-m-d H:i:s') ?>
@@ -117,7 +125,13 @@ Allow: /blog/<?= rawurlencode($slug) ?>
 
 <?php endforeach; ?>
 
-# السماح بالأدوات
+# السماح بأدوات الويب (قاعدة البيانات)
+<?php foreach ($webToolSlugs as $slug): ?>
+Allow: /tools?slug=<?= rawurlencode($slug) ?>
+
+<?php endforeach; ?>
+
+# السماح بالأدوات (المجلدات)
 <?php foreach ($toolAllows as $p): ?>
 Allow: <?= $p ?>
 
