@@ -12,6 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sent = true; // pretend success, don't store, don't tip off the bot
     } elseif (!csrf_check()) {
         $error = 'جلسة غير صالحة، أعد تحميل الصفحة وحاول مجدداً.';
+    } elseif (cf_turnstile_enabled($pdo) && !cf_turnstile_verify($pdo, $_POST['cf-turnstile-response'] ?? '')) {
+        $error = 'فشل التحقق من الهوية (Turnstile). يرجى إعادة المحاولة.';
     } else {
         $name    = trim($_POST['name'] ?? '');
         $email   = trim($_POST['email'] ?? '');
@@ -92,6 +94,7 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
           <label style="font-size:12px;color:var(--muted)">الرسالة</label>
           <textarea name="message" rows="6" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical"></textarea>
         </div>
+        <?= cf_turnstile_widget($pdo) ?>
         <button type="submit" class="btn-primary" style="align-self:flex-start">إرسال</button>
       </form>
     <?php endif; ?>

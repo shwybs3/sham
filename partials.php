@@ -294,7 +294,7 @@ function render_app_card(array $app): void { ?>
       </div>
     </div>
   </a>
-  <a href="<?= h(download_url($app['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
+  <a href="<?= h(app_url($app['slug']) . '?intent=dl') ?>" class="btn-dl-card">
     <?= partial_icon('download') ?> تحميل
   </a>
 </div>
@@ -443,7 +443,7 @@ function render_site_footer(): void { ?>
             url('terms')          => 'شروط الاستخدام',
             url('cookie-policy')  => 'سياسة الكوكيز',
             url('disclosure')     => 'الإفصاح الإعلاني',
-            url('dmca')           => 'إشعار DMCA',
+            url('dmca')           => 'DMCA وإزالة المحتوى',
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
            onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'"><?= h($label) ?></a>

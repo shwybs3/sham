@@ -68,7 +68,7 @@
 
 /* ══ Reset ══ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; overflow-x: clip; }
 body {
   font-family: 'Tajawal', sans-serif;
   font-family: var(--f-body);
@@ -135,6 +135,23 @@ button, input, select, textarea { font-family: inherit; }
 }
 @media (max-width: 1024px) {
   .header-search-wrap { display: none; }
+  .header-search-wrap.mobile-open {
+    display: block;
+    position: fixed;
+    top: 62px;
+    left: 0; right: 0;
+    padding: 10px 14px;
+    background: var(--header-bg);
+    border-bottom: 1px solid rgba(255,255,255,.09);
+    z-index: 199;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+    max-width: none;
+    animation: slideDown .15s ease;
+  }
+  @keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+  .header-search-wrap.mobile-open .header-search { display: block; width: 100%; }
+  .header-search-wrap.mobile-open .header-search input { width: 100%; font-size: 15px; padding: 11px 16px 11px 44px; }
+  .header-icon-btn.active { background: rgba(255,255,255,.18); color: #fff; }
 }
 
 /* Desktop nav */
@@ -714,6 +731,47 @@ button, input, select, textarea { font-family: inherit; }
   transform: translateY(-2px) scale(1.04);
   box-shadow: 0 8px 24px rgba(14,165,233,.45);
 }
+
+/* Cloudflare Turnstile widget */
+.cf-turnstile-wrap {
+  margin: 12px 0 4px;
+}
+.cf-turnstile-wrap .cf-turnstile { display: inline-block; }
+
+/* Download intent countdown bar */
+#dl-intent-bar {
+  position: sticky;
+  top: 62px;
+  z-index: 120;
+  background: linear-gradient(135deg, #0ea5e9 0%, #7c3aed 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-family: var(--f-head);
+  box-shadow: 0 4px 20px rgba(14,165,233,.35);
+  flex-wrap: wrap;
+}
+#dl-intent-bar strong { font-variant-numeric: tabular-nums; font-size: 18px; }
+#dl-intent-bar .dl-now-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background .15s;
+}
+#dl-intent-bar .dl-now-btn:hover { background: rgba(255,255,255,.32); }
 
 .btn-slim-dl {
   display: inline-flex;

@@ -3030,7 +3030,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'quick_publish' && is_admin()) {
     $seoTitle = seo_title_clamp(trim($data['seo_title'] ?? ''));
     $pdo->prepare("INSERT INTO apps
         (name,slug,category_id,developer,version,android_version,size_mb,license,package_name,
-         icon_path,screenshot_paths,short_description,long_description,features,pros,cons,
+         icon_path,screenshots,short_description,long_description,features,pros,cons,
          install_steps,faq,whats_new,playstore_url,download_url,rating,seo_title,meta_description,
          keywords,status,lang_code,created_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'".addslashes($status)."','ar',NOW(),NOW())")
@@ -3696,8 +3696,12 @@ if (in_array($page, ['add-app','edit-app']) && $_SERVER['REQUEST_METHOD'] === 'P
         $iconPath = trim($_POST['ai_icon_path']);
     }
 
-    // Screenshots
-    $shots = json_decode($existing['screenshots'] ?? '[]', true) ?: [];
+    // Screenshots — if the edit form sent keep_shots[], use those as the kept set
+    if (isset($_POST['keep_shots']) && is_array($_POST['keep_shots'])) {
+        $shots = array_values(array_filter(array_map('trim', $_POST['keep_shots'])));
+    } else {
+        $shots = json_decode($existing['screenshots'] ?? '[]', true) ?: [];
+    }
     if (!empty($_FILES['screenshots']['name'][0])) {
         $newShots = process_screenshots($_FILES['screenshots'], $slug);
         $shots = array_merge($shots, $newShots);
@@ -3966,6 +3970,20 @@ if ($page === 'messages') {
     }
     if (isset($_GET['view'])) {
         $pdo->prepare("UPDATE contact_messages SET status='read' WHERE id=?")->execute([(int)$_GET['view']]);
+    }
+}
+
+// ─── Removal requests ───
+if ($page === 'removals') {
+    if (isset($_GET['del_req']) && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+        $pdo->prepare("DELETE FROM removal_requests WHERE id=?")->execute([(int)$_GET['del_req']]);
+        header('Location: admin.php?page=removals&msg=deleted'); exit;
+    }
+    if (isset($_GET['status']) && isset($_GET['id']) && isset($_GET['t']) && hash_equals($_SESSION['csrf']??'', $_GET['t'])) {
+        $validStatuses = ['new','reviewing','resolved','rejected'];
+        $newStatus = in_array($_GET['status'], $validStatuses, true) ? $_GET['status'] : 'new';
+        $pdo->prepare("UPDATE removal_requests SET status=? WHERE id=?")->execute([$newStatus, (int)$_GET['id']]);
+        header('Location: admin.php?page=removals&msg=updated'); exit;
     }
 }
 
@@ -6967,6 +6985,7 @@ $navLinks = [
     'playstore-library' => ['label'=>'مكتبة Play Store', 'icon'=>'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
     'messages'  => ['label'=>'رسائل التواصل', 'icon'=>'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm0 2l8 6 8-6'],
+    'removals'  => ['label'=>'طلبات الإزالة (DMCA)', 'icon'=>'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
     'comments'  => ['label'=>'التعليقات والتقييمات', 'icon'=>'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z'],
     'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
     'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
@@ -7641,34 +7660,89 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       </div>
       <div class="form-group">
         <label class="form-label">صور التطبيق (Screenshots)</label>
+
+        <?php
+        $existingShots = json_decode($app['screenshots'] ?? '[]', true) ?: [];
+        if ($existingShots):
+        ?>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">الصور الحالية (<?= count($existingShots) ?>)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px" id="existing-shots-wrap">
+            <?php foreach ($existingShots as $si => $s): ?>
+            <div style="position:relative;display:inline-block" class="existing-shot-item" data-idx="<?= $si ?>">
+              <img src="<?= h(media_url($s)) ?>" style="width:65px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border-c);display:block" loading="lazy">
+              <button type="button" onclick="removeExistingShot(this,<?= $si ?>)" title="حذف"
+                style="position:absolute;top:-5px;right:-5px;width:20px;height:20px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2">×</button>
+              <input type="hidden" name="keep_shots[]" value="<?= h($s) ?>" id="keep-shot-<?= $si ?>">
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <label class="upload-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
             اختر صور متعددة
-            <input type="file" name="screenshots[]" accept="image/*" multiple hidden>
+            <input type="file" name="screenshots[]" id="screenshots-file-input" accept="image/*" multiple hidden>
           </label>
           <button type="button" id="btn-gen-shot-ai" class="btn-ai" style="padding:9px 16px;font-size:12px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
             توليد صورة بالذكاء الاصطناعي
           </button>
         </div>
-        <div class="form-hint" id="shot-ai-status">يمكنك رفع عدة صور مرة واحدة — سيتم ضغطها تلقائياً لـ WebP. يمكنك أيضاً توليد صور بالذكاء الاصطناعي (زر عدة مرات لعدة صور).</div>
+        <div class="form-hint" id="shot-ai-status">يمكنك رفع عدة صور مرة واحدة — سيتم ضغطها تلقائياً لـ WebP.</div>
+        <!-- Live preview of selected files -->
+        <div id="new-shots-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
         <div id="ai-shots-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
-        <!-- Hidden inputs injected by JS after Play Store import -->
         <div id="ps-screenshot-inputs"></div>
         <div id="ps-screenshot-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
       </div>
     </div>
-    <?php
-    $shots = json_decode($app['screenshots'] ?? '[]', true) ?: [];
-    if ($shots):
-    ?>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
-      <?php foreach ($shots as $s): ?>
-        <img src="<?= h($s) ?>" style="width:70px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border-c)">
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
+    <script>
+    // Live screenshot preview
+    (function(){
+      var inp=document.getElementById('screenshots-file-input');
+      var pre=document.getElementById('new-shots-preview');
+      if(!inp||!pre) return;
+      inp.addEventListener('change',function(){
+        pre.innerHTML='';
+        Array.from(this.files).forEach(function(f){
+          var r=new FileReader();
+          r.onload=function(e){
+            var w=document.createElement('div');
+            w.style.cssText='position:relative;display:inline-block';
+            var img=document.createElement('img');
+            img.src=e.target.result;
+            img.style.cssText='width:65px;height:110px;object-fit:cover;border-radius:8px;border:2px solid var(--accent,#0ea5e9)';
+            w.appendChild(img);
+            var lbl=document.createElement('div');
+            lbl.textContent='جديد';
+            lbl.style.cssText='position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:9px;background:#0ea5e9;color:#fff;padding:1px 4px;border-radius:4px;white-space:nowrap';
+            w.appendChild(lbl);
+            pre.appendChild(w);
+          };
+          r.readAsDataURL(f);
+        });
+      });
+    })();
+    // Remove existing shot
+    function removeExistingShot(btn,idx){
+      var item=btn.closest('.existing-shot-item');
+      var hiddenInput=document.getElementById('keep-shot-'+idx);
+      if(hiddenInput) hiddenInput.disabled=true;
+      if(item) item.style.opacity='0.3';
+      btn.textContent='↩'; btn.title='إلغاء الحذف';
+      btn.style.background='#6b7280';
+      btn.onclick=function(){
+        if(hiddenInput) hiddenInput.disabled=false;
+        if(item) item.style.opacity='1';
+        btn.textContent='×'; btn.title='حذف';
+        btn.style.background='#ef4444';
+        btn.onclick=function(){removeExistingShot(btn,idx);};
+      };
+    }
+    </script>
   </div>
 
   <!-- ── Download Links ── -->
@@ -9275,6 +9349,63 @@ elseif ($page === 'messages'):
   </tr>
   <?php endforeach; ?>
   <?php if (!$msgs): ?><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">لا توجد رسائل بعد</td></tr><?php endif; ?>
+  </tbody>
+</table>
+</div>
+
+<?php
+/* ─────────────── REMOVAL REQUESTS (DMCA) ─────────────── */
+elseif ($page === 'removals'):
+  $removalFilter = $_GET['filter'] ?? 'all';
+  $removalWhere  = $removalFilter !== 'all' ? "WHERE status=?" : "";
+  $removalStmt   = $pdo->prepare("SELECT * FROM removal_requests $removalWhere ORDER BY created_at DESC LIMIT 200");
+  $removalFilter !== 'all' ? $removalStmt->execute([$removalFilter]) : $removalStmt->execute();
+  $removals = $removalStmt->fetchAll();
+  $statusLabels = ['new'=>'جديد','reviewing'=>'قيد المراجعة','resolved'=>'تم الحل','rejected'=>'مرفوض'];
+  $statusColors = ['new'=>'status-published','reviewing'=>'status-draft','resolved'=>'status-published','rejected'=>'status-draft'];
+  $typeLabels   = ['dmca'=>'DMCA','app_removal'=>'إزالة تطبيق','wrong_info'=>'معلومات خاطئة','other'=>'أخرى'];
+?>
+
+<div class="admin-header">
+  <h1>طلبات الإزالة (DMCA)</h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <?php foreach (['all'=>'الكل','new'=>'جديدة','reviewing'=>'قيد المراجعة','resolved'=>'محلولة','rejected'=>'مرفوضة'] as $f=>$fl): ?>
+    <a href="admin.php?page=removals&filter=<?= $f ?>" class="btn-view<?= $removalFilter===$f?' active':'' ?>" style="<?= $removalFilter===$f?'background:var(--primary);color:#fff':'' ?>"><?= $fl ?></a>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<div class="panel" style="padding:0;overflow:hidden">
+<table class="admin-table responsive-cards">
+  <thead><tr><th>الاسم</th><th>البريد</th><th>نوع الطلب</th><th>الرابط</th><th>التاريخ</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+  <tbody>
+  <?php foreach ($removals as $r): ?>
+  <tr>
+    <td data-label="الاسم" style="font-weight:700"><?= h($r['req_name']) ?></td>
+    <td data-label="البريد" style="font-family:var(--f-mono);font-size:12px"><a href="mailto:<?= h($r['req_email']) ?>" style="color:var(--primary)"><?= h($r['req_email']) ?></a></td>
+    <td data-label="نوع الطلب"><span class="status-badge status-published"><?= h($typeLabels[$r['req_type']] ?? $r['req_type']) ?></span></td>
+    <td data-label="الرابط" style="max-width:200px;font-size:12px;word-break:break-all"><a href="<?= h($r['content_url']) ?>" target="_blank" style="color:var(--primary)"><?= h(mb_strimwidth($r['content_url'], 0, 60, '...')) ?></a></td>
+    <td data-label="التاريخ" style="color:var(--muted);font-size:12px"><?= h(time_ago($r['created_at'])) ?></td>
+    <td data-label="الحالة"><span class="status-badge <?= $statusColors[$r['status']] ?? 'status-draft' ?>"><?= h($statusLabels[$r['status']] ?? $r['status']) ?></span></td>
+    <td data-label="إجراءات" class="td-actions">
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <?php foreach (['reviewing'=>'مراجعة','resolved'=>'تم','rejected'=>'رفض'] as $s=>$sl): ?>
+        <?php if ($r['status'] !== $s): ?>
+        <a href="admin.php?page=removals&id=<?= $r['id'] ?>&status=<?= $s ?>&t=<?= csrf_token() ?>" class="btn-view" style="font-size:11px;padding:4px 8px"><?= $sl ?></a>
+        <?php endif; ?>
+        <?php endforeach; ?>
+        <a href="admin.php?page=removals&del_req=<?= $r['id'] ?>&t=<?= csrf_token() ?>" class="btn-del" data-confirm="حذف هذا الطلب؟">حذف</a>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="7" style="padding-top:0;background:rgba(0,0,0,.15)">
+      <div style="padding:8px 12px;color:var(--muted);font-size:13px;line-height:1.8;white-space:pre-wrap"><?= h($r['message']) ?></div>
+      <?php if ($r['ip']): ?><div style="padding:0 12px 8px;font-size:11px;color:var(--muted)">IP: <?= h($r['ip']) ?></div><?php endif; ?>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (!$removals): ?><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">لا توجد طلبات إزالة بعد</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>

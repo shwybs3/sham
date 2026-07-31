@@ -79,16 +79,38 @@ $phones = [
   </section>
 
   <section class="seo-content card">
-    <h2>📌 دليل شراء الهواتف الذكية</h2>
+    <h2>📌 الدليل الشامل لاختيار الهاتف الذكي المناسب 2025</h2>
     <div class="prose">
-      <h3>كيف تختار الهاتف المناسب؟</h3>
+      <p>مع تزايد الخيارات في سوق الهواتف الذكية، أصبح اختيار الهاتف المناسب أمراً يستحق التمحيص. سواء كانت ميزانيتك محدودة أو كنت تبحث عن أفضل ما في الأسواق، هذا الدليل يساعدك على اتخاذ القرار الصحيح.</p>
+
+      <h3>معايير اختيار الهاتف الذكي</h3>
       <ul>
-        <li><strong>الميزانية:</strong> حدد سقفاً للإنفاق مسبقاً</li>
-        <li><strong>نظام التشغيل:</strong> iOS (آيفون) أو Android (سامسونج، شاومي...)</li>
-        <li><strong>الكاميرا:</strong> للتصوير الاحترافي انظر للميغابكسل ومواصفات الكاميرا</li>
-        <li><strong>البطارية:</strong> كلما زادت عن 5000mAh كلما كانت أفضل</li>
-        <li><strong>المعالج:</strong> A18 Pro (آيفون) وSnapdragon 8 Elite (أندرويد) هما الأقوى</li>
+        <li><strong>الميزانية:</strong> حدد سقفاً للإنفاق قبل البدء — الفئة الاقتصادية (أقل من 1500 ر.س)، المتوسطة (1500-3500)، والفلاجشيب (فوق 3500)</li>
+        <li><strong>نظام التشغيل:</strong> iOS (آيفون) يتميز بتحديثات طويلة الأمد وخصوصية أفضل. Android يوفر تنوعاً أوسع وأسعاراً لكل الفئات</li>
+        <li><strong>المعالج:</strong> A18 Pro في آيفون 16 Pro وSnapdragon 8 Elite هما الأسرع حالياً. للفئة المتوسطة: Snapdragon 7s أو Dimensity 9200</li>
+        <li><strong>البطارية:</strong> لا تقل عن 4500mAh للاستخدام المتوسط. فوق 5000mAh للاستخدام المكثف</li>
+        <li><strong>سرعة الشحن:</strong> الشحن السريع 65W+ يوفر شحناً كاملاً في أقل من ساعة</li>
+        <li><strong>الكاميرا:</strong> عدد الميغابيكسل ليس المعيار الوحيد — حجم الحساس وكيفية المعالجة تؤثران أكثر</li>
       </ul>
+
+      <h3>مقارنة iOS مقابل Android في 2025</h3>
+      <table style="width:100%;border-collapse:collapse;margin-top:.75rem;font-size:13px">
+        <tr style="background:var(--c-bg2)"><th style="padding:8px;text-align:right;border:1px solid var(--c-border)">الميزة</th><th style="padding:8px;border:1px solid var(--c-border)">iOS (آيفون)</th><th style="padding:8px;border:1px solid var(--c-border)">Android</th></tr>
+        <tr><td style="padding:8px;border:1px solid var(--c-border)">مدة دعم التحديثات</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">6-7 سنوات ✅</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">2-7 سنوات (حسب العلامة)</td></tr>
+        <tr style="background:var(--c-bg2)"><td style="padding:8px;border:1px solid var(--c-border)">تنوع الأسعار</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">محدود</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">واسع جداً ✅</td></tr>
+        <tr><td style="padding:8px;border:1px solid var(--c-border)">الخصوصية والأمان</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">أعلى ✅</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">متوسط</td></tr>
+        <tr style="background:var(--c-bg2)"><td style="padding:8px;border:1px solid var(--c-border)">تخصيص النظام</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">محدود</td><td style="padding:8px;border:1px solid var(--c-border);text-align:center">كامل ✅</td></tr>
+      </table>
+
+      <h3>أسئلة شائعة قبل شراء الهاتف</h3>
+      <details class="faq-item" style="margin:.5rem 0">
+        <summary>هل يستحق الفلاجشيب ضعف سعر الهاتف المتوسط؟</summary>
+        <p>للاستخدام العادي (تصفح، واتساب، سناب، كاميرا عادية) لا. الهواتف المتوسطة مثل Samsung A55 أو Redmi Note 14 Pro تلبي 90% من الاحتياجات بنصف السعر. الفلاجشيب يستحق إذا كنت مصوراً محترفاً أو تحتاج أعلى أداء للألعاب أو الإنتاجية المكثفة.</p>
+      </details>
+      <details class="faq-item" style="margin:.5rem 0">
+        <summary>ما أفضل وقت لشراء الهاتف بسعر أرخص؟</summary>
+        <p>موسم الجمعة السوداء (نوفمبر) وموسم رمضان والعيد يشهدان أكبر التخفيضات في السوق السعودية والخليجي. كذلك عند إطلاق الجيل الجديد تنخفض أسعار الجيل السابق بشكل ملحوظ (20-40%).</p>
+      </details>
     </div>
   </section>
 </div>

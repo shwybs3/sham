@@ -229,6 +229,20 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'contact_messages';
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS removal_requests (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      req_name VARCHAR(150) NOT NULL,
+      req_email VARCHAR(190) NOT NULL,
+      content_url VARCHAR(600) NOT NULL,
+      req_type ENUM('dmca','app_removal','wrong_info','other') NOT NULL DEFAULT 'dmca',
+      message TEXT NOT NULL,
+      status ENUM('new','reviewing','resolved','rejected') NOT NULL DEFAULT 'new',
+      ip VARCHAR(45) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'removal_requests';
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS app_versions (
       id INT AUTO_INCREMENT PRIMARY KEY,
       app_id INT NOT NULL,
@@ -1732,12 +1746,18 @@ function set_cfg(PDO $pdo, string $k, string $v): void {
 // "openrouter/free" هو الموجّه التلقائي الرسمي من OpenRouter نفسه ويختار نموذجاً مجانياً متاحاً
 // تلقائياً، لذا نضعه أولاً كضمان يعمل دائماً حتى لو تغيّرت أسماء النماذج الفردية لاحقاً.
 function openrouter_default_free_models(): array {
+    // Prefer open-source models — they are least likely to be blocked by
+    // OpenRouter guardrail / data-policy restrictions on user accounts.
+    // openai/* and anthropic/* models often require explicit data-policy
+    // acceptance, so we skip them here.
     return [
         'openrouter/free',
         'meta-llama/llama-3.3-70b-instruct:free',
-        'qwen/qwen3-coder:free',
-        'openai/gpt-oss-20b:free',
-        'nvidia/nemotron-nano-9b-v2:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
+        'qwen/qwen3-14b:free',
+        'mistralai/mistral-7b-instruct:free',
+        'google/gemma-3-27b-it:free',
+        'deepseek/deepseek-r1-0528:free',
     ];
 }
 
@@ -1926,6 +1946,12 @@ function openrouter_diagnose_trace(array $trace): string {
         return "تم تجاوز الحد المسموح من الطلبات (HTTP 429) على كل المحاولات — الموديلات المجانية لها حد استخدام يومي/دقيق منخفض. انتظر بضع دقائق ثم أعد المحاولة، أو أضف مفتاح OpenRouter إضافي من حساب آخر لزيادة عدد المحاولات المتاحة.";
     }
     if ($countOf(404) === $count) {
+        // Check if it's a guardrail/data-policy restriction (account-level setting)
+        $allErrors = array_column($trace, 'error');
+        $hasGuardrail = !empty(array_filter($allErrors, fn($e) => str_contains((string)$e, 'guardrail') || str_contains((string)$e, 'data policy')));
+        if ($hasGuardrail) {
+            return "إعدادات الخصوصية في حساب OpenRouter تمنع الوصول إلى النماذج — هذا إعداد على مستوى حسابك وليس خطأ في مفتاح API. الحل: افتح رابط إعدادات الخصوصية openrouter.ai/settings/privacy وأزِل أي قيود على مشاركة البيانات أو اختر نماذج مسموح بها.";
+        }
         return "كل الموديلات المستخدمة غير موجودة على OpenRouter (HTTP 404) — على الأغلب أسماء الموديلات المحفوظة في الإعدادات لم تعد متوفرة مجاناً. افتح صفحة الإعدادات واختر موديلاً من القائمة المحدّثة، أو فعّل \"التدوير التلقائي\".";
     }
     // Mixed causes — summarize the most common one plus the last error text.
@@ -1933,6 +1959,12 @@ function openrouter_diagnose_trace(array $trace): string {
     arsort($tally);
     $topCode = array_key_first($tally);
     $lastErr = end($trace)['error'] ?? '';
+    // Detect guardrail in mixed errors
+    $allErrors = array_column($trace, 'error');
+    $hasGuardrail = !empty(array_filter($allErrors, fn($e) => str_contains((string)$e, 'guardrail') || str_contains((string)$e, 'data policy')));
+    if ($hasGuardrail) {
+        return "إعدادات الخصوصية في حساب OpenRouter تمنع الوصول إلى النماذج ({$count} محاولة) — افتح رابط openrouter.ai/settings/privacy وأزِل قيود مشاركة البيانات، ثم أعد المحاولة.";
+    }
     $label = match (true) {
         $topCode === 0   => 'فشل اتصال بالخادم',
         $topCode === 401 => 'مفتاح مرفوض (401)',
@@ -4384,6 +4416,45 @@ function notify_admin(PDO $pdo, string $subject, string $body): void {
     $headers = "From: yassota <no-reply@" . parse_url(SITE_URL, PHP_URL_HOST) . ">\r\n"
         . "Content-Type: text/plain; charset=UTF-8";
     @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
+}
+
+/* ── Cloudflare Turnstile helpers ────────────────────────────────────────
+   Settings used: cf_turnstile_site_key, cf_turnstile_secret_key, cf_turnstile_enabled
+   All three must be configured in Admin → Settings before Turnstile is active.
+   When not configured the widget returns empty string and verify() returns true
+   (fail-open: don't break forms for sites that haven't set up CF Turnstile).
+   ────────────────────────────────────────────────────────────────────── */
+// Public-form Turnstile helpers — reuse the same keys as the admin captcha system
+function cf_turnstile_enabled(PDO $pdo): bool {
+    return get_cfg($pdo, 'turnstile_site_key', '') !== ''
+        && get_cfg($pdo, 'turnstile_secret_key', '') !== '';
+}
+
+function cf_turnstile_widget(PDO $pdo): string {
+    if (!cf_turnstile_enabled($pdo)) return '';
+    $key = h(get_cfg($pdo, 'turnstile_site_key'));
+    return '<div class="cf-turnstile-wrap">'
+         . '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>'
+         . '<div class="cf-turnstile" data-sitekey="' . $key . '" data-theme="dark"></div>'
+         . '</div>';
+}
+
+function cf_turnstile_verify(PDO $pdo, string $token): bool {
+    if (!cf_turnstile_enabled($pdo)) return true; // not configured = open
+    if (!$token) return false;
+    $secret = get_cfg($pdo, 'turnstile_secret_key');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $ch = curl_init('https://challenges.cloudflare.com/turnstile/v0/siteverify');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query(['secret'=>$secret,'response'=>$token,'remoteip'=>$ip]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 8,
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+    $data = json_decode($res, true);
+    return !empty($data['success']);
 }
 
 function head_extras(PDO $pdo): string {

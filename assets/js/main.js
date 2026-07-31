@@ -102,18 +102,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ── Mobile search toggle (header-search is hidden by default on small screens) ── */
+  /* ── Mobile search toggle ── */
   const searchToggle = document.querySelector('.mobile-search-toggle');
   const searchForm = document.querySelector('.header-search');
-  if (searchToggle && searchForm) {
+  const searchWrap = searchForm?.closest('.header-search-wrap');
+  if (searchToggle && searchWrap && searchForm) {
     searchToggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isOpen = searchForm.classList.toggle('mobile-open');
+      const isOpen = searchWrap.classList.toggle('mobile-open');
+      searchToggle.classList.toggle('active', isOpen);
       if (isOpen) searchForm.querySelector('input')?.focus();
     });
     document.addEventListener('click', (e) => {
-      if (searchForm.classList.contains('mobile-open') && !searchForm.contains(e.target) && !e.target.closest('.mobile-search-toggle'))
-        searchForm.classList.remove('mobile-open');
+      if (searchWrap.classList.contains('mobile-open') && !searchWrap.contains(e.target) && !e.target.closest('.mobile-search-toggle')) {
+        searchWrap.classList.remove('mobile-open');
+        searchToggle.classList.remove('active');
+      }
     });
   }
 

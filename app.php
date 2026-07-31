@@ -339,6 +339,32 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
 <?php render_site_header('', $app['cat_slug'] === 'games' ? 'games' : ($app['cat_slug'] === 'apps' ? 'apps' : 'home')); ?>
 
+<?php if (($_GET['intent'] ?? '') === 'dl' && !empty($app['download_url'])): ?>
+<?php $dlTarget = h(download_url($app['slug'])); ?>
+<div id="dl-intent-bar">
+  <span style="display:flex;align-items:center;gap:8px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+    سيتم التحميل تلقائياً خلال <strong id="dl-countdown">5</strong> ثوانٍ...
+  </span>
+  <a href="<?= $dlTarget ?>" class="dl-now-btn" data-hardnav="1">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+    تحميل الآن
+  </a>
+</div>
+<script>
+(function(){
+  var n=5,el=document.getElementById('dl-countdown'),tgt='<?= $dlTarget ?>';
+  var ti=setInterval(function(){
+    el.textContent=--n;
+    if(n<=0){clearInterval(ti);window.location.href=tgt;}
+  },1000);
+  // Let the "تحميل الآن" link also cancel the timer
+  var btn=document.querySelector('.dl-now-btn');
+  if(btn) btn.addEventListener('click',function(){clearInterval(ti);});
+})();
+</script>
+<?php endif; ?>
+
 <div class="page-wrap">
 
 <!-- Sidebar -->
