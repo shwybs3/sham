@@ -1,8 +1,8 @@
 <header class="site-header">
   <div class="container header-inner">
-    <a href="/" class="logo" aria-label="<?= h(SITE_NAME) ?>">
-      <span class="logo-icon"><?= SITE_LOGO ?></span>
-      <span class="logo-text"><?= h(SITE_NAME) ?></span>
+    <a href="/" class="logo" aria-label="yassota" style="display:flex;flex-direction:column;line-height:1;gap:2px">
+      <span style="font-size:1.2rem;font-weight:900"><span class="logo-yas">yas</span><span class="logo-sota">sota</span></span>
+      <span class="logo-tagline">دليل تطبيقات أندرويد</span>
     </a>
 
     <nav class="desktop-nav" aria-label="التنقل الرئيسي">
@@ -46,7 +46,7 @@
 <!-- Mobile nav drawer -->
 <nav class="mobile-nav" id="mobileNav" aria-label="القائمة المتنقلة" hidden>
   <div class="mobile-nav-header">
-    <span class="logo-text"><?= h(SITE_NAME) ?></span>
+    <span><span class="logo-yas">yas</span><span class="logo-sota">sota</span></span>
     <button onclick="toggleMobileNav()" aria-label="إغلاق">✕</button>
   </div>
   <a href="/"           class="mnav-link">🏠 الرئيسية</a>

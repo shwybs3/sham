@@ -284,7 +284,30 @@ strong { font-weight: 700; }
   text-decoration: none;
   flex-shrink: 0;
 }
-.logo:hover .logo-text { opacity: .85; }
+.logo-yas {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-sota {
+  font-family: 'Cairo', sans-serif;
+  font-weight: 900;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-tagline {
+  font-size: 10px;
+  color: rgba(226,232,240,.5);
+  font-weight: 500;
+  letter-spacing: .3px;
+  margin-top: 1px;
+}
+/* legacy — kept to avoid breakage */
 .logo-icon { font-size: 1.4rem; }
 .logo-text {
   font-family: 'Cairo', sans-serif;
@@ -1311,8 +1334,47 @@ strong { font-weight: 700; }
   padding: .4rem .25rem;
   transition: color var(--trans);
 }
-.bnav-item:hover, .bnav-item.active { color: var(--c-primary); }
+.bnav-item:hover, .bnav-item.active, .bnav-item.bn-active { color: var(--c-primary); }
 .bnav-item svg { flex-shrink: 0; }
+.bnav-item button { background: none; border: none; color: inherit; font-size: inherit; font-family: inherit; font-weight: inherit; }
+
+/* المزيد bottom sheet */
+.bn-more-sheet {
+  position: fixed;
+  bottom: 58px;
+  right: 0;
+  left: 0;
+  background: #0d1a2e;
+  border-top: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px 18px 0 0;
+  padding: 16px 16px 20px;
+  z-index: 998;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 -8px 32px rgba(0,0,0,.45);
+}
+.bn-more-sheet.open { transform: translateY(0); }
+.bn-more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.bn-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 4px;
+  border-radius: 10px;
+  color: rgba(226,232,240,.75);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255,255,255,.06);
+  text-decoration: none;
+  transition: background .18s, color .18s;
+}
+.bn-more-item:hover { background: rgba(59,130,246,.15); color: #60a5fa; }
+.bn-more-item svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; }
 
 /* ── Utility ──────────────────────────────────────────── */
 .muted  { color: var(--c-text2); }

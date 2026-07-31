@@ -285,11 +285,12 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
       if ($hasLink) {
           // Main/current slot
           $mirrors = [];
-          $mirrorLabels = ['مرآة 2', 'مرآة 3'];
+          $_appVer = $displayVersion ? ' v' . $displayVersion : '';
+          $_appLbl = $app['name'] . $_appVer;
           foreach ([2 => $app['mirror2_url'] ?? '', 3 => $app['mirror3_url'] ?? ''] as $n => $mu) {
-              if ($mu) $mirrors[] = ['label' => $mirrorLabels[$n-2], 'url' => download_url($app['slug'], $n), 'ext' => false];
+              if ($mu) $mirrors[] = ['label' => $_appLbl . ' — مرآة ' . $n, 'url' => download_url($app['slug'], $n), 'ext' => false];
           }
-          $primaryLabel = $hasLocalApk ? 'تحميل APK' : (str_contains($url, 'play.google.com') ? 'Google Play' : 'تحميل APK');
+          $primaryLabel = $hasLocalApk ? $_appLbl : (str_contains($url, 'play.google.com') ? 'Google Play' : $_appLbl);
           $primaryUrl   = $hasLocalApk ? url('download.php?slug='.urlencode($app['slug']).'&apk=1') : $url;
           $dlSlots[] = [
               'version'  => $displayVersion ?: 'الإصدار الحالي',
@@ -305,10 +306,11 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
 
       foreach ($versionHistory as $vh) {
           if (empty($vh['download_url'])) continue;
+          $_vhLbl = $app['name'] . ($vh['version'] ? ' v' . $vh['version'] : '');
           $dlSlots[] = [
               'version' => $vh['version'] ?: '—',
               'notes'   => $vh['changelog'] ?? '',
-              'buttons' => [['label' => 'تحميل APK', 'url' => download_url($app['slug']).'&ver='.$vh['id'], 'primary' => true, 'local' => false]],
+              'buttons' => [['label' => $_vhLbl, 'url' => download_url($app['slug']).'&ver='.$vh['id'], 'primary' => true, 'local' => false]],
               'date'    => $vh['created_at'] ?? '',
               'open'    => false,
           ];
@@ -407,16 +409,17 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
           روابط بديلة:
         </span>
+        <?php $__mv = $displayVersion ? ' v' . $displayVersion : ''; ?>
         <?php if ($app['mirror2_url']): ?>
           <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dlp-mirror-btn" data-hardnav="1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-            مرآة 2
+            <?= h($app['name']) ?><?= h($__mv) ?> — مرآة 2
           </a>
         <?php endif; ?>
         <?php if ($app['mirror3_url']): ?>
           <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dlp-mirror-btn" data-hardnav="1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-            مرآة 3
+            <?= h($app['name']) ?><?= h($__mv) ?> — مرآة 3
           </a>
         <?php endif; ?>
       </div>
