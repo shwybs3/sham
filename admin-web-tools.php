@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
+require_once __DIR__ . '/lang.php';
 
 evil_check_ban($pdo);
 require_admin();
@@ -21,7 +22,7 @@ if ($action === 'delete' && $id && csrf_check($_GET['t'] ?? '')) {
         delete_web_tool($pdo, $id);
         header("Location: admin.php?page=web-tools&msg=deleted"); exit;
     } catch (Throwable $e) {
-        $error = 'خطأ في حذف الأداة: ' . $e->getMessage();
+        $error = __('delete_tool') . ': ' . $e->getMessage();
     }
 }
 
@@ -54,9 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
     }
 
     if (!$data['name']) {
-        $error = 'اسم الأداة مطلوب';
+        $error = __('tool_name') . ' ' . __('required');
     } elseif (!$data['slug']) {
-        $error = 'الرابط (slug) مطلوب';
+        $error = __('tool_slug') . ' ' . __('required');
     } else {
         try {
             $newId = save_web_tool($pdo, $data, $toolId);
@@ -64,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
             header("Location: admin.php?page=web-tools&action=edit&id=$newId&msg=" . ($toolId ? 'updated' : 'added'));
             exit;
         } catch (Throwable $e) {
-            $error = 'خطأ في الحفظ: ' . $e->getMessage();
+            $error = __('save') . ': ' . $e->getMessage();
         }
     }
 }
@@ -120,35 +121,38 @@ $tools = list_web_tools($pdo, 'all');
 
 <div class="container">
   <div class="header">
-    <h1>إدارة أدوات الويب</h1>
+    <h1><?= __('manage_tools') ?></h1>
     <?php if ($action === 'list'): ?>
-    <a href="?page=web-tools&action=add" class="btn btn-success">+ أضف أداة جديدة</a>
+    <a href="?page=web-tools&action=add" class="btn btn-success">+ <?= __('add_tool_new') ?></a>
     <?php else: ?>
-    <a href="?page=web-tools" class="btn">← العودة للقائمة</a>
+    <a href="?page=web-tools" class="btn">← <?= __('back') ?></a>
     <?php endif; ?>
   </div>
 
   <?php if ($msg === 'added'): ?>
-  <div class="alert alert-success">✓ تم إضافة الأداة بنجاح</div>
+  <div class="alert alert-success">✓ <?= __('added_success') ?></div>
   <?php elseif ($msg === 'updated'): ?>
-  <div class="alert alert-success">✓ تم تحديث الأداة بنجاح</div>
+  <div class="alert alert-success">✓ <?= __('updated_success') ?></div>
   <?php elseif ($msg === 'deleted'): ?>
-  <div class="alert alert-success">✓ تم حذف الأداة بنجاح</div>
+  <div class="alert alert-success">✓ <?= __('deleted_success') ?></div>
   <?php elseif ($error): ?>
-  <div class="alert alert-danger">✗ خطأ: <?= h($error) ?></div>
+  <div class="alert alert-danger">✗ <?= h($error) ?></div>
   <?php endif; ?>
 
   <?php if ($action === 'list'): ?>
     <!-- ── قائمة الأدوات ── -->
+    <?php if (empty($tools)): ?>
+    <p style="text-align: center; color: #666; padding: 40px 20px;"><?= __('no_tools') ?></p>
+    <?php else: ?>
     <table class="tools-table">
       <thead>
         <tr>
-          <th>الاسم</th>
-          <th>الرابط</th>
-          <th>الحالة</th>
-          <th>المشاهدات</th>
-          <th>التاريخ</th>
-          <th>الإجراءات</th>
+          <th><?= __('name') ?></th>
+          <th><?= __('slug') ?></th>
+          <th><?= __('status') ?></th>
+          <th><?= __('views') ?></th>
+          <th><?= __('date') ?></th>
+          <th><?= __('action') ?></th>
         </tr>
       </thead>
       <tbody>
@@ -156,17 +160,18 @@ $tools = list_web_tools($pdo, 'all');
         <tr>
           <td><?= h($t['name']) ?></td>
           <td><code><?= h($t['slug']) ?></code></td>
-          <td><span class="status-badge status-<?= $t['status'] ?>"><?= $t['status'] === 'published' ? 'منشور' : 'مسودة' ?></span></td>
+          <td><span class="status-badge status-<?= $t['status'] ?>"><?= $t['status'] === 'published' ? __('tool_published') : __('tool_draft') ?></span></td>
           <td><?= number_format($t['views']) ?></td>
           <td><?= date('d M Y', strtotime($t['created_at'])) ?></td>
           <td>
-            <a href="?page=web-tools&action=edit&id=<?= $t['id'] ?>" class="btn" style="padding: 6px 12px; font-size: 12px;">تعديل</a>
-            <a href="?page=web-tools&action=delete&id=<?= $t['id'] ?>&t=<?= csrf_token() ?>" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="return confirm('هل تريد حذف هذه الأداة؟')">حذف</a>
+            <a href="?page=web-tools&action=edit&id=<?= $t['id'] ?>" class="btn" style="padding: 6px 12px; font-size: 12px;"><?= __('edit') ?></a>
+            <a href="?page=web-tools&action=delete&id=<?= $t['id'] ?>&t=<?= csrf_token() ?>" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="return confirm('<?= __('tool_delete_confirm') ?>')"><?= __('delete') ?></a>
           </td>
         </tr>
         <?php endforeach; ?>
       </tbody>
     </table>
+    <?php endif; ?>
 
   <?php elseif ($action === 'add' || $action === 'edit'): ?>
     <!-- ── نموذج الأداة ── -->
@@ -176,46 +181,46 @@ $tools = list_web_tools($pdo, 'all');
 
       <div class="form-grid">
         <div class="form-group">
-          <label>اسم الأداة *</label>
+          <label><?= __('tool_name') ?> *</label>
           <input type="text" name="name" value="<?= h($tool['name'] ?? '') ?>" required>
         </div>
 
         <div class="form-group">
-          <label>الرابط (slug) *</label>
+          <label><?= __('tool_slug') ?> *</label>
           <input type="text" name="slug" value="<?= h($tool['slug'] ?? '') ?>" placeholder="currency-converter" required>
         </div>
 
         <div class="form-group">
-          <label>عنوان SEO</label>
-          <input type="text" name="seo_title" value="<?= h($tool['seo_title'] ?? '') ?>" placeholder="محول العملات - تحويل العملات الحي">
+          <label><?= __('description') ?> (SEO)</label>
+          <input type="text" name="seo_title" value="<?= h($tool['seo_title'] ?? '') ?>" placeholder="">
         </div>
 
         <div class="form-group">
-          <label>وصف Meta (160 حرف)</label>
-          <input type="text" name="meta_description" value="<?= h($tool['meta_description'] ?? '') ?>" maxlength="160" placeholder="محول العملات مع أسعار صرف حية">
+          <label><?= __('tool_description') ?> (160 chars)</label>
+          <input type="text" name="meta_description" value="<?= h($tool['meta_description'] ?? '') ?>" maxlength="160" placeholder="">
         </div>
 
         <div class="form-group">
-          <label>الحالة</label>
+          <label><?= __('status') ?></label>
           <select name="status">
-            <option value="draft" <?= ($tool['status'] ?? 'draft') === 'draft' ? 'selected' : '' ?>>مسودة</option>
-            <option value="published" <?= ($tool['status'] ?? 'draft') === 'published' ? 'selected' : '' ?>>منشورة</option>
+            <option value="draft" <?= ($tool['status'] ?? 'draft') === 'draft' ? 'selected' : '' ?>><?= __('tool_draft') ?></option>
+            <option value="published" <?= ($tool['status'] ?? 'draft') === 'published' ? 'selected' : '' ?>><?= __('tool_published') ?></option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>الكلمات المفتاحية</label>
-          <input type="text" name="meta_tags" value="<?= h($tool['meta_tags'] ?? '') ?>" placeholder="محول عملات, صرف, دولار">
+          <label><?= __('tool_features') ?> (Keywords)</label>
+          <input type="text" name="meta_tags" value="<?= h($tool['meta_tags'] ?? '') ?>" placeholder="">
         </div>
 
         <div class="form-group form-full">
-          <label>الوصف القصير (500 حرف)</label>
-          <textarea name="short_description" maxlength="500" placeholder="وصف قصير عن الأداة..."><?= h($tool['short_description'] ?? '') ?></textarea>
+          <label><?= __('tool_description') ?> (500 chars)</label>
+          <textarea name="short_description" maxlength="500" placeholder=""><?= h($tool['short_description'] ?? '') ?></textarea>
         </div>
 
         <div class="form-group form-full">
-          <label>الوصف الطويل (SEO - 1000+ حرف)</label>
-          <textarea name="long_description" placeholder="محتوى تفصيلي شامل عن الأداة..."><?= h($tool['long_description'] ?? '') ?></textarea>
+          <label><?= __('tool_long_desc') ?> (1000+ chars)</label>
+          <textarea name="long_description" placeholder=""><?= h($tool['long_description'] ?? '') ?></textarea>
         </div>
 
         <div class="form-group form-full">
