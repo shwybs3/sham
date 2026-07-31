@@ -211,71 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-/* ── Featured Carousel ── */
-  const fcCarousel = document.getElementById('featured-carousel');
-  if (fcCarousel) {
-    const slides   = [...fcCarousel.querySelectorAll('.fc-slide')];
-    const thumbs   = [...fcCarousel.querySelectorAll('.fc-thumb')];
-    const progress = document.getElementById('fc-progress');
-    const prevBtn  = document.getElementById('fc-prev');
-    const nextBtn  = document.getElementById('fc-next');
-    const AUTO_MS  = 4500;
-    let current    = 0;
-    let autoTimer  = null;
-
-    function goTo(i) {
-      slides[current].classList.remove('active');
-      thumbs[current].classList.remove('active');
-      current = ((i % slides.length) + slides.length) % slides.length;
-      slides[current].classList.add('active');
-      thumbs[current].classList.add('active');
-      // Scroll only the thumb strip container horizontally — never move the page vertically
-      var strip = thumbs[current].closest('.fc-thumbs');
-      if (strip) {
-        var tw = thumbs[current];
-        var targetLeft = tw.offsetLeft - (strip.offsetWidth - tw.offsetWidth) / 2;
-        strip.scrollTo({ left: targetLeft, behavior: 'smooth' });
-      }
-      resetProgress();
-    }
-
-    function resetProgress() {
-      clearInterval(autoTimer);
-      if (progress) {
-        progress.style.transition = 'none';
-        progress.style.width = '0%';
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          progress.style.transition = `width ${AUTO_MS}ms linear`;
-          progress.style.width = '100%';
-        }));
-      }
-      autoTimer = setInterval(() => goTo(current + 1), AUTO_MS);
-    }
-
-    prevBtn?.addEventListener('click', (e) => { e.preventDefault(); goTo(current - 1); });
-    nextBtn?.addEventListener('click', (e) => { e.preventDefault(); goTo(current + 1); });
-    thumbs.forEach((t, i) => t.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      goTo(i);
-      t.blur(); // prevent browser's focus-scroll from jumping page
-    }));
-
-    /* Touch / swipe (RTL: swipe left → next, swipe right → prev) */
-    let txStart = 0;
-    fcCarousel.addEventListener('touchstart', (e) => { txStart = e.touches[0].clientX; }, { passive: true });
-    fcCarousel.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - txStart;
-      if (Math.abs(dx) > 40) dx < 0 ? goTo(current + 1) : goTo(current - 1);
-    });
-
-    /* Pause on hover */
-    fcCarousel.addEventListener('mouseenter', () => clearInterval(autoTimer));
-    fcCarousel.addEventListener('mouseleave', resetProgress);
-
-    resetProgress();
-  }
-
-  /* ── Smooth card hover ripple ── */
+/* ── Smooth card hover ripple ── */
   document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(function(el) {
     el.addEventListener('click', function (e) {
       var ripple = document.createElement('span');

@@ -83,9 +83,8 @@ $stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
 $stmt->execute($params);
 $apps = $stmt->fetchAll();
 
-// Featured carousel: top 6 downloaded original (non-translated) apps
-$featuredApps = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' AND (a.parent_id IS NULL OR a.parent_id=0) ORDER BY a.downloads DESC LIMIT 6")->fetchAll();
-$featured = $featuredApps[0] ?? null;
+// Top app for OG image only (no carousel)
+$featured = $pdo->query("SELECT icon_path FROM apps WHERE status='published' ORDER BY downloads DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 
 // Latest blog posts for homepage
 $latestPosts = [];
@@ -184,48 +183,6 @@ $orgSchema = json_encode([
   </div>
 
 
-  <!-- ── Featured Apps Carousel (editor's picks) ── -->
-  <?php if (!empty($featuredApps) && !$search && !$catSlug): ?>
-  <div class="featured-carousel reveal" id="featured-carousel">
-    <div class="fc-stage" id="fc-stage">
-      <?php foreach ($featuredApps as $fi => $fa): ?>
-      <a href="<?= h(app_url($fa['slug'])) ?>" class="fc-slide<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" data-hardnav="1">
-        <div class="fc-icon-wrap">
-          <?php if ($fa['icon_path']): ?>
-            <img src="<?= h(media_url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" class="fc-icon" loading="lazy">
-          <?php else: ?>
-            <div class="fc-icon fc-icon-blank"><?= partial_icon('smartphone', 32) ?></div>
-          <?php endif; ?>
-        </div>
-        <div class="fc-info">
-          <div class="fc-badge"><?= partial_icon('award', 12) ?> اختيار المحرر<?= $fa['cat_name'] ? ' — ' . h($fa['cat_name']) : '' ?></div>
-          <div class="fc-name"><?= h($fa['name']) ?></div>
-          <div class="fc-desc"><?= h(mb_strimwidth($fa['short_description'] ?? '', 0, 120, '...')) ?></div>
-          <span class="fc-cta"><?= partial_icon('info') ?> اقرأ المراجعة الكاملة</span>
-        </div>
-      </a>
-      <?php endforeach; ?>
-      <button class="fc-arrow fc-prev" id="fc-prev" aria-label="السابق"><?= partial_icon('chevron-r', 18) ?></button>
-      <button class="fc-arrow fc-next" id="fc-next" aria-label="التالي"><?= partial_icon('chevron-l', 18) ?></button>
-    </div>
-    <div class="fc-footer">
-      <div class="fc-progress-bar"><div class="fc-progress-fill" id="fc-progress"></div></div>
-      <div class="fc-thumbs" id="fc-thumbs">
-        <?php foreach ($featuredApps as $fi => $fa): ?>
-        <button class="fc-thumb<?= $fi === 0 ? ' active' : '' ?>" data-index="<?= $fi ?>" aria-label="<?= h($fa['name']) ?>">
-          <?php if ($fa['icon_path']): ?>
-            <img src="<?= h(media_url($fa['icon_path'])) ?>" alt="<?= h($fa['name']) ?>" loading="lazy">
-          <?php else: ?>
-            <div class="fc-thumb-blank"></div>
-          <?php endif; ?>
-          <span class="fc-thumb-name"><?= h(mb_strimwidth($fa['name'], 0, 12, '…')) ?></span>
-        </button>
-        <?php endforeach; ?>
-      </div>
-    </div>
-  </div>
-  <?= partial_wave() ?>
-  <?php endif; ?>
 
   <!-- ── Apps Grid ── -->
   <div class="section-head reveal" id="apps-grid">
