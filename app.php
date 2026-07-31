@@ -116,6 +116,11 @@ if (!empty($app['developer'])) {
     $devAlternatives = $devStmt->fetchAll();
 }
 
+// Related tools — web tools to cross-promote alongside apps
+$toolsStmt = $pdo->prepare("SELECT id, name, slug, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 6");
+$toolsStmt->execute();
+$relatedTools = $toolsStmt->fetchAll();
+
 // Related articles (AI-generated "how to use X", "X vs Y" etc. — internal
 // linking back to this app's download page)
 $articlesStmt = $pdo->prepare("SELECT id,title,slug FROM app_articles WHERE app_id=? ORDER BY created_at DESC");
@@ -949,6 +954,23 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     </div>
     <?php endforeach; ?>
   </div>
+  <?php endif; ?>
+
+  <!-- Related Tools -->
+  <?php if ($relatedTools): ?>
+  <div class="section-head reveal"><span class="section-title">🔧 أدوات مفيدة</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
+    <?php foreach ($relatedTools as $t): ?>
+    <a href="<?= h(url('tools.php?slug=' . urlencode($t['slug']))) ?>" class="app-card reveal" data-hardnav="1" style="text-decoration:none">
+      <div class="app-card-body" style="padding:16px;border-bottom:none">
+        <div class="app-card-icon-placeholder" style="margin:0 auto 10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)"></div>
+        <div class="app-card-name" style="font-size:13px;min-height:2.6em"><?= h($t['name']) ?></div>
+        <div style="color:var(--muted);font-size:11px;line-height:1.4;margin-top:6px"><?= h(mb_substr($t['short_description'], 0, 60)) ?>...</div>
+      </div>
+    </a>
+    <?php endforeach; ?>
+  </div>
+  <?= wave() ?>
   <?php endif; ?>
 
   <!-- Alternatives -->
