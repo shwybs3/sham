@@ -78,7 +78,7 @@ $breadcrumbSchema = json_encode([
     <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= number_format($totalApps) ?> تطبيق</span>
   </div>
 
-  <?php render_app_grid($apps, $today ? 'لا توجد تحديثات اليوم بعد' : 'لا توجد تحديثات بعد'); ?>
+  <?php render_app_grid($apps, $today ? __('no_updates_today') : __('no_updates_yet')); ?>
   <?php render_pagination($page, $totalPages); ?>
 
 </main>

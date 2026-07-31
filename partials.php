@@ -82,7 +82,7 @@ function render_stars(float $rating, int $count = 0): string {
 
 /* ── Breadcrumb nav ── */
 function render_breadcrumbs(array $crumbs): void { ?>
-<nav class="breadcrumb" aria-label="مسار التنقل">
+<nav class="breadcrumb" aria-label="<?= h(__('menu')) ?>">
   <?php foreach ($crumbs as $i => $c): ?>
   <?php if ($i > 0): ?><svg class="bc-sep" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg><?php endif; ?>
   <?php if ($i < count($crumbs) - 1 && isset($c['url'])): ?>
@@ -178,7 +178,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 
 <!-- Full-screen search modal -->
 <div class="search-modal" id="search-modal" role="dialog" aria-modal="true">
-  <button type="button" class="search-modal-close" id="search-modal-close" aria-label="إغلاق">
+  <button type="button" class="search-modal-close" id="search-modal-close" aria-label="<?= h(__('close')) ?>">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
   </button>
   <div class="search-modal-box">
@@ -192,7 +192,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
       </div>
     </form>
     <div id="search-modal-results" class="search-modal-results" hidden></div>
-    <p class="search-modal-hint">اضغط <kbd style="background:rgba(255,255,255,.1);border-radius:5px;padding:2px 6px;font-size:11px">Esc</kbd> للإغلاق</p>
+    <p class="search-modal-hint"><?= h(__('press_esc_close')) ?></p>
   </div>
 </div>
 
@@ -200,43 +200,43 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 <nav class="mobile-nav-drawer" id="mobile-nav-drawer" aria-hidden="true">
   <div class="mobile-nav-header">
     <span class="mobile-nav-logo">yas<span>sota</span></span>
-    <button type="button" class="mobile-nav-close" id="mobile-nav-close" aria-label="إغلاق">
+    <button type="button" class="mobile-nav-close" id="mobile-nav-close" aria-label="<?= h(__('close')) ?>">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
   </div>
   <div class="mobile-nav-links">
-    <a href="/" class="mobile-nav-link <?= $activeNav === 'home' ? 'active' : '' ?>"><?= partial_icon('home') ?> الرئيسية</a>
-    <a href="/?cat=apps" class="mobile-nav-link <?= $activeNav === 'apps' ? 'active' : '' ?>"><?= partial_icon('apps') ?> تطبيقات</a>
-    <a href="/?cat=games" class="mobile-nav-link <?= $activeNav === 'games' ? 'active' : '' ?>"><?= partial_icon('games') ?> ألعاب</a>
-    <a href="<?= h(url('top?by=downloads')) ?>" class="mobile-nav-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
-    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">الأسعار</div>
+    <a href="/" class="mobile-nav-link <?= $activeNav === 'home' ? 'active' : '' ?>"><?= partial_icon('home') ?> <?= h(__('home')) ?></a>
+    <a href="/?cat=apps" class="mobile-nav-link <?= $activeNav === 'apps' ? 'active' : '' ?>"><?= partial_icon('apps') ?> <?= h(__('apps')) ?></a>
+    <a href="/?cat=games" class="mobile-nav-link <?= $activeNav === 'games' ? 'active' : '' ?>"><?= partial_icon('games') ?> <?= h(__('games')) ?></a>
+    <a href="<?= h(url('top?by=downloads')) ?>" class="mobile-nav-link"><?= partial_icon('trending') ?> <?= h(__('top_downloads')) ?></a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('prices')) ?></div>
     <a href="<?= h(url('exchange')) ?>" class="mobile-nav-link <?= $activeNav === 'exchange' ? 'active' : '' ?>">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-      أسعار الصرف
+      <?= h(__('exchange')) ?>
     </a>
     <a href="<?= h(url('gold')) ?>" class="mobile-nav-link <?= $activeNav === 'gold' ? 'active' : '' ?>">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-      أسعار الذهب
+      <?= h(__('gold')) ?>
     </a>
-    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">حاسبات</div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('calculators')) ?></div>
     <a href="<?= h(url('calculators')) ?>" class="mobile-nav-link <?= $activeNav === 'calculators' ? 'active' : '' ?>">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/></svg>
-      حاسبات البناء
+      <?= h(__('calculators')) ?>
     </a>
     <a href="<?= h(url('solar')) ?>" class="mobile-nav-link <?= $activeNav === 'solar' ? 'active' : '' ?>">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-      الطاقة الشمسية
+      <?= h(__('solar')) ?>
     </a>
-    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">أدوات الويب</div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('tools')) ?></div>
     <a href="<?= h(url('tools')) ?>" class="mobile-nav-link <?= $activeNav === 'tools' ? 'active' : '' ?>">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-      جميع الأدوات (20 أداة)
+      <?= h(__('all_tools_label')) ?>
     </a>
-    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7">المحتوى</div>
-    <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
-    <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> المدونة</a>
-    <a href="<?= h(url('about')) ?>" class="mobile-nav-link"><?= partial_icon('info') ?> من نحن</a>
-    <a href="<?= h(url('contact')) ?>" class="mobile-nav-link"><?= partial_icon('mail') ?> تواصل معنا</a>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('content_label')) ?></div>
+    <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> <?= h(__('latest_updates')) ?></a>
+    <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> <?= h(__('blog')) ?></a>
+    <a href="<?= h(url('about')) ?>" class="mobile-nav-link"><?= partial_icon('info') ?> <?= h(__('about')) ?></a>
+    <a href="<?= h(url('contact')) ?>" class="mobile-nav-link"><?= partial_icon('mail') ?> <?= h(__('contact')) ?></a>
   </div>
 </nav>
 <!-- Dark overlay behind the drawer -->
@@ -247,17 +247,17 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
 function render_category_tabs_bar(PDO $pdo, string $activeCat = ''): void {
     $cats = $pdo->query("SELECT * FROM categories ORDER BY sort_order, name")->fetchAll();
     ?><div class="cat-tabs-bar">
-      <a href="/" class="cat-tab <?= !$activeCat ? 'active' : '' ?>"><?= partial_icon('home') ?> الكل</a>
+      <a href="/" class="cat-tab <?= !$activeCat ? 'active' : '' ?>"><?= partial_icon('home') ?> <?= h(__('all')) ?></a>
       <?php foreach ($cats as $c): ?>
       <a href="/?cat=<?= h($c['slug']) ?>" class="cat-tab <?= $activeCat === $c['slug'] ? 'active' : '' ?>">
         <?= partial_icon($c['slug'] === 'games' ? 'games' : 'apps') ?> <?= h($c['name']) ?>
       </a>
       <?php endforeach; ?>
       <a href="<?= h(url('top?by=downloads')) ?>" class="cat-tab" style="color:#F97316">
-        <?= partial_icon('trending') ?> الأكثر تحميلاً
+        <?= partial_icon('trending') ?> <?= h(__('top_downloads')) ?>
       </a>
       <a href="<?= h(url('updates')) ?>" class="cat-tab">
-        <?= partial_icon('clock') ?> آخر التحديثات
+        <?= partial_icon('clock') ?> <?= h(__('latest_updates')) ?>
       </a>
     </div><?php
 }
@@ -267,9 +267,9 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     ?>
 <aside class="sidebar">
   <div class="sidebar-section">
-    <div class="sidebar-title">الأقسام</div>
+    <div class="sidebar-title"><?= h(__('sections_label')) ?></div>
     <a href="/" class="sidebar-link <?= !$activeCatSlug ? 'active' : '' ?>">
-      <?= partial_icon('home') ?> الكل
+      <?= partial_icon('home') ?> <?= h(__('all')) ?>
     </a>
     <?php foreach ($categories as $cat): ?>
     <a href="<?= h(url('category/' . $cat['slug'])) ?>" class="sidebar-link <?= $activeCatSlug === $cat['slug'] ? 'active' : '' ?>">
@@ -279,35 +279,35 @@ function render_site_sidebar(PDO $pdo, string $activeCatSlug = ''): void {
     <?php endforeach; ?>
   </div>
   <div class="sidebar-section">
-    <div class="sidebar-title">اكتشف</div>
-    <a href="<?= h(url('top?by=downloads')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر تحميلاً</a>
-    <a href="<?= h(url('top?by=views')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> الأكثر زيارة</a>
-    <a href="<?= h(url('updates')) ?>" class="sidebar-link"><?= partial_icon('clock') ?> آخر التحديثات</a>
+    <div class="sidebar-title"><?= h(__('discover')) ?></div>
+    <a href="<?= h(url('top?by=downloads')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> <?= h(__('top_downloads')) ?></a>
+    <a href="<?= h(url('top?by=views')) ?>" class="sidebar-link"><?= partial_icon('trending') ?> <?= h(__('top_views')) ?></a>
+    <a href="<?= h(url('updates')) ?>" class="sidebar-link"><?= partial_icon('clock') ?> <?= h(__('latest_updates')) ?></a>
   </div>
   <div class="sidebar-section">
-    <div class="sidebar-title">المدونة</div>
+    <div class="sidebar-title"><?= h(__('blog')) ?></div>
     <?php foreach (BLOG_TYPES as $t => $label): if ($t === 'code-page') continue; ?>
     <a href="<?= h(blog_type_url($t)) ?>" class="sidebar-link"><?= partial_icon('article') ?> <?= h($label) ?></a>
     <?php endforeach; ?>
-    <a href="<?= h(blog_type_url('code-page')) ?>" class="sidebar-link"><?= partial_icon('info') ?> صفحة المحتوى</a>
+    <a href="<?= h(blog_type_url('code-page')) ?>" class="sidebar-link"><?= partial_icon('info') ?> <?= h(__('content_page_label')) ?></a>
   </div>
   <div class="sidebar-section">
     <div class="sidebar-title">yassota</div>
     <a href="<?= h(url('about')) ?>" class="sidebar-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
-      من نحن
+      <?= h(__('about')) ?>
     </a>
     <a href="<?= h(url('faq')) ?>" class="sidebar-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
-      الأسئلة الشائعة
+      <?= h(__('faq')) ?>
     </a>
     <a href="<?= h(url('contact')) ?>" class="sidebar-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-      اتصل بنا
+      <?= h(__('contact')) ?>
     </a>
     <a href="<?= h(url('privacy-policy')) ?>" class="sidebar-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      سياسة الخصوصية
+      <?= h(__('privacy')) ?>
     </a>
   </div>
 </aside>
@@ -325,7 +325,7 @@ function render_app_card(array $app): void { ?>
       </div>
     <?php endif; ?>
     <div class="app-card-body">
-      <div class="app-card-cat"><?= h($app['cat_name'] ?? 'تطبيق') ?></div>
+      <div class="app-card-cat"><?= h($app['cat_name'] ?? __('app')) ?></div>
       <div class="app-card-name"><?= h($app['name']) ?></div>
       <?php if (!empty($app['short_description'])): ?>
       <div class="app-card-desc"><?= h(mb_substr($app['short_description'], 0, 80)) ?><?= mb_strlen($app['short_description']) > 80 ? '…' : '' ?></div>
@@ -340,13 +340,14 @@ function render_app_card(array $app): void { ?>
     </div>
   </a>
   <a href="<?= h(app_url($app['slug']) . '?intent=dl') ?>" class="btn-dl-card">
-    <?= partial_icon('download') ?> تحميل
+    <?= partial_icon('download') ?> <?= h(__('download')) ?>
   </a>
 </div>
 <?php }
 
 /* ── A grid of app cards, with an empty-state message ── */
-function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نتائج'): void {
+function render_app_grid(array $apps, string $emptyMessage = ''): void {
+    if ($emptyMessage === '') $emptyMessage = __('no_results');
     if (!$apps) {
         echo '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><p style="font-size:16px">' . h($emptyMessage) . '</p></div>';
         return;
@@ -359,48 +360,48 @@ function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نت
 
 function render_site_footer(): void { ?>
 <!-- ═══ MOBILE BOTTOM NAV ═══ -->
-<nav class="bottom-nav" id="bottom-nav" aria-label="التنقل السريع">
+<nav class="bottom-nav" id="bottom-nav" aria-label="<?= h(__('menu')) ?>">
   <a href="<?= h(url('')) ?>" id="bn-home">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg>
-    الرئيسية
+    <?= h(__('home')) ?>
   </a>
   <a href="<?= h(url('top?by=downloads')) ?>" id="bn-top">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 6l-9.5 9.5-5-5L2 18"/><path d="M16 6h6v6"/></svg>
-    الأكثر تحميلاً
+    <?= h(__('top_downloads')) ?>
   </a>
   <a href="<?= h(url('updates')) ?>" id="bn-updates">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-    التحديثات
+    <?= h(__('updates')) ?>
   </a>
   <a href="<?= h(url('tools')) ?>" id="bn-tools">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-    أدوات
+    <?= h(__('tools')) ?>
   </a>
   <button onclick="document.getElementById('bn-sheet').classList.toggle('open')" id="bn-more">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
-    المزيد
+    <?= h(__('more')) ?>
   </button>
 </nav>
 
-<!-- "المزيد" bottom sheet -->
+<!-- "More" bottom sheet -->
 <div class="bn-more-sheet" id="bn-sheet">
-  <div style="text-align:center;font-size:12px;color:rgba(226,232,240,.4);margin-bottom:12px;font-weight:600;letter-spacing:.5px">قسم المزيد</div>
+  <div style="text-align:center;font-size:12px;color:rgba(226,232,240,.4);margin-bottom:12px;font-weight:600;letter-spacing:.5px"><?= h(__('more')) ?></div>
   <div class="bn-more-grid">
     <a href="<?= h(url('blog')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
-      المدونة
+      <?= h(__('blog')) ?>
     </a>
     <a href="<?= h(url('exchange')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-      سعر الصرف
+      <?= h(__('exchange')) ?>
     </a>
     <a href="<?= h(url('gold')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-      أسعار الذهب
+      <?= h(__('gold')) ?>
     </a>
     <a href="<?= h(url('about')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
-      من نحن
+      <?= h(__('about')) ?>
     </a>
     <a href="<?= h(url('rss')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/></svg>
@@ -408,15 +409,15 @@ function render_site_footer(): void { ?>
     </a>
     <a href="<?= h(url('contact')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,4 12,13 2,4"/></svg>
-      تواصل
+      <?= h(__('contact')) ?>
     </a>
     <a href="<?= h(url('faq')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
-      الأسئلة
+      <?= h(__('faq')) ?>
     </a>
     <a href="<?= h(url('calculators')) ?>" class="bn-more-item">
       <svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 12h4M8 17h2"/></svg>
-      حاسبات
+      <?= h(__('calculators')) ?>
     </a>
   </div>
 </div>
@@ -447,29 +448,27 @@ function render_site_footer(): void { ?>
       <div>
         <div class="footer-logo" style="margin-bottom:10px">yas<span style="color:var(--purple)">sota</span></div>
         <p style="color:var(--muted);font-size:13px;line-height:1.75;max-width:300px;margin:0 0 12px">
-          دليلك التحريري العربي المستقل لاكتشاف ومراجعة تطبيقات أندرويد — مراجعات دقيقة، معلومات موثوقة، ومحتوى محدّث باستمرار.
+          <?= h(__('footer_tagline')) ?>
         </p>
         <p style="color:var(--muted);font-size:11px;line-height:1.65;padding-top:12px;border-top:1px solid var(--border-c);margin:0">
-          yassota موقع تحريري مستقل لمراجعة التطبيقات ولا ينتمي لأي متجر أو شركة تطبيقات.
-          بعض روابط التحميل توجّه إلى Google Play أو مصادر رسمية أخرى.
-          يحتوي الموقع على إعلانات من Google AdSense.
+          <?= h(__('footer_disclaimer')) ?>
         </p>
       </div>
 
       <!-- Col 1 -->
       <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">اكتشف</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px"><?= h(__('discover')) ?></div>
         <?php foreach ([
-            url('') => 'الرئيسية',
-            url('top?by=downloads') => 'الأكثر تحميلاً',
-            url('top?by=views')     => 'الأكثر زيارة',
-            url('updates')          => 'آخر التحديثات',
-            url('blog')             => 'المدونة',
-            url('tools')            => 'أدوات الويب (20+)',
-            url('exchange')         => 'أسعار الصرف',
-            url('gold')             => 'أسعار الذهب',
-            url('calculators')      => 'حاسبات البناء',
-            url('solar')            => 'الطاقة الشمسية',
+            url('') => __('home'),
+            url('top?by=downloads') => __('top_downloads'),
+            url('top?by=views')     => __('top_views'),
+            url('updates')          => __('latest_updates'),
+            url('blog')             => __('blog'),
+            url('tools')            => __('tools') . ' (20+)',
+            url('exchange')         => __('exchange'),
+            url('gold')             => __('gold'),
+            url('calculators')      => __('calculators'),
+            url('solar')            => __('solar'),
             url('rss')              => 'RSS',
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
@@ -479,16 +478,16 @@ function render_site_footer(): void { ?>
 
       <!-- Col 2 -->
       <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">yassota</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;margin-bottom:14px"><?= h(__('yassota_section')) ?></div>
         <?php foreach ([
-            url('about')          => 'من نحن',
-            url('faq')            => 'الأسئلة الشائعة',
-            url('contact')        => 'اتصل بنا',
-            url('privacy-policy') => 'سياسة الخصوصية',
-            url('terms')          => 'شروط الاستخدام',
-            url('cookie-policy')  => 'سياسة الكوكيز',
-            url('disclosure')     => 'الإفصاح الإعلاني',
-            url('dmca')           => 'DMCA وإزالة المحتوى',
+            url('about')          => __('about'),
+            url('faq')            => __('faq'),
+            url('contact')        => __('contact'),
+            url('privacy-policy') => __('privacy'),
+            url('terms')          => __('terms'),
+            url('cookie-policy')  => __('cookie_policy'),
+            url('disclosure')     => __('disclosure_link'),
+            url('dmca')           => __('dmca_link'),
         ] as $href => $label): ?>
         <a href="<?= h($href) ?>" style="display:block;color:var(--muted);font-size:13px;padding:4px 0;text-decoration:none;transition:color .15s"
            onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--muted)'"><?= h($label) ?></a>
@@ -499,10 +498,10 @@ function render_site_footer(): void { ?>
     <!-- Copyright bar -->
     <div style="border-top:1px solid var(--border-c);padding-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
       <p style="font-size:11px;color:var(--muted);margin:0">
-        &copy; 2024–<?= date('Y') ?> yassota — جميع الحقوق محفوظة | دليل تحريري مستقل لتطبيقات أندرويد
+        &copy; 2024–<?= date('Y') ?> yassota — <?= h(__('all_rights')) ?>
       </p>
       <p style="font-size:11px;color:var(--muted);margin:0">
-        تحت إشراف تحريري — المحتوى يُحدَّث يومياً
+        <?= h(__('editorial_oversight')) ?>
       </p>
     </div>
   </div>
@@ -525,7 +524,7 @@ function render_cookie_banner(): void { ?>
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   padding:18px 24px;
   display:flex;flex-wrap:wrap;align-items:center;gap:14px;
-  font-family:'Cairo',sans-serif;direction:rtl;
+  font-family:'Cairo',sans-serif;
   transform:translateY(100%);
   transition:transform .35s cubic-bezier(.4,0,.2,1);
 }
@@ -550,16 +549,16 @@ function render_cookie_banner(): void { ?>
 .cb-reject:hover{border-color:rgba(255,255,255,.3);color:#e2e8f0;}
 </style>
 
-<div id="cookie-banner" class="cookie-banner" role="dialog" aria-label="إشعار الخصوصية" hidden>
+<div id="cookie-banner" class="cookie-banner" role="dialog" aria-label="<?= h(__('privacy_notice')) ?>" hidden>
   <div class="cb-text">
-    <strong>نستخدم ملفات تعريف الارتباط (Cookies)</strong>
-    يستخدم yassota cookies ضرورية للتشغيل، وبموافقتك: إعلانات Google AdSense مخصصة وإحصاءات الزيارات.
-    راجع <a href="<?= h(url('privacy-policy')) ?>">سياسة الخصوصية</a>
-    و<a href="<?= h(url('cookie-policy')) ?>">سياسة الكوكيز</a>.
+    <strong><?= h(__('cookie_banner_title')) ?></strong>
+    <?= h(__('cookie_banner_text')) ?>
+    <?= h(__('review_word')) ?> <a href="<?= h(url('privacy-policy')) ?>"><?= h(__('privacy')) ?></a>
+    <?= h(__('and_word')) ?> <a href="<?= h(url('cookie-policy')) ?>"><?= h(__('cookie_policy')) ?></a>.
   </div>
   <div class="cb-btns">
-    <button type="button" class="cb-accept" id="cb-accept-all">قبول الكل</button>
-    <button type="button" class="cb-reject" id="cb-reject-all">الضروري فقط</button>
+    <button type="button" class="cb-accept" id="cb-accept-all"><?= h(__('accept_all')) ?></button>
+    <button type="button" class="cb-reject" id="cb-reject-all"><?= h(__('essential_only')) ?></button>
   </div>
 </div>
 

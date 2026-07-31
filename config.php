@@ -388,6 +388,9 @@ function ensure_schema(PDO $pdo): array {
         if (!in_array('how_it_started', $toolsCols)) {
             @$pdo->exec("ALTER TABLE web_tools ADD COLUMN how_it_started MEDIUMTEXT COMMENT 'origin story / how this tool started' AFTER whats_new");
         }
+        if (!in_array('icon_path', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN icon_path VARCHAR(255) COMMENT 'uploaded tool icon, same pipeline as app icons' AFTER slug");
+        }
     } catch (Throwable $e) {}
 
     // Additive migrations for apps table (existing installs don't have new columns)
@@ -4987,20 +4990,20 @@ function get_web_tool_by_slug(PDO $pdo, string $slug): ?array {
 function list_web_tools(PDO $pdo, string $status = 'published', int $limit = 999): array {
     $where = $status === 'all' ? '' : "WHERE status=?";
     $params = $status === 'all' ? [] : [$status];
-    $sql = "SELECT id, name, slug, short_description, seo_title, status, views, created_at, updated_at FROM web_tools $where ORDER BY created_at DESC LIMIT $limit";
+    $sql = "SELECT id, name, slug, icon_path, short_description, seo_title, status, views, created_at, updated_at FROM web_tools $where ORDER BY created_at DESC LIMIT $limit";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 function save_web_tool(PDO $pdo, array $data, int $id = 0): int {
-    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','how_it_started','status'], true), ARRAY_FILTER_USE_KEY);
+    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','icon_path','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','how_it_started','status'], true), ARRAY_FILTER_USE_KEY);
 
     if (!$id) {
-        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, how_it_started, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, icon_path, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, how_it_started, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $data['name'] ?? '', $data['slug'] ?? '', $data['seo_title'] ?? '', $data['meta_description'] ?? '',
+            $data['name'] ?? '', $data['slug'] ?? '', $data['icon_path'] ?? null, $data['seo_title'] ?? '', $data['meta_description'] ?? '',
             $data['meta_tags'] ?? '', $data['short_description'] ?? '', $data['long_description'] ?? '',
             $data['tutorials'] ?? '', $data['features'] ?? '', $data['pros'] ?? '', $data['cons'] ?? '',
             $data['whats_new'] ?? '', $data['faq'] ?? '', $data['how_it_started'] ?? '', $data['status'] ?? 'draft'

@@ -97,7 +97,7 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   </div>
   <?php endif; ?>
 
-  <?php render_app_grid($apps, "لا توجد تطبيقات في تصنيف \"{$category['name']}\" بعد"); ?>
+  <?php render_app_grid($apps, __('no_apps_in_category')); ?>
   <?php render_pagination($page, $totalPages); ?>
 
 </main>

@@ -49,8 +49,8 @@ if (!$app) {
     echo '<!DOCTYPE html><html lang="' . (defined('UI_LANG') ? UI_LANG : 'ar') . '" dir="' . (defined('UI_DIR') ? UI_DIR : 'rtl') . '"><head><meta charset="UTF-8"><title>404</title>
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
-    <p style="color:var(--muted)">التطبيق غير موجود</p>
-    <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
+    <p style="color:var(--muted)">' . h(__('app_not_found')) . '</p>
+    <a href="/" style="color:var(--cyan)">' . h(__('back_to_home')) . '</a></body></html>';
     exit;
 }
 
@@ -117,7 +117,7 @@ if (!empty($app['developer'])) {
 }
 
 // Related tools — web tools to cross-promote alongside apps
-$toolsStmt = $pdo->prepare("SELECT id, name, slug, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 6");
+$toolsStmt = $pdo->prepare("SELECT id, name, slug, icon_path, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 6");
 $toolsStmt->execute();
 $relatedTools = $toolsStmt->fetchAll();
 
@@ -244,7 +244,7 @@ $schemaData = array_filter($schemaData, fn($v) => $v !== null && $v !== '');
 $schema = json_encode($schemaData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 $breadcrumbItems = [
-    ["@type" => "ListItem", "position" => 1, "name" => "الرئيسية", "item" => url('')],
+    ["@type" => "ListItem", "position" => 1, "name" => __('home'), "item" => url('')],
 ];
 if ($app['cat_slug']) {
     $breadcrumbItems[] = ["@type" => "ListItem", "position" => 2, "name" => $app['cat_name'], "item" => url('category/' . $app['cat_slug'])];
@@ -310,10 +310,10 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     if ($app['seo_title']) echo h($app['seo_title']);
     else {
         $vtag = $app['version'] ? ' ' . h($app['version']) : '';
-        printf('%s%s لـ Android - تحميل APK الموثوق | yassota', h($app['name']), $vtag);
+        printf('%s%s %s APK - yassota', h($app['name']), $vtag, __('download'));
     }
   ?></title>
-  <meta name="description" content="<?= h($app['meta_description'] ?: "تحميل " . $app['name'] . ($app['version'] ? " v{$app['version']}" : '') . " لـ Android مجاناً — " . ($app['short_description'] ?: "أحدث إصدار APK آمن وموثوق متاح على yassota.com")) ?>">
+  <meta name="description" content="<?= h($app['meta_description'] ?: __('download') . " " . $app['name'] . ($app['version'] ? " v{$app['version']}" : '') . " " . __('android') . " " . __('free') . " — " . ($app['short_description'] ?: 'yassota.com')) ?>">
   <?php if ($app['keywords']): ?><meta name="keywords" content="<?= h($app['keywords']) ?>"><?php endif; ?>
   <?php
     // All published apps are indexable — the admin approved them for publication.
@@ -352,15 +352,15 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 <!-- Sidebar -->
 <aside class="sidebar">
   <div class="sidebar-section">
-    <div class="sidebar-title">التنقل</div>
-    <a href="/" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> الرئيسية</a>
+    <div class="sidebar-title"><?= h(__('menu')) ?></div>
+    <a href="/" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg> <?= h(__('home')) ?></a>
     <?php if ($app['cat_slug']): ?>
     <a href="<?= h(url('category/' . $app['cat_slug'])) ?>" class="sidebar-link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg> <?= h($app['cat_name']) ?></a>
     <?php endif; ?>
   </div>
   <?php if ($relatedApps): ?>
   <div class="sidebar-section">
-    <div class="sidebar-title">تطبيقات مشابهة</div>
+    <div class="sidebar-title"><?= h(__('similar_apps')) ?></div>
     <?php foreach ($relatedApps as $r): ?>
     <a href="<?= h(app_url($r['slug'])) ?>" class="sidebar-link" style="gap:10px">
       <?php if ($r['icon_path']): ?>
@@ -378,7 +378,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
   <!-- Breadcrumb -->
   <?php
-  $bcItems = [['label' => 'الرئيسية', 'url' => url('')]];
+  $bcItems = [['label' => __('home'), 'url' => url('')]];
   if ($app['cat_slug']) $bcItems[] = ['label' => $app['cat_name'], 'url' => url('category/' . $app['cat_slug'])];
   $bcItems[] = ['label' => $app['name']];
   render_breadcrumbs($bcItems);
@@ -386,7 +386,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- Language switcher (shown when translations exist) -->
   <?php if (count($langVersions) > 1): ?>
   <div style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-    <span style="font-size:12px;color:var(--muted)">🌐 اللغات المتاحة:</span>
+    <span style="font-size:12px;color:var(--muted)">🌐 <?= h(__('available_languages')) ?></span>
     <?php
     $langLabels = ['ar'=>'العربية','en'=>'English','ru'=>'Русский','fr'=>'Français','de'=>'Deutsch',
                    'es'=>'Español','tr'=>'Türkçe','id'=>'Indonesia','pt'=>'Português','ur'=>'اردو',
@@ -408,10 +408,10 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <div style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">
     <span class="editorial-badge">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-      تمت مراجعته من قِبَل فريق yassota
+      <?= h(__('reviewed_by_team')) ?>
     </span>
     <?php if ($app['updated_at']): ?>
-    <span style="font-size:11px;color:var(--muted)">آخر تحديث: <?= date('d/m/Y', strtotime($app['updated_at'])) ?></span>
+    <span style="font-size:11px;color:var(--muted)"><?= h(__('last_update')) ?>: <?= date('d/m/Y', strtotime($app['updated_at'])) ?></span>
     <?php endif; ?>
   </div>
 
@@ -606,8 +606,8 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <div class="section-box reveal" style="padding:16px 20px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <span style="font-size:13px;font-weight:700">الصلاحيات المطلوبة</span>
-      <span style="font-size:11px;color:var(--muted);margin-right:auto"><?= count($permList) ?> صلاحية</span>
+      <span style="font-size:13px;font-weight:700"><?= h(__('required_permissions')) ?></span>
+      <span style="font-size:11px;color:var(--muted);margin-right:auto"><?= count($permList) ?> <?= h(__('permission_count')) ?></span>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px">
       <?php foreach ($permList as $perm):
@@ -626,7 +626,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     </div>
     <?php if (count(array_filter($permList, fn($p) => in_array(strtoupper(str_replace('android.permission.','',$p)),['CAMERA','RECORD_AUDIO','ACCESS_FINE_LOCATION','READ_CONTACTS','READ_SMS','SEND_SMS','CALL_PHONE','REQUEST_INSTALL_PACKAGES','MANAGE_EXTERNAL_STORAGE'],true)))): ?>
     <p style="font-size:11px;color:var(--muted);margin-top:10px">
-      <span style="color:var(--danger)">●</span> صلاحيات باللون الأحمر قد تكون حساسة — تأكد من فهم سبب حاجة التطبيق لها قبل المنح.
+      <span style="color:var(--danger)">●</span> <?= h(__('permissions_warning')) ?>
     </p>
     <?php endif; ?>
   </div>
@@ -679,9 +679,9 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
       <?= nl2br(h($descFirst)) ?>
     </div>
     <?php if ($descIsLong): ?>
-    <button type="button" class="btn-desc-toggle" id="btn-desc-more" onclick="(function(b,w){var exp=w.classList.toggle('expanded');b.classList.toggle('expanded',exp);b.innerHTML=exp?'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;18 15 12 9 6 15&quot;/></svg> عرض أقل':'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;6 9 12 15 18 9&quot;/></svg> اقرأ المزيد';})(this,document.getElementById('app-desc-body'))">
+    <button type="button" class="btn-desc-toggle" id="btn-desc-more" onclick="(function(b,w){var exp=w.classList.toggle('expanded');b.classList.toggle('expanded',exp);b.innerHTML=exp?'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;18 15 12 9 6 15&quot;/></svg> <?= h(__('show_less')) ?>':'<svg width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2.5&quot;><polyline points=&quot;6 9 12 15 18 9&quot;/></svg> <?= h(__('show_more')) ?>';})(this,document.getElementById('app-desc-body'))">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-      اقرأ المزيد
+      <?= h(__('read_more')) ?>
     </button>
     <?php endif; ?>
   </div>
@@ -720,7 +720,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     <div class="pros-cons-grid">
       <div class="pros-box">
         <div class="pros-cons-title pros">
-          <?= svgi('check') ?> الإيجابيات
+          <?= svgi('check') ?> <?= h(__('pros')) ?>
         </div>
         <ul class="pros-cons-list">
           <?php foreach ($pros as $p): ?><li><span><?= h($p) ?></span></li><?php endforeach; ?>
@@ -728,7 +728,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
       </div>
       <div class="cons-box">
         <div class="pros-cons-title cons">
-          <?= svgi('x') ?> السلبيات
+          <?= svgi('x') ?> <?= h(__('cons')) ?>
         </div>
         <ul class="pros-cons-list">
           <?php foreach ($cons as $c): ?><li><span><?= h($c) ?></span></li><?php endforeach; ?>
@@ -795,20 +795,20 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     <div class="section-head"><span class="section-title"><?= __('version_history') ?></span></div>
     <div style="overflow-x:auto">
       <table class="admin-table" style="width:100%;min-width:480px">
-        <thead><tr><th>الإصدار</th><th>التاريخ</th><th>التغييرات</th><th></th></tr></thead>
+        <thead><tr><th><?= h(__('version_col')) ?></th><th><?= h(__('date_col')) ?></th><th><?= h(__('changes_col')) ?></th><th></th></tr></thead>
         <tbody>
           <tr style="background:rgba(37,99,235,.04)">
-            <td style="font-family:var(--f-mono);color:var(--cyan)">v<?= h($app['version']) ?> (الحالي)</td>
+            <td style="font-family:var(--f-mono);color:var(--cyan)">v<?= h($app['version']) ?> (<?= h(__('current_version')) ?>)</td>
             <td style="color:var(--muted);font-size:12px"><?= h(time_ago($app['updated_at'])) ?></td>
             <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth($whatsNew, 0, 120, '...')) ?></td>
-            <td><a href="<?= h(download_url($app['slug'])) ?>" class="btn-edit" data-hardnav="1">تحميل</a></td>
+            <td><a href="<?= h(download_url($app['slug'])) ?>" class="btn-edit" data-hardnav="1"><?= h(__('download')) ?></a></td>
           </tr>
           <?php foreach ($versionHistory as $v): ?>
           <tr>
             <td style="font-family:var(--f-mono)">v<?= h($v['version'] ?: '—') ?></td>
             <td style="color:var(--muted);font-size:12px"><?= h(time_ago($v['created_at'])) ?></td>
             <td style="color:var(--muted);font-size:13px"><?= h(mb_strimwidth(clean_long_text($v['changelog'] ?? ''), 0, 120, '...')) ?></td>
-            <td><?php if ($v['download_url']): ?><a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="btn-view" data-hardnav="1">تحميل هذا الإصدار</a><?php endif; ?></td>
+            <td><?php if ($v['download_url']): ?><a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="btn-view" data-hardnav="1"><?= h(__('download_this_version')) ?></a><?php endif; ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
@@ -830,7 +830,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     <?php $dlVersions = array_filter($versionHistory, fn($v) => !empty($v['download_url'])); ?>
     <?php if ($dlVersions): ?>
     <details class="prev-versions-slim">
-      <summary>📦 الإصدارات السابقة (<?= count($dlVersions) ?>)</summary>
+      <summary>📦 <?= h(__('prev_versions')) ?> (<?= count($dlVersions) ?>)</summary>
       <div class="prev-versions-list">
         <?php foreach ($dlVersions as $v): ?>
         <a href="<?= h(download_url($app['slug'])) ?>?ver=<?= (int)$v['id'] ?>" class="prev-version-chip" data-hardnav="1">
@@ -846,7 +846,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
     <?php if ($tgUrl): ?>
     <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-      اشترك في قناة yassota على تيليجرام
+      <?= h(__('subscribe_telegram')) ?>
     </a>
     <?php endif; ?>
   </div>
@@ -888,12 +888,12 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
       <?php endforeach; ?>
     </div>
     <?php else: ?>
-    <p style="color:var(--muted);font-size:13px;margin-bottom:20px">لا توجد تقييمات بعد — كن أول من يقيّم هذا التطبيق.</p>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:20px"><?= h(__('no_reviews_yet')) ?></p>
     <?php endif; ?>
 
     <?php if ($commentSubmitted): ?>
       <div style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:var(--success);padding:14px 18px;border-radius:10px">
-        ✅ شكراً لك، تم استلام تقييمك وسيظهر بعد المراجعة.
+        ✅ <?= h(__('review_thanks')) ?>
       </div>
     <?php else: ?>
       <?php if ($commentError): ?>
@@ -909,7 +909,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <!-- What this app offers -->
   <?php if ($offersText !== ''): ?>
   <div class="section-box reveal">
-    <div class="section-head"><span class="section-title">ماذا يقدّم <?= h($app['name']) ?>؟</span></div>
+    <div class="section-head"><span class="section-title"><?= h(__('what_does_offer')) ?> <?= h($app['name']) ?><?= (defined('UI_LANG') && UI_LANG === 'ar') ? '؟' : '?' ?></span></div>
     <div style="color:var(--muted);font-size:14px;line-height:1.85"><?= nl2br(h($offersText)) ?></div>
   </div>
   <?= wave() ?>
@@ -968,7 +968,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
         </div>
       </a>
       <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
-        <?= svgi('download') ?> تحميل
+        <?= svgi('download') ?> <?= h(__('download')) ?>
       </a>
     </div>
     <?php endforeach; ?>
@@ -977,12 +977,16 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
 
   <!-- Related Tools -->
   <?php if ($relatedTools): ?>
-  <div class="section-head reveal"><span class="section-title">🔧 أدوات مفيدة</span></div>
+  <div class="section-head reveal"><span class="section-title"><?= h(__('useful_tools')) ?></span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
     <?php foreach ($relatedTools as $t): ?>
     <a href="<?= h(url('tools.php?slug=' . urlencode($t['slug']))) ?>" class="app-card reveal" data-hardnav="1" style="text-decoration:none">
       <div class="app-card-body" style="padding:16px;border-bottom:none">
+        <?php if (!empty($t['icon_path'])): ?>
+        <img src="<?= h(media_url($t['icon_path'])) ?>" alt="<?= h($t['name']) ?>" class="app-card-icon" loading="lazy" style="margin:0 auto 10px">
+        <?php else: ?>
         <div class="app-card-icon-placeholder" style="margin:0 auto 10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)"></div>
+        <?php endif; ?>
         <div class="app-card-name" style="font-size:13px;min-height:2.6em"><?= h($t['name']) ?></div>
         <div style="color:var(--muted);font-size:11px;line-height:1.4;margin-top:6px"><?= h(mb_substr($t['short_description'], 0, 60)) ?>...</div>
       </div>
@@ -1012,7 +1016,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
         </div>
       </a>
       <a href="<?= h(download_url($r['slug'])) ?>" class="btn-dl-card" data-hardnav="1">
-        <?= svgi('download') ?> تحميل
+        <?= svgi('download') ?> <?= h(__('download')) ?>
       </a>
     </div>
     <?php endforeach; ?>

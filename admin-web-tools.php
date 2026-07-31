@@ -69,6 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
         $data['faq'] = json_encode($pairs, JSON_UNESCAPED_UNICODE);
     }
 
+    // Icon upload — reuses the same process_icon() pipeline as app icons
+    // (security scan, center-crop to 400x400 WebP). Leaving the field empty
+    // on edit keeps the existing icon (icon_path is simply omitted from $data).
+    if (!empty($_FILES['icon']['name']) && $_FILES['icon']['error'] === UPLOAD_ERR_OK) {
+        $iconPath = process_icon($_FILES['icon'], $data['slug'] ?: 'tool', $pdo);
+        if ($iconPath) $data['icon_path'] = $iconPath;
+    }
+
     if (!$data['name']) {
         $error = __('tool_name') . ' ' . __('required');
     } elseif (!$data['slug']) {
@@ -160,6 +168,7 @@ $tools = list_web_tools($pdo, 'all');
     <table class="tools-table">
       <thead>
         <tr>
+          <th></th>
           <th><?= __('name') ?></th>
           <th><?= __('slug') ?></th>
           <th><?= __('status') ?></th>
@@ -171,6 +180,13 @@ $tools = list_web_tools($pdo, 'all');
       <tbody>
         <?php foreach ($tools as $t): ?>
         <tr>
+          <td>
+            <?php if (!empty($t['icon_path'])): ?>
+              <img src="<?= h(media_url($t['icon_path'])) ?>" alt="" style="width:36px;height:36px;border-radius:9px;object-fit:cover">
+            <?php else: ?>
+              <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#667eea,#764ba2)"></div>
+            <?php endif; ?>
+          </td>
           <td><?= h($t['name']) ?></td>
           <td><code><?= h($t['slug']) ?></code></td>
           <td><span class="status-badge status-<?= $t['status'] ?>"><?= $t['status'] === 'published' ? __('tool_published') : __('tool_draft') ?></span></td>
@@ -188,11 +204,24 @@ $tools = list_web_tools($pdo, 'all');
 
   <?php elseif ($action === 'add' || $action === 'edit'): ?>
     <!-- ── نموذج الأداة ── -->
-    <form method="post" class="edit-form">
+    <form method="post" class="edit-form" enctype="multipart/form-data">
       <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
       <input type="hidden" name="id" value="<?= $tool['id'] ?? 0 ?>">
 
       <div class="form-grid">
+        <div class="form-group form-full" style="display:flex;align-items:center;gap:16px">
+          <?php if (!empty($tool['icon_path'])): ?>
+            <img src="<?= h(media_url($tool['icon_path'])) ?>" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid #ddd">
+          <?php else: ?>
+            <div style="width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,#667eea,#764ba2);flex-shrink:0"></div>
+          <?php endif; ?>
+          <div>
+            <label style="margin-bottom:6px">أيقونة الأداة</label>
+            <input type="file" name="icon" accept="image/png,image/jpeg,image/webp">
+            <small style="color:#666;display:block;margin-top:4px">اتركه فارغاً للإبقاء على الأيقونة الحالية</small>
+          </div>
+        </div>
+
         <div class="form-group">
           <label><?= __('tool_name') ?> *</label>
           <input type="text" name="name" value="<?= h($tool['name'] ?? '') ?>" required>

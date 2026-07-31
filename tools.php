@@ -12,7 +12,7 @@ if ($slug) {
     $tool = get_web_tool_by_slug($pdo, $slug);
     if (!$tool || $tool['status'] !== 'published') {
         http_response_code(404);
-        die('أداة غير موجودة');
+        die(h(__('tool_not_found')));
     }
 
     // Increment views
@@ -32,13 +32,13 @@ if ($slug) {
             [
                 '@type' => 'ListItem',
                 'position' => 1,
-                'name' => 'الرئيسية',
+                'name' => __('home'),
                 'item' => SITE_URL
             ],
             [
                 '@type' => 'ListItem',
                 'position' => 2,
-                'name' => 'الأدوات',
+                'name' => __('tools'),
                 'item' => SITE_URL . '/tools'
             ],
             [
@@ -76,7 +76,7 @@ if ($slug) {
     }
 
     ?><!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -123,12 +123,12 @@ if ($slug) {
   <?php require_once __DIR__ . '/partials.php'; render_site_header('', 'tools'); ?>
 
   <div class="container" style="max-width:900px;padding:40px 20px">
-    <a href="/tools" style="color: var(--muted); text-decoration: none; font-size: 14px;">← الأدوات</a>
+    <a href="/tools" style="color: var(--muted); text-decoration: none; font-size: 14px;">← <?= h(__('tools')) ?></a>
 
     <h1 style="margin-top:16px;font-size:32px;line-height:1.3"><?= h($tool['name']) ?></h1>
     <p style="color: var(--muted); font-size: 14px; margin-top: 8px;">
-      تاريخ الإنشاء: <?= h(date('d M Y', strtotime($tool['created_at']))) ?>
-      | المشاهدات: <?= number_format($tool['views']) ?>
+      <?= h(__('date')) ?>: <?= h(date('d M Y', strtotime($tool['created_at']))) ?>
+      | <?= h(__('views')) ?>: <?= number_format($tool['views']) ?>
     </p>
 
     <!-- Short description -->
@@ -143,7 +143,7 @@ if ($slug) {
     <!-- Main content (long description) -->
     <?php if ($tool['long_description']): ?>
     <div class="tool-section">
-      <h3>نظرة عامة</h3>
+      <h3><?= h(__('overview')) ?></h3>
       <div class="tool-content">
         <?= nl2br(h($tool['long_description'])) ?>
       </div>
@@ -153,7 +153,7 @@ if ($slug) {
     <!-- Features -->
     <?php if (!empty($features)): ?>
     <div class="tool-section">
-      <h3>المميزات الرئيسية</h3>
+      <h3><?= h(__('main_features')) ?></h3>
       <div class="tool-features">
         <?php foreach ($features as $f): ?>
         <div class="feature-item">✨ <?= h($f) ?></div>
@@ -165,11 +165,11 @@ if ($slug) {
     <!-- Pros and Cons -->
     <?php if (!empty($pros) || !empty($cons)): ?>
     <div class="tool-section">
-      <h3>الإيجابيات والسلبيات</h3>
+      <h3><?= h(__('pros_cons')) ?></h3>
       <div class="pros-cons">
         <?php if (!empty($pros)): ?>
         <div>
-          <h4 style="margin-top: 0; color: #22c55e;">الإيجابيات</h4>
+          <h4 style="margin-top: 0; color: #22c55e;"><?= h(__('pros')) ?></h4>
           <ul class="pro-list" style="margin: 0; padding-left: 20px; list-style: none;">
             <?php foreach ($pros as $p): ?>
             <li><?= h($p) ?></li>
@@ -180,7 +180,7 @@ if ($slug) {
 
         <?php if (!empty($cons)): ?>
         <div>
-          <h4 style="margin-top: 0; color: #ef4444;">السلبيات</h4>
+          <h4 style="margin-top: 0; color: #ef4444;"><?= h(__('cons')) ?></h4>
           <ul class="con-list" style="margin: 0; padding-left: 20px; list-style: none;">
             <?php foreach ($cons as $c): ?>
             <li><?= h($c) ?></li>
@@ -195,7 +195,7 @@ if ($slug) {
     <!-- Tutorials/Usage -->
     <?php if ($tool['tutorials']): ?>
     <div class="tool-section">
-      <h3>كيفية الاستخدام والشروحات</h3>
+      <h3><?= h(__('how_to_use_tutorials')) ?></h3>
       <div class="tool-content">
         <?= nl2br(h($tool['tutorials'])) ?>
       </div>
@@ -205,7 +205,7 @@ if ($slug) {
     <!-- How it started -->
     <?php if (!empty($tool['how_it_started'])): ?>
     <div class="tool-section">
-      <h3>كيف بدأت هذه الأداة</h3>
+      <h3><?= h(__('how_it_started_label')) ?></h3>
       <div class="tool-content">
         <?= nl2br(h($tool['how_it_started'])) ?>
       </div>
@@ -215,7 +215,7 @@ if ($slug) {
     <!-- FAQ -->
     <?php if (!empty($faq)): ?>
     <div class="tool-section">
-      <h3>أسئلة شائعة</h3>
+      <h3><?= h(__('faq_heading')) ?></h3>
       <?php foreach ($faq as $item): ?>
         <?php if (!empty($item['q']) && !empty($item['a'])): ?>
         <div class="faq-item">
@@ -230,7 +230,7 @@ if ($slug) {
     <!-- What's New -->
     <?php if ($tool['whats_new']): ?>
     <div class="tool-section">
-      <h3>آخر التحديثات</h3>
+      <h3><?= h(__('latest_updates_heading')) ?></h3>
       <div class="tool-content">
         <?= nl2br(h($tool['whats_new'])) ?>
       </div>
@@ -248,7 +248,7 @@ if ($slug) {
     ?>
     <?php if (!empty($relatedApps)): ?>
     <div class="tool-section" style="background:linear-gradient(135deg, rgba(34,197,94,.08), rgba(59,130,246,.08));border-left:4px solid #22c55e">
-      <h3 style="margin-top:0">تطبيقات قد تهمك</h3>
+      <h3 style="margin-top:0"><?= h(__('apps_you_may_like')) ?></h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px">
         <?php foreach ($relatedApps as $app): ?>
         <a href="<?= h(app_url($app['slug'])) ?>"
@@ -267,7 +267,7 @@ if ($slug) {
         <?php endforeach; ?>
       </div>
       <div style="text-align:center;margin-top:12px">
-        <a href="/" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600">عرض جميع التطبيقات <?= partial_icon('arrow-r') ?></a>
+        <a href="/" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600"><?= h(__('view_all_apps')) ?> <?= partial_icon('arrow-r') ?></a>
       </div>
     </div>
     <?php endif; ?>
@@ -280,54 +280,63 @@ if ($slug) {
     // Show tools directory listing
     $tools = list_web_tools($pdo, 'published', 1000);
     ?><!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>أدوات الويب — yassota</title>
-  <meta name="description" content="أدوات ويب مجانية لمحترفي التطوير والتسويق الرقمي">
-  <meta name="keywords" content="أدوات ويب, أدوات تطوير, أدوات تسويق رقمي">
+  <title><?= h(__('free_web_tools')) ?> — yassota</title>
+  <meta name="description" content="<?= h(__('free_web_tools_desc')) ?>">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="<?= h(SITE_URL . '/tools') ?>">
   <?php require_once __DIR__ . '/partials.php'; head_common(); ?>
   <style>
-    .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin: 30px 0; }
-    .tool-card { padding: 20px; background: var(--surface); border: 1px solid var(--border-c); border-radius: 12px; transition: transform .2s, box-shadow .2s; cursor: pointer; }
+    .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; margin: 30px 0; }
+    .tool-card { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border-c); border-radius: 14px; overflow: hidden; transition: transform .2s, box-shadow .2s; }
     .tool-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
-    .tool-card-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--fg); }
-    .tool-card-desc { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
-    .tool-card-meta { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-c); font-size: 12px; color: var(--muted); }
+    .tool-card-body { padding: 18px 18px 14px; text-align: center; text-decoration: none; color: inherit; flex: 1; }
+    .tool-card-icon { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; margin: 0 auto 10px; }
+    .tool-card-icon-ph { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; color: #fff; }
+    .tool-card-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--fg); }
+    .tool-card-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; min-height: 2.6em; }
+    .tool-card-meta { font-size: 11px; color: var(--muted); }
+    .tool-card-browse { display: block; text-align: center; padding: 10px; font-size: 13px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#667eea,#764ba2); text-decoration: none; }
+    .tool-card-browse:hover { opacity: .9; }
   </style>
 </head>
 <body>
   <?php require_once __DIR__ . '/partials.php'; render_site_header('', 'tools'); ?>
 
   <div class="container" style="max-width:1200px;padding:40px 20px">
-    <h1 style="font-size:32px;margin:0 0 10px">أدوات الويب المجانية</h1>
+    <h1 style="font-size:32px;margin:0 0 10px"><?= h(__('free_web_tools')) ?></h1>
     <p style="color: var(--muted); font-size: 16px; margin: 0 0 30px;">
-      مجموعة شاملة من أدوات الويب المجانية لتسهيل عملك
+      <?= h(__('free_web_tools_desc')) ?>
     </p>
 
     <?php if (empty($tools)): ?>
     <div style="text-align: center; padding: 60px 20px; color: var(--muted);">
-      <p style="font-size: 18px;">لا توجد أدوات متاحة حالياً</p>
+      <p style="font-size: 18px;"><?= h(__('no_tools_available')) ?></p>
     </div>
     <?php else: ?>
     <div class="tools-grid">
       <?php foreach ($tools as $t): ?>
-      <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($t['slug'])) ?>" style="text-decoration: none; color: inherit;">
-        <div class="tool-card">
+      <div class="tool-card">
+        <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($t['slug'])) ?>" class="tool-card-body">
+          <?php if (!empty($t['icon_path'])): ?>
+          <img src="<?= h(media_url($t['icon_path'])) ?>" alt="<?= h($t['name']) ?>" class="tool-card-icon" loading="lazy">
+          <?php else: ?>
+          <div class="tool-card-icon-ph">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <?php endif; ?>
           <div class="tool-card-title"><?= h($t['name']) ?></div>
           <div class="tool-card-desc">
-            <?= h(mb_substr($t['short_description'], 0, 100)) ?>
-            <?php if (mb_strlen($t['short_description']) > 100): ?>…<?php endif; ?>
+            <?= h(mb_substr($t['short_description'], 0, 80)) ?>
+            <?php if (mb_strlen($t['short_description']) > 80): ?>…<?php endif; ?>
           </div>
-          <div class="tool-card-meta">
-            <span>📊 <?= number_format($t['views']) ?> مشاهدة</span>
-            <span>📅 <?= h(date('M Y', strtotime($t['created_at']))) ?></span>
-          </div>
-        </div>
-      </a>
+          <div class="tool-card-meta">📊 <?= number_format($t['views']) ?> <?= h(__('views_label')) ?></div>
+        </a>
+        <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($t['slug'])) ?>" class="tool-card-browse"><?= h(__('browse')) ?></a>
+      </div>
       <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -343,8 +352,8 @@ if ($slug) {
     ?>
     <?php if (!empty($relatedApps)): ?>
     <div style="margin-top:60px;padding:30px;background:linear-gradient(135deg, rgba(34,197,94,.08), rgba(59,130,246,.08));border:1px solid rgba(34,197,94,.2);border-radius:12px">
-      <h2 style="font-size:24px;margin:0 0 20px;color:var(--fg)">تطبيقات مشهورة قد تهمك</h2>
-      <p style="color:var(--muted);margin:0 0 20px">استكمل تجربتك باستخدام أفضل التطبيقات الأكثر تحميلاً</p>
+      <h2 style="font-size:24px;margin:0 0 20px;color:var(--fg)"><?= h(__('popular_apps_you_like')) ?></h2>
+      <p style="color:var(--muted);margin:0 0 20px"><?= h(__('complete_experience')) ?></p>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px">
         <?php foreach ($relatedApps as $app): ?>
         <a href="<?= h(app_url($app['slug'])) ?>"
@@ -365,7 +374,7 @@ if ($slug) {
       <div style="text-align:center;margin-top:20px">
         <a href="/" style="display:inline-block;padding:10px 20px;background:var(--primary);color:white;text-decoration:none;border-radius:6px;font-weight:600;transition:.2s"
            onmouseover="this.style.opacity='.85'"
-           onmouseout="this.style.opacity='1'">عرض جميع التطبيقات</a>
+           onmouseout="this.style.opacity='1'"><?= h(__('view_all_apps')) ?></a>
       </div>
     </div>
     <?php endif; ?>

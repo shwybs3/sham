@@ -192,7 +192,7 @@ $orgSchema = json_encode([
     <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= number_format($totalApps) ?> تطبيق</span>
   </div>
 
-  <?php render_app_grid($apps, 'لا توجد نتائج' . ($search ? " لـ \"$search\"" : '')); ?>
+  <?php render_app_grid($apps, $search ? __('no_results_for') . " \"$search\"" : __('no_results')); ?>
   <?php render_pagination($page, $totalPages); ?>
 
   <!-- Ad Zone Mid -->
@@ -206,7 +206,7 @@ $orgSchema = json_encode([
     $relatedTools = [];
     try {
       $relatedTools = $pdo->query(
-        "SELECT id, slug, name, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 4"
+        "SELECT id, slug, name, icon_path, short_description FROM web_tools WHERE status='published' ORDER BY views DESC LIMIT 4"
       )->fetchAll();
     } catch (\Throwable $e) { $relatedTools = []; }
   ?>
@@ -214,8 +214,8 @@ $orgSchema = json_encode([
   <?= partial_wave() ?>
   <section style="margin-top:16px;padding:20px;background:linear-gradient(135deg, rgba(99,102,241,.08), rgba(59,130,246,.08));border:1px solid rgba(99,102,241,.2);border-radius:var(--radius-lg)" id="related-tools-apps">
     <div class="section-head reveal" style="margin-bottom:12px">
-      <span class="section-title">أدوات تكمل تجربتك</span>
-      <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600">عرض جميع الأدوات (50+) <?= partial_icon('arrow-r') ?></a>
+      <span class="section-title"><?= h(__('tools_complete_experience')) ?></span>
+      <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600"><?= h(__('view_all_tools_count')) ?> <?= partial_icon('arrow-r') ?></a>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px" class="reveal">
       <?php foreach ($relatedTools as $tool): ?>
@@ -224,9 +224,13 @@ $orgSchema = json_encode([
          onmouseover="this.style.borderColor='rgba(99,102,241,.4)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,.1)'"
          onmouseout="this.style.borderColor='var(--border-c)';this.style.transform='';this.style.boxShadow=''">
         <div style="display:flex;align-items:flex-start;gap:10px">
+          <?php if (!empty($tool['icon_path'])): ?>
+          <img src="<?= h(media_url($tool['icon_path'])) ?>" alt="<?= h($tool['name']) ?>" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0">
+          <?php else: ?>
           <div style="width:32px;height:32px;border-radius:6px;background:rgba(99,102,241,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
           </div>
+          <?php endif; ?>
           <div style="flex:1">
             <div style="font-weight:700;font-size:13px;color:var(--fg);line-height:1.3"><?= h($tool['name']) ?></div>
             <p style="font-size:11px;color:var(--muted);line-height:1.5;margin:4px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
