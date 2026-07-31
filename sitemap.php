@@ -163,4 +163,22 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   </url>
   <?php endforeach; ?>
 
+  <!-- أدوات الويب المنشورة -->
+  <?php
+  $webTools = [];
+  try {
+    $webTools = $pdo->query(
+      "SELECT slug, name, updated_at FROM web_tools
+       WHERE status='published' ORDER BY updated_at DESC LIMIT 500"
+    )->fetchAll();
+  } catch (\Throwable $e) { $webTools = []; }
+  foreach ($webTools as $wt):
+  ?>
+  <url>
+    <loc><?= h(SITE_URL . '/tools?slug=' . rawurlencode($wt['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($wt['updated_at'] ?: 'now')) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.7</priority>
+  </url>
+  <?php endforeach; ?>
+
 </urlset>

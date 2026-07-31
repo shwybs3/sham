@@ -364,6 +364,7 @@ function ensure_schema(PDO $pdo): array {
       meta_tags VARCHAR(500),
       short_description VARCHAR(500),
       long_description MEDIUMTEXT,
+      tutorials LONGTEXT COMMENT '3-5k character tutorials/explanations',
       features JSON,
       pros JSON,
       cons JSON,
@@ -377,6 +378,14 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'web_tools';
+
+    // Add tutorials column if missing
+    try {
+        $toolsCols = $pdo->query("SHOW COLUMNS FROM web_tools")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('tutorials', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN tutorials LONGTEXT COMMENT '3-5k character tutorials/explanations' AFTER long_description");
+        }
+    } catch (Throwable $e) {}
 
     // Additive migrations for apps table (existing installs don't have new columns)
     $appCols = $pdo->query("SHOW COLUMNS FROM apps")->fetchAll(PDO::FETCH_COLUMN);
@@ -4944,4 +4953,61 @@ function layos_should_index(PDO $pdo, string $type, int $id, bool $autoDecision)
     if ($ov === 'index')   return true;
     if ($ov === 'noindex') return false;
     return $autoDecision;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Web Tools Management Functions
+   ═══════════════════════════════════════════════════════════════════ */
+
+function get_web_tool(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare("SELECT * FROM web_tools WHERE id=?");
+    $stmt->execute([$id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function get_web_tool_by_slug(PDO $pdo, string $slug): ?array {
+    $stmt = $pdo->prepare("SELECT * FROM web_tools WHERE slug=?");
+    $stmt->execute([$slug]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
+function list_web_tools(PDO $pdo, string $status = 'published', int $limit = 999): array {
+    $where = $status === 'all' ? '' : "WHERE status=?";
+    $params = $status === 'all' ? [] : [$status];
+    $sql = "SELECT id, name, slug, short_description, seo_title, status, views, created_at, updated_at FROM web_tools $where ORDER BY created_at DESC LIMIT $limit";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function save_web_tool(PDO $pdo, array $data, int $id = 0): int {
+    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','status'], true), ARRAY_FILTER_USE_KEY);
+
+    if (!$id) {
+        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $data['name'] ?? '', $data['slug'] ?? '', $data['seo_title'] ?? '', $data['meta_description'] ?? '',
+            $data['meta_tags'] ?? '', $data['short_description'] ?? '', $data['long_description'] ?? '',
+            $data['tutorials'] ?? '', $data['features'] ?? '', $data['pros'] ?? '', $data['cons'] ?? '',
+            $data['whats_new'] ?? '', $data['faq'] ?? '', $data['status'] ?? 'draft'
+        ]);
+        return (int)$pdo->lastInsertId();
+    } else {
+        $setClauses = [];
+        $values = [];
+        foreach ($data as $k => $v) {
+            $setClauses[] = "$k=?";
+            $values[] = $v;
+        }
+        $values[] = $id;
+        $stmt = $pdo->prepare("UPDATE web_tools SET " . implode(',', $setClauses) . " WHERE id=?");
+        $stmt->execute($values);
+        return $id;
+    }
+}
+
+function delete_web_tool(PDO $pdo, int $id): bool {
+    $stmt = $pdo->prepare("DELETE FROM web_tools WHERE id=?");
+    return $stmt->execute([$id]);
 }

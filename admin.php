@@ -7033,6 +7033,7 @@ $navLinks = [
     '__sec_content' => ['_section'=>'المحتوى'],
     'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
     'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
+    'web-tools' => ['label'=>'إدارة أدوات الويب', 'icon'=>'M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zm7-2v2m0-2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zM5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
     // ── الإحصائيات
     '__sec_stats' => ['_section'=>'الإحصائيات'],
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
@@ -9875,6 +9876,10 @@ elseif ($page === 'blog-edit'):
 </form>
 
 <?php
+/* ─────────────── WEB TOOLS MANAGER ─────────────── */
+elseif ($page === 'web-tools'):
+  require_once __DIR__ . '/admin-web-tools.php';
+
 /* ─────────────── ARTICLE GENERATOR ─────────────── */
 elseif ($page === 'article-gen'):
   $allApps = $pdo->query("SELECT id,name,slug,developer FROM apps WHERE status='published' ORDER BY name")->fetchAll();
