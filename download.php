@@ -486,14 +486,15 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
           if ($app['downloads'] > 0)   $infoCells[] = ['التحميلات',    '<span dir="ltr">+' . number_format($app['downloads']) . '</span>'];
           if (!empty($app['updated_at']))  $infoCells[] = ['آخر تحديث',  $fmtDate($app['updated_at'])];
           if (!empty($app['release_date'])) $infoCells[] = ['تاريخ الإصدار', $fmtDate($app['release_date'])];
-          // If odd count, last paired cell spans 2 columns to avoid orphaned grid cell
           $cellCount = count($infoCells);
         ?>
         <div class="dlp-meta-grid">
-          <?php foreach ($infoCells as $i => [$key, $val]): ?>
-          <?php $span = ($i === $cellCount - 1 && $cellCount % 2 !== 0) ? ' style="grid-column:1/-1"' : ''; ?>
-          <div class="dlp-meta-cell"<?= $span ?>><div class="dlp-meta-key"><?= $key ?></div><div class="dlp-meta-val"><?= $val ?></div></div>
+          <?php foreach ($infoCells as [$key, $val]): ?>
+          <div class="dlp-meta-cell"><div class="dlp-meta-key"><?= $key ?></div><div class="dlp-meta-val"><?= $val ?></div></div>
           <?php endforeach; ?>
+          <?php if ($cellCount % 2 !== 0): ?>
+          <div class="dlp-meta-cell" aria-hidden="true"></div>
+          <?php endif; ?>
           <?php if (!empty($app['package_name'])): ?>
           <div class="dlp-meta-cell" style="grid-column:1/-1">
             <div class="dlp-meta-key">اسم الحزمة</div>

@@ -15,35 +15,54 @@ if (isset($_GET['action']) && $_GET['action'] === 'rates') {
         exit;
     }
 
-    $ctx = stream_context_create(['http' => [
-        'timeout'    => 10,
-        'user_agent' => 'yassota-tools/1.0 currency-proxy',
-        'header'     => 'Accept: application/json',
-    ]]);
-    $raw = @file_get_contents('https://api.frankfurter.app/latest?base=USD', false, $ctx);
+    $caBundle = '/root/.ccr/ca-bundle.crt';
+    $sslOpts  = is_file($caBundle) ? ['ssl' => ['cafile' => $caBundle, 'verify_peer' => true, 'verify_peer_name' => true]] : [];
 
-    if ($raw) {
-        $data = json_decode($raw, true);
-        if (!empty($data['rates'])) {
-            $rates = $data['rates'];
+    // Primary: fawazahmed0 via jsDelivr (includes SYP, no key, reliable CDN)
+    $ctx1 = stream_context_create(array_merge(['http' => ['timeout' => 10, 'user_agent' => 'yassota-tools/1.0']], $sslOpts));
+    $raw1 = @file_get_contents('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json', false, $ctx1);
+    $rates = [];
+    $rateDate = date('Y-m-d');
+    if ($raw1) {
+        $d1 = json_decode($raw1, true);
+        if (!empty($d1['usd']) && is_array($d1['usd'])) {
+            foreach ($d1['usd'] as $code => $rate) {
+                $rates[strtoupper($code)] = 1.0 / $rate; // rates relative to USD
+            }
             $rates['USD'] = 1.0;
-            // SYP — unofficial market rate (updated manually; Frankfurter/ECB does not track SYP)
-            $rates['SYP'] = 13000.0;
-            // IQD — Iraqi Dinar (not always in ECB list)
-            if (!isset($rates['IQD'])) $rates['IQD'] = 1310.0;
-            // LYD — Libyan Dinar
-            if (!isset($rates['LYD'])) $rates['LYD'] = 4.85;
-
-            $out = json_encode([
-                'ok'       => true,
-                'rates'    => $rates,
-                'date'     => $data['date'] ?? date('Y-m-d'),
-                'syp_note' => 'سعر الليرة السورية تقريبي (سعر السوق الموازي) وليس رسمياً',
-            ]);
-            file_put_contents($cacheFile, $out);
-            echo $out;
-            exit;
+            $rateDate = $d1['date'] ?? date('Y-m-d');
         }
+    }
+
+    // Fallback: Frankfurter (ECB — no SYP)
+    if (empty($rates)) {
+        $ctx2 = stream_context_create(array_merge(['http' => ['timeout' => 10, 'user_agent' => 'yassota-tools/1.0', 'header' => 'Accept: application/json']], $sslOpts));
+        $raw2 = @file_get_contents('https://api.frankfurter.app/latest?base=USD', false, $ctx2);
+        if ($raw2) {
+            $d2 = json_decode($raw2, true);
+            if (!empty($d2['rates'])) {
+                $rates = $d2['rates'];
+                $rates['USD'] = 1.0;
+                $rateDate = $d2['date'] ?? date('Y-m-d');
+            }
+        }
+    }
+
+    if (!empty($rates)) {
+        // Ensure SYP is set (fawazahmed0 includes it; add fallback if absent)
+        if (!isset($rates['SYP'])) $rates['SYP'] = 13000.0;
+        if (!isset($rates['IQD'])) $rates['IQD'] = 1310.0;
+        if (!isset($rates['LYD'])) $rates['LYD'] = 4.85;
+
+        $out = json_encode([
+            'ok'       => true,
+            'rates'    => $rates,
+            'date'     => $rateDate,
+            'syp_note' => 'سعر الليرة السورية تقريبي (سعر السوق الموازي) وليس رسمياً',
+        ]);
+        file_put_contents($cacheFile, $out);
+        echo $out;
+        exit;
     }
 
     // Serve stale cache on network failure

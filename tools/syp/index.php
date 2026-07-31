@@ -14,22 +14,35 @@ if (isset($_GET['action']) && $_GET['action'] === 'syp') {
         exit;
     }
 
-    // Fetch USD-based rates from Frankfurter (free, no key needed)
-    $ctx = stream_context_create(['http' => ['timeout' => 10, 'user_agent' => 'yassota-tools/1.0']]);
-    $raw = @file_get_contents('https://api.frankfurter.app/latest?base=USD&symbols=EUR,GBP,SAR,AED,KWD,TRY,IQD,LBP,EGP,JOD', false, $ctx);
+    $caBundle = '/root/.ccr/ca-bundle.crt';
+    $sslOpts  = is_file($caBundle) ? ['ssl' => ['cafile' => $caBundle, 'verify_peer' => true, 'verify_peer_name' => true]] : [];
 
-    // SYP market rates (updated manually — no public API for Syrian Pound)
+    // Primary: fawazahmed0 via jsDelivr (includes real SYP rate)
+    $ctx1 = stream_context_create(array_merge(['http' => ['timeout' => 10, 'user_agent' => 'yassota-tools/1.0']], $sslOpts));
+    $raw1 = @file_get_contents('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json', false, $ctx1);
+
     $syp_per_usd = 13000.0;
-
     $rates = [];
-    if ($raw && ($d = json_decode($raw, true)) && !empty($d['rates'])) {
-        foreach ($d['rates'] as $code => $usd_rate) {
-            $rates[$code] = round($syp_per_usd / $usd_rate, 2);
+    $wantedCodes = ['EUR', 'GBP', 'SAR', 'AED', 'KWD', 'TRY', 'IQD', 'LBP', 'EGP', 'JOD'];
+
+    if ($raw1 && ($d1 = json_decode($raw1, true)) && !empty($d1['usd'])) {
+        $usdRates = $d1['usd']; // $usdRates[code] = units_per_USD (actually it's value of 1 USD in that currency)
+        // fawazahmed0 gives: usd.syp = SYP units for 1 USD
+        if (!empty($usdRates['syp'])) $syp_per_usd = (float)$usdRates['syp'];
+        foreach ($wantedCodes as $code) {
+            $lc = strtolower($code);
+            if (!empty($usdRates[$lc])) {
+                // usdRates[$lc] = how many $code per USD
+                // We want: how many SYP per 1 $code
+                $rates[$code] = round($syp_per_usd / $usdRates[$lc], 2);
+            }
         }
-    } else {
-        // Fallback hardcoded rates (SYP per 1 unit)
+    }
+
+    // Fallback hardcoded rates (SYP per 1 unit)
+    if (empty($rates)) {
         $rates = [
-            'USD' => 13000, 'EUR' => 14100, 'GBP' => 16300, 'SAR' => 3465,
+            'EUR' => 14100, 'GBP' => 16300, 'SAR' => 3465,
             'AED' => 3540, 'KWD' => 42400, 'TRY' => 395, 'IQD' => 9.9,
             'LBP' => 0.14, 'EGP' => 260, 'JOD' => 18340,
         ];
