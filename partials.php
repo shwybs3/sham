@@ -313,6 +313,85 @@ function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نت
 <?php }
 
 function render_site_footer(): void { ?>
+<!-- ═══ MOBILE BOTTOM NAV ═══ -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="التنقل السريع">
+  <a href="<?= h(url('')) ?>" id="bn-home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-4h4v4h4a1 1 0 001-1v-9"/></svg>
+    الرئيسية
+  </a>
+  <a href="<?= h(url('top?by=downloads')) ?>" id="bn-top">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 6l-9.5 9.5-5-5L2 18"/><path d="M16 6h6v6"/></svg>
+    الأكثر تحميلاً
+  </a>
+  <a href="<?= h(url('updates')) ?>" id="bn-updates">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+    التحديثات
+  </a>
+  <a href="<?= h(url('tools')) ?>" id="bn-tools">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+    أدوات
+  </a>
+  <button onclick="document.getElementById('bn-sheet').classList.toggle('open')" id="bn-more">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>
+    المزيد
+  </button>
+</nav>
+
+<!-- "المزيد" bottom sheet -->
+<div class="bn-more-sheet" id="bn-sheet">
+  <div style="text-align:center;font-size:12px;color:rgba(226,232,240,.4);margin-bottom:12px;font-weight:600;letter-spacing:.5px">قسم المزيد</div>
+  <div class="bn-more-grid">
+    <a href="<?= h(url('blog')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+      المدونة
+    </a>
+    <a href="<?= h(url('exchange')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      سعر الصرف
+    </a>
+    <a href="<?= h(url('gold')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      أسعار الذهب
+    </a>
+    <a href="<?= h(url('about')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      من نحن
+    </a>
+    <a href="<?= h(url('rss')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1" fill="currentColor" stroke="none"/></svg>
+      RSS
+    </a>
+    <a href="<?= h(url('contact')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,4 12,13 2,4"/></svg>
+      تواصل
+    </a>
+    <a href="<?= h(url('faq')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
+      الأسئلة
+    </a>
+    <a href="<?= h(url('calculators')) ?>" class="bn-more-item">
+      <svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 12h4M8 17h2"/></svg>
+      حاسبات
+    </a>
+  </div>
+</div>
+<script>
+(function(){
+  document.body.classList.add('has-bottom-nav');
+  var sheet = document.getElementById('bn-sheet');
+  document.addEventListener('click', function(e){
+    if (sheet && sheet.classList.contains('open') && !e.target.closest('#bn-more') && !e.target.closest('#bn-sheet'))
+      sheet.classList.remove('open');
+  });
+  // Highlight active link
+  var p = location.pathname;
+  if (p === '/' || p === '') document.getElementById('bn-home')?.classList.add('bn-active');
+  else if (p.includes('/updates')) document.getElementById('bn-updates')?.classList.add('bn-active');
+  else if (p.includes('/tools')) document.getElementById('bn-tools')?.classList.add('bn-active');
+  else if (p.includes('/top')) document.getElementById('bn-top')?.classList.add('bn-active');
+})();
+</script>
+
 <footer class="site-footer" style="padding:0">
   <div style="max-width:100%;padding:36px 32px 24px;border-top:1px solid var(--border-c)">
 
