@@ -55,8 +55,14 @@ function convertCurrency() {
   const toRate   = to   === 'USD' ? 1 : (rates[to]   || 1);
   const result   = (amt / fromRate) * toRate;
 
-  const dec = ['JPY','INR','TRY'].includes(to) ? 1 : (['KWD','BHD','OMR','JOD'].includes(to) ? 4 : 2);
-  out.innerHTML = `<span>${fmt(amt, 2)} ${from}</span> = <strong style="font-size:1.3em;color:var(--c-gold)">${fmt(result, dec)} ${to}</strong>`;
+  const dec = ['JPY','INR','TRY','SYP'].includes(to) ? 0 : (['KWD','BHD','OMR','JOD'].includes(to) ? 4 : 2);
+  const decFrom = ['JPY','INR','TRY','SYP'].includes(from) ? 0 : (['KWD','BHD','OMR','JOD'].includes(from) ? 4 : 2);
+  const rateDisplay = fmt((toRate / fromRate), dec);
+  const revDisplay  = fmt((fromRate / toRate), decFrom);
+  out.innerHTML = `
+    <div class="cr-result-big">${fmt(result, dec)}</div>
+    <div class="cr-label">${fmt(amt, 2)} ${from} = <strong>${fmt(result, dec)} ${to}</strong></div>
+    <div class="cr-rate-info">1 ${from} = ${rateDisplay} ${to} &nbsp;·&nbsp; 1 ${to} = ${revDisplay} ${from}</div>`;
   out.removeAttribute('hidden');
 }
 

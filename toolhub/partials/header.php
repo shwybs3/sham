@@ -23,7 +23,11 @@
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       </button>
       <button class="hamburger" onclick="toggleMobileNav()" aria-label="القائمة" aria-expanded="false" id="hamburger">
-        <span></span><span></span><span></span>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+          <circle cx="9" cy="3" r="2.2"/>
+          <circle cx="9" cy="9" r="2.2"/>
+          <circle cx="9" cy="15" r="2.2"/>
+        </svg>
       </button>
     </div>
   </div>

@@ -37,13 +37,12 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
     $schemaBlock = $schema ? "\n<script type=\"application/ld+json\">$schema</script>" : '';
 
     // Derive light variant of the tool color for backgrounds
-    // We pass this as a CSS custom property and let CSS handle lightening via opacity
     $c = ltrim($color, '#');
     $r = hexdec(substr($c, 0, 2));
     $g = hexdec(substr($c, 2, 2));
     $b = hexdec(substr($c, 4, 2));
     $colorRgb   = "$r,$g,$b";
-    $siteTitle  = preg_replace('/\s*[|—–-].*/u', '', $title); // short title for OG
+    $siteTitle  = preg_replace('/\s*[|—–-].*/u', '', $title);
 
     // Breadcrumb slug from path
     $pathParts = array_filter(explode('/', trim($_SERVER['REQUEST_URI'] ?? '', '/')));
@@ -87,7 +86,7 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 /* ── Reset & Base ─────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;font-size:16px}
-body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100vh;overflow-x:hidden}
+body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100vh;overflow-x:hidden;padding-top:62px}
 a{color:inherit;text-decoration:none}img{max-width:100%;display:block}
 button,input,select,textarea{font-family:inherit;font-size:inherit}
 
@@ -117,21 +116,15 @@ button,input,select,textarea{font-family:inherit;font-size:inherit}
   --f-mono:     'Consolas','Courier New',monospace;
 }
 
-/* ── Top Accent Strip ─────────────────────────────── */
-body::before {
-  content:'';display:block;height:4px;
-  background:linear-gradient(90deg,var(--tool-h),rgba({$colorRgb},.5));
-  position:sticky;top:0;z-index:200;
-}
-
 /* ── Header ───────────────────────────────────────── */
 .t-header {
   background:#0b1120;
   color:#e2e8f0;
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 24px;height:58px;
-  position:sticky;top:4px;z-index:100;
+  padding:0 24px;height:62px;
+  position:fixed;top:0;left:0;right:0;z-index:200;
   box-shadow:0 2px 16px rgba(0,0,0,.3);
+  border-top:4px solid var(--tool-h);
 }
 .t-logo {
   font-size:17px;font-weight:800;letter-spacing:-.5px;
@@ -143,7 +136,11 @@ body::before {
   flex-shrink:0;
 }
 .t-logo-mark svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5}
-.t-logo-text em {color:rgba({$colorRgb},1);font-style:normal;}
+.t-logo-text{
+  background:linear-gradient(135deg,#22c55e 0%,#3b82f6 35%,#f59e0b 70%,#ef4444 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.t-logo-text em{font-style:normal}
 .t-nav{display:flex;align-items:center;gap:4px}
 .t-nav a {
   color:rgba(226,232,240,.7);font-size:12px;font-weight:500;
@@ -153,6 +150,15 @@ body::before {
 .t-nav a:hover{color:#fff;background:rgba(255,255,255,.1)}
 .t-nav a.active{color:#fff;background:var(--tool-light)}
 .t-nav svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+
+/* ── Hamburger ────────────────────────────────────── */
+.t-hamburger{
+  display:none;background:transparent;border:none;cursor:pointer;
+  padding:8px;border-radius:8px;color:rgba(226,232,240,.7);
+  transition:background .15s;flex-shrink:0;
+}
+.t-hamburger:hover{background:rgba(255,255,255,.1);color:#fff}
+.t-hamburger svg{display:block}
 
 /* ── Breadcrumb ───────────────────────────────────── */
 .t-breadcrumb {
@@ -267,6 +273,20 @@ body::before {
 .t-textarea:focus{border-color:var(--tool-h);background:var(--surface);box-shadow:0 0 0 3px var(--tool-light)}
 select.t-input option{direction:rtl}
 
+/* ── File Input ───────────────────────────────────── */
+input[type=file]{
+  width:100%;border:1.5px dashed var(--border);border-radius:var(--radius-sm);
+  background:var(--surface2);color:var(--text);font-size:14px;cursor:pointer;
+  transition:border-color .18s;overflow:hidden;padding:0;
+}
+input[type=file]:focus,input[type=file]:hover{border-color:var(--tool-h);outline:none}
+input[type=file]::file-selector-button{
+  padding:11px 16px;background:var(--tool-h);color:#fff;border:none;
+  font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;
+  font-family:inherit;margin-inline-end:12px;
+}
+input[type=file]::file-selector-button:hover{opacity:.85}
+
 /* ── Buttons ──────────────────────────────────────── */
 .t-btn {
   display:inline-flex;align-items:center;gap:8px;
@@ -339,8 +359,47 @@ select.t-input option{direction:rtl}
   display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
   font-size:12px;color:rgba(226,232,240,.4);
 }
-.t-footer-logo{font-weight:800;font-size:16px;color:#fff}
-.t-footer-logo em{color:rgba({$colorRgb},1);font-style:normal}
+.t-footer-logo{
+  font-weight:800;font-size:16px;
+  background:linear-gradient(135deg,#22c55e 0%,#3b82f6 35%,#f59e0b 70%,#ef4444 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+
+/* ── Mobile Nav Drawer ────────────────────────────── */
+.t-mobile-nav{
+  position:fixed;top:0;right:0;bottom:0;width:280px;
+  background:#0b1120;z-index:600;padding:20px 0;overflow-y:auto;
+  transform:translateX(110%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+  box-shadow:-6px 0 32px rgba(0,0,0,.5);
+}
+.t-mobile-nav.open{transform:translateX(0)}
+.t-mobile-nav-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px 16px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px;
+}
+.t-mobile-nav-head span{
+  font-size:16px;font-weight:800;
+  background:linear-gradient(135deg,#22c55e 0%,#3b82f6 35%,#f59e0b 70%,#ef4444 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.t-mobile-nav-head button{
+  background:transparent;border:none;cursor:pointer;
+  color:rgba(226,232,240,.6);font-size:20px;padding:4px;line-height:1;
+  transition:color .15s;
+}
+.t-mobile-nav-head button:hover{color:#fff}
+.t-mobile-nav a{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 20px;font-size:14px;color:rgba(226,232,240,.75);
+  transition:background .15s,color .15s;
+}
+.t-mobile-nav a:hover{background:rgba(255,255,255,.07);color:#fff}
+.t-mobile-nav svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+.t-nav-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:599;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.t-nav-overlay.open{opacity:1;pointer-events:all}
 
 /* ── Responsive ───────────────────────────────────── */
 @media(max-width:640px){
@@ -349,7 +408,8 @@ select.t-input option{direction:rtl}
   .t-main{padding:18px 12px 60px}
   .t-card{padding:18px 14px}
   .t-header{padding:0 14px}
-  .t-nav a span{display:none}
+  .t-hamburger{display:flex;align-items:center;justify-content:center}
+  .t-nav{display:none}
   .t-grid-2,.t-grid-3{grid-template-columns:1fr}
   .t-article h2{font-size:17px}
   .t-breadcrumb{padding:8px 14px}
@@ -364,8 +424,7 @@ HTML;
 }
 
 /**
- * Render the sticky header with tool branding and breadcrumb.
- * Automatically uses color/title set by tool_head().
+ * Render the fixed header with tool branding, nav, hamburger, and mobile drawer.
  */
 function tool_header(string $toolName = '', string $toolsIndexUrl = ''): void {
     $main      = MAIN_SITE_URL;
@@ -379,7 +438,7 @@ function tool_header(string $toolName = '', string $toolsIndexUrl = ''): void {
     <div class="t-logo-mark">
       <svg viewBox="0 0 24 24" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
     </div>
-    <span class="t-logo-text">yass<em>ota</em></span>
+    <span class="t-logo-text">yassota</span>
   </a>
   <nav class="t-nav" aria-label="التنقل الرئيسي">
     <a href="{$toolsUrl}">
@@ -395,7 +454,46 @@ function tool_header(string $toolName = '', string $toolsIndexUrl = ''): void {
       <span>الرئيسية</span>
     </a>
   </nav>
+  <button class="t-hamburger" onclick="toggleToolNav()" aria-label="القائمة" aria-expanded="false" id="t-hamburger">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+      <circle cx="9" cy="3" r="2.2"/><circle cx="9" cy="9" r="2.2"/><circle cx="9" cy="15" r="2.2"/>
+    </svg>
+  </button>
 </header>
+
+<!-- Mobile nav drawer -->
+<nav class="t-mobile-nav" id="tMobileNav" aria-label="القائمة المتنقلة">
+  <div class="t-mobile-nav-head">
+    <span>yassota</span>
+    <button onclick="toggleToolNav()" aria-label="إغلاق">✕</button>
+  </div>
+  <a href="{$main}">
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    الرئيسية
+  </a>
+  <a href="{$toolsUrl}">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    جميع الأدوات
+  </a>
+  <a href="{$main}/apps">
+    <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+    تطبيقات
+  </a>
+  <a href="{$main}/categories">
+    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    التصنيفات
+  </a>
+  <a href="{$main}/privacy">
+    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    الخصوصية
+  </a>
+  <a href="{$main}/terms">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    شروط الاستخدام
+  </a>
+</nav>
+<div class="t-nav-overlay" id="tNavOverlay" onclick="toggleToolNav()"></div>
+
 <nav class="t-breadcrumb" aria-label="مسار التنقل">
   <a href="{$main}">yassota</a>
   <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
@@ -481,7 +579,7 @@ function tool_footer(): void {
     </div>
   </div>
   <div class="t-footer-bottom">
-    <div class="t-footer-logo">yass<em>ota</em></div>
+    <div class="t-footer-logo">yassota</div>
     <div>جميع الأدوات مجانية · لا تتطلب تسجيلاً · © {$yr} yassota.com · جميع الحقوق محفوظة</div>
     <div style="display:flex;gap:12px">
       <a href="{$main}/privacy" style="color:inherit">الخصوصية</a>
@@ -499,6 +597,32 @@ document.querySelectorAll('.t-faq-q').forEach(q => {
     document.querySelectorAll('.t-faq-a.open').forEach(el => { el.classList.remove('open'); el.previousElementSibling?.classList.remove('open'); });
     if (!isOpen) { a.classList.add('open'); q.classList.add('open'); }
   });
+});
+
+// Mobile nav toggle
+function toggleToolNav() {
+  const nav     = document.getElementById('tMobileNav');
+  const overlay = document.getElementById('tNavOverlay');
+  const btn     = document.getElementById('t-hamburger');
+  if (!nav) return;
+  const isOpen = nav.classList.contains('open');
+  if (isOpen) {
+    nav.classList.remove('open');
+    overlay.classList.remove('open');
+    btn?.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  } else {
+    nav.classList.add('open');
+    overlay.classList.add('open');
+    btn?.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const nav = document.getElementById('tMobileNav');
+    if (nav && nav.classList.contains('open')) toggleToolNav();
+  }
 });
 </script>
 </body></html>

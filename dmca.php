@@ -71,6 +71,25 @@ $metaDesc = 'قدّم طلب إزالة محتوى أو تطبيق من موقع
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
+  <style>
+    .dmca-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+    @media(max-width:720px){.dmca-grid{grid-template-columns:1fr}}
+    input[type=file].dmca-file{
+      width:100%;border:1.5px dashed var(--border-c,#2d3a52);border-radius:10px;
+      background:var(--navy-600,#1e2d45);color:var(--white,#fff);
+      cursor:pointer;overflow:hidden;padding:0;font-size:14px;
+      transition:border-color .18s;
+    }
+    input[type=file].dmca-file:hover,input[type=file].dmca-file:focus{
+      border-color:var(--cyan,#22d3ee);outline:none;
+    }
+    input[type=file].dmca-file::file-selector-button{
+      padding:11px 16px;background:var(--cyan,#22d3ee);color:#0b1120;
+      border:none;font-size:13px;font-weight:700;cursor:pointer;
+      font-family:inherit;margin-inline-end:12px;transition:opacity .15s;
+    }
+    input[type=file].dmca-file::file-selector-button:hover{opacity:.85}
+  </style>
 </head>
 <body>
 
@@ -85,7 +104,7 @@ $metaDesc = 'قدّم طلب إزالة محتوى أو تطبيق من موقع
 
   <div class="section-head reveal"><span class="section-title">طلب إزالة محتوى أو تطبيق</span></div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start">
+  <div class="dmca-grid">
 
     <!-- Policy info -->
     <div class="section-box reveal" style="color:var(--muted);font-size:14px;line-height:1.9">
@@ -176,6 +195,11 @@ $metaDesc = 'قدّم طلب إزالة محتوى أو تطبيق من موقع
                       placeholder="اشرح بالتفصيل سبب طلب الإزالة..."
                       style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical;outline:none;transition:border-color .15s"
                       onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--border-c)'"><?= h($_POST['message'] ?? '') ?></textarea>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:var(--muted);font-weight:600">مرفق (اختياري) — لقطة شاشة أو دليل</label>
+            <input type="file" name="attachment" class="dmca-file" accept="image/*,.pdf">
           </div>
 
           <?= cf_turnstile_widget($pdo) ?>
