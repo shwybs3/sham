@@ -78,7 +78,7 @@ $countStmt->execute($params);
 $totalApps  = (int)$countStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($totalApps / $perPage));
 
-$stmt = $pdo->prepare("SELECT a.*, c.name AS cat_name, c.slug AS cat_slug
+$stmt = $pdo->prepare("SELECT a.id, a.name, a.slug, a.rating, a.size_mb, a.icon_path, a.short_description, a.category_id, c.name AS cat_name, c.slug AS cat_slug
     FROM apps a LEFT JOIN categories c ON a.category_id=c.id
     $where ORDER BY a.created_at DESC LIMIT $perPage OFFSET $offset");
 $stmt->execute($params);

@@ -14,10 +14,10 @@ header('Cache-Control: public, max-age=3600, s-maxage=3600');
 $apps = [];
 try {
     $apps = $pdo->query(
-        "SELECT id, slug, name, seo_title, meta_desc, meta_description,
-                long_description, icon_path, download_url, updated_at
+        "SELECT id, slug, name, seo_title, meta_description,
+                icon_path, download_url, updated_at
          FROM apps
-         WHERE status='published'
+         WHERE status='published' AND (parent_id IS NULL OR parent_id=0)
          ORDER BY updated_at DESC"
     )->fetchAll();
 } catch (\Throwable $e) { $apps = []; }

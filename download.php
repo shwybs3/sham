@@ -117,12 +117,19 @@ $turnstileSiteKey = trim(get_cfg($pdo, 'turnstile_site_key'));
 $v3SiteKey        = trim(get_cfg($pdo, 'recaptcha_v3_site_key'));
 $v2SiteKey        = trim(get_cfg($pdo, 'recaptcha_v2_site_key'));
 
-// Download button CAPTCHA — ALWAYS required when Turnstile is configured.
-// Falls back to reCAPTCHA v2/v3 if only those keys are set.
+// Download button CAPTCHA:
+// - First button (primary): Always use Google reCAPTCHA v2 (+ silent v3) when keys exist
+// - Other buttons: Use Cloudflare Turnstile when configured
 $dlCaptchaType = 'none';
-if ($turnstileSiteKey)      $dlCaptchaType = 'turnstile';
-elseif ($v2SiteKey)         $dlCaptchaType = 'v2';
-elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
+$dlFirstSlotCaptchaType = 'none';
+// Primary download button uses Google reCAPTCHA v2/v3
+if ($v2SiteKey) {
+    $dlFirstSlotCaptchaType = 'v2';
+} elseif ($v3SiteKey) {
+    $dlFirstSlotCaptchaType = 'v3';
+}
+// Other buttons use Cloudflare Turnstile
+if ($turnstileSiteKey) $dlCaptchaType = 'turnstile';
 ?>
 <!DOCTYPE html>
 <html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
@@ -141,9 +148,11 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
   <?php if ($captchaType === 'turnstile' || $dlCaptchaType === 'turnstile'): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-  <?php elseif ($captchaType === 'v3' || $dlCaptchaType === 'v3'): ?>
-  <script src="https://www.google.com/recaptcha/api.js?render=<?= h($v3SiteKey) ?>" async defer></script>
-  <?php elseif ($captchaType === 'v2' || $dlCaptchaType === 'v2'): ?>
+  <?php endif; ?>
+  <?php if ($captchaType === 'v3' || $dlFirstSlotCaptchaType === 'v3' || ($dlFirstSlotCaptchaType === 'v2' && $v3SiteKey)): ?>
+  <script src="https://www.google.com/recaptcha/api.js?render=<?= h($v3SiteKey ?: 'placeholder') ?>" async defer></script>
+  <?php endif; ?>
+  <?php if ($captchaType === 'v2' || $dlFirstSlotCaptchaType === 'v2'): ?>
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <?php endif; ?>
 </head>
@@ -318,16 +327,7 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
       ?>
 
       <?php if ($dlSlots): ?>
-      <?php if ($dlCaptchaType === 'turnstile'): ?>
-      <div id="cf-dl-gate" style="margin-bottom:14px;padding:18px 16px;background:var(--surface);border:1px solid var(--border-c);border-radius:14px;text-align:center">
-        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;font-weight:600">للتحميل يرجى إتمام التحقق من Cloudflare</p>
-        <div style="display:flex;justify-content:center">
-          <div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlTurnstileSolved" data-theme="auto" data-size="normal"></div>
-        </div>
-        <p style="font-size:11px;color:var(--muted);margin:10px 0 0">🔒 محمي بواسطة Cloudflare Turnstile</p>
-      </div>
-      <?php endif; ?>
-      <div id="dl-buttons-wrap"<?= $dlCaptchaType === 'turnstile' ? ' style="pointer-events:none;opacity:.4;transition:opacity .3s"' : '' ?>>
+      <div id="dl-buttons-wrap">
       <div class="dlp-accordion" id="dl-accordion">
         <?php foreach ($dlSlots as $si => $slot): ?>
         <div class="dlp-acc-item<?= $slot['open'] ? ' open' : '' ?>" id="dlacc-<?= $si ?>">
@@ -347,9 +347,24 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
             <?php endif; ?>
             <div class="dlp-acc-btns">
               <?php foreach ($slot['buttons'] as $btn): ?>
-              <?php if ($dlCaptchaType !== 'none' && $slot['open']): ?>
+              <?php
+              $needsCaptcha = false;
+              $captchaForThisBtn = 'none';
+              if ($slot['open']) {
+                  if ($si === 0 && $btn['primary'] && $dlFirstSlotCaptchaType !== 'none') {
+                      // First slot, primary button: use v2/v3
+                      $needsCaptcha = true;
+                      $captchaForThisBtn = $dlFirstSlotCaptchaType;
+                  } elseif ($dlCaptchaType === 'turnstile' && !($si === 0 && $btn['primary'])) {
+                      // Other buttons use Turnstile
+                      $needsCaptcha = true;
+                      $captchaForThisBtn = 'turnstile';
+                  }
+              }
+              ?>
+              <?php if ($needsCaptcha): ?>
               <!-- Captcha-gated: unlock via JS -->
-              <button type="button" class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>"
+              <button type="button" class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>" data-btn-captcha="<?= h($captchaForThisBtn) ?>"
                       onclick="dlStartDownload('<?= h($btn['url']) ?>', <?= $btn['local'] ? 'true' : 'false' ?>)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
                 <span><?= h($btn['label']) ?></span>
@@ -368,15 +383,21 @@ elseif ($v3SiteKey)         $dlCaptchaType = 'v3';
               <?php endif; ?>
               <?php endforeach; ?>
             </div>
-            <?php if ($dlCaptchaType !== 'none' && $slot['open']): ?>
-            <div id="dl-captcha-wrap" class="dl-cap-hidden" style="margin-top:12px;text-align:center" aria-hidden="true">
+            <?php if ($slot['open'] && ($dlFirstSlotCaptchaType !== 'none' || $dlCaptchaType !== 'none')): ?>
+            <div id="dl-captcha-wrap-<?= $si ?>" class="dl-cap-hidden" style="margin-top:12px;text-align:center" aria-hidden="true">
               <p style="font-size:12px;color:var(--muted);margin:0 0 10px">للمتابعة، يرجى التحقق من هويتك</p>
-              <?php if ($dlCaptchaType === 'turnstile'): ?>
+              <?php if ($si === 0 && $dlFirstSlotCaptchaType === 'v2' && $v2SiteKey): ?>
+              <!-- First slot: Google reCAPTCHA v2 + silent v3 if available -->
+              <div style="display:flex;justify-content:center"><div class="g-recaptcha" data-sitekey="<?= h($v2SiteKey) ?>" data-callback="onDlFirstSlotV2Done"></div></div>
+              <?php if ($v3SiteKey): ?>
+              <p style="font-size:11px;color:var(--muted);margin:10px 0 0">يتم التحقق الإضافي تلقائياً...</p>
+              <?php endif; ?>
+              <?php elseif ($si === 0 && $dlFirstSlotCaptchaType === 'v3' && $v3SiteKey): ?>
+              <!-- First slot: Google reCAPTCHA v3 only -->
+              <button id="dl-captcha-v3-btn" onclick="runDlFirstSlotV3Captcha()" style="background:var(--cyan);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-size:13px;cursor:pointer">تحقق وابدأ التحميل</button>
+              <?php elseif ($dlCaptchaType === 'turnstile' && !($si === 0 && $dlFirstSlotCaptchaType !== 'none')): ?>
+              <!-- Other slots: Cloudflare Turnstile -->
               <div style="display:flex;justify-content:center"><div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlCaptchaSolved" data-theme="light" data-size="normal"></div></div>
-              <?php elseif ($dlCaptchaType === 'v2'): ?>
-              <div style="display:flex;justify-content:center"><div class="g-recaptcha" data-sitekey="<?= h($v2SiteKey) ?>" data-callback="onDlCaptchaSolvedV2"></div></div>
-              <?php else: ?>
-              <button id="dl-captcha-v3-btn" onclick="runDlV3Captcha()" style="background:var(--cyan);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-size:13px;cursor:pointer">تحقق وابدأ التحميل</button>
               <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -720,22 +741,37 @@ window.onDlTurnstileSolved = function(token) {
 
 /* ── Download page JS: immediate download, accordion, captcha ── */
 const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>;
-<?php if ($dlCaptchaType === 'v3'): ?>const DL_V3_SITE_KEY = <?= json_encode($v3SiteKey) ?>;<?php endif; ?>
+const DL_FIRST_SLOT_CAPTCHA_TYPE = <?= json_encode($dlFirstSlotCaptchaType) ?>;
+const DL_V2_SITE_KEY = <?= json_encode($v2SiteKey) ?>;
+<?php if ($dlFirstSlotCaptchaType === 'v3' || $dlCaptchaType === 'v3'): ?>const DL_V3_SITE_KEY = <?= json_encode($v3SiteKey) ?>;<?php endif; ?>
 
-var dlCaptchaSolved  = (DL_CAPTCHA_TYPE === 'none');
+var dlCaptchaSolved  = (DL_CAPTCHA_TYPE === 'none' && DL_FIRST_SLOT_CAPTCHA_TYPE === 'none');
 var dlPendingUrl     = null;
 var dlPendingLocal   = false;
+var dlPendingCaptchaType = null;
 const dlVerifyUrl    = location.pathname + '?ajax=verify_captcha';
 const captchaWrap    = document.getElementById('dl-captcha-wrap');
+
+// Run v3 silently on first slot if configured alongside v2
+<?php if ($dlFirstSlotCaptchaType === 'v2' && $v3SiteKey): ?>
+if (typeof grecaptcha !== 'undefined') {
+  grecaptcha.ready(function(){
+    grecaptcha.execute(<?= json_encode($v3SiteKey) ?>, {action:'download_pre_check'});
+  });
+}
+<?php endif; ?>
 
 /* Fire an anchor-based download (direct, no auto-fire on page load) */
 function dlFireDownload(el) {
   var href = el.href;
   var local = !!el.download;
-  if (DL_CAPTCHA_TYPE !== 'none' && !dlCaptchaSolved) {
+  var btnCaptcha = el.getAttribute('data-btn-captcha') || 'none';
+  if (btnCaptcha !== 'none' && !dlCaptchaSolved) {
     dlPendingUrl   = href;
     dlPendingLocal = local;
-    if (captchaWrap) { captchaWrap.classList.remove('dl-cap-hidden'); captchaWrap.removeAttribute('aria-hidden'); }
+    dlPendingCaptchaType = btnCaptcha;
+    var wrap = document.getElementById('dl-captcha-wrap-0') || captchaWrap;
+    if (wrap) { wrap.classList.remove('dl-cap-hidden'); wrap.removeAttribute('aria-hidden'); }
     return;
   }
   doDownload(href, local);
@@ -743,10 +779,18 @@ function dlFireDownload(el) {
 
 /* Captcha-gated button (no href) */
 function dlStartDownload(url, local) {
-  if (DL_CAPTCHA_TYPE !== 'none' && !dlCaptchaSolved) {
+  var btnEl = event.target.closest('button[type="button"]');
+  var btnCaptcha = btnEl ? btnEl.getAttribute('data-btn-captcha') : 'none';
+  if (btnCaptcha === 'none') btnCaptcha = DL_FIRST_SLOT_CAPTCHA_TYPE || DL_CAPTCHA_TYPE;
+
+  if (btnCaptcha !== 'none' && !dlCaptchaSolved) {
     dlPendingUrl   = url;
     dlPendingLocal = local;
-    if (captchaWrap) { captchaWrap.classList.remove('dl-cap-hidden'); captchaWrap.removeAttribute('aria-hidden'); }
+    dlPendingCaptchaType = btnCaptcha;
+    // Find the captcha wrap for this slot
+    var slotIdx = btnEl ? (btnEl.closest('.dlp-acc-item') ? Array.from(document.querySelectorAll('.dlp-acc-item')).indexOf(btnEl.closest('.dlp-acc-item')) : 0) : 0;
+    var wrap = document.getElementById('dl-captcha-wrap-' + slotIdx) || captchaWrap;
+    if (wrap) { wrap.classList.remove('dl-cap-hidden'); wrap.removeAttribute('aria-hidden'); }
     return;
   }
   doDownload(url, local);
@@ -767,8 +811,20 @@ function dlCaptchaUnlock(token, type) {
   if (dlPendingUrl) { doDownload(dlPendingUrl, dlPendingLocal); dlPendingUrl = null; }
 }
 
+// First slot captcha callbacks
+window.onDlFirstSlotV2Done = function(t){ dlCaptchaUnlock(t, 'v2'); };
+window.runDlFirstSlotV3Captcha = function() {
+  var btn = document.getElementById('dl-captcha-v3-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التحقق…'; }
+  if (typeof grecaptcha !== 'undefined') {
+    grecaptcha.ready(function(){ grecaptcha.execute(DL_V3_SITE_KEY, {action:'download'}).then(function(t){ dlCaptchaUnlock(t,'v3'); }); });
+  }
+};
+
+// Other slots captcha callbacks
 window.onDlCaptchaSolved    = function(t){ dlCaptchaUnlock(t, 'turnstile'); };
 window.onDlCaptchaSolvedV2  = function(t){ dlCaptchaUnlock(t, 'v2'); };
+
 <?php if ($dlCaptchaType === 'v3'): ?>
 window.runDlV3Captcha = function() {
   var btn = document.getElementById('dl-captcha-v3-btn');
