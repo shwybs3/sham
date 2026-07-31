@@ -630,3 +630,78 @@ function render_pagination(int $page, int $totalPages): void {
     <?php endfor; ?>
   </div>
 <?php }
+
+/* ── Unified Head Section ── */
+function head_common(): void { ?>
+  <link rel="icon" type="image/svg+xml" href="<?= h(url('favicon.svg')) ?>">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+  <link rel="stylesheet" href="<?= h(asset_url('assets/css/style.min.css')) ?>">
+  <link rel="alternate" type="application/rss+xml" title="آخر التطبيقات" href="<?= h(SITE_URL . '/feed.php') ?>">
+<?php }
+
+/* ── Unified Navigation Bar ── */
+function navbar(): void {
+    global $pdo;
+    $activeNav = $_GET['cat'] ?? ($_GET['page'] ?? 'home');
+    if (basename($_SERVER['PHP_SELF']) === 'tools.php') $activeNav = 'tools';
+    if (basename($_SERVER['PHP_SELF']) === 'blog.php') $activeNav = 'blog';
+    if (basename($_SERVER['PHP_SELF']) === 'app.php') $activeNav = 'app';
+    $lang = $_GET['lang'] ?? get_cfg($pdo, 'default_lang', 'ar');
+    ?>
+<header class="navbar" role="banner">
+  <div class="container" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;gap:20px">
+    <a href="/" class="logo" style="display:flex;flex-direction:column;line-height:1;gap:3px;text-decoration:none;color:var(--fg);font-weight:800;font-size:20px">
+      yass<span style="color:var(--primary)">ota</span>
+    </a>
+
+    <nav class="nav-links" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center;flex:1">
+      <a href="/" class="<?= $activeNav === 'home' ? 'active' : '' ?>" style="text-decoration:none;color:var(--fg);padding:8px 12px;border-radius:6px;transition:.2s">الرئيسية</a>
+      <a href="/?cat=apps" class="<?= $activeNav === 'apps' ? 'active' : '' ?>" style="text-decoration:none;color:var(--fg);padding:8px 12px;border-radius:6px;transition:.2s">التطبيقات</a>
+      <a href="/?cat=games" class="<?= $activeNav === 'games' ? 'active' : '' ?>" style="text-decoration:none;color:var(--fg);padding:8px 12px;border-radius:6px;transition:.2s">الألعاب</a>
+      <a href="/tools" class="<?= $activeNav === 'tools' ? 'active' : '' ?>" style="text-decoration:none;color:var(--fg);padding:8px 12px;border-radius:6px;transition:.2s">أدوات</a>
+      <a href="/blog" class="<?= $activeNav === 'blog' ? 'active' : '' ?>" style="text-decoration:none;color:var(--fg);padding:8px 12px;border-radius:6px;transition:.2s">المدونة</a>
+    </nav>
+
+    <style>
+      .navbar { background: var(--surface); border-bottom: 1px solid var(--border-c); position: sticky; top: 0; z-index: 100; }
+      .nav-links a.active { background: rgba(37,99,235,.1); color: var(--primary); font-weight: 600; }
+      .nav-links a:hover { background: rgba(37,99,235,.05); }
+    </style>
+  </div>
+</header>
+<?php }
+
+/* ── Unified Footer ── */
+function footer(): void {
+    global $pdo;
+    ?>
+<footer class="footer" style="background:var(--surface-2);border-top:1px solid var(--border-c);margin-top:60px;padding:40px 20px;text-align:center;color:var(--muted);font-size:14px">
+  <div class="container" style="max-width:1200px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:30px;margin-bottom:30px;text-align:right">
+      <div>
+        <h4 style="margin:0 0 12px;color:var(--fg);font-size:15px">yassota</h4>
+        <p style="margin:0;font-size:13px">منصة تطبيقات ويب شاملة</p>
+      </div>
+      <div>
+        <h4 style="margin:0 0 12px;color:var(--fg);font-size:15px">الروابط</h4>
+        <ul style="list-style:none;margin:0;padding:0">
+          <li><a href="/" style="color:var(--muted);text-decoration:none">الرئيسية</a></li>
+          <li><a href="/tools" style="color:var(--muted);text-decoration:none">أدوات</a></li>
+          <li><a href="/blog" style="color:var(--muted);text-decoration:none">المدونة</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="margin:0 0 12px;color:var(--fg);font-size:15px">القانونية</h4>
+        <ul style="list-style:none;margin:0;padding:0">
+          <li><a href="<?= h(url('privacy-policy')) ?>" style="color:var(--muted);text-decoration:none">سياسة الخصوصية</a></li>
+          <li><a href="<?= h(url('terms')) ?>" style="color:var(--muted);text-decoration:none">الشروط</a></li>
+          <li><a href="<?= h(url('cookie-policy')) ?>" style="color:var(--muted);text-decoration:none">سياسة الكوكيز</a></li>
+        </ul>
+      </div>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border-c);margin:30px 0">
+    <p style="margin:0">© <?= date('Y') ?> yassota. جميع الحقوق محفوظة.</p>
+  </div>
+</footer>
+<?php }

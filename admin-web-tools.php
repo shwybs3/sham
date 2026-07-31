@@ -259,9 +259,117 @@ $tools = list_web_tools($pdo, 'all');
         <button type="submit" class="btn btn-success">
           <?= $tool ? '✓ حفظ التعديلات' : '+ إضافة الأداة' ?>
         </button>
+        <button type="button" class="btn btn-edit" onclick="openLivePreview()" style="background:#6366f1">
+          👁️ معاينة حية
+        </button>
         <a href="?page=web-tools" class="btn">← إلغاء</a>
       </div>
     </form>
+
+    <!-- Live Preview Modal -->
+    <div id="preview-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);overflow-y:auto">
+      <div style="max-width:1000px;margin:20px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px;background:#f8f9fa;border-bottom:1px solid #e0e0e0">
+          <h2 style="margin:0;font-size:18px">👁️ معاينة حية للأداة</h2>
+          <button onclick="document.getElementById('preview-modal').style.display='none'" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666">×</button>
+        </div>
+        <div id="preview-content" style="padding:30px;max-height:80vh;overflow-y:auto">
+          <div style="text-align:center;color:#999">جاري التحميل...</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function openLivePreview() {
+      const name = document.querySelector('[name="name"]')?.value || '';
+      const slug = document.querySelector('[name="slug"]')?.value || '';
+      const seoTitle = document.querySelector('[name="seo_title"]')?.value || '';
+      const metaDesc = document.querySelector('[name="meta_description"]')?.value || '';
+      const shortDesc = document.querySelector('[name="short_description"]')?.value || '';
+      const longDesc = document.querySelector('[name="long_description"]')?.value || '';
+      const tutorials = document.querySelector('[name="tutorials"]')?.value || '';
+      const features = document.querySelector('[name="features"]')?.value || '';
+      const pros = document.querySelector('[name="pros"]')?.value || '';
+      const cons = document.querySelector('[name="cons"]')?.value || '';
+
+      if (!name) { alert('أدخل اسم الأداة أولاً'); return; }
+
+      const previewHtml = `
+        <style>
+          .preview-header { max-width: 100%; }
+          .preview-section { margin: 24px 0; padding: 16px; background: #f8f9fa; border-radius: 8px; }
+          .preview-section h3 { margin: 0 0 12px; font-size: 18px; color: #2563eb; font-weight: 700; }
+          .preview-features { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+          .feature-item { padding: 10px; background: rgba(37,99,235,.05); border-radius: 6px; font-size: 14px; }
+          .preview-content { line-height: 1.8; color: #333; font-size: 15px; }
+          .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+          .pro-list, .con-list { padding: 12px; border-radius: 6px; list-style: none; margin: 0; padding-left: 20px; }
+          .pro-list { background: rgba(34,197,94,.08); }
+          .con-list { background: rgba(239,68,68,.08); }
+          .pro-list li { margin: 6px 0; }
+          .con-list li { margin: 6px 0; }
+          .pro-list li:before { content: '✓ '; color: #22c55e; }
+          .con-list li:before { content: '✗ '; color: #ef4444; }
+          .preview-seo { margin-top: 20px; padding: 16px; background: #f0f9ff; border-left: 4px solid #0066cc; border-radius: 6px; font-size: 13px; }
+          .preview-seo strong { color: #0066cc; }
+        </style>
+        <div class="preview-header">
+          <h1 style="font-size:32px;margin:0 0 10px;font-weight:800">${escapeHtml(name)}</h1>
+          <p style="color:#999;font-size:14px;margin:0 0 20px">معاينة حية للأداة</p>
+          ${shortDesc ? '<div class="preview-section" style="background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(99,102,241,.08));border-left:4px solid #2563eb"><p style="margin:0;font-size:16px">' + escapeHtml(shortDesc) + '</p></div>' : '<div style="color:#999">لم تُدخل وصفاً قصيراً</div>'}
+        </div>
+
+        ${longDesc ? '<div class="preview-section"><h3>📝 نظرة عامة</h3><div class="preview-content">' + escapeHtml(longDesc).replace(/\n/g, '<br>') + '</div></div>' : ''}
+
+        ${features ? '<div class="preview-section"><h3>✨ المميزات الرئيسية</h3><div class="preview-features">' +
+          escapeHtml(features).split('\n').filter(f => f.trim()).map(f => '<div class="feature-item">✔️ ' + f.trim() + '</div>').join('') +
+          '</div></div>' : ''}
+
+        ${(pros || cons) ? '<div class="preview-section"><h3>⚖️ الإيجابيات والسلبيات</h3><div class="pros-cons">' +
+          (pros ? '<div><h4 style="margin-top:0;color:#22c55e">✅ الإيجابيات</h4><ul class="pro-list">' +
+            escapeHtml(pros).split('\n').filter(p => p.trim()).map(p => '<li>' + p.trim() + '</li>').join('') +
+            '</ul></div>' : '') +
+          (cons ? '<div><h4 style="margin-top:0;color:#ef4444">❌ السلبيات</h4><ul class="con-list">' +
+            escapeHtml(cons).split('\n').filter(c => c.trim()).map(c => '<li>' + c.trim() + '</li>').join('') +
+            '</ul></div>' : '') +
+          '</div></div>' : ''}
+
+        ${tutorials ? '<div class="preview-section"><h3>🎓 كيفية الاستخدام والشروحات</h3><div class="preview-content">' + escapeHtml(tutorials).replace(/\n/g, '<br>') + '</div></div>' : ''}
+
+        <div class="preview-seo">
+          <strong>📊 معلومات SEO والمشاركة:</strong><br>
+          <strong>العنوان (Title):</strong> ${escapeHtml(seoTitle || name)}<br>
+          <strong>الوصف (Description):</strong> ${escapeHtml(metaDesc || shortDesc || '...')}<br>
+          <strong>الرابط (URL):</strong> /tools?slug=${escapeHtml(slug || 'tool-name')}
+        </div>
+      `;
+
+      document.getElementById('preview-content').innerHTML = previewHtml;
+      document.getElementById('preview-modal').style.display = 'flex';
+      document.getElementById('preview-modal').style.alignItems = 'flex-start';
+      document.getElementById('preview-modal').style.justifyContent = 'center';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return String(text).replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // إغلاق المعاينة عند الضغط خارجها
+    document.getElementById('preview-modal')?.addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.style.display = 'none';
+        document.body.style.overflow = 'auto';
+      }
+    });
+    </script>
 
   <?php endif; ?>
 </div>
