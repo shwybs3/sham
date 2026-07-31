@@ -32,6 +32,9 @@ DirectoryIndex index.php
   # إخفاء admin.php خلف /admin
   RewriteRule ^admin/?$ admin.php [L,QSA]
 
+  # صفحة تحميل المنتج
+  RewriteRule ^download/?$ download.php [L,QSA]
+
   # صفحات ثابتة بدون امتداد .php
   RewriteRule ^about/?$ about.php [L]
   RewriteRule ^contact/?$ contact.php [L]

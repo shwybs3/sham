@@ -101,6 +101,7 @@ if ($isPost && isset($_POST['save_product'])) {
         str_replace("\r","",clean($_POST['features_ar']??'')),
         str_replace("\r","",clean($_POST['features_en']??'')),
         clean($_POST['delivery_ar']??'تسليم فوري'), clean($_POST['delivery_en']??'Instant delivery'),
+        clean($_POST['download_url']??''),
         isset($_POST['featured'])?1:0, isset($_POST['active'])?1:0,
     ];
     if ($id) {
@@ -108,7 +109,7 @@ if ($isPost && isset($_POST['save_product'])) {
         db()->prepare("UPDATE products SET name_ar=?,name_en=?,price=?,category=?,icon=?,color=?,
             duration_ar=?,duration_en=?,rating=?,sales=?,badge_ar=?,badge_en=?,badge_color=?,
             short_ar=?,short_en=?,long_ar=?,long_en=?,features_ar=?,features_en=?,
-            delivery_ar=?,delivery_en=?,featured=?,active=? WHERE id=?")->execute($data);
+            delivery_ar=?,delivery_en=?,download_url=?,featured=?,active=? WHERE id=?")->execute($data);
         $message = 'تم تحديث المنتج بنجاح';
     } else {
         $sl = slug($data[0]?:$data[1]);
@@ -118,7 +119,7 @@ if ($isPost && isset($_POST['save_product'])) {
             ['slug','name_ar','name_en','price','category','icon','color',
              'duration_ar','duration_en','rating','sales','badge_ar','badge_en','badge_color',
              'short_ar','short_en','long_ar','long_en','features_ar','features_en',
-             'delivery_ar','delivery_en','featured','active'],
+             'delivery_ar','delivery_en','download_url','featured','active'],
             $data
         );
         $message = 'تمت إضافة المنتج بنجاح';
@@ -487,6 +488,11 @@ if ($action==='edit_product' && isset($_GET['id'])) {
         <div class="form-group">
           <label>Delivery method (English)</label>
           <input type="text" name="delivery_en" value="<?= clean($editProd['delivery_en']??'Instant delivery via email') ?>">
+        </div>
+        <div class="form-group">
+          <label>رابط التحميل المباشر (اختياري)</label>
+          <input type="url" name="download_url" placeholder="https://drive.google.com/..." value="<?= clean($editProd['download_url']??'') ?>">
+          <div style="font-size:12px;color:var(--dim);margin-top:6px;">يُستخدم في صفحة download.php بعد اجتياز الكابتشا — اتركه فارغاً لإرسال الملف يدوياً بالبريد</div>
         </div>
       </div>
     </div>

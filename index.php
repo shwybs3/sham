@@ -10,6 +10,7 @@ $lang  = getLang();
 
 <!-- ===== HERO ===== -->
 <section class="hero">
+  <div class="hero-grid"></div>
   <div class="hero-badge">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M8 1L10 6H15L11 9.5L12.5 15L8 12L3.5 15L5 9.5L1 6H6L8 1Z" fill="#00f0ff"/>
@@ -17,12 +18,12 @@ $lang  = getLang();
     <?= t('متجر أدوات رقمي احترافي وموثوق','Professional & Trusted Digital Tools Store') ?>
   </div>
   <h1><?= t(
-    'أدوات وخدمات برمجية رقمية <span>احترافية</span>',
-    'Professional Digital <span>Tools & Dev Services</span>'
+    'أدوات وخدمات برمجية <span>احترافية</span>',
+    'Professional Digital <span>Tools & Services</span>'
   ) ?></h1>
   <p><?= t(
-    'بوتات تيليغرام، سكريبتات PHP، قوالب ويب، وأدوات API — تسليم فوري بعد الدفع',
-    'Telegram bots, PHP scripts, web templates, and API tools — instant delivery after payment'
+    'بوتات تيليغرام · سكريبتات PHP · قوالب ويب · أدوات API — تسليم فوري آمن',
+    'Telegram bots · PHP scripts · Web templates · API tools — Instant secure delivery'
   ) ?></p>
   <div class="hero-btns">
     <a href="#products" class="btn btn-primary">
@@ -38,94 +39,115 @@ $lang  = getLang();
 <div class="stats-bar">
   <div class="stats-inner">
     <div class="stat-item">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 8px;">
-        <rect width="32" height="32" rx="8" fill="rgba(0,240,255,0.08)"/>
-        <path d="M16 8C11.6 8 8 11.6 8 16C8 20.4 11.6 24 16 24C20.4 24 24 20.4 24 16C24 11.6 20.4 8 16 8ZM17 20H15V15H17V20ZM17 13H15V11H17V13Z" fill="#00f0ff"/>
-      </svg>
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(0,240,255,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+        <i class="fa-solid fa-users" style="font-size:22px;color:var(--cyan);"></i>
+      </div>
       <div class="stat-num">500+</div>
       <div class="stat-label"><?= t('عميل راضٍ','Happy Clients') ?></div>
     </div>
     <div class="stat-item">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 8px;">
-        <rect width="32" height="32" rx="8" fill="rgba(0,255,102,0.08)"/>
-        <path d="M10 22L14 18L17 21L22 14" stroke="#00ff66" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div class="stat-num"><?= count($prods) ?>+</div>
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(0,255,136,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+        <i class="fa-solid fa-boxes-stacked" style="font-size:22px;color:var(--green);"></i>
+      </div>
+      <div class="stat-num" style="color:var(--green);"><?= count($prods) ?>+</div>
       <div class="stat-label"><?= t('منتج رقمي','Digital Products') ?></div>
     </div>
     <div class="stat-item">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 8px;">
-        <rect width="32" height="32" rx="8" fill="rgba(255,184,0,0.08)"/>
-        <path d="M16 9L18.5 14.5H24L19.5 17.5L21.5 23L16 20L10.5 23L12.5 17.5L8 14.5H13.5L16 9Z" fill="#ffb800"/>
-      </svg>
-      <div class="stat-num">4.9★</div>
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(255,184,0,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+        <i class="fa-solid fa-star" style="font-size:22px;color:var(--gold);"></i>
+      </div>
+      <div class="stat-num" style="color:var(--gold);">4.9★</div>
       <div class="stat-label"><?= t('تقييم العملاء','Customer Rating') ?></div>
     </div>
     <div class="stat-item">
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 8px;">
-        <rect width="32" height="32" rx="8" fill="rgba(124,58,237,0.08)"/>
-        <path d="M22 10H10C8.9 10 8 10.9 8 12V22C8 23.1 8.9 24 10 24H22C23.1 24 24 23.1 24 22V12C24 10.9 23.1 10 22 10ZM16 20C13.8 20 12 18.2 12 16C12 13.8 13.8 12 16 12C18.2 12 20 13.8 20 16C20 18.2 18.2 20 16 20Z" fill="#7c3aed"/>
-      </svg>
-      <div class="stat-num">USDT</div>
-      <div class="stat-label"><?= t('دفع آمن','Secure Payment') ?></div>
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(124,58,237,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+        <i class="fa-solid fa-bolt" style="font-size:22px;color:var(--purple);"></i>
+      </div>
+      <div class="stat-num" style="color:var(--purple);">FAST</div>
+      <div class="stat-label"><?= t('تسليم فوري','Instant Delivery') ?></div>
     </div>
   </div>
 </div>
 
 <!-- ===== WHY US ===== -->
-<section style="padding:60px 20px;background:var(--bg2);">
+<section style="padding:65px 20px;background:var(--bg2);">
   <div class="container">
     <div class="section-header">
       <h2><?= t('لماذا <span>تختارنا</span>؟','Why <span>Choose Us</span>?') ?></h2>
       <div class="section-divider"></div>
-      <p><?= t('نقدم أدوات ومنتجات رقمية عالية الجودة بأسعار تنافسية وتسليم فوري','High-quality digital tools and products at competitive prices with instant delivery') ?></p>
+      <p><?= t('نقدم أدوات ومنتجات رقمية عالية الجودة بأسعار تنافسية وتسليم فوري','High-quality digital tools at competitive prices with instant delivery') ?></p>
     </div>
     <div class="features-grid">
 
       <div class="feat-card">
         <div class="feat-svg">
-          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="26" cy="26" r="26" fill="rgba(0,240,255,0.07)"/>
-            <path d="M26 14L30 22H38L31.5 26.5L34 35L26 30L18 35L20.5 26.5L14 22H22L26 14Z" fill="#00f0ff" opacity=".9"/>
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(0,240,255,.07)"/>
+            <path d="M28 14L32 22H40L33.5 27L36 35.5L28 31L20 35.5L22.5 27L16 22H24L28 14Z" fill="#00f0ff" opacity=".9"/>
           </svg>
         </div>
         <h3><?= t('تسليم فوري','Instant Delivery') ?></h3>
-        <p><?= t('تحصل على المنتج مباشرة بعد تأكيد الدفع دون انتظار','Get your product immediately after payment confirmation') ?></p>
+        <p><?= t('تحصل على منتجك مباشرة بعد تأكيد الدفع — بدون انتظار','Get your product immediately after payment confirmation — no waiting') ?></p>
       </div>
 
       <div class="feat-card">
         <div class="feat-svg">
-          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="26" cy="26" r="26" fill="rgba(0,255,102,0.07)"/>
-            <path d="M26 14C19.4 14 14 19.4 14 26C14 32.6 19.4 38 26 38C32.6 38 38 32.6 38 26C38 19.4 32.6 14 26 14ZM24 32L18 26L19.4 24.6L24 29.2L32.6 20.6L34 22L24 32Z" fill="#00ff66"/>
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(0,255,136,.07)"/>
+            <path d="M28 14C20.3 14 14 20.3 14 28C14 35.7 20.3 42 28 42C35.7 42 42 35.7 42 28C42 20.3 35.7 14 28 14ZM25.5 34.2L19 27.7L20.8 25.9L25.5 30.6L35.2 20.9L37 22.7L25.5 34.2Z" fill="#00ff88"/>
           </svg>
         </div>
         <h3><?= t('جودة مضمونة','Guaranteed Quality') ?></h3>
-        <p><?= t('كل منتج مختبر ومضمون الجودة مع دعم ما بعد البيع','Every product is tested and quality-guaranteed with after-sale support') ?></p>
+        <p><?= t('كل منتج مختبر ومضمون مع دعم ما بعد البيع عبر تيليغرام','Every product is tested and guaranteed with after-sale support on Telegram') ?></p>
       </div>
 
       <div class="feat-card">
         <div class="feat-svg">
-          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="26" cy="26" r="26" fill="rgba(124,58,237,0.07)"/>
-            <rect x="15" y="20" width="22" height="16" rx="3" stroke="#7c3aed" stroke-width="2"/>
-            <path d="M20 20V17C20 14.8 21.8 13 24 13H28C30.2 13 32 14.8 32 17V20" stroke="#7c3aed" stroke-width="2"/>
-            <circle cx="26" cy="28" r="2.5" fill="#7c3aed"/>
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(124,58,237,.07)"/>
+            <rect x="16" y="20" width="24" height="18" rx="3.5" stroke="#7c3aed" stroke-width="2"/>
+            <path d="M21 20V17C21 14.8 22.8 13 25 13H31C33.2 13 35 14.8 35 17V20" stroke="#7c3aed" stroke-width="2"/>
+            <circle cx="28" cy="29" r="3" fill="#7c3aed"/>
+            <path d="M28 32V35" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
         <h3><?= t('دفع USDT آمن','Secure USDT Payment') ?></h3>
-        <p><?= t('نقبل USDT على شبكتي TRC20 وERC20 — آمن وسريع','We accept USDT on TRC20 & ERC20 — secure and fast') ?></p>
+        <p><?= t('نقبل USDT على شبكتي TRC20 وERC20 — مشفّر وآمن 100%','Accept USDT on TRC20 & ERC20 — encrypted and 100% secure') ?></p>
       </div>
 
       <div class="feat-card">
         <div class="feat-svg">
-          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="26" cy="26" r="26" fill="rgba(255,184,0,0.07)"/>
-            <path d="M26 14C19.4 14 14 19.4 14 26C14 32.6 19.4 38 26 38C32.6 38 38 32.6 38 26C38 19.4 32.6 14 26 14ZM27 27H19V25H25V19H27V27Z" fill="#ffb800"/>
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(255,184,0,.07)"/>
+            <path d="M28 14C20.3 14 14 20.3 14 28C14 35.7 20.3 42 28 42C35.7 42 42 35.7 42 28C42 20.3 35.7 14 28 14ZM29.5 30H20V27H27.5V20H29.5V30Z" fill="#ffb800"/>
           </svg>
         </div>
-        <h3><?= t('دعم على مدار الساعة','24/7 Support') ?></h3>
-        <p><?= t('فريق دعم متاح دائماً عبر تيليغرام للإجابة على استفساراتك','Support team always available on Telegram to answer your questions') ?></p>
+        <h3><?= t('دعم 24/7','24/7 Support') ?></h3>
+        <p><?= t('فريق دعم فني متاح على مدار الساعة عبر تيليغرام لمساعدتك','Technical support team available 24/7 on Telegram to help you') ?></p>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-svg">
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(255,0,85,.07)"/>
+            <path d="M42 20L28 14L14 20V30C14 37.5 20.2 43 28 43C35.8 43 42 37.5 42 30V20Z" stroke="#ff0055" stroke-width="2" fill="none"/>
+            <path d="M22 28.5L26 32.5L34 23.5" stroke="#ff0055" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h3><?= t('أمان عالي','High Security') ?></h3>
+        <p><?= t('حماية CSRF وكابتشا وتحديد معدل الطلبات — موقعنا وبياناتك آمنان','CSRF protection, captcha & rate limiting — your data and our site are secure') ?></p>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-svg">
+          <svg viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="28" fill="rgba(0,240,255,.07)"/>
+            <path d="M22 15H34C36.2 15 38 16.8 38 19V37C38 39.2 36.2 41 34 41H22C19.8 41 18 39.2 18 37V19C18 16.8 19.8 15 22 15ZM28 35C29.1 35 30 34.1 30 33C30 31.9 29.1 31 28 31C26.9 31 26 31.9 26 33C26 34.1 26.9 35 28 35Z" fill="#00f0ff" opacity=".7"/>
+            <path d="M23 22H33M23 26H30" stroke="#00f0ff" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h3><?= t('منتجات موثّقة','Documented Products') ?></h3>
+        <p><?= t('كل منتج يأتي مع توثيق كامل ودليل تثبيت خطوة بخطوة','Every product comes with full documentation and step-by-step installation guide') ?></p>
       </div>
 
     </div>
@@ -141,17 +163,21 @@ $lang  = getLang();
       <p><?= t('اختر الأداة المناسبة وابدأ في الحصول عليها فوراً','Choose the right tool and get it instantly') ?></p>
     </div>
 
-    <div style="max-width:480px;margin:0 auto 24px;">
+    <div style="max-width:520px;margin:0 auto 28px;">
       <div style="position:relative;">
-        <i class="fa-solid fa-magnifying-glass" style="position:absolute;top:50%;transform:translateY(-50%);<?= $lang==='ar'?'right':'left' ?>:16px;color:var(--dim);"></i>
-        <input type="text" placeholder="<?= t('ابحث عن منتج...','Search products...') ?>"
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute;top:50%;transform:translateY(-50%);<?= $lang==='ar'?'right':'left' ?>:18px;color:var(--dim);font-size:15px;"></i>
+        <input type="text" id="searchInput" placeholder="<?= t('ابحث عن أداة...','Search tools...') ?>"
           onkeyup="filterSearch(this.value)"
-          style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:12px <?= $lang==='ar'?'44px 12px 16px':'12px 16px 44px' ?>;border-radius:30px;font-size:15px;font-family:inherit;">
+          style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:13px <?= $lang==='ar'?'48px 13px 18px':'13px 18px 48px' ?>;border-radius:30px;font-size:15px;font-family:inherit;transition:all .3s;"
+          onfocus="this.style.borderColor='var(--cyan)';this.style.boxShadow='0 0 0 3px rgba(0,240,255,.07)'"
+          onblur="this.style.borderColor='';this.style.boxShadow=''">
       </div>
     </div>
 
     <div class="cats-bar">
-      <button class="cat-btn active" onclick="filterCat('all',this)"><?= t('الكل','All') ?></button>
+      <button class="cat-btn active" onclick="filterCat('all',this)">
+        <i class="fa-solid fa-th-large"></i> <?= t('الكل','All') ?>
+      </button>
       <?php foreach($cats as $c): ?>
       <button class="cat-btn" onclick="filterCat('<?= clean($c['name_ar']) ?>',this)">
         <i class="fa-solid <?= clean($c['icon']) ?>"></i>
@@ -160,7 +186,7 @@ $lang  = getLang();
       <?php endforeach; ?>
     </div>
 
-    <div class="products-grid">
+    <div class="products-grid" id="productsGrid">
       <?php foreach($prods as $p):
         $fAr = $p['features_ar'] ? explode("\n",$p['features_ar']) : [];
         $fEn = $p['features_en'] ? explode("\n",$p['features_en']) : [];
@@ -169,11 +195,11 @@ $lang  = getLang();
         <div class="card-top">
           <?php if($p['badge_ar']): ?>
           <div class="card-badge" style="background:<?= clean($p['badge_color']) ?>22;color:<?= clean($p['badge_color']) ?>;border:1px solid <?= clean($p['badge_color']) ?>44;">
-            <?= t(clean($p['badge_ar']),clean($p['badge_en']?:'')) ?>
+            <i class="fa-solid fa-certificate"></i> <?= t(clean($p['badge_ar']),clean($p['badge_en']?:'')) ?>
           </div>
           <?php endif; ?>
 
-          <div class="card-icon-wrap" style="color:<?= clean($p['color']) ?>;">
+          <div class="card-icon-wrap" style="color:<?= clean($p['color']) ?>;background:<?= clean($p['color']) ?>12;">
             <i class="fa-solid <?= clean($p['icon']) ?>"></i>
           </div>
 
@@ -182,13 +208,16 @@ $lang  = getLang();
 
           <div class="card-meta">
             <span><i class="fa-solid fa-star"></i> <?= number_format($p['rating'],1) ?></span>
-            <span><i class="fa-solid fa-bag-shopping" style="color:var(--dim)"></i> <?= number_format($p['sales']) ?></span>
+            <span><i class="fa-solid fa-bag-shopping" style="color:var(--dim)"></i> <?= number_format($p['sales']) ?> <?= t('مبيعة','sold') ?></span>
           </div>
 
           <?php if(!empty($fAr)): ?>
-          <div style="margin-top:10px;">
+          <div style="margin-top:12px;">
             <?php foreach(array_slice($lang==='ar'?$fAr:$fEn,0,3) as $f): ?>
-              <div style="font-size:12.5px;color:var(--dim);margin-bottom:4px;"><?= clean($f) ?></div>
+              <div style="font-size:12.5px;color:var(--dim);margin-bottom:5px;display:flex;align-items:flex-start;gap:6px;">
+                <i class="fa-solid fa-check" style="color:var(--green);font-size:11px;margin-top:3px;flex-shrink:0;"></i>
+                <span><?= clean(ltrim($f,'✅ ')) ?></span>
+              </div>
             <?php endforeach; ?>
           </div>
           <?php endif; ?>
@@ -204,42 +233,112 @@ $lang  = getLang();
             <div class="card-duration"><?= t(clean($p['duration_ar']),clean($p['duration_en'])) ?></div>
           </div>
           <a href="product.php?slug=<?= urlencode($p['slug']) ?>" class="btn btn-primary btn-sm">
-            <?= t('اشتر الآن','Buy Now') ?> <i class="fa-solid fa-arrow-left"></i>
+            <i class="fa-solid fa-bag-shopping"></i> <?= t('اشتر','Buy') ?>
           </a>
         </div>
       </div>
       <?php endforeach; ?>
+
       <?php if(empty($prods)): ?>
-      <p style="text-align:center;color:var(--dim);grid-column:1/-1;"><?= t('لا توجد منتجات متاحة حالياً.','No products available yet.') ?></p>
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
+        <i class="fa-solid fa-box-open" style="font-size:48px;color:var(--border);display:block;margin-bottom:16px;"></i>
+        <p style="color:var(--dim);font-size:16px;"><?= t('لا توجد منتجات متاحة حالياً. أضف منتجات من لوحة التحكم.','No products available yet. Add products from the admin panel.') ?></p>
+        <?php if(isAdmin()): ?>
+        <a href="admin.php?action=add_product" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">
+          <i class="fa-solid fa-plus"></i> <?= t('إضافة منتج','Add Product') ?>
+        </a>
+        <?php endif; ?>
+      </div>
       <?php endif; ?>
     </div>
   </div>
 </section>
 
 <!-- ===== HOW IT WORKS ===== -->
-<section style="padding:60px 20px;background:var(--bg2);">
+<section style="padding:65px 20px;background:var(--bg2);">
   <div class="container">
     <div class="section-header">
       <h2><?= t('كيف <span>يعمل</span>؟','How Does It <span>Work</span>?') ?></h2>
       <div class="section-divider"></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px;max-width:900px;margin:0 auto;">
+    <div class="steps-grid">
       <?php
       $steps = [
-        ['icon'=>'fa-store','color'=>'#00f0ff','title_ar'=>'اختر المنتج','title_en'=>'Choose Product','desc_ar'=>'تصفح الكتالوج واختر الأداة المناسبة','desc_en'=>'Browse the catalog and select your tool','num'=>'01'],
-        ['icon'=>'fa-credit-card','color'=>'#7c3aed','title_ar'=>'ادفع بـ USDT','title_en'=>'Pay with USDT','desc_ar'=>'أرسل المبلغ إلى عنوان محفظتنا وأدخل hash العملية','desc_en'=>'Send the amount to our wallet address and enter the transaction hash','num'=>'02'],
-        ['icon'=>'fa-bolt','color'=>'#00ff66','title_ar'=>'استلم فوراً','title_en'=>'Get Instantly','desc_ar'=>'بعد التحقق ستستلم المنتج فوراً على بريدك الإلكتروني','desc_en'=>'After verification you receive the product instantly via email','num'=>'03'],
+        ['icon'=>'fa-store','color'=>'#00f0ff','title_ar'=>'اختر المنتج','title_en'=>'Choose Product','desc_ar'=>'تصفح الكتالوج واختر الأداة المناسبة لمشروعك','desc_en'=>'Browse the catalog and select the tool that fits your project','num'=>'01'],
+        ['icon'=>'fa-wallet','color'=>'#7c3aed','title_ar'=>'ادفع بـ USDT','title_en'=>'Pay with USDT','desc_ar'=>'أرسل المبلغ لمحفظتنا وأدخل hash المعاملة في النموذج','desc_en'=>'Send the amount to our wallet and enter the transaction hash','num'=>'02'],
+        ['icon'=>'fa-bolt','color'=>'#00ff88','title_ar'=>'استلم فوراً','title_en'=>'Get Instantly','desc_ar'=>'بعد التحقق ستتلقى المنتج مباشرة على بريدك الإلكتروني','desc_en'=>'After verification you receive the product directly via email','num'=>'03'],
       ];
       foreach($steps as $s): ?>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:26px;text-align:center;position:relative;">
-        <div style="position:absolute;top:-14px;<?= $lang==='ar'?'right':'left' ?>:20px;background:<?= $s['color'] ?>;color:var(--bg);font-weight:900;font-size:12px;padding:4px 10px;border-radius:8px;"><?= $s['num'] ?></div>
-        <div style="width:54px;height:54px;border-radius:14px;background:<?= $s['color'] ?>18;display:flex;align-items:center;justify-content:center;font-size:24px;color:<?= $s['color'] ?>;margin:0 auto 14px;">
+      <div class="step-card">
+        <div class="step-num" style="background:<?= $s['color'] ?>;color:var(--bg);"><?= $s['num'] ?></div>
+        <div class="step-icon" style="background:<?= $s['color'] ?>18;color:<?= $s['color'] ?>;">
           <i class="fa-solid <?= $s['icon'] ?>"></i>
         </div>
-        <h3 style="font-size:17px;font-weight:700;margin-bottom:8px;"><?= t($s['title_ar'],$s['title_en']) ?></h3>
-        <p style="font-size:13.5px;color:var(--dim);line-height:1.65;"><?= t($s['desc_ar'],$s['desc_en']) ?></p>
+        <h3 style="font-size:17px;font-weight:700;margin-bottom:10px;"><?= t($s['title_ar'],$s['title_en']) ?></h3>
+        <p style="font-size:13.5px;color:var(--dim);line-height:1.7;"><?= t($s['desc_ar'],$s['desc_en']) ?></p>
       </div>
       <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TESTIMONIALS ===== -->
+<section style="padding:65px 20px;">
+  <div class="container">
+    <div class="section-header">
+      <h2><?= t('ماذا يقول <span>عملاؤنا</span>؟','What Our <span>Clients Say</span>?') ?></h2>
+      <div class="section-divider"></div>
+    </div>
+    <div class="testimonials-grid">
+      <?php
+      $testimonials = [
+        ['name'=>'Ahmad K.','role_ar'=>'مطور ويب','role_en'=>'Web Developer','bg'=>'linear-gradient(135deg,#00f0ff,#7c3aed)','text_ar'=>'منتج احترافي جداً! البوت يعمل بشكل مثالي واللوحة الإدارية سهلة الاستخدام. التسليم كان فورياً والدعم ممتاز.','text_en'=>'Very professional product! The bot works perfectly and the admin panel is easy to use. Delivery was instant and support is excellent.','stars'=>5],
+        ['name'=>'Mohammed S.','role_ar'=>'صاحب متجر إلكتروني','role_en'=>'E-commerce Owner','bg'=>'linear-gradient(135deg,#ff0055,#7c3aed)','text_ar'=>'اشتريت سكريبت المتجر وأنا سعيد جداً بالنتيجة. يعمل على استضافة مجانية InfinityFree بدون مشاكل.','text_en'=>'Bought the store script and I am very happy with the result. Works on InfinityFree hosting without any issues.','stars'=>5],
+        ['name'=>'Sara R.','role_ar'=>'مستقلة في التسويق','role_en'=>'Freelance Marketer','bg'=>'linear-gradient(135deg,#ffb800,#ff0055)','text_ar'=>'قالب الصفحة الرئيسية أفضل ما رأيته بهذا السعر. التصميم احترافي والكود نظيف ومنظم.','text_en'=>'Best landing page template I\'ve seen at this price. Professional design and clean, organized code.','stars'=>4],
+      ];
+      foreach($testimonials as $t): ?>
+      <div class="testi-card">
+        <div class="testi-stars">
+          <?php for($i=0;$i<5;$i++): ?>
+            <i class="fa-solid fa-star" style="color:<?= $i<$t['stars']?'var(--gold)':'var(--border)' ?>;font-size:14px;"></i>
+          <?php endfor; ?>
+        </div>
+        <p class="testi-text"><?= getLang()==='ar' ? clean($t['text_ar']) : clean($t['text_en']) ?></p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:<?= $t['bg'] ?>;">
+            <?= strtoupper(substr($t['name'],0,1)) ?>
+          </div>
+          <div>
+            <div class="testi-name"><?= clean($t['name']) ?></div>
+            <div class="testi-role"><?= getLang()==='ar' ? clean($t['role_ar']) : clean($t['role_en']) ?></div>
+          </div>
+          <i class="fa-solid fa-quote-right" style="color:var(--border);font-size:24px;margin-<?= getLang()==='ar'?'right':'left' ?>:auto;"></i>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section style="padding:60px 20px;background:var(--bg2);text-align:center;border-top:1px solid var(--border);">
+  <div style="max-width:600px;margin:0 auto;">
+    <div style="width:64px;height:64px;border-radius:18px;background:rgba(0,240,255,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;color:var(--cyan);">
+      <i class="fa-brands fa-telegram"></i>
+    </div>
+    <h2 style="font-size:clamp(20px,3.5vw,30px);font-weight:900;margin-bottom:12px;">
+      <?= t('هل لديك سؤال؟ نحن هنا!','Have a Question? We\'re Here!') ?>
+    </h2>
+    <p style="color:var(--dim);font-size:15px;margin-bottom:28px;line-height:1.75;">
+      <?= t('تواصل معنا عبر تيليغرام للاستفسار قبل الشراء أو للدعم الفني. فريقنا يرد خلال دقائق.','Contact us on Telegram for pre-purchase inquiries or technical support. Our team responds within minutes.') ?>
+    </p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+      <a href="<?= clean(setting('telegram','#')) ?>" class="btn btn-primary" target="_blank" rel="noopener">
+        <i class="fa-brands fa-telegram"></i> <?= t('تواصل عبر تيليغرام','Chat on Telegram') ?>
+      </a>
+      <a href="contact.php" class="btn btn-outline">
+        <i class="fa-solid fa-envelope"></i> <?= t('أرسل رسالة','Send Message') ?>
+      </a>
     </div>
   </div>
 </section>

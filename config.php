@@ -215,6 +215,21 @@ function install_db(): void {
         created_at $dt
     )$engine");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS download_tokens (
+        id         $pk,
+        token      VARCHAR(64) UNIQUE NOT NULL,
+        order_id   VARCHAR(50) NOT NULL,
+        product_slug VARCHAR(191) NOT NULL,
+        created_at $dt,
+        expires_at DATETIME NOT NULL
+    )$engine");
+
+    // ترقية الأعمدة لإصدارات قديمة (آمن على MySQL وSQLite)
+    try { $db->query("SELECT download_url FROM products LIMIT 1"); }
+    catch (Throwable) {
+        $db->exec("ALTER TABLE products ADD COLUMN download_url VARCHAR(500) DEFAULT ''");
+    }
+
     // ---- إعدادات افتراضية ----
     $defaults = [
         'site_name_ar'   => 'DarkStore',
@@ -234,12 +249,14 @@ function install_db(): void {
         'cf_site_key'    => '',
         'cf_secret_key'  => '',
         // إعدادات الحماية من الفلود والبوتات (قابلة للتعديل من لوحة التحكم)
-        'rl_login_max'      => '5',   // عدد محاولات الدخول المسموحة
-        'rl_login_window'   => '900', // النافذة الزمنية بالثواني (15 دقيقة)
-        'rl_checkout_max'   => '6',
-        'rl_checkout_window'=> '600',
-        'rl_contact_max'    => '4',
-        'rl_contact_window' => '600',
+        'rl_login_max'       => '5',
+        'rl_login_window'    => '900',
+        'rl_checkout_max'    => '6',
+        'rl_checkout_window' => '600',
+        'rl_contact_max'     => '4',
+        'rl_contact_window'  => '600',
+        'rl_download_max'    => '10',
+        'rl_download_window' => '600',
     ];
     foreach ($defaults as $k => $v) {
         dbInsertIgnore('settings', ['k', 'v'], [$k, $v]);
@@ -533,6 +550,23 @@ function verifyCaptcha(): bool {
     }
     $json = json_decode($res, true);
     return !empty($json['success']);
+}
+
+/* ============================================================
+   Download Tokens — رموز تحميل مؤقتة بعد التحقق بالكابتشا
+   ============================================================ */
+function genDownloadToken(string $orderId, string $productSlug): string {
+    $token = bin2hex(random_bytes(32));
+    $db = db();
+    $db->prepare("DELETE FROM download_tokens WHERE order_id=? OR expires_at < " . dbNow())->execute([$orderId]);
+    $db->prepare("INSERT INTO download_tokens(token,order_id,product_slug,expires_at) VALUES(?,?,?," . dbNow('+30 minutes') . ")")->execute([$token, $orderId, $productSlug]);
+    return $token;
+}
+function validateDownloadToken(string $token): ?array {
+    if (strlen($token) < 10) return null;
+    $s = db()->prepare("SELECT dt.*, o.status as order_status, p.download_url, p.name_ar, p.name_en FROM download_tokens dt LEFT JOIN orders o ON dt.order_id=o.order_id LEFT JOIN products p ON dt.product_slug=p.slug WHERE dt.token=? AND dt.expires_at > " . dbNow());
+    $s->execute([$token]);
+    return $s->fetch() ?: null;
 }
 
 /* ============================================================

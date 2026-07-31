@@ -66,9 +66,18 @@ require_once __DIR__.'/header.php';
       <i class="fa-solid fa-receipt"></i>
       <?= t('رقم الطلب','Order ID') ?>: <strong><?= clean($orderId) ?></strong>
     </div>
-    <a href="index.php" class="btn btn-primary" style="margin-top:18px;">
-      <i class="fa-solid fa-house"></i> <?= t('العودة للرئيسية','Back to Home') ?>
-    </a>
+    <p style="font-size:13px;color:var(--dim);margin:14px 0 20px;">
+      <?= t('يجري التحقق من معاملتك — ستتلقى إشعاراً فور التأكيد. يمكنك الوصول للتحميل الآن:',
+            'Transaction verification in progress — you\'ll be notified once confirmed. You can access the download now:') ?>
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a href="download.php?order=<?= urlencode($orderId) ?>" class="btn btn-primary" style="font-size:15px;">
+        <i class="fa-solid fa-arrow-down-to-line"></i> <?= t('الوصول للتحميل','Access Download') ?>
+      </a>
+      <a href="index.php" class="btn btn-outline">
+        <i class="fa-solid fa-house"></i> <?= t('الرئيسية','Home') ?>
+      </a>
+    </div>
   </div>
 
   <?php else: ?>
