@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check($_POST['csrf'] ?? '')) {
     $data = [
         'name' => trim($_POST['name'] ?? ''),
         'slug' => trim($_POST['slug'] ?? ''),
+        'icon_svg' => trim($_POST['icon_svg'] ?? ''),
+        'icon_color' => trim($_POST['icon_color'] ?? '') ?: '#2563eb',
+        'icon_bg' => trim($_POST['icon_bg'] ?? '') ?: '#dbeafe',
         'seo_title' => trim($_POST['seo_title'] ?? ''),
         'meta_description' => trim($_POST['meta_description'] ?? ''),
         'meta_tags' => trim($_POST['meta_tags'] ?? ''),
@@ -183,6 +186,10 @@ $tools = list_web_tools($pdo, 'all');
           <td>
             <?php if (!empty($t['icon_path'])): ?>
               <img src="<?= h(media_url($t['icon_path'])) ?>" alt="" style="width:36px;height:36px;border-radius:9px;object-fit:cover">
+            <?php elseif (!empty($t['icon_svg'])): ?>
+              <div style="width:36px;height:36px;border-radius:9px;background:<?= h($t['icon_bg'] ?: '#dbeafe') ?>;display:flex;align-items:center;justify-content:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="<?= h($t['icon_color'] ?: '#2563eb') ?>" stroke-width="2"><?= $t['icon_svg'] ?></svg>
+              </div>
             <?php else: ?>
               <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#667eea,#764ba2)"></div>
             <?php endif; ?>
@@ -209,18 +216,36 @@ $tools = list_web_tools($pdo, 'all');
       <input type="hidden" name="id" value="<?= $tool['id'] ?? 0 ?>">
 
       <div class="form-grid">
-        <div class="form-group form-full" style="display:flex;align-items:center;gap:16px">
-          <?php if (!empty($tool['icon_path'])): ?>
-            <img src="<?= h(media_url($tool['icon_path'])) ?>" alt="" style="width:64px;height:64px;border-radius:14px;object-fit:cover;border:1px solid #ddd">
-          <?php else: ?>
-            <div style="width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,#667eea,#764ba2);flex-shrink:0"></div>
-          <?php endif; ?>
-          <div>
-            <label style="margin-bottom:6px">أيقونة الأداة</label>
-            <input type="file" name="icon" accept="image/png,image/jpeg,image/webp">
-            <small style="color:#666;display:block;margin-top:4px">اتركه فارغاً للإبقاء على الأيقونة الحالية</small>
+        <div class="form-group form-full" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div id="icon-live-preview" style="width:64px;height:64px;border-radius:14px;background:<?= h($tool['icon_bg'] ?? '#dbeafe') ?>;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #ddd">
+            <svg id="icon-preview-svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="<?= h($tool['icon_color'] ?? '#2563eb') ?>" stroke-width="2"><?= $tool['icon_svg'] ?? '<circle cx="12" cy="12" r="10"/>' ?></svg>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label style="margin-bottom:6px">أيقونة الأداة (SVG — نفس الأيقونة المعروضة في الموقع)</label>
+            <textarea name="icon_svg" id="icon_svg" oninput="updateIconPreview()" rows="2" style="font-family:monospace;font-size:11px;direction:ltr;text-align:left" placeholder='<circle cx="12" cy="12" r="10"/>'><?= h($tool['icon_svg'] ?? '') ?></textarea>
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <div>
+                <small style="color:#666;display:block">لون الأيقونة</small>
+                <input type="color" name="icon_color" id="icon_color" value="<?= h($tool['icon_color'] ?? '#2563eb') ?>" oninput="updateIconPreview()" style="width:60px;height:32px;padding:2px">
+              </div>
+              <div>
+                <small style="color:#666;display:block">لون الخلفية</small>
+                <input type="color" name="icon_bg" id="icon_bg" value="<?= h($tool['icon_bg'] ?? '#dbeafe') ?>" oninput="updateIconPreview()" style="width:60px;height:32px;padding:2px">
+              </div>
+            </div>
+            <small style="color:#666;display:block;margin-top:4px">مسار SVG (بدون علامة &lt;svg&gt; نفسها) — نفس التنسيق المستخدم في lucide.dev icons</small>
           </div>
         </div>
+        <script>
+        function updateIconPreview(){
+          var svg=document.getElementById('icon_svg').value.trim();
+          var color=document.getElementById('icon_color').value;
+          var bg=document.getElementById('icon_bg').value;
+          document.getElementById('icon-preview-svg').innerHTML=svg||'<circle cx="12" cy="12" r="10"/>';
+          document.getElementById('icon-preview-svg').setAttribute('stroke',color);
+          document.getElementById('icon-live-preview').style.background=bg;
+        }
+        </script>
 
         <div class="form-group">
           <label><?= __('tool_name') ?> *</label>

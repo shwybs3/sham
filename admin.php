@@ -1900,6 +1900,160 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_app_article' && is_admin()) 
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Web tool content generator — same chunked-AI
+   technique as gen_app_article_chunk, but writes directly
+   into web_tools.long_description instead of blog_posts.
+   Produces genuinely unique, tool-specific content (not
+   templated filler) at 3 chunks × 700-900 words ≈ 2100-2700
+   words / ~11000-15000 characters — well past the 3000-char
+   floor needed for meaningful indexing and AdSense review.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'gen_tool_content_chunk' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(120);
+    $input    = json_decode(file_get_contents('php://input'), true);
+    $toolId   = (int)($input['tool_id'] ?? 0);
+    $chunk    = max(1, min(3, (int)($input['chunk'] ?? 1)));
+    $prevHtml = trim($input['prev_html'] ?? '');
+    if (!$toolId) { echo json_encode(['success'=>false,'error'=>'tool_id مطلوب']); exit; }
+
+    $tool = $pdo->prepare("SELECT * FROM web_tools WHERE id=?");
+    $tool->execute([$toolId]);
+    $tool = $tool->fetch(PDO::FETCH_ASSOC);
+    if (!$tool) { echo json_encode(['success'=>false,'error'=>'الأداة غير موجودة']); exit; }
+
+    $tName = $tool['name'];
+    $tDesc = $tool['short_description'] ?: $tool['name'];
+    $tSlug = $tool['slug'];
+    $isAiTool = strpos($tSlug, 'ai-') === 0 || in_array($tSlug, ['write','hashtag','chat']);
+    $toolUrl = rtrim(SITE_URL,'/') . '/tools/' . $tSlug . '/';
+
+    $sectionBriefs = [
+        1 => 'مقدمة شاملة: ما هي الأداة بالضبط، أي مشكلة حقيقية تحلها، من يحتاجها (اذكر فئات مستخدمين محددة: طلاب، موظفون، أصحاب متاجر، مطورون... حسب طبيعة الأداة)، وكيف تعمل تقنياً بشرح مبسط غير تقني مبالغ فيه.',
+        2 => 'الاستخدامات العملية ودليل الاستخدام: على الأقل 3 سيناريوهات واقعية مختلفة لاستخدام الأداة بأمثلة ملموسة، ثم دليل استخدام مرقّم خطوة بخطوة، ثم نصائح احترافية متقدمة لا يعرفها أغلب المستخدمين.',
+        3 => 'الخصوصية والأمان + المقارنة + الخلاصة: قسم مخصص بعنوان "الخصوصية والأمان" يشرح تحديداً كيف تُعالَج بيانات المستخدم في هذه الأداة تحديداً (مثال: هل تُرسَل النصوص لخادم خارجي أم تُعالَج محلياً، هل تُخزَّن، عبر اتصال مشفر أم لا)، ثم فقرة مقارنة موجزة عن سبب تفوق هذه الأداة على البدائل المشابهة، ثم خلاصة ودعوة لتجربتها.',
+    ];
+
+    $aiNote = $isAiTool
+        ? 'هذه أداة مدعومة بالذكاء الاصطناعي (نماذج لغوية عبر OpenRouter) — اذكر ذلك بشكل طبيعي دون مبالغة.'
+        : 'هذه أداة تعمل مباشرة (بدون ذكاء اصطناعي) — لا تدّعِ أنها تستخدم ذكاءً اصطناعياً.';
+
+    $prevNote = $prevHtml ? "ما سبق كتابته في المقالة (لا تكرره إطلاقاً، أكمل مباشرة بعده):\n[تم كتابة ".mb_strlen($prevHtml)." حرفاً سابقاً]" : '';
+
+    $prompt = <<<P
+أنت كاتب محتوى تقني عربي محترف متخصص في كتابة صفحات أدوات الويب لموقع yassota.com. أسلوبك عربي فصيح سلس، مباشر، ومفيد فعلياً — لا حشو ولا جمل عامة يمكن أن تنطبق على أي أداة أخرى.
+
+معلومات الأداة:
+- الاسم: {$tName}
+- الوصف: {$tDesc}
+- الرابط: {$toolUrl}
+- {$aiNote}
+
+{$prevNote}
+
+اكتب الآن القسم رقم {$chunk} من صفحة الأداة: {$sectionBriefs[$chunk]}
+
+قواعد صارمة:
+- 700-900 كلمة لهذا القسم تحديداً (لا تكتب أقل من ذلك)
+- HTML فقط: <h2> للعناوين الرئيسية، <h3> للفرعية، <p> فقرات كاملة مفيدة، <ul><li> عند الحاجة، <strong> للمصطلحات المهمة
+- المحتوى يجب أن يكون خاصاً بهذه الأداة تحديداً — لا تكتب عبارات عامة تصلح لأي أداة أخرى
+- ممنوع عبارات الحشو مثل "في عالم اليوم المتسارع" أو "أصبح من الضروري" أو "لا شك أن"
+- ممنوع أي مقدمة عن المقال نفسه مثل "في هذا القسم سنتحدث عن"
+- فقط HTML قابل للصق مباشرة، لا Markdown ولا نص خارج الوسوم
+P;
+
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $html = trim($r['content']);
+    $html = preg_replace('/^```(?:html)?\s*/i', '', $html);
+    $html = preg_replace('/\s*```\s*$/i', '', $html);
+
+    echo json_encode(['success'=>true,'chunk'=>$chunk,'html'=>$html,'word_count'=>count(preg_split('/\s+/u',$html,-1,PREG_SPLIT_NO_EMPTY))], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── AJAX: Save accumulated long_description chunks to a tool ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_tool_content' && is_admin()) {
+    header('Content-Type: application/json');
+    $input  = json_decode(file_get_contents('php://input'), true);
+    $toolId = (int)($input['tool_id'] ?? 0);
+    $html   = trim($input['html'] ?? '');
+    if (!$toolId || !$html) { echo json_encode(['success'=>false,'error'=>'بيانات مطلوبة']); exit; }
+    $pdo->prepare("UPDATE web_tools SET long_description=?, updated_at=NOW() WHERE id=?")->execute([$html, $toolId]);
+    echo json_encode(['success'=>true, 'chars'=>mb_strlen(strip_tags($html))], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── AJAX: Generate creative SEO title + meta description + FAQ + features for a tool ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'gen_tool_seo' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(60);
+    $input  = json_decode(file_get_contents('php://input'), true);
+    $toolId = (int)($input['tool_id'] ?? 0);
+    if (!$toolId) { echo json_encode(['success'=>false,'error'=>'tool_id مطلوب']); exit; }
+
+    $tool = $pdo->prepare("SELECT * FROM web_tools WHERE id=?");
+    $tool->execute([$toolId]);
+    $tool = $tool->fetch(PDO::FETCH_ASSOC);
+    if (!$tool) { echo json_encode(['success'=>false,'error'=>'الأداة غير موجودة']); exit; }
+
+    $tName = $tool['name'];
+    $tDesc = $tool['short_description'] ?: $tool['name'];
+
+    $prompt = <<<P
+أنت خبير SEO عربي متخصص بكتابة عناوين تتصدر نتائج البحث لصفحات أدوات الويب. أسلوبك يشبه تماماً هذا النمط الناجح (أمثلة حقيقية من عناوين رابحة):
+"💵 سعر الليرة السورية اليوم مقابل الدولار والتركي وجميع العملات | تحديث مستمر"
+"🔥 الدولار يرتفع أم تنخفض الليرة؟ تعرف على أسعار العملات اليوم في سوريا"
+"📊 نشرة أسعار العملات اليوم | الليرة السورية مقابل الدولار والتركي واليورو"
+
+الأداة المطلوب كتابة عنوانها:
+- الاسم: {$tName}
+- الوصف: {$tDesc}
+
+أعد النتيجة بصيغة JSON فقط بدون أي نص إضافي قبله أو بعده، بالضبط بهذا الشكل:
+{
+  "seo_title": "عنوان يبدأ برمز تعبيري (إيموجي) مناسب، جذاب، يحتوي كلمات بحث قوية، أقل من 65 حرفاً",
+  "meta_description": "وصف تعريفي مقنع 140-160 حرفاً يحتوي كلمات مفتاحية ويشجع على النقر",
+  "features": ["ميزة 1 محددة", "ميزة 2 محددة", "ميزة 3 محددة", "ميزة 4 محددة", "ميزة 5 محددة", "ميزة 6 محددة"],
+  "faq": [
+    {"q":"سؤال شائع حقيقي وخاص بهذه الأداة 1؟","a":"إجابة مفيدة 40-70 كلمة"},
+    {"q":"سؤال 2؟","a":"إجابة 2"},
+    {"q":"سؤال 3؟","a":"إجابة 3"},
+    {"q":"سؤال 4؟","a":"إجابة 4"},
+    {"q":"سؤال 5؟","a":"إجابة 5"},
+    {"q":"سؤال 6؟","a":"إجابة 6"}
+  ]
+}
+الأسئلة يجب أن تكون خاصة بهذه الأداة تحديداً (ليست أسئلة عامة تصلح لأي أداة)، وتغطي: كيفية العمل، الدقة/الجودة، الخصوصية، الاستخدام على الجوال، حدود الاستخدام، ومقارنة مع البدائل.
+P;
+
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+
+    $raw = trim($r['content']);
+    $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+    $raw = preg_replace('/\s*```\s*$/i', '', $raw);
+    if (preg_match('/\{.*\}/s', $raw, $m)) $raw = $m[0];
+    $data = json_decode($raw, true);
+    if (!is_array($data)) { echo json_encode(['success'=>false,'error'=>'تعذّر تحليل رد الذكاء الاصطناعي']); exit; }
+
+    $seoTitle = trim($data['seo_title'] ?? '');
+    $metaDesc = trim($data['meta_description'] ?? '');
+    $features = json_encode(array_values(array_filter((array)($data['features'] ?? []))), JSON_UNESCAPED_UNICODE);
+    $faqPairs = [];
+    foreach ((array)($data['faq'] ?? []) as $qa) {
+        if (!empty($qa['q']) && !empty($qa['a'])) $faqPairs[] = ['q'=>trim($qa['q']),'a'=>trim($qa['a'])];
+    }
+    $faqJson = json_encode($faqPairs, JSON_UNESCAPED_UNICODE);
+
+    $pdo->prepare("UPDATE web_tools SET seo_title=?, meta_description=?, features=?, faq=?, updated_at=NOW() WHERE id=?")
+        ->execute([$seoTitle, $metaDesc, $features, $faqJson, $toolId]);
+
+    echo json_encode(['success'=>true,'seo_title'=>$seoTitle,'meta_description'=>$metaDesc,'features'=>$data['features']??[],'faq'=>$faqPairs], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -7140,6 +7294,7 @@ $navLinks = [
     'blog'      => ['label'=>'المدونة والمحتوى', 'icon'=>'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z'],
     'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'web-tools' => ['label'=>'إدارة أدوات الويب', 'icon'=>'M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zm7-2v2m0-2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zM5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+    'tool-content-gen' => ['label'=>'توليد محتوى الأدوات', 'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     // ── الإحصائيات
     '__sec_stats' => ['_section'=>'الإحصائيات'],
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
@@ -9986,6 +10141,156 @@ elseif ($page === 'blog-edit'):
 elseif ($page === 'web-tools'):
   require_once __DIR__ . '/admin-web-tools.php';
 
+/* ─────────────── TOOL CONTENT GENERATOR ─────────────── */
+elseif ($page === 'tool-content-gen'):
+  $allTools = $pdo->query("SELECT id,name,slug,status,LENGTH(long_description) AS desc_len FROM web_tools ORDER BY name")->fetchAll();
+?>
+
+<div class="admin-header"><h1>توليد محتوى الأدوات بالذكاء الاصطناعي</h1></div>
+
+<div class="panel" style="margin-bottom:16px">
+  <p style="color:var(--muted);font-size:13px;line-height:1.9">
+    يولّد النظام لكل أداة محتوى تفصيلياً فريداً من <strong>3 أقسام × 700-900 كلمة ≈ 2100-2700 كلمة (10-15 ألف حرف)</strong> —
+    مقدمة شاملة، استخدامات عملية ودليل خطوة بخطوة، وقسم مخصص للخصوصية والأمان + مقارنة وخلاصة. كما يولّد عنواناً إبداعياً
+    محسّناً لمحركات البحث (بنمط عنوان + إيموجي جذاب)، وصفاً تعريفياً، 6 ميزات، و6 أسئلة شائعة خاصة بكل أداة — كل ذلك
+    يُحفظ مباشرة في بيانات الأداة. الأداة الموسومة بأحمر أقل من 3000 حرف حالياً وتحتاج توليداً عاجلاً.
+  </p>
+</div>
+
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div style="font-size:14px;font-weight:700">اختر الأدوات لتوليد محتواها</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="tgSelectAll()">تحديد الكل</button>
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="tgSelectThin()">تحديد الناقصة فقط (&lt;3000 حرف)</button>
+      <button class="btn" style="font-size:12px;padding:6px 14px" onclick="tgDeselectAll()">إلغاء الكل</button>
+    </div>
+  </div>
+  <div id="tg-tool-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+    <?php foreach ($allTools as $t):
+      $len = (int)($t['desc_len'] ?? 0);
+      $thin = $len < 3000;
+    ?>
+    <label id="tg-tool-<?= $t['id'] ?>" data-len="<?= $len ?>" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid <?= $thin ? 'rgba(239,68,68,.35)' : 'var(--border)' ?>;border-radius:8px;cursor:pointer;transition:border-color .2s,background .2s">
+      <input type="checkbox" name="tg_tools[]" value="<?= $t['id'] ?>" style="flex-shrink:0" onchange="tgUpdateBtn()">
+      <span>
+        <div style="font-size:13px;font-weight:600"><?= h($t['name']) ?></div>
+        <div style="font-size:11px;color:<?= $thin ? '#ef4444' : 'var(--muted)' ?>"><?= $len ?> حرف <?= $thin ? '⚠ ناقص' : '✓' ?></div>
+      </span>
+    </label>
+    <?php endforeach; ?>
+    <?php if (!$allTools): ?>
+    <p style="color:var(--muted);font-size:13px">لا توجد أدوات بعد.</p>
+    <?php endif; ?>
+  </div>
+  <div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <button id="tg-start-btn" class="btn btn-primary" onclick="tgStartGeneration()" disabled>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      توليد المحتوى الشامل + SEO للأدوات المحددة
+    </button>
+    <span id="tg-sel-count" style="font-size:13px;color:var(--muted)">0 محدد</span>
+  </div>
+</div>
+
+<div id="tg-progress-wrap" style="display:none">
+  <div class="panel" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-weight:700;font-size:14px">تقدم التوليد</div>
+      <span id="tg-overall-status" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div style="height:6px;background:rgba(37,99,235,.1);border-radius:3px;overflow:hidden;margin-bottom:12px">
+      <div id="tg-overall-bar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:3px;width:0%;transition:width .5s"></div>
+    </div>
+    <div id="tg-log"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function tgUpdateBtn(){
+    const checked=document.querySelectorAll('input[name="tg_tools[]"]:checked');
+    document.getElementById('tg-start-btn').disabled=checked.length===0;
+    document.getElementById('tg-sel-count').textContent=checked.length+' محدد';
+  }
+  window.tgUpdateBtn=tgUpdateBtn;
+  window.tgSelectAll=()=>{document.querySelectorAll('input[name="tg_tools[]"]').forEach(c=>c.checked=true);tgUpdateBtn();};
+  window.tgDeselectAll=()=>{document.querySelectorAll('input[name="tg_tools[]"]').forEach(c=>c.checked=false);tgUpdateBtn();};
+  window.tgSelectThin=()=>{
+    document.querySelectorAll('input[name="tg_tools[]"]').forEach(c=>{
+      const label=c.closest('label');
+      c.checked = parseInt(label.dataset.len||'0',10) < 3000;
+    });
+    tgUpdateBtn();
+  };
+
+  const CHUNKS=3;
+
+  window.tgStartGeneration=async()=>{
+    const checked=[...document.querySelectorAll('input[name="tg_tools[]"]:checked')];
+    if(!checked.length)return;
+    document.getElementById('tg-start-btn').disabled=true;
+    document.getElementById('tg-progress-wrap').style.display='block';
+    const log=document.getElementById('tg-log');
+    const bar=document.getElementById('tg-overall-bar');
+    const st=document.getElementById('tg-overall-status');
+    log.innerHTML='';
+    let totalSteps=checked.length*(CHUNKS+1), doneSteps=0;
+
+    for(let ci=0;ci<checked.length;ci++){
+      const toolId=checked[ci].value;
+      const toolName=checked[ci].closest('label').querySelector('div').textContent;
+      const row=document.createElement('div');
+      row.style.cssText='background:var(--panel-bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px';
+      row.innerHTML=`<div style="font-size:13px;font-weight:700;margin-bottom:8px">${esc(toolName)}</div>
+        <div style="height:4px;background:rgba(37,99,235,.1);border-radius:2px;margin-bottom:8px;overflow:hidden"><div class="tg-row-bar" style="height:100%;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:2px;width:0%;transition:width .4s"></div></div>
+        <div class="tg-row-status" style="font-size:12px;color:var(--muted)">جارٍ التوليد...</div>`;
+      log.appendChild(row);
+      const rowBar=row.querySelector('.tg-row-bar');
+      const rowSt=row.querySelector('.tg-row-status');
+
+      let fullHtml=''; let ok=true;
+      for(let ch=1;ch<=CHUNKS;ch++){
+        rowSt.textContent=`القسم ${ch}/${CHUNKS}: جارٍ...`;
+        try{
+          const r=await fetch('admin.php?ajax=gen_tool_content_chunk',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tool_id:parseInt(toolId),chunk:ch,prev_html:fullHtml.slice(-2000)})});
+          const d=await r.json();
+          if(d.success){fullHtml+='\n'+d.html;}
+          else{rowSt.textContent='⚠ خطأ في القسم '+ch+': '+(d.error||'غير معروف');ok=false;break;}
+        }catch(e){rowSt.textContent='⚠ استثناء في القسم '+ch+': '+e.message;ok=false;break;}
+        doneSteps++; rowBar.style.width=(ch/(CHUNKS+1)*100)+'%';
+        bar.style.width=(doneSteps/totalSteps*100)+'%';
+        st.textContent=Math.round(doneSteps/totalSteps*100)+'%';
+      }
+      if(ok && fullHtml){
+        rowSt.textContent='حفظ المحتوى...';
+        try{
+          const sr=await fetch('admin.php?ajax=save_tool_content',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tool_id:parseInt(toolId),html:fullHtml})});
+          const sd=await sr.json();
+          if(sd.success){
+            rowSt.textContent=`توليد عنوان SEO وFAQ...`;
+            try{
+              const seoR=await fetch('admin.php?ajax=gen_tool_seo',{method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({tool_id:parseInt(toolId)})});
+              const seoD=await seoR.json();
+              rowSt.textContent = seoD.success ? `✓ تم — ${sd.chars} حرف + عنوان: ${esc(seoD.seo_title||'')}` : `✓ محتوى محفوظ (${sd.chars} حرف) — تعذّر توليد SEO: ${seoD.error||''}`;
+              rowBar.style.background='linear-gradient(90deg,#16a34a,#16a34a)';
+            }catch(e){ rowSt.textContent=`✓ محتوى محفوظ (${sd.chars} حرف) — تعذّر توليد SEO`; }
+          } else { rowSt.textContent='⚠ فشل الحفظ: '+(sd.error||''); }
+        }catch(e){ rowSt.textContent='⚠ استثناء بالحفظ: '+e.message; }
+      }
+      doneSteps++; bar.style.width=(doneSteps/totalSteps*100)+'%'; st.textContent=Math.round(doneSteps/totalSteps*100)+'%';
+    }
+    st.textContent='اكتمل التوليد ✓';
+    document.getElementById('tg-start-btn').disabled=false;
+  };
+
+  function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+})();
+</script>
+
+<?php
 /* ─────────────── ARTICLE GENERATOR ─────────────── */
 elseif ($page === 'article-gen'):
   $allApps = $pdo->query("SELECT id,name,slug,developer FROM apps WHERE status='published' ORDER BY name")->fetchAll();

@@ -445,6 +445,18 @@ function ensure_schema(PDO $pdo): array {
         }
     } catch (Throwable $e) {}
 
+    // Third-batch seed: real, fully-functional (non-AI) Arabic utility tools
+    try {
+        if (get_cfg($pdo, 'web_tools_seeded_v3', '') !== '1') {
+            $seedTools3 = require __DIR__ . '/install/web_tools_seed_v3.php';
+            $seedStmt3 = $pdo->prepare("INSERT IGNORE INTO web_tools (slug, name, short_description, icon_svg, icon_color, icon_bg, status, sort_order) VALUES (?, ?, ?, ?, ?, ?, 'published', ?)");
+            foreach ($seedTools3 as $i => $t) {
+                $seedStmt3->execute([$t['slug'], $t['title'], $t['desc'], $t['icon'], $t['color'], $t['bg'], 200 + $i]);
+            }
+            set_cfg($pdo, 'web_tools_seeded_v3', '1');
+        }
+    } catch (Throwable $e) {}
+
     // Additive migrations for apps table (existing installs don't have new columns)
     $appCols = $pdo->query("SHOW COLUMNS FROM apps")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('parent_id', $appCols))
@@ -5071,20 +5083,22 @@ function get_web_tool_by_slug(PDO $pdo, string $slug): ?array {
 function list_web_tools(PDO $pdo, string $status = 'published', int $limit = 999): array {
     $where = $status === 'all' ? '' : "WHERE status=?";
     $params = $status === 'all' ? [] : [$status];
-    $sql = "SELECT id, name, slug, icon_path, short_description, seo_title, status, views, created_at, updated_at FROM web_tools $where ORDER BY created_at DESC LIMIT $limit";
+    $sql = "SELECT id, name, slug, icon_path, icon_svg, icon_color, icon_bg, short_description, long_description, seo_title, status, views, created_at, updated_at FROM web_tools $where ORDER BY created_at DESC LIMIT $limit";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 function save_web_tool(PDO $pdo, array $data, int $id = 0): int {
-    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','icon_path','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','how_it_started','status'], true), ARRAY_FILTER_USE_KEY);
+    $data = array_filter($data, fn($k) => in_array($k, ['name','slug','icon_path','icon_svg','icon_color','icon_bg','seo_title','meta_description','meta_tags','short_description','long_description','tutorials','features','pros','cons','whats_new','faq','how_it_started','status'], true), ARRAY_FILTER_USE_KEY);
 
     if (!$id) {
-        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, icon_path, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, how_it_started, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO web_tools (name, slug, icon_path, icon_svg, icon_color, icon_bg, seo_title, meta_description, meta_tags, short_description, long_description, tutorials, features, pros, cons, whats_new, faq, how_it_started, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $data['name'] ?? '', $data['slug'] ?? '', $data['icon_path'] ?? null, $data['seo_title'] ?? '', $data['meta_description'] ?? '',
+            $data['name'] ?? '', $data['slug'] ?? '', $data['icon_path'] ?? null,
+            $data['icon_svg'] ?? '<circle cx="12" cy="12" r="10"/>', $data['icon_color'] ?? '#2563eb', $data['icon_bg'] ?? '#dbeafe',
+            $data['seo_title'] ?? '', $data['meta_description'] ?? '',
             $data['meta_tags'] ?? '', $data['short_description'] ?? '', $data['long_description'] ?? '',
             $data['tutorials'] ?? '', $data['features'] ?? '', $data['pros'] ?? '', $data['cons'] ?? '',
             $data['whats_new'] ?? '', $data['faq'] ?? '', $data['how_it_started'] ?? '', $data['status'] ?? 'draft'

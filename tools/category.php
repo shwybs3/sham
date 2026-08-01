@@ -145,7 +145,7 @@ $categories = [
         'bg'    => '#ede9fe',
         'icon'  => '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
         'slugs' => ['word-count','text-case','lorem','text-diff-merge','markdown-to-html','html-to-md','char-map',
-                    'speech-to-text','text-to-speech'],
+                    'speech-to-text','text-to-speech','tashkeel-remove','keyboard-fix','number-to-words'],
         'intro' => '<p>أدوات النصوص في yassota تسرّع معالجة النصوص اليومية — من عدّ الكلمات والأحرف، إلى مقارنة نسختين من نص وإيجاد الفروقات، إلى تحويل النصوص بين صيغ مختلفة.</p>',
         'faq' => [
             ['q' => 'هل أداة عدّ الكلمات تدعم العربية؟', 'a' => 'نعم، تعدّ الكلمات والأحرف والجمل والفقرات بدقة للنصوص العربية والإنجليزية وجميع اللغات.'],
