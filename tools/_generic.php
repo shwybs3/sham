@@ -95,7 +95,7 @@ if ($isAI && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prompt = str_replace('{'.$fKey.'}', $label, $prompt);
             }
         }
-        $aiResult = ai_text($prompt, 2000);
+        $aiResult = ai_text($pdo, $prompt);
         if (isset($aiResult['content'])) $result = $aiResult['content'];
         else $error = $aiResult['error'] ?? 'تعذّرت المعالجة، حاول مرة أخرى.';
     }

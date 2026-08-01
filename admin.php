@@ -4438,8 +4438,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
     $key  = get_cfg($pdo,'indexnow_key','');
     $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
     $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
-    foreach (['','blog','about','privacy-policy','terms','contact','updates','top?by=downloads'] as $p)
+    foreach (['','blog','about','privacy-policy','terms','contact','updates','top?by=downloads','disclosure'] as $p)
         $urlList[] = url($p);
+    // Web tools + tool category pages + Yasmin chat
+    try {
+        $toolSlugs = $pdo->query("SELECT slug FROM web_tools WHERE status='published'")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($toolSlugs as $ts) $urlList[] = rtrim(SITE_URL,'/') . '/tools/' . rawurlencode($ts) . '/';
+    } catch (Throwable $e) {}
+    foreach (['ai','pdf','network','image','developer','security','seo','text'] as $catSlug)
+        $urlList[] = rtrim(SITE_URL,'/') . '/tools/category/' . $catSlug . '/';
+    $urlList[] = rtrim(SITE_URL,'/') . '/tools/';
+    $urlList[] = rtrim(SITE_URL,'/') . '/tools/chat/';
     $urlList = array_values(array_unique(array_filter($urlList)));
     $pinged = 0;
     $logStatus = 'skipped'; $logCode = null; $logReason = 'مفتاح IndexNow غير مضبوط';
@@ -4469,6 +4478,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
         $pdo->prepare("INSERT INTO indexnow_log (url,engine,status,http_code,reason) VALUES (?,?,?,?,?)")
             ->execute([rtrim(SITE_URL,'/').'/', 'indexnow-bulk', $logStatus, $logCode ?: null, $logReason]);
     } catch (Throwable $le) {}
+    // Also submit through Google's official Indexing API when a service account is configured
+    if (function_exists('google_indexing_request') && get_cfg($pdo,'google_indexing_json','')) {
+        try { google_indexing_request($pdo, $urlList); } catch (Throwable $ge) {}
+    }
     $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
     log_security_event($pdo,'reindex_all','info',"Mass re-index: {$pinged} URLs submitted to IndexNow + sitemap ping");
     echo json_encode(['ok'=>true,'pinged'=>$pinged,'total'=>count($apps)], JSON_UNESCAPED_UNICODE);

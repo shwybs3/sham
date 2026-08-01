@@ -217,28 +217,34 @@ $orgSchema = json_encode([
       <span class="section-title"><?= h(__('tools_complete_experience')) ?></span>
       <a href="<?= h(url('tools')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none;font-weight:600"><?= h(__('view_all_tools_count')) ?> <?= partial_icon('arrow-r') ?></a>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px" class="reveal">
-      <?php foreach ($relatedTools as $tool): ?>
-      <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($tool['slug'])) ?>"
-         style="display:block;background:var(--surface);border:1px solid var(--border-c);border-radius:8px;padding:14px;text-decoration:none;transition:.2s"
-         onmouseover="this.style.borderColor='rgba(99,102,241,.4)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,.1)'"
-         onmouseout="this.style.borderColor='var(--border-c)';this.style.transform='';this.style.boxShadow=''">
-        <div style="display:flex;align-items:flex-start;gap:10px">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px" class="reveal">
+      <?php foreach ($relatedTools as $tool):
+        $toolTryUrl = SITE_URL . '/tools/' . rawurlencode($tool['slug']) . '/';
+      ?>
+      <div style="background:var(--surface);border:1px solid var(--border-c);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;transition:.2s"
+           onmouseover="this.style.borderColor='rgba(99,102,241,.4)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,.1)'"
+           onmouseout="this.style.borderColor='var(--border-c)';this.style.transform='';this.style.boxShadow=''">
+        <a href="<?= h($toolTryUrl) ?>" style="display:flex;align-items:flex-start;gap:10px;text-decoration:none">
           <?php if (!empty($tool['icon_path'])): ?>
-          <img src="<?= h(media_url($tool['icon_path'])) ?>" alt="<?= h($tool['name']) ?>" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0">
+          <img src="<?= h(media_url($tool['icon_path'])) ?>" alt="<?= h($tool['name']) ?>" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0">
           <?php else: ?>
-          <div style="width:32px;height:32px;border-radius:6px;background:rgba(99,102,241,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          <div style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
           </div>
           <?php endif; ?>
-          <div style="flex:1">
+          <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:13px;color:var(--fg);line-height:1.3"><?= h($tool['name']) ?></div>
             <p style="font-size:11px;color:var(--muted);line-height:1.5;margin:4px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
               <?= h(mb_substr($tool['short_description'], 0, 80)) ?>
             </p>
           </div>
-        </div>
-      </a>
+        </a>
+        <a href="<?= h($toolTryUrl) ?>" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border-radius:8px;background:rgba(99,102,241,.12);color:#6366f1;font-size:12px;font-weight:700;text-decoration:none;transition:background .15s"
+           onmouseover="this.style.background='rgba(99,102,241,.2)'" onmouseout="this.style.background='rgba(99,102,241,.12)'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          تجربة
+        </a>
+      </div>
       <?php endforeach; ?>
     </div>
   </section>

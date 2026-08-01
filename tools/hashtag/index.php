@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $langMap = ['ar'=>'اللغة العربية فقط','en'=>'English only','both'=>'مزيج عربي وإنجليزي'];
         $prompt = "أنت خبير تسويق رقمي. أنشئ {$count} هاشتاق مناسبة لمنصة {$platform} عن الموضوع: \"{$topic}\"\n{$langMap[$lang]}\n\nالقواعد:\n- لا تضع مسافات داخل الهاشتاق\n- الهاشتاقات بدون # (ستضاف تلقائياً)\n- متنوعة: عامة وخاصة وبالإنجليزية إن طُلب\n- أخرجها كقائمة نقطية، كلمة واحدة في كل سطر بدون شرح";
 
-        $aiResult = ai_text($prompt, 300);
+        $aiResult = ai_text($pdo, $prompt);
         if (isset($aiResult['content'])) {
             $rawText = $aiResult['content'];
             $lines = preg_split('/\r?\n/', $rawText);

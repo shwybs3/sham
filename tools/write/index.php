@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $extraLine = $extra ? "\nملاحظات إضافية: $extra" : '';
         $prompt = "أنت كاتب محترف باللغة العربية. اكتب {$styles[$style]} عن الموضوع التالي:\n\n{$topic}{$extraLine}\n\nالطول المطلوب: {$lengths[$length]}\n\nاكتب النص مباشرة بدون مقدمة توضيحية.";
 
-        $aiResult = ai_text($prompt, 1500);
+        $aiResult = ai_text($pdo, $prompt);
         if (isset($aiResult['content'])) {
             $result = $aiResult['content'];
         } else {
