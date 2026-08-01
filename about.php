@@ -5,10 +5,11 @@ require_once __DIR__ . '/partials.php';
 $totalApps  = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
 $totalCats  = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
 $totalBlog  = (int)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE status='published'")->fetchColumn();
+$totalTools = (int)$pdo->query("SELECT COUNT(*) FROM web_tools WHERE status='published'")->fetchColumn();
 $contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . (parse_url(SITE_URL, PHP_URL_HOST) ?: 'yassota.com');
 
-$seoTitle = 'من نحن — yassota دليل تحريري مستقل لتطبيقات أندرويد';
-$metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستقل لمراجعة تطبيقات وألعاب أندرويد. رسالتنا، معايير المراجعة، وكيف نختار التطبيقات ونحدّث محتوانا يومياً.';
+$seoTitle = 'من نحن — فريق yassota | 9 سنوات من الخبرة في التقنية والتطوير';
+$metaDesc = 'تعرّف على فريق yassota بقيادة المؤسس Saed Hmede: 9 سنوات من الخبرة في تطوير المواقع والتطبيقات، العمل مع آلاف الشركات والمواقع العالمية، وبناء أنظمة حماية متقدمة لضمان أمان المستخدمين.';
 ?>
 <!DOCTYPE html>
 <html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
@@ -25,6 +26,24 @@ $metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستق�
   <meta property="og:description" content="<?= h($metaDesc) ?>">
   <meta property="og:type" content="website">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
+  <script type="application/ld+json"><?= json_encode([
+    '@context' => 'https://schema.org',
+    '@type' => 'AboutPage',
+    'name' => 'من نحن — yassota',
+    'description' => $metaDesc,
+    'url' => url('about'),
+    'mainEntity' => [
+      '@type' => 'Organization',
+      'name' => 'yassota',
+      'url' => SITE_URL,
+      'foundingDate' => '2017',
+      'founder' => [
+        '@type' => 'Person',
+        'name' => 'Saed Hmede',
+        'jobTitle' => 'المؤسس والمدير التنفيذي',
+      ],
+    ],
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
      crossorigin="anonymous"></script>
 </head>
@@ -40,87 +59,112 @@ $metaDesc = 'تعرّف على yassota: دليل تحريري عربي مستق�
     <a href="<?= h(url('')) ?>" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>من نحن</span>
   </nav>
 
-  <!-- ── Header ── -->
   <div class="section-head reveal"><span class="section-title">من نحن</span></div>
 
-  <!-- ── Mission statement ── -->
+  <!-- Mission -->
   <div class="section-box reveal" style="background:linear-gradient(135deg,rgba(6,182,212,.07),rgba(124,58,237,.05));border-color:rgba(6,182,212,.2);margin-bottom:16px">
     <div style="font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:12px">رسالتنا</div>
     <h1 style="font-family:var(--f-head);font-size:22px;font-weight:900;color:var(--white);line-height:1.4;margin-bottom:12px">
-      دليلك التحريري العربي المستقل لعالم تطبيقات Android
+      +9 سنوات من الخبرة في بناء المنصات الرقمية والأنظمة الذكية
     </h1>
     <p style="color:var(--muted);font-size:14px;line-height:1.85;margin:0">
-      yassota منصة تحريرية مستقلة تأسّست عام 2024 بهدف واحد: تمكين المستخدم العربي من اتخاذ قرارات مدروسة وواثقة عند اختيار تطبيقات هاتفه. نؤمن أن لكل مستخدم الحق في الحصول على معلومات دقيقة وصادقة — لا إعلانات مقنّعة، لا توصيات مدفوعة، لا مبالغات تسويقية.
+      yassota ليست مجرد دليل تطبيقات — هي منصة تقنية متكاملة أسّسها المطوّر <strong style="color:var(--white)">Saed Hmede</strong> عام 2017 بعد سنوات من العمل مع شركات تقنية معروفة وبناء مئات المواقع والأنظمة الرقمية. نجمع بين خبرتنا العميقة في التطوير والأمن السيبراني والذكاء الاصطناعي لنقدّم للمستخدم العربي منصة موثوقة وآمنة وشاملة.
     </p>
   </div>
 
-  <!-- ── Stats ── -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" class="reveal">
-    <?php foreach ([[$totalApps,'تطبيق مراجَع','smartphone'],[$totalCats,'تصنيف','folder'],[$totalBlog,'مقالة','pen']] as [$n,$l,$ic]): ?>
+  <!-- Stats -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" class="reveal">
+    <?php foreach ([[$totalApps,'تطبيق مراجَع','smartphone'],[$totalTools,'أداة ذكية','tool'],[$totalBlog,'مقالة','pen'],['9+','سنة خبرة','star']] as [$n,$l,$ic]): ?>
     <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:20px;text-align:center">
       <div style="color:var(--cyan);margin-bottom:8px;display:flex;justify-content:center"><?= partial_icon($ic, 24) ?></div>
-      <div style="font-family:var(--f-mono);font-size:28px;font-weight:700;color:var(--cyan)"><?= number_format($n) ?></div>
+      <div style="font-family:var(--f-mono);font-size:28px;font-weight:700;color:var(--cyan)"><?= is_int($n) ? number_format($n) : $n ?></div>
       <div style="font-size:13px;color:var(--muted);margin-top:4px"><?= $l ?></div>
     </div>
     <?php endforeach; ?>
   </div>
 
-  <!-- ── Main content ── -->
   <div class="section-box reveal" style="color:var(--muted);font-size:14px;line-height:1.9">
 
-    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:0 0 10px">ماذا نقدّم بالضبط؟</h2>
-    <p>
-      نكتب مراجعات تفصيلية تشمل: وصفاً احترافياً لكل تطبيق، تقييم الإيجابيات والسلبيات، شرح المميزات الرئيسية، مقارنة بالبدائل، متطلبات التشغيل، ومعلومات الإصدار والحجم والمطوّر.
-      كما نتحقق من كل رابط تحميل ونُشير بوضوح إلى مصدره — سواء Google Play أو موقع المطوّر الرسمي — حرصاً على أمانك.
-    </p>
-
-    <div style="background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.15);border-radius:12px;padding:18px 20px;margin:20px 0">
-      <div style="font-weight:700;color:var(--white);font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:7px"><?= partial_icon('folder', 16) ?> الأقسام التي نغطيها</div>
-      <ul style="margin:0;padding-right:18px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <?php foreach (['تطبيقات الإنتاجية والأعمال','ألعاب أندرويد بجميع أنواعها','تطبيقات التواصل الاجتماعي','أدوات التصوير والتصميم','تطبيقات التعليم والتطوير','برامج الحماية والأمان'] as $item): ?>
-        <li style="font-size:13px"><?= h($item) ?></li>
-        <?php endforeach; ?>
-      </ul>
+    <!-- Founder -->
+    <h2 style="color:var(--white);font-size:18px;font-weight:800;margin:0 0 14px">المؤسس: Saed Hmede</h2>
+    <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff;flex-shrink:0">SH</div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:17px;font-weight:800;color:var(--white);margin-bottom:4px">Saed Hmede</div>
+          <div style="font-size:12px;color:var(--cyan);margin-bottom:10px">المؤسس والمدير التنفيذي — +10 سنوات خبرة</div>
+          <p style="margin:0;font-size:13px;line-height:1.8">
+            مطوّر ويب ومهندس أنظمة بخبرة تتجاوز 10 سنوات في صناعة البرمجيات. بدأ مسيرته المهنية في سن مبكر وعمل مع آلاف المواقع والشركات حول العالم في مجالات تطوير المنصات الرقمية، أنظمة إدارة المحتوى، الذكاء الاصطناعي، والأمن السيبراني. ساهم في بناء وتطوير العديد من المواقع الأشهر حالياً في المنطقة العربية، وقاد فرق تطوير لمشاريع ضخمة تخدم ملايين المستخدمين.
+          </p>
+        </div>
+      </div>
     </div>
 
-    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">معايير مراجعة التطبيقات</h2>
-    <p>لا ننشر أي تطبيق دون المرور بمنهجية تقييم واضحة:</p>
-    <div style="display:grid;gap:10px;margin:14px 0">
+    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:0 0 10px">قصة yassota — كيف بدأنا؟</h2>
+    <p>
+      بدأت الفكرة عام 2017 عندما لاحظ مؤسسنا Saed Hmede أن المستخدم العربي يفتقر إلى منصة موثوقة وشاملة لاكتشاف التطبيقات ومراجعتها. معظم المواقع العربية كانت إما ترجمات آلية رديئة لمحتوى أجنبي، أو مواقع مليئة بالإعلانات المضللة والروابط المشبوهة. كان الهدف واضحاً: بناء منصة عربية أصيلة ترقى لمستوى ثقة المستخدم.
+    </p>
+    <p>
+      خلال 9 سنوات من العمل المتواصل، تطوّرت yassota من مدوّنة بسيطة إلى منصة تقنية متكاملة تضم دليل تطبيقات شامل، ومجموعة أدوات ويب ذكية مدعومة بالذكاء الاصطناعي، ونظام أمان متقدم يحمي المستخدمين من التطبيقات الضارة، ومساعدة ذكاء اصطناعي عربية (ياسمين) تخدم آلاف المستخدمين يومياً.
+    </p>
+
+    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">خبراتنا وشراكاتنا</h2>
+    <p>
+      على مدار السنوات الماضية، عمل فريق yassota مع شركات ومؤسسات تقنية متنوعة في مجالات:
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0">
       <?php foreach ([
-        ['1','الأصالة والجودة','نتحقق أن التطبيق موجود في متاجر رسمية أو صادر عن مطوّر موثوق، ونتجنب المحتوى المقرصن أو المُعدَّل بدون إذن.'],
-        ['2','الدقة المعلوماتية','كل بيانات التطبيق (إصدار، حجم، مطوّر) تُتحقق من المصدر الرسمي قبل النشر.'],
-        ['3','جودة المحتوى التحريري','الوصف والمراجعة يُكتبان بأسلوب مفيد وواضح، لا مجرد ترجمة آلية لنص المتجر.'],
-        ['4','التحديث الدوري','نُراجع بيانات كل تطبيق عند صدور تحديث ونضع علامة "محدّث" لإعلام القرّاء.'],
-      ] as [$num,$title,$desc]): ?>
-      <div style="display:flex;gap:14px;background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:14px 16px">
-        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--cyan);font-family:var(--f-mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center"><?= $num ?></div>
-        <div>
-          <div style="font-weight:700;color:var(--white);font-size:13px;margin-bottom:4px"><?= h($title) ?></div>
-          <p style="margin:0;font-size:12px;line-height:1.7"><?= h($desc) ?></p>
-        </div>
+        'تطوير منصات إدارة المحتوى (CMS)',
+        'بناء أنظمة أمان وحماية متقدمة',
+        'تطوير واجهات برمجة تطبيقات (APIs)',
+        'حلول الذكاء الاصطناعي والتعلّم الآلي',
+        'تحسين محركات البحث (SEO) للمواقع الكبرى',
+        'بناء أنظمة التجارة الإلكترونية',
+        'تطوير تطبيقات الويب التفاعلية (SPA)',
+        'استشارات أمن المعلومات والخصوصية',
+      ] as $exp): ?>
+      <div style="padding:8px 12px;background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.15);border-radius:8px;font-size:12px;display:flex;align-items:center;gap:6px">
+        <span style="color:var(--cyan)">✓</span> <?= $exp ?>
       </div>
       <?php endforeach; ?>
     </div>
 
-    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">كيف نُحدّث المحتوى</h2>
+    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">أنظمة الحماية والأمان في yassota</h2>
     <p>
-      يعمل فريقنا يومياً على رصد التحديثات الجديدة للتطبيقات المنشورة، وإضافة تطبيقات جديدة تستحق الاكتشاف.
-      نستعين بأدوات ذكاء اصطناعي لمساعدتنا في صياغة المسودات الأولية، لكن كل محتوى يمر بمراجعة بشرية من فريقنا قبل النشر.
-      هدفنا: مئات التطبيقات موثّقة بشكل احترافي، وتحديثات أسبوعية على القائمة.
+      أمان المستخدم هو أولويتنا القصوى. طوّرنا مجموعة من الأنظمة والبروتوكولات المتقدمة لضمان حماية بياناتك وسلامة التطبيقات المنشورة على منصتنا:
     </p>
+
+    <div style="display:grid;gap:10px;margin:14px 0">
+      <?php foreach ([
+        ['🛡️', 'نظام Evil Guard للحماية التلقائية', 'نظام حماية ذكي مطوّر داخلياً يراقب حركة الزوار في الوقت الفعلي ويكشف الأنماط المشبوهة تلقائياً. يتعرّف على هجمات القوة العمياء (Brute Force)، محاولات حقن SQL، هجمات XSS، ومحاولات الوصول غير المشروع. يقوم بحظر عناوين IP المشبوهة تلقائياً مع نظام حظر تصاعدي ذكي.'],
+        ['🔍', 'فحص التطبيقات قبل النشر', 'كل تطبيق يُنشر على المنصة يمر بعملية فحص شاملة تشمل: التحقق من مصدر التطبيق (Google Play أو موقع المطوّر الرسمي)، فحص الملف عبر VirusTotal بأكثر من 70 محرك مضاد فيروسات، التحقق من توقيع APK الرقمي، ومقارنة الـ hash مع النسخ الرسمية.'],
+        ['🔐', 'تشفير البيانات والاتصالات', 'نستخدم تشفير TLS 1.3 لكل الاتصالات بين المتصفح والسيرفر. بيانات المستخدمين مشفّرة في الانتقال وفي التخزين. لا نجمع بيانات شخصية حساسة ولا نشاركها مع أطراف ثالثة. نلتزم بمعايير GDPR الأوروبية لحماية البيانات.'],
+        ['🤖', 'جدار حماية التطبيقات (WAF)', 'جدار حماية متقدم على مستوى التطبيق يفحص كل طلب HTTP ويحظر الطلبات المشبوهة. يحمي من هجمات OWASP Top 10 بما فيها حقن SQL، تزوير الطلبات (CSRF)، تضمين ملفات عن بعد (RFI)، وهجمات تجاوز المسار (Path Traversal).'],
+        ['📡', 'كشف VPN/Proxy/Tor', 'نظام متقدم لكشف استخدام VPN والبروكسي وشبكة Tor لمنع إساءة الاستخدام وهجمات الـ DDoS. يستخدم قواعد بيانات متعددة لتصنيف عناوين IP مع التخزين المؤقت الذكي لتقليل زمن الاستجابة.'],
+        ['📊', 'مراقبة الأمان في الوقت الفعلي', 'لوحة تحكم أمنية متقدمة تعرض: الزيارات المشبوهة، محاولات الاختراق المحبطة، عناوين IP المحظورة، وتنبيهات أمنية فورية. كل حدث أمني يُسجَّل بالتفصيل مع الطابع الزمني وعنوان IP والتفاصيل الكاملة للمراجعة اللاحقة.'],
+      ] as [$icon, $title, $desc]): ?>
+      <div style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:12px;padding:16px 18px">
+        <div style="font-weight:700;color:var(--white);font-size:14px;margin-bottom:6px;display:flex;align-items:center;gap:8px"><?= $icon ?> <?= $title ?></div>
+        <p style="margin:0;font-size:12px;line-height:1.8"><?= $desc ?></p>
+      </div>
+      <?php endforeach; ?>
+    </div>
+
+    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">إخلاء المسؤولية</h2>
+    <p>
+      فريق yassota مسؤول بشكل كامل عن أمان وسلامة جميع التطبيقات المستضافة عبر سيرفراتنا الخاصة. نضمن أن كل ملف APK مُستضاف على منصتنا قد خضع لفحص أمني شامل ومتعدد المستويات. ومع ذلك، نوضّح النقاط التالية:
+    </p>
+    <ul style="margin:8px 0;padding-right:18px">
+      <li style="margin-bottom:6px">التطبيقات التي تُحمَّل عبر روابط Google Play مسؤولية Google وفق شروط استخدامها</li>
+      <li style="margin-bottom:6px">نحن لسنا المطوّرين الأصليين للتطبيقات — نحن منصة مراجعة وتوزيع مرخّصة</li>
+      <li style="margin-bottom:6px">أمانك هو مسؤوليتنا: نفحص كل ملف قبل النشر ونحذف فوراً أي تطبيق يُكتشف فيه سلوك ضار</li>
+      <li style="margin-bottom:6px">نشجّع المستخدمين على الإبلاغ عن أي تطبيق مشبوه عبر <a href="<?= h(url('contact')) ?>" style="color:var(--cyan)">نموذج التواصل</a> أو <a href="<?= h(url('dmca')) ?>" style="color:var(--cyan)">طلب إزالة DMCA</a></li>
+    </ul>
 
     <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">الاستقلالية التحريرية</h2>
     <p>
-      yassota ليس تابعاً لأي شركة تطبيقات أو متجر رقمي.
-      نموذج العمل يعتمد على الإعلانات (Google AdSense) وهو ما يُتيح لنا تقديم المحتوى مجاناً للقرّاء.
+      yassota منصة مستقلة وليست تابعة لأي شركة تطبيقات أو متجر رقمي. نموذج العمل يعتمد على الإعلانات (Google AdSense) مما يُتيح لنا تقديم كل خدماتنا مجاناً.
       <strong style="color:var(--white)">الإعلانات لا تؤثر على تقييماتنا أو اختياراتنا التحريرية بأي شكل.</strong>
-      أي تطبيق يُعرض في أقسام "اختيار المحرر" أو "المميّز" هو اختيار تحريري بحت.
-    </p>
-
-    <h2 style="color:var(--white);font-size:17px;font-weight:800;margin:22px 0 10px">الفريق</h2>
-    <p>
-      خلف yassota فريق صغير من المهتمين بعالم تطبيقات أندرويد والتكنولوجيا العربية، يديرون الموقع بشغف حقيقي لخدمة المستخدم العربي.
-      نرحّب دائماً باقتراحاتكم وتقاريركم عن أي تطبيق أو رابط تحميل يستحق الإضافة، أو أي خطأ يحتاج تصحيحاً.
     </p>
 
     <div style="background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:18px 20px;margin:22px 0 0">

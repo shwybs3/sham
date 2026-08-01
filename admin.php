@@ -1910,6 +1910,76 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_app_article' && is_admin()) 
    never becomes a live remote-code-execution surface even if
    the admin session were ever compromised.
    ══════════════════════════════════════════════════════ */
+/* ── Yasmin admin: save settings ─────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_save' && is_admin()) {
+    header('Content-Type: application/json');
+    if (!csrf_check()) { echo json_encode(['success'=>false,'error'=>'CSRF']); exit; }
+    $input = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+
+    $allowedKeys = ['yasmin_api_keys','yasmin_system_prompt','yasmin_model','yasmin_max_tokens','yasmin_temperature','yasmin_welcome_msg'];
+    foreach ($allowedKeys as $k) {
+        if (isset($input[$k])) set_cfg($pdo, $k, trim($input[$k]));
+    }
+    // Multi-key array support
+    if (isset($input['yasmin_keys_array']) && is_array($input['yasmin_keys_array'])) {
+        $merged = implode("\n", array_filter(array_map('trim', $input['yasmin_keys_array'])));
+        set_cfg($pdo, 'yasmin_api_keys', $merged);
+    }
+    echo json_encode(['success'=>true]);
+    exit;
+}
+
+/* ── Yasmin admin: conversation logs ─────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_logs' && is_admin()) {
+    header('Content-Type: application/json');
+    $page_num = max(1, (int)($_GET['p'] ?? 1));
+    $limit = 20;
+    $offset = ($page_num - 1) * $limit;
+    $total = (int)$pdo->query("SELECT COUNT(*) FROM yasmin_conversations")->fetchColumn();
+    $rows = $pdo->query("SELECT c.*, (SELECT COUNT(*) FROM yasmin_messages WHERE conversation_id=c.id) AS msg_count
+                          FROM yasmin_conversations c ORDER BY c.updated_at DESC LIMIT $limit OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['total'=>$total,'page'=>$page_num,'rows'=>$rows], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── Yasmin admin: view conversation ─────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_view_conv' && is_admin()) {
+    header('Content-Type: application/json');
+    $cid = (int)($_GET['id'] ?? 0);
+    if (!$cid) { echo '{"error":"missing id"}'; exit; }
+    $conv = $pdo->prepare("SELECT * FROM yasmin_conversations WHERE id=?");
+    $conv->execute([$cid]);
+    $c = $conv->fetch(PDO::FETCH_ASSOC);
+    if (!$c) { echo '{"error":"not found"}'; exit; }
+    $msgs = $pdo->prepare("SELECT role, content, created_at FROM yasmin_messages WHERE conversation_id=? ORDER BY id");
+    $msgs->execute([$cid]);
+    echo json_encode(['conv'=>$c,'messages'=>$msgs->fetchAll(PDO::FETCH_ASSOC)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── Yasmin admin: delete conversation ───────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_delete_conv' && is_admin()) {
+    header('Content-Type: application/json');
+    $cid = (int)($_GET['id'] ?? 0);
+    if ($cid) $pdo->prepare("DELETE FROM yasmin_conversations WHERE id=?")->execute([$cid]);
+    echo '{"ok":true}';
+    exit;
+}
+
+/* ── Yasmin admin: stats ─────────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_stats' && is_admin()) {
+    header('Content-Type: application/json');
+    $stats = [
+        'total_conversations' => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_conversations")->fetchColumn(),
+        'total_messages'      => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_messages")->fetchColumn(),
+        'today_conversations' => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_conversations WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
+        'today_messages'      => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_messages WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
+        'active_keys'         => count(openrouter_keys(get_cfg($pdo, 'yasmin_api_keys', '') ?: get_cfg($pdo, 'openrouter_key'))),
+    ];
+    echo json_encode($stats);
+    exit;
+}
+
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
     header('Content-Type: application/json');
     $input   = json_decode(file_get_contents('php://input'), true);
@@ -7039,6 +7109,7 @@ $navLinks = [
     'bulk-generate' => ['label'=>'توليد تطبيقات رائجة', 'icon'=>'M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5 2.3-7.2-6-4.6h7.6z'],
     'bulk-content'  => ['label'=>'توليد محتوى للتطبيقات', 'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'assistant' => ['label'=>'مساعد الذكاء الاصطناعي', 'icon'=>'M9 18h6m-5 3h4M12 3a6 6 0 00-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0012 3z'],
+    'yasmin'    => ['label'=>'إدارة ياسمين AI', 'icon'=>'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z'],
     // ── الاستيراد
     '__sec_import' => ['_section'=>'الاستيراد'],
     'import-preset' => ['label'=>'استيراد 30 تطبيقاً جاهزاً', 'icon'=>'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'],
@@ -11994,9 +12065,215 @@ function submitSitemapNow() {
 }
 </script>
 
-<?php
-/* ─────────────── AI ASSISTANT ─────────────── */
-elseif ($page === 'assistant'): ?>
+/* ─────────────── YASMIN MANAGEMENT ─────────────── */
+elseif ($page === 'yasmin'):
+  $yasminKeys = openrouter_keys(get_cfg($pdo, 'yasmin_api_keys', ''));
+  $globalKeys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+  $activeKeys = $yasminKeys ?: $globalKeys;
+  $yasminPrompt = get_cfg($pdo, 'yasmin_system_prompt', '');
+  $yasminModel = get_cfg($pdo, 'yasmin_model', '');
+  $yasminMaxTokens = get_cfg($pdo, 'yasmin_max_tokens', '2000');
+  $yasminTemp = get_cfg($pdo, 'yasmin_temperature', '0.8');
+?>
+
+<div class="admin-header"><h1>🌸 إدارة ياسمين AI</h1></div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px" id="yasmin-stats">
+  <div class="stat-card"><div class="stat-value" id="ys-total-conv">—</div><div class="stat-label">محادثات إجمالية</div></div>
+  <div class="stat-card"><div class="stat-value" id="ys-total-msg">—</div><div class="stat-label">رسائل إجمالية</div></div>
+  <div class="stat-card"><div class="stat-value" id="ys-today-conv">—</div><div class="stat-label">محادثات اليوم</div></div>
+  <div class="stat-card"><div class="stat-value" id="ys-today-msg">—</div><div class="stat-label">رسائل اليوم</div></div>
+  <div class="stat-card"><div class="stat-value" id="ys-keys"><?= count($activeKeys) ?></div><div class="stat-label">مفاتيح API نشطة</div></div>
+</div>
+
+<!-- Tabs -->
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  <button class="btn btn-sm" onclick="showYasminTab('keys')" id="yt-keys" style="background:var(--primary);color:#fff">مفاتيح API</button>
+  <button class="btn btn-sm" onclick="showYasminTab('prompt')" id="yt-prompt">شخصية ياسمين</button>
+  <button class="btn btn-sm" onclick="showYasminTab('logs')" id="yt-logs">سجل المحادثات</button>
+</div>
+
+<!-- Tab: API Keys -->
+<div class="panel" id="yasmin-tab-keys">
+  <h3 style="margin:0 0 12px;font-size:15px">🔑 مفاتيح OpenRouter لياسمين</h3>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 12px">أضف حتى 10 مفاتيح — ياسمين تبدّل بينها تلقائياً بشكل ذكي. إذا تُركت فارغة تستخدم المفاتيح العامة من الإعدادات.</p>
+  <div id="yasmin-keys-list">
+    <?php
+    $displayKeys = $yasminKeys ?: [''];
+    foreach ($displayKeys as $i => $k): ?>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center" class="ys-key-row">
+      <span style="font-size:12px;color:var(--muted);min-width:20px"><?= $i+1 ?></span>
+      <input type="text" class="form-input ys-key-input" value="<?= h($k) ?>" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+      <button onclick="this.closest('.ys-key-row').remove()" class="btn btn-sm" style="background:var(--danger);color:#fff;padding:4px 8px">✕</button>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button onclick="addYasminKey()" class="btn btn-sm">+ إضافة مفتاح</button>
+    <button onclick="saveYasminKeys()" class="btn btn-sm" style="background:var(--primary);color:#fff">💾 حفظ المفاتيح</button>
+  </div>
+  <?php if (!$yasminKeys && $globalKeys): ?>
+  <div style="margin-top:12px;padding:10px 14px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);border-radius:10px;font-size:12px;color:var(--primary)">
+    ℹ️ حالياً تستخدم ياسمين المفاتيح العامة (<?= count($globalKeys) ?> مفتاح) من إعدادات الموقع
+  </div>
+  <?php endif; ?>
+</div>
+
+<!-- Tab: Personality -->
+<div class="panel" id="yasmin-tab-prompt" style="display:none">
+  <h3 style="margin:0 0 12px;font-size:15px">🌸 شخصية ياسمين</h3>
+  <label class="form-label">System Prompt (شخصية ياسمين)</label>
+  <textarea class="form-input" id="yasmin-prompt" rows="8" dir="rtl" style="font-size:13px;line-height:1.7" placeholder="اتركه فارغاً لاستخدام الشخصية الافتراضية (بنت سورية ساحلية)"><?= h($yasminPrompt) ?></textarea>
+  <p style="font-size:11px;color:var(--muted);margin:4px 0 16px">اتركه فارغاً لاستخدام الشخصية الافتراضية — بنت سورية ذكية بلهجة ساحلية دافئة</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div>
+      <label class="form-label">Max Tokens</label>
+      <input type="number" class="form-input" id="yasmin-max-tokens" value="<?= h($yasminMaxTokens) ?>" min="100" max="4000">
+    </div>
+    <div>
+      <label class="form-label">Temperature</label>
+      <input type="number" class="form-input" id="yasmin-temp" value="<?= h($yasminTemp) ?>" min="0" max="2" step="0.1">
+    </div>
+  </div>
+
+  <button onclick="saveYasminPrompt()" class="btn" style="background:var(--primary);color:#fff">💾 حفظ الإعدادات</button>
+</div>
+
+<!-- Tab: Conversation Logs -->
+<div class="panel" id="yasmin-tab-logs" style="display:none">
+  <h3 style="margin:0 0 12px;font-size:15px">💬 سجل المحادثات</h3>
+  <div id="yasmin-logs-list" style="font-size:13px">جاري التحميل...</div>
+</div>
+
+<!-- Conversation viewer modal -->
+<div id="yasmin-conv-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);padding:20px;overflow-y:auto">
+  <div style="max-width:600px;margin:0 auto;background:var(--card-bg);border-radius:16px;padding:20px;position:relative">
+    <button onclick="document.getElementById('yasmin-conv-modal').style.display='none'" style="position:absolute;top:12px;left:12px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    <h3 style="margin:0 0 16px;font-size:15px" id="yasmin-conv-title">المحادثة</h3>
+    <div id="yasmin-conv-messages" style="max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<script>
+function showYasminTab(tab) {
+  ['keys','prompt','logs'].forEach(t => {
+    document.getElementById('yasmin-tab-'+t).style.display = t===tab?'block':'none';
+    document.getElementById('yt-'+t).style.background = t===tab?'var(--primary)':'var(--card-bg)';
+    document.getElementById('yt-'+t).style.color = t===tab?'#fff':'var(--text)';
+  });
+  if (tab === 'logs') loadYasminLogs();
+}
+
+function addYasminKey() {
+  const list = document.getElementById('yasmin-keys-list');
+  const count = list.querySelectorAll('.ys-key-row').length + 1;
+  if (count > 10) { alert('الحد الأقصى 10 مفاتيح'); return; }
+  const div = document.createElement('div');
+  div.className = 'ys-key-row';
+  div.style = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  div.innerHTML = `<span style="font-size:12px;color:var(--muted);min-width:20px">${count}</span>
+    <input type="text" class="form-input ys-key-input" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+    <button onclick="this.closest('.ys-key-row').remove()" class="btn btn-sm" style="background:var(--danger);color:#fff;padding:4px 8px">✕</button>`;
+  list.appendChild(div);
+}
+
+function saveYasminKeys() {
+  const keys = [...document.querySelectorAll('.ys-key-input')].map(i=>i.value.trim()).filter(Boolean);
+  fetch('admin.php?ajax=yasmin_save', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({yasmin_keys_array: keys, csrf_token: '<?= $_SESSION['csrf'] ?? '' ?>'})
+  }).then(r=>r.json()).then(d=>{
+    alert(d.success ? 'تم حفظ المفاتيح بنجاح ✅' : 'خطأ: ' + (d.error||''));
+    loadYasminStats();
+  });
+}
+
+function saveYasminPrompt() {
+  fetch('admin.php?ajax=yasmin_save', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      yasmin_system_prompt: document.getElementById('yasmin-prompt').value,
+      yasmin_max_tokens: document.getElementById('yasmin-max-tokens').value,
+      yasmin_temperature: document.getElementById('yasmin-temp').value,
+      csrf_token: '<?= $_SESSION['csrf'] ?? '' ?>'
+    })
+  }).then(r=>r.json()).then(d=>{
+    alert(d.success ? 'تم حفظ إعدادات ياسمين ✅' : 'خطأ: ' + (d.error||''));
+  });
+}
+
+function loadYasminStats() {
+  fetch('admin.php?ajax=yasmin_stats').then(r=>r.json()).then(d=>{
+    document.getElementById('ys-total-conv').textContent = d.total_conversations || 0;
+    document.getElementById('ys-total-msg').textContent = d.total_messages || 0;
+    document.getElementById('ys-today-conv').textContent = d.today_conversations || 0;
+    document.getElementById('ys-today-msg').textContent = d.today_messages || 0;
+    document.getElementById('ys-keys').textContent = d.active_keys || 0;
+  });
+}
+
+function loadYasminLogs(p) {
+  p = p || 1;
+  fetch('admin.php?ajax=yasmin_logs&p='+p).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('yasmin-logs-list');
+    if (!d.rows || !d.rows.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">لا توجد محادثات بعد</div>'; return; }
+    let html = '<table class="admin-table" style="font-size:12px"><thead><tr><th>#</th><th>العنوان</th><th>رسائل</th><th>الموديل</th><th>التاريخ</th><th></th></tr></thead><tbody>';
+    for (const r of d.rows) {
+      html += `<tr>
+        <td>${r.id}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.title||'—'}</td>
+        <td>${r.msg_count||r.message_count||0}</td>
+        <td style="font-size:10px;font-family:var(--f-mono)">${r.model_used||'—'}</td>
+        <td style="font-size:10px">${r.updated_at||r.created_at}</td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="viewYasminConv(${r.id})" style="font-size:11px">👁</button>
+          <button class="btn btn-sm" onclick="deleteYasminConv(${r.id})" style="font-size:11px;background:var(--danger);color:#fff">🗑</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    const pages = Math.ceil(d.total / 20);
+    if (pages > 1) {
+      html += '<div style="display:flex;gap:4px;margin-top:8px;justify-content:center">';
+      for (let i = 1; i <= pages; i++) {
+        html += `<button class="btn btn-sm" onclick="loadYasminLogs(${i})" style="${i===d.page?'background:var(--primary);color:#fff':''}">${i}</button>`;
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  });
+}
+
+function viewYasminConv(id) {
+  fetch('admin.php?ajax=yasmin_view_conv&id='+id).then(r=>r.json()).then(d=>{
+    if (d.error) return;
+    document.getElementById('yasmin-conv-title').textContent = d.conv.title || 'محادثة #'+id;
+    const el = document.getElementById('yasmin-conv-messages');
+    el.innerHTML = '';
+    for (const m of d.messages) {
+      const div = document.createElement('div');
+      div.style = `padding:10px 14px;margin-bottom:8px;border-radius:12px;font-size:13px;line-height:1.7;${m.role==='user'?'background:var(--primary);color:#fff;margin-right:40px':'background:var(--bg);border:1px solid var(--border-c);margin-left:40px'}`;
+      div.textContent = m.content;
+      el.appendChild(div);
+    }
+    document.getElementById('yasmin-conv-modal').style.display = 'block';
+  });
+}
+
+function deleteYasminConv(id) {
+  if (!confirm('حذف هذه المحادثة؟')) return;
+  fetch('admin.php?ajax=yasmin_delete_conv&id='+id).then(()=>loadYasminLogs());
+}
+
+loadYasminStats();
+</script>
+
+<?php /* ─────────────── AI ASSISTANT ─────────────── */ ?>
+<?php elseif ($page === 'assistant'): ?>
 
 <div class="admin-header"><h1>مساعد الذكاء الاصطناعي</h1></div>
 

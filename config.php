@@ -391,6 +391,58 @@ function ensure_schema(PDO $pdo): array {
         if (!in_array('icon_path', $toolsCols)) {
             @$pdo->exec("ALTER TABLE web_tools ADD COLUMN icon_path VARCHAR(255) COMMENT 'uploaded tool icon, same pipeline as app icons' AFTER slug");
         }
+        if (!in_array('icon_svg', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN icon_svg TEXT COMMENT 'inline SVG path markup, used when no icon_path uploaded' AFTER icon_path");
+        }
+        if (!in_array('icon_color', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN icon_color VARCHAR(20) DEFAULT '#2563eb' AFTER icon_svg");
+        }
+        if (!in_array('icon_bg', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN icon_bg VARCHAR(20) DEFAULT '#dbeafe' AFTER icon_color");
+        }
+        if (!in_array('sort_order', $toolsCols)) {
+            @$pdo->exec("ALTER TABLE web_tools ADD COLUMN sort_order INT DEFAULT 0 AFTER icon_bg");
+        }
+    } catch (Throwable $e) {}
+
+    // One-time seed: migrate the ~40 real, functional tools from tools/index.php's
+    // hardcoded directory array into web_tools, so they become admin-manageable
+    // (status, SEO fields, descriptions) and the toolhub listing can query the DB
+    // instead of a hardcoded array. Gated by a settings flag so the 40 INSERT
+    // IGNOREs only ever run once — after that, admin edits are never overwritten.
+    try {
+        if (get_cfg($pdo, 'web_tools_seeded', '') !== '1') {
+            $seedTools = require __DIR__ . '/install/web_tools_seed.php';
+            $seedStmt = $pdo->prepare("INSERT IGNORE INTO web_tools (slug, name, short_description, icon_svg, icon_color, icon_bg, status, sort_order) VALUES (?, ?, ?, ?, ?, ?, 'published', ?)");
+            foreach ($seedTools as $i => $t) {
+                $seedStmt->execute([$t['slug'], $t['title'], $t['desc'], $t['icon'], $t['color'], $t['bg'], $i]);
+            }
+            set_cfg($pdo, 'web_tools_seeded', '1');
+        }
+    } catch (Throwable $e) {}
+
+    // Second-batch seed: 55 new AI/web tools
+    try {
+        if (get_cfg($pdo, 'web_tools_seeded_v2', '') !== '1') {
+            $seedTools2 = require __DIR__ . '/install/web_tools_seed_v2.php';
+            $seedStmt2 = $pdo->prepare("INSERT IGNORE INTO web_tools (slug, name, short_description, icon_svg, icon_color, icon_bg, status, sort_order) VALUES (?, ?, ?, ?, ?, ?, 'published', ?)");
+            foreach ($seedTools2 as $i => $t) {
+                $seedStmt2->execute([$t['slug'], $t['title'], $t['desc'], $t['icon'], $t['color'], $t['bg'], 100 + $i]);
+            }
+            set_cfg($pdo, 'web_tools_seeded_v2', '1');
+        }
+    } catch (Throwable $e) {}
+
+    // SEO long descriptions for all web tools
+    try {
+        if (get_cfg($pdo, 'web_tools_seo_seeded', '') !== '1') {
+            $seoDescs = require __DIR__ . '/install/web_tools_seo.php';
+            $seoStmt = $pdo->prepare("UPDATE web_tools SET long_description = ? WHERE slug = ? AND (long_description IS NULL OR long_description = '')");
+            foreach ($seoDescs as $slug => $html) {
+                $seoStmt->execute([trim($html), $slug]);
+            }
+            set_cfg($pdo, 'web_tools_seo_seeded', '1');
+        }
     } catch (Throwable $e) {}
 
     // Additive migrations for apps table (existing installs don't have new columns)
@@ -906,6 +958,35 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_cached (cached_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'evil_ip_cache';
+
+    // ── Yasmin AI chatbot — persistent conversation history ──────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS yasmin_conversations (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      session_id VARCHAR(64) NOT NULL COMMENT 'browser fingerprint or session cookie',
+      title VARCHAR(255) NOT NULL DEFAULT 'محادثة جديدة',
+      model_used VARCHAR(120) DEFAULT NULL,
+      message_count INT UNSIGNED NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_session (session_id),
+      INDEX idx_updated (updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'yasmin_conversations';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS yasmin_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      conversation_id INT NOT NULL,
+      role ENUM('user','assistant') NOT NULL,
+      content MEDIUMTEXT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_conv (conversation_id),
+      CONSTRAINT fk_yasmin_conv FOREIGN KEY (conversation_id) REFERENCES yasmin_conversations(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'yasmin_messages';
+
+    // Prune old Yasmin conversations (keep 30 days)
+    try { @$pdo->exec("DELETE FROM yasmin_conversations WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 500"); }
+    catch (Throwable $e) {}
 
     return $log;
 }

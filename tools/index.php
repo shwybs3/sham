@@ -1,79 +1,16 @@
 <?php
+require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/_base.php';
 
-$tools = [
-  // أدوات الصور
-  ['slug'=>'compress','title'=>'ضاغط الصور','desc'=>'ضغط JPG وPNG وتحويلها إلى WebP بتوفير يصل 85%','icon'=>'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>','color'=>'#2563eb','bg'=>'#dbeafe'],
-  ['slug'=>'resize','title'=>'تغيير حجم الصورة','desc'=>'غيّر أبعاد صورتك بدقة مع الحفاظ على نسبة الأبعاد','icon'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  ['slug'=>'img-crop','title'=>'قصّ الصور','desc'=>'اقطع صورتك بدقة — نسب جاهزة أو أبعاد مخصصة','icon'=>'<path d="M6 2v14a2 2 0 002 2h14"/><path d="M18 22V8a2 2 0 00-2-2H2"/>','color'=>'#0891b2','bg'=>'#e0f2fe'],
-  ['slug'=>'img-convert','title'=>'تحويل تنسيق الصور','desc'=>'حوّل JPG إلى WebP وPNG وبالعكس مجاناً','icon'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>','color'=>'#059669','bg'=>'#d1fae5'],
-  ['slug'=>'ocr','title'=>'استخراج النص (OCR)','desc'=>'استخرج النص من أي صورة — يدعم العربية والإنجليزية','icon'=>'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M9 21V9"/>','color'=>'#0891b2','bg'=>'#cffafe'],
-  // أدوات PDF
-  ['slug'=>'pdf-merge','title'=>'دمج ملفات PDF','desc'=>'ادمج عدة ملفات PDF في ملف واحد مجاناً في المتصفح','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/>','color'=>'#7c3aed','bg'=>'#ede9fe'],
-  ['slug'=>'pdf-split','title'=>'تقسيم PDF','desc'=>'قسّم ملف PDF أو استخرج صفحات محددة','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="9" y1="15" x2="15" y2="15"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  ['slug'=>'pdf-compress','title'=>'ضغط PDF','desc'=>'قلّل حجم ملف PDF مع الحفاظ على الجودة','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="12" y1="18" x2="12" y2="12"/>','color'=>'#ea580c','bg'=>'#ffedd5'],
-  // أدوات المال والأسعار
-  ['slug'=>'currency','title'=>'محوّل العملات','desc'=>'أسعار صرف لحظية لأكثر من 150 عملة عالمية','icon'=>'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>','color'=>'#f59e0b','bg'=>'#fef3c7'],
-  ['slug'=>'gold-calc','title'=>'حاسبة الذهب','desc'=>'احسب سعر الذهب بجميع العيارات بالعملات العربية','icon'=>'<circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>','color'=>'#d97706','bg'=>'#fef9c3'],
-  // أدوات للمطورين
-  ['slug'=>'json-fmt','title'=>'منسّق JSON','desc'=>'نسّق وتحقق وضغط ملفات JSON مجاناً','icon'=>'<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>','color'=>'#6366f1','bg'=>'#eef2ff'],
-  ['slug'=>'encode','title'=>'مشفّر Base64 وURL','desc'=>'شفّر وفكّ Base64 وURL واحسب MD5 وSHA-256','icon'=>'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2z"/>','color'=>'#0891b2','bg'=>'#cffafe'],
-  // أدوات عامة
-  ['slug'=>'qr','title'=>'مولّد QR Code','desc'=>'حوّل أي رابط أو نص إلى رمز QR فوري قابل للتحميل','icon'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>','color'=>'#0f172a','bg'=>'#f1f5f9'],
-  ['slug'=>'pass','title'=>'مولّد كلمات المرور','desc'=>'أنشئ كلمة مرور قوية وآمنة حسب متطلباتك','icon'=>'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  ['slug'=>'unit','title'=>'محوّل الوحدات','desc'=>'حوّل بين وحدات الطول والوزن والحرارة والمساحة والسرعة','icon'=>'<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>','color'=>'#0891b2','bg'=>'#e0f2fe'],
-  ['slug'=>'colors','title'=>'منتقي الألوان','desc'=>'اختر لوناً وولّد لوحة ألوان متناسقة مع HEX وRGB وHSL','icon'=>'<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/>','color'=>'#7c3aed','bg'=>'#ede9fe'],
-  // أدوات النصوص والمحتوى
-  ['slug'=>'words','title'=>'عدّاد الكلمات العربي','desc'=>'عدّ كلمات وأحرف وجمل نصك مع الكلمات الأكثر تكراراً','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>','color'=>'#059669','bg'=>'#d1fae5'],
-  ['slug'=>'whatsapp','title'=>'مولّد روابط واتساب','desc'=>'أنشئ رابط واتساب مباشر لأي رقم ورسالة مخصصة','icon'=>'<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>','color'=>'#16a34a','bg'=>'#dcfce7'],
-  // أدوات الذكاء الاصطناعي
-  ['slug'=>'write','title'=>'كاتب المحتوى AI','desc'=>'أنشئ مقالات ومنشورات وأوصاف منتجات باللغة العربية','icon'=>'<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>','color'=>'#0891b2','bg'=>'#e0f2fe'],
-  ['slug'=>'hashtag','title'=>'مولّد الهاشتاق AI','desc'=>'أنشئ هاشتاقات احترافية لإنستغرام وتيك توك وتويتر','icon'=>'<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>','color'=>'#e11d48','bg'=>'#ffe4e6'],
-  // أدوات الحياة والصحة
-  ['slug'=>'age-calc','title'=>'حاسبة العمر','desc'=>'احسب عمرك بالسنوات والشهور والأيام والساعات مع ذكرى ميلادك القادمة','icon'=>'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>','color'=>'#0891b2','bg'=>'#cffafe'],
-  ['slug'=>'bmi','title'=>'حاسبة مؤشر كتلة الجسم','desc'=>'احسب BMI وتعرّف على تصنيفك الصحي ووزنك المثالي','icon'=>'<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>','color'=>'#16a34a','bg'=>'#dcfce7'],
-  ['slug'=>'loan','title'=>'حاسبة القرض والتقسيط','desc'=>'احسب قسطك الشهري والفائدة الكلية وجدول السداد كاملاً','icon'=>'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>','color'=>'#d97706','bg'=>'#fef3c7'],
-  ['slug'=>'percentage','title'=>'حاسبة النسبة المئوية','desc'=>'6 أنواع من حسابات النسبة: خصم، ضريبة، نسبة التغيير وأكثر','icon'=>'<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  // أدوات الوقت
-  ['slug'=>'timer','title'=>'ساعة إيقاف ومؤقت','desc'=>'ساعة إيقاف بدقة المليثانية ومؤقت عداد تنازلي مع تنبيه صوتي','icon'=>'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>','color'=>'#e11d48','bg'=>'#ffe4e6'],
-  ['slug'=>'timezone','title'=>'محوّل المناطق الزمنية','desc'=>'حوّل الوقت بين دمشق وبيروت والرياض ودبي وأي مدينة عالمية','icon'=>'<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>','color'=>'#0891b2','bg'=>'#e0f2fe'],
-  // أدوات المطورين
-  ['slug'=>'diff','title'=>'مقارنة النصوص Diff','desc'=>'قارن بين نصّين وابحث عن الاختلافات — الإضافات خضراء والحذف أحمر','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M9 11h6M9 15h6M9 7h3"/>','color'=>'#6366f1','bg'=>'#eef2ff'],
-  ['slug'=>'base-conv','title'=>'محوّل قواعد الأرقام','desc'=>'حوّل الأرقام بين عشري وثنائي وست عشري وثماني فوراً','icon'=>'<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/>','color'=>'#0f172a','bg'=>'#f1f5f9'],
-  ['slug'=>'slug','title'=>'مولّد Slug الروابط','desc'=>'حوّل أي عنوان عربي أو إنجليزي إلى Slug صالح لعناوين URL','icon'=>'<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  ['slug'=>'gradient','title'=>'مولّد تدرجات CSS','desc'=>'أنشئ تدرجات CSS جميلة خطية ودائرية وانسخ الكود جاهزاً','icon'=>'<defs><linearGradient id="gi"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs><rect x="2" y="3" width="20" height="18" rx="3" fill="url(#gi)" stroke="none"/>','color'=>'#8b5cf6','bg'=>'#ede9fe'],
-  ['slug'=>'lorem','title'=>'مولّد Lorem Ipsum عربي','desc'=>'أنشئ نصوص تعبئة عربية أو Lorem Ipsum للتصميم والنماذج','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>','color'=>'#0f766e','bg'=>'#ccfbf1'],
-  ['slug'=>'markdown','title'=>'محوّل Markdown إلى HTML','desc'=>'اكتب Markdown وشاهد معاينة HTML فورية مع إمكانية التنزيل','icon'=>'<path d="M17 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M9 8l2 2-2 2M13 12h2"/>','color'=>'#0369a1','bg'=>'#e0f2fe'],
-  // أدوات المال - الليرة السورية
-  ['slug'=>'syp','title'=>'سعر الليرة السورية','desc'=>'سعر صرف الليرة السورية مقابل الدولار واليورو والريال — محدَّث يومياً','icon'=>'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/><path d="M8 3h8"/>','color'=>'#dc2626','bg'=>'#fee2e2'],
-  // أدوات الصحة
-  ['slug'=>'calorie','title'=>'حاسبة السعرات الحرارية','desc'=>'احسب BMR وTDEE واحتياجك اليومي من السعرات حسب نشاطك','icon'=>'<path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/>','color'=>'#f97316','bg'=>'#fff7ed'],
-  // أدوات المطورين
-  ['slug'=>'uuid','title'=>'مولّد UUID / GUID','desc'=>'أنشئ معرّفات UUID v4 عشوائية فريدة — للمشاريع البرمجية وقواعد البيانات','icon'=>'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M9 9h6M9 12h4M9 15h2"/>','color'=>'#7c3aed','bg'=>'#ede9fe'],
-  ['slug'=>'regex','title'=>'محرر Regex','desc'=>'اكتب وتجرب التعابير النمطية مع تظليل التطابقات وشرح النمط','icon'=>'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/><line x1="11" y1="8" x2="11" y2="14"/>','color'=>'#0891b2','bg'=>'#e0f2fe'],
-  ['slug'=>'aspect-ratio','title'=>'حاسبة نسبة الأبعاد','desc'=>'احسب أبعاد الصور والفيديو بنسب 16:9 و4:3 و1:1 وأي نسبة مخصصة','icon'=>'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 6v12"/>','color'=>'#2563eb','bg'=>'#dbeafe'],
-  // أدوات المحتوى
-  ['slug'=>'reading-time','title'=>'حاسبة وقت القراءة','desc'=>'احسب وقت قراءة مقالتك مع إحصائيات الكلمات والجمل ومستوى الصعوبة','icon'=>'<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>','color'=>'#059669','bg'=>'#d1fae5'],
-  // أدوات عامة
-  ['slug'=>'ip','title'=>'ما هو IP الخاص بي؟','desc'=>'اعرف عنوان IP الخاص بك وموقعك الجغرافي وشركة الإنترنت','icon'=>'<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>','color'=>'#4f46e5','bg'=>'#eef2ff'],
-  ['slug'=>'invoice','title'=>'مولّد الفاتورة','desc'=>'أنشئ فاتورة احترافية وطبعها أو احفظها PDF — مجاناً','icon'=>'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>','color'=>'#0f766e','bg'=>'#ccfbf1'],
-  ['slug'=>'color-names','title'=>'أسماء الألوان بالعربية','desc'=>'قاموس الألوان بالعربي والإنجليزي مع HEX وRGB وCSS','icon'=>'<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 22a7 7 0 010-14"/>','color'=>'#be185d','bg'=>'#fce7f3'],
-  // الذكاء الاصطناعي
-  ['slug'=>'chat','title'=>'ياسمين — مساعد AI سوري','desc'=>'تحدّث مع ياسمين، مساعدتك الذكية السورية بالعربية — مجاناً','icon'=>'<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>','color'=>'#CE1126','bg'=>'#fff1f2'],
-  // الأمان والشبكات
-  ['slug'=>'password','title'=>'مولد كلمات المرور','desc'=>'أنشئ كلمات مرور قوية وعشوائية مع مقياس القوة وتوليد دفعي','icon'=>'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>','color'=>'#7c3aed','bg'=>'#f5f3ff'],
-  ['slug'=>'dns','title'=>'بحث DNS','desc'=>'استعلم عن سجلات DNS لأي نطاق — A وMX وNS وTXT وغيرها','icon'=>'<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>','color'=>'#92400e','bg'=>'#fffbeb'],
-  ['slug'=>'whois','title'=>'WHOIS — معلومات النطاق','desc'=>'اعرف مالك أي نطاق وتاريخ تسجيله وانتهائه وخوادم DNS','icon'=>'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>','color'=>'#1e40af','bg'=>'#eff6ff'],
-  // الترميز والتحويل
-  ['slug'=>'ascii','title'=>'تحويل نص إلى ASCII','desc'=>'اعرف كود ASCII لكل حرف وحوّل نصك إلى ASCII Art مزخرف','icon'=>'<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>','color'=>'#0891b2','bg'=>'#ecfeff'],
-  // أدوات المطورين
-  ['slug'=>'html-minifier','title'=>'مصغّر HTML','desc'=>'ضغط كود HTML وإزالة التعليقات والمسافات الزائدة مجاناً','icon'=>'<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>','color'=>'#dc2626','bg'=>'#fef2f2'],
-  // التصميم والألوان
-  ['slug'=>'color-picker','title'=>'أداة اختيار الألوان','desc'=>'اختر لوناً واحصل على قيمه HEX وRGB وHSL وCMYK مع التناسق اللوني','icon'=>'<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>','color'=>'#0d9488','bg'=>'#f0fdfa'],
-  // رموز وباركود
-  ['slug'=>'qr-code','title'=>'مولد QR Code','desc'=>'أنشئ QR Code لأي رابط أو نص أو هاتف أو واي فاي مجاناً','icon'=>'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/>','color'=>'#1d4ed8','bg'=>'#eff6ff'],
-  ['slug'=>'barcode','title'=>'مولد الباركود','desc'=>'أنشئ باركود بتنسيقات CODE128 وEAN-13 وUPC-A وCode 39','icon'=>'<path d="M3 9.5V5a1 1 0 011-1h3.5M3 14.5V19a1 1 0 001 1h3.5M20.5 9.5V5a1 1 0 00-1-1H16M20.5 14.5V19a1 1 0 01-1 1H16"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="12" y1="4" x2="12" y2="20" stroke-width="3"/>','color'=>'#065f46','bg'=>'#ecfdf5'],
-];
+// Tool directory is admin-manageable via admin.php?page=web-tools — each row's
+// slug must match an existing tools/{slug}/ folder for its "Try it" link to work.
+$tools = [];
+try {
+    $rows = $pdo->query("SELECT slug, name AS title, short_description AS `desc`, icon_svg AS icon, icon_color AS color, icon_bg AS bg FROM web_tools WHERE status='published' ORDER BY sort_order, id")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) {
+        if (is_dir(__DIR__ . '/' . $r['slug'])) $tools[] = $r;
+    }
+} catch (\Throwable $e) { $tools = []; }
 
 $schema = json_encode([
   '@context'=>'https://schema.org',
