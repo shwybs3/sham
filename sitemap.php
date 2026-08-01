@@ -172,13 +172,25 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
        WHERE status='published' ORDER BY updated_at DESC LIMIT 500"
     )->fetchAll();
   } catch (\Throwable $e) { $webTools = []; }
+  // Determine tools base URL
+  $toolsBase = defined('TOOLS_BASE_URL') ? TOOLS_BASE_URL : SITE_URL;
   foreach ($webTools as $wt):
   ?>
   <url>
-    <loc><?= h(SITE_URL . '/tools?slug=' . rawurlencode($wt['slug'])) ?></loc>
+    <loc><?= h($toolsBase . '/tools/' . rawurlencode($wt['slug']) . '/') ?></loc>
     <lastmod><?= date('Y-m-d', strtotime($wt['updated_at'] ?: 'now')) ?></lastmod>
     <changefreq>monthly</changefreq><priority>0.7</priority>
   </url>
   <?php endforeach; ?>
+
+  <!-- صفحة قائمة الأدوات -->
+  <url><loc><?= h($toolsBase . '/tools/') ?></loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <!-- صفحات فئات الأدوات -->
+  <?php foreach (['ai','pdf','network','image','developer','security','seo','text'] as $catSlug): ?>
+  <url><loc><?= h($toolsBase . '/tools/category/' . $catSlug . '/') ?></loc><changefreq>weekly</changefreq><priority>0.75</priority></url>
+  <?php endforeach; ?>
+
+  <!-- ياسمين للمحادثة الذكاء الاصطناعي -->
+  <url><loc><?= h($toolsBase . '/tools/chat/') ?></loc><changefreq>weekly</changefreq><priority>0.85</priority></url>
 
 </urlset>

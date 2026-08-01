@@ -10,6 +10,11 @@ DirectoryIndex index.php
 
   # sitemap.xml → sitemap.php
   RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+  # Tool category pages: /tools/category/{slug}/ → category.php?cat={slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^category/([a-z0-9-]+)/?$ category.php?cat=$1 [L,QSA]
 </IfModule>
 
 <IfModule mod_headers.c>

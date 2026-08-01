@@ -31,6 +31,29 @@ tool_header();
     <p>أدوات احترافية تعمل مباشرة في متصفحك — بدون تسجيل، بدون حدود، مجانية 100%</p>
   </div>
 
+  <!-- Category navigation -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+    <?php
+    $cats = [
+      'ai'        => ['أدوات الذكاء الاصطناعي','#7c3aed','#ede9fe'],
+      'image'     => ['أدوات الصور','#059669','#d1fae5'],
+      'pdf'       => ['أدوات PDF','#dc2626','#fee2e2'],
+      'network'   => ['أدوات الشبكات','#0891b2','#e0f2fe'],
+      'developer' => ['أدوات المطورين','#d97706','#fef3c7'],
+      'security'  => ['أدوات الأمان','#16a34a','#dcfce7'],
+      'seo'       => ['أدوات السيو','#0284c7','#e0f2fe'],
+      'text'      => ['أدوات النصوص','#6d28d9','#ede9fe'],
+    ];
+    foreach ($cats as $slug => [$label, $color, $bg]):
+    ?>
+    <a href="<?= TOOLS_BASE_URL ?>/tools/category/<?= $slug ?>/"
+       style="text-decoration:none;padding:7px 14px;background:<?= $bg ?>;color:<?= $color ?>;border-radius:20px;font-size:13px;font-weight:600;transition:opacity .15s"
+       onmouseenter="this.style.opacity='.8'" onmouseleave="this.style.opacity='1'">
+      <?= $label ?>
+    </a>
+    <?php endforeach; ?>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:24px">
     <?php foreach ($tools as $t):
       $toolUrl = TOOLS_BASE_URL . '/tools/' . $t['slug'] . '/';
