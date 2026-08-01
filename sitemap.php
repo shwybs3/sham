@@ -20,7 +20,17 @@ try {
          WHERE status='published' AND (parent_id IS NULL OR parent_id=0)
          ORDER BY updated_at DESC"
     )->fetchAll();
-} catch (\Throwable $e) { $apps = []; }
+} catch (\Throwable $e) {
+    // parent_id column may not exist on older installs — retry without it
+    try {
+        $apps = $pdo->query(
+            "SELECT id, slug, name, seo_title, meta_description,
+                    icon_path, download_url, updated_at
+             FROM apps WHERE status='published'
+             ORDER BY updated_at DESC"
+        )->fetchAll();
+    } catch (\Throwable $e2) { $apps = []; }
+}
 
 // ── التصنيفات التي فيها تطبيقات مقبولة ──
 $cats = [];
@@ -66,58 +76,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url><loc><?= SITE_URL ?>/gold</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc><?= SITE_URL ?>/calculators</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc><?= SITE_URL ?>/solar</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <!-- الأدوات -->
-  <url><loc><?= SITE_URL ?>/tools/age-calc</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/ascii</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/aspect-ratio</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/barcode</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/base-conv</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/bmi</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/calorie</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/chat</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/color-names</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/color-picker</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/colors</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/compress</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/currency</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/diff</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/dns</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/encode</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/gold-calc</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/gradient</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/hashtag</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/html-minifier</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/img-convert</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/img-crop</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/invoice</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/ip</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/json-fmt</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/loan</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/lorem</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/markdown</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/ocr</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/pass</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/password</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/pdf-compress</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/pdf-merge</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/pdf-split</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/percentage</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/qr</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/qr-code</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/reading-time</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/regex</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/resize</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/slug</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/syp</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/timer</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/timezone</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/unit</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/uuid</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/whatsapp</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/whois</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/words</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc><?= SITE_URL ?>/tools/write</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/tools/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/about</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
   <url><loc><?= SITE_URL ?>/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc><?= SITE_URL ?>/terms</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
@@ -183,8 +142,6 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   </url>
   <?php endforeach; ?>
 
-  <!-- صفحة قائمة الأدوات -->
-  <url><loc><?= h($toolsBase . '/tools/') ?></loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <!-- صفحات فئات الأدوات -->
   <?php foreach (['ai','pdf','network','image','developer','security','seo','text'] as $catSlug): ?>
   <url><loc><?= h($toolsBase . '/tools/category/' . $catSlug . '/') ?></loc><changefreq>weekly</changefreq><priority>0.75</priority></url>

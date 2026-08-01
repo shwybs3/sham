@@ -4354,43 +4354,6 @@ if ($page === 'login'): ?>
 
 <?php
 /* ══════════════════════════════════════════════════════
-   AJAX: Mass re-index all published apps
-   ══════════════════════════════════════════════════════ */
-if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
-    header('Content-Type: application/json');
-    $apps = $pdo->query("SELECT id, slug FROM apps WHERE status='published' ORDER BY id")->fetchAll();
-    $pinged = 0; $errors = 0;
-    // Submit all URLs to IndexNow in one batch (up to 10k URLs)
-    $key  = get_cfg($pdo, 'indexnow_key', '');
-    $host = parse_url(SITE_URL, PHP_URL_HOST) ?: '';
-    $urlList = array_map(fn($a) => app_url($a['slug']), $apps);
-    foreach (['', 'blog', 'about', 'privacy-policy', 'terms', 'contact'] as $p) {
-        $urlList[] = url($p);
-    }
-    if ($key && $urlList) {
-        $keyLocation = 'https://' . $host . '/' . $key . '.txt';
-        $body = json_encode([
-            'host'        => $host,
-            'key'         => $key,
-            'keyLocation' => $keyLocation,
-            'urlList'     => array_values(array_unique($urlList)),
-        ]);
-        $ictx = stream_context_create(['http' => [
-            'method' => 'POST', 'timeout' => 10, 'ignore_errors' => true,
-            'header' => "Content-Type: application/json\r\nContent-Length: " . strlen($body),
-            'content' => $body,
-        ]]);
-        $resp = @file_get_contents('https://api.indexnow.org/indexnow', false, $ictx);
-        @file_get_contents('https://www.bing.com/indexnow', false, $ictx);
-        $pinged = count($urlList);
-    }
-    $pdo->exec("UPDATE apps SET last_indexed_at=NOW(), index_status='indexed' WHERE status='published'");
-    log_security_event($pdo, 'reindex_all', 'info', "Mass re-index: {$pinged} URLs submitted to IndexNow");
-    echo json_encode(['ok' => true, 'pinged' => $pinged, 'total' => count($apps)], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-/* ══════════════════════════════════════════════════════
    AJAX: Clear security log
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'clear_security_log' && is_admin()) {
