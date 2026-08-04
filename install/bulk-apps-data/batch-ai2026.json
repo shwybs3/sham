@@ -1,0 +1,76 @@
+{
+  "_note": "دفعة 1 من عدة دفعات — تطبيقات حقيقية موثّقة غير موجودة بالدفعات الحالية (تم التحقق بالمقارنة مع 1008 تطبيق موجود). short_description حقيقي ومختصر، long_description متروك فارغاً عمداً ليملأه نظام توليد المحتوى بالذكاء الاصطناعي الموجود أصلاً بلوحة التحكم (bulk-content / article-gen) — نفس نمط الدفعات القديمة (راجع batch-r.json).",
+  "_verify_before_import": ["meta-ai", "reelshort", "dramabox", "honor-of-kings"],
+  "apps": [
+    {
+      "name": "تشات جي بي تي",
+      "name_en": "ChatGPT",
+      "developer": "OpenAI",
+      "category_slug": "productivity",
+      "package_name": "com.openai.chatgpt",
+      "license": "مجاني (مع اشتراك اختياري)",
+      "short_description": "التطبيق الرسمي لـ ChatGPT من OpenAI — مساعد ذكاء اصطناعي محادثي يجيب على الأسئلة، يكتب النصوص، يحلل الصور، ويولّد صوراً. الأكثر تحميلاً عالمياً في 2026.",
+      "long_description": ""
+    },
+    {
+      "name": "جيميناي",
+      "name_en": "Gemini",
+      "developer": "Google",
+      "category_slug": "productivity",
+      "package_name": "com.google.android.apps.bard",
+      "license": "مجاني (مع اشتراك Gemini Advanced اختياري)",
+      "short_description": "مساعد Google الذكي — يتكامل مع تطبيقات Google (Gmail، Docs، Maps)، يفهم الصور والصوت، ويجيب بأسلوب محادثة طبيعي.",
+      "long_description": ""
+    },
+    {
+      "name": "كلود",
+      "name_en": "Claude by Anthropic",
+      "developer": "Anthropic",
+      "category_slug": "productivity",
+      "package_name": "com.anthropic.claude",
+      "license": "مجاني (مع خطط مدفوعة)",
+      "short_description": "مساعد ذكاء اصطناعي من Anthropic معروف بجودة الكتابة والتحليل والبرمجة، ويدعم رفع الملفات والصور والمحادثات الطويلة.",
+      "long_description": ""
+    },
+    {
+      "name": "بيربلكسيتي",
+      "name_en": "Perplexity AI",
+      "developer": "Perplexity AI, Inc.",
+      "category_slug": "productivity",
+      "package_name": "ai.perplexity.app.android",
+      "license": "مجاني (مع اشتراك Pro اختياري)",
+      "short_description": "محرك بحث بالذكاء الاصطناعي يعطي إجابات مباشرة موثّقة بمصادر حقيقية بدل قوائم روابط تقليدية.",
+      "long_description": ""
+    },
+    {
+      "name": "ديب سيك",
+      "name_en": "DeepSeek",
+      "developer": "DeepSeek",
+      "category_slug": "productivity",
+      "package_name": "com.deepseek.chat",
+      "license": "مجاني",
+      "short_description": "مساعد ذكاء اصطناعي صيني قوي بالتحليل المنطقي والبرمجة، انتشر بسرعة كبيرة كبديل مجاني لأدوات الذكاء الاصطناعي الكبرى.",
+      "long_description": ""
+    },
+    {
+      "name": "جروك",
+      "name_en": "Grok",
+      "developer": "xAI",
+      "category_slug": "productivity",
+      "package_name": "ai.x.grok",
+      "license": "مجاني (مع ميزات إضافية عبر اشتراك X Premium)",
+      "short_description": "مساعد الذكاء الاصطناعي من xAI (شركة إيلون ماسك) المدمج مع منصة X، معروف بأسلوبه المباشر والوصول لمعلومات حديثة.",
+      "long_description": ""
+    },
+    {
+      "name": "كاراكتر AI",
+      "name_en": "Character.AI",
+      "developer": "Character Technologies Inc.",
+      "category_slug": "productivity",
+      "package_name": "com.character.ai",
+      "license": "مجاني (مع اشتراك c.ai+ اختياري)",
+      "short_description": "منصة لإنشاء والدردشة مع شخصيات ذكاء اصطناعي مخصصة — واحدة من أكثر تطبيقات الذكاء الاصطناعي استخداماً بين الشباب.",
+      "long_description": ""
+    }
+  ]
+}

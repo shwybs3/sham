@@ -49,6 +49,20 @@ $SLUG_MAP = [
     'إن شوت'           => ['inshot',             'design'],
     'بابجي موبايل'     => ['pubg-mobile',        'games'],
     'فري فاير'         => ['free-fire',          'games'],
+    // ── دفعة الذكاء الاصطناعي 2026 (batch-ai2026.json) ──
+    // بدون هذه المطابقات يولّد slugify() من الاسم العربي مسارات غير مفهومة
+    // ("tshat-jy-by-ty" لـ ChatGPT، "klwd" لـ Claude) — أي مسارات لا يبحث عنها
+    // أحد وتحصل على تقييم منخفض في فاحص المسارات.
+    'تشات جي بي تي'      => ['chatgpt',            'productivity'],
+    'جيميناي'          => ['gemini',             'productivity'],
+    'كلود'              => ['claude-ai',          'productivity'],
+    // نفس تهجئة الاسم الموجود في batch-x.json حتى يعمل تخطّي المكرر بالاسم
+    'مايكروسوفت كوبيلوت' => ['microsoft-copilot',  'productivity'],
+    'كوبوز'             => ['qobuz',              'music'],
+    'بيربلكسيتي'      => ['perplexity-ai',       'productivity'],
+    'ديب سيك'           => ['deepseek',           'productivity'],
+    'جروك'              => ['grok-ai',            'productivity'],
+    'كاراكتر AI'       => ['character-ai',        'productivity'],
 ];
 
 $catLabels = [
