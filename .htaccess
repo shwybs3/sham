@@ -139,6 +139,13 @@ ErrorDocument 404 /404.php
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^tools/([^/]+)/?$ tools/$1/index.php [L,QSA]
+  # DB-only web tools with no physical tools/{slug}/ folder (e.g. AI-generated
+  # tools managed from admin) — fall back to the legacy single-file renderer
+  # so the pretty /tools/{slug}/ URL used in the sitemap still resolves
+  # instead of 404ing.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^tools/([^/]+)/?$ tools.php?slug=$1 [L,QSA]
 
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f

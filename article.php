@@ -1,8 +1,13 @@
 <?php
+require_once __DIR__ . '/static-cache-check.php';
+$_scSlug = trim($_GET['slug'] ?? '');
+static_cache_try_serve('article', $_scSlug);
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
-$slug = trim($_GET['slug'] ?? '');
+$slug = $_scSlug;
+static_cache_capture_start('article', $slug);
 if ($slug === '') { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT ar.*, a.name AS app_name, a.slug AS app_slug, a.icon_path, a.short_description, a.rating

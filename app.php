@@ -1,4 +1,9 @@
 <?php
+require_once __DIR__ . '/static-cache-check.php';
+$_scSlug = trim($_GET['slug'] ?? '');
+$_scLangKey = $_scSlug . '@' . preg_replace('/[^a-zA-Z0-9.-]/', '_', $_SERVER['HTTP_HOST'] ?? 'main') . (isset($_GET['lang']) ? '_l' . preg_replace('/[^a-z]/', '', $_GET['lang']) : '');
+static_cache_try_serve('app', $_scLangKey);
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
@@ -6,7 +11,8 @@ evil_check_ban($pdo);
 waf_check($pdo);
 public_cache_headers(120);
 
-$slug    = trim($_GET['slug'] ?? '');
+$slug    = $_scSlug;
+static_cache_capture_start('app', $_scLangKey);
 // Language: ?lang=XX param takes priority; otherwise auto-detect from subdomain
 $subdomainLang = detect_lang_from_subdomain();
 $reqLang = preg_replace('/[^a-z]/', '', strtolower(trim($_GET['lang'] ?? $subdomainLang ?? '')));
@@ -818,15 +824,8 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <?= wave() ?>
   <?php endif; ?>
 
-  <!-- Download zone — direct APKPure-style button -->
+  <!-- Download zone — version history + telegram (primary download button lives in the download-cta box below, next to the icon, to avoid a redundant duplicate here) -->
   <div class="quick-actions-zone">
-    <?php if ($hasDlMethod): ?>
-    <a href="<?= h(download_url($app['slug'])) ?>" class="btn-download-hero" data-hardnav="1"
-       style="display:inline-flex;width:100%;max-width:340px;justify-content:center;font-size:16px;padding:15px 28px">
-      <?= svgi('download') ?> <?= __('download') ?> <?= h($app['name']) ?><?= $app['version'] ? ' v'.h($app['version']) : '' ?>
-    </a>
-    <?php endif; ?>
-
     <?php $dlVersions = array_filter($versionHistory, fn($v) => !empty($v['download_url'])); ?>
     <?php if ($dlVersions): ?>
     <details class="prev-versions-slim">

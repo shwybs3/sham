@@ -3,9 +3,14 @@
  * Web Tools Directory
  * Displays all published web tools with proper SEO
  */
+require_once __DIR__ . '/static-cache-check.php';
+$_scSlug = trim($_GET['slug'] ?? '');
+static_cache_try_serve('tool', $_scSlug);
+
 require_once __DIR__ . '/config.php';
 
-$slug = trim($_GET['slug'] ?? '');
+$slug = $_scSlug;
+if ($slug) static_cache_capture_start('tool', $slug);
 
 // If slug provided, show single tool detail
 if ($slug) {
@@ -45,7 +50,7 @@ if ($slug) {
                 '@type' => 'ListItem',
                 'position' => 3,
                 'name' => $tool['name'],
-                'item' => SITE_URL . '/tools?slug=' . rawurlencode($slug)
+                'item' => SITE_URL . '/tools/' . rawurlencode($slug) . '/'
             ]
         ]
     ];
@@ -84,11 +89,11 @@ if ($slug) {
   <meta name="description" content="<?= h($tool['meta_description'] ?: $tool['short_description']) ?>">
   <meta name="keywords" content="<?= h($tool['meta_tags']) ?>">
   <meta name="robots" content="index, follow">
-  <link rel="canonical" href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($slug)) ?>">
+  <link rel="canonical" href="<?= h(SITE_URL . '/tools/' . rawurlencode($slug) . '/') ?>">
   <meta property="og:title" content="<?= h($tool['seo_title'] ?: $tool['name']) ?>">
   <meta property="og:description" content="<?= h($tool['meta_description'] ?: $tool['short_description']) ?>">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($slug)) ?>">
+  <meta property="og:url" content="<?= h(SITE_URL . '/tools/' . rawurlencode($slug) . '/') ?>">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="<?= h($tool['seo_title'] ?: $tool['name']) ?>">
   <meta name="twitter:description" content="<?= h($tool['meta_description'] ?: $tool['short_description']) ?>">
@@ -140,12 +145,14 @@ if ($slug) {
     </div>
     <?php endif; ?>
 
-    <!-- Main content (long description) -->
+    <!-- Main content (long description) — AI-generated content is stored as
+         HTML (see admin.php gen_tool_content_chunk), so it must render as
+         markup here, not be escaped as literal text. -->
     <?php if ($tool['long_description']): ?>
     <div class="tool-section">
       <h3><?= h(__('overview')) ?></h3>
       <div class="tool-content">
-        <?= nl2br(h($tool['long_description'])) ?>
+        <?= str_contains($tool['long_description'], '<') ? $tool['long_description'] : nl2br(h($tool['long_description'])) ?>
       </div>
     </div>
     <?php endif; ?>
@@ -320,7 +327,7 @@ if ($slug) {
     <div class="tools-grid">
       <?php foreach ($tools as $t): ?>
       <div class="tool-card">
-        <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($t['slug'])) ?>" class="tool-card-body">
+        <a href="<?= h(SITE_URL . '/tools/' . rawurlencode($t['slug']) . '/') ?>" class="tool-card-body">
           <?php if (!empty($t['icon_path'])): ?>
           <img src="<?= h(media_url($t['icon_path'])) ?>" alt="<?= h($t['name']) ?>" class="tool-card-icon" loading="lazy">
           <?php else: ?>
@@ -335,7 +342,7 @@ if ($slug) {
           </div>
           <div class="tool-card-meta">📊 <?= number_format($t['views']) ?> <?= h(__('views_label')) ?></div>
         </a>
-        <a href="<?= h(SITE_URL . '/tools?slug=' . rawurlencode($t['slug'])) ?>" class="tool-card-browse"><?= h(__('browse')) ?></a>
+        <a href="<?= h(SITE_URL . '/tools/' . rawurlencode($t['slug']) . '/') ?>" class="tool-card-browse"><?= h(__('browse')) ?></a>
       </div>
       <?php endforeach; ?>
     </div>

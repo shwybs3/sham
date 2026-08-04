@@ -84,6 +84,16 @@ try {
     )->fetchAll(PDO::FETCH_COLUMN);
 } catch (\Throwable $e) { $webToolSlugs = []; }
 
+/* ── DB: مقالات التطبيقات (app_articles) ── */
+$appArticleSlugs = [];
+try {
+    $appArticleSlugs = $pdo->query(
+        "SELECT ar.slug FROM app_articles ar
+         JOIN apps a ON a.id = ar.app_id
+         WHERE a.status='published' LIMIT 500"
+    )->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) { $appArticleSlugs = []; }
+
 ?>
 # ── yassota robots.txt ──────────────────────────────────────────────────────
 # تم التوليد تلقائياً — <?= date('Y-m-d H:i:s') ?>
@@ -102,7 +112,7 @@ Allow: <?= $p ?>
 
 # السماح بصفحات التطبيقات
 <?php foreach ($appSlugs as $slug): ?>
-Allow: /<?= rawurlencode($slug) ?>
+Allow: /<?= rawurlencode($slug) ?>/apk
 
 Allow: /<?= rawurlencode($slug) ?>/download
 <?php endforeach; ?>
@@ -125,15 +135,21 @@ Allow: /blog/<?= rawurlencode($slug) ?>
 
 <?php endforeach; ?>
 
-# السماح بأدوات الويب (قاعدة البيانات)
+# السماح بأدوات الويب (قاعدة البيانات) — المسار الفعلي /tools/{slug}/
 <?php foreach ($webToolSlugs as $slug): ?>
-Allow: /tools?slug=<?= rawurlencode($slug) ?>
+Allow: /tools/<?= rawurlencode($slug) ?>/
 
 <?php endforeach; ?>
 
 # السماح بالأدوات (المجلدات)
 <?php foreach ($toolAllows as $p): ?>
 Allow: <?= $p ?>
+
+<?php endforeach; ?>
+
+# السماح بمقالات التطبيقات
+<?php foreach ($appArticleSlugs as $slug): ?>
+Allow: /article/<?= rawurlencode($slug) ?>
 
 <?php endforeach; ?>
 
@@ -155,7 +171,6 @@ Disallow: /?q=
 Disallow: /*?q=
 Disallow: /?page=
 Disallow: /index.php
-Disallow: /app.php
 
 # ── AdsBot — Google يتطلب قاعدة منفصلة ──────────────────────────────────────
 User-agent: AdsBot-Google

@@ -53,6 +53,16 @@ try {
     )->fetchAll(PDO::FETCH_COLUMN);
 } catch (\Throwable $e) { $developers = []; }
 
+// ── مقالات التطبيقات (app_articles) ──
+$appArticles = [];
+try {
+    $appArticles = $pdo->query(
+        "SELECT ar.slug, ar.created_at FROM app_articles ar
+         JOIN apps a ON a.id = ar.app_id
+         WHERE a.status='published' ORDER BY ar.created_at DESC LIMIT 500"
+    )->fetchAll();
+} catch (\Throwable $e) { $appArticles = []; }
+
 // ── مقالات المدونة ──
 $blogPosts = [];
 try {
@@ -110,6 +120,15 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
       <image:title><?= h($a['name']) ?></image:title>
     </image:image>
     <?php endif; ?>
+  </url>
+  <?php endforeach; ?>
+
+  <!-- مقالات التطبيقات (app_articles) -->
+  <?php foreach ($appArticles as $art): ?>
+  <url>
+    <loc><?= h(article_url($art['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($art['created_at'] ?: 'now')) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.6</priority>
   </url>
   <?php endforeach; ?>
 

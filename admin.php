@@ -4566,6 +4566,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'reindex_all' && is_admin()) {
         $urlList[] = rtrim(SITE_URL,'/') . '/tools/category/' . $catSlug . '/';
     $urlList[] = rtrim(SITE_URL,'/') . '/tools/';
     $urlList[] = rtrim(SITE_URL,'/') . '/tools/chat/';
+    // App articles
+    try {
+        $articleSlugs = $pdo->query("SELECT ar.slug FROM app_articles ar JOIN apps a ON a.id=ar.app_id WHERE a.status='published'")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($articleSlugs as $as) $urlList[] = article_url($as);
+    } catch (Throwable $e) {}
     $urlList = array_values(array_unique(array_filter($urlList)));
     $pinged = 0;
     $logStatus = 'skipped'; $logCode = null; $logReason = 'مفتاح IndexNow غير مضبوط';
@@ -6606,7 +6611,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_health_check' && is_admin
 // ── Sitemap health prune dead URLs ────────────────────────────────────────
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_prune' && is_admin()) {
     $dead = [];
-    try { $dead = $pdo->query("SELECT url FROM sitemap_url_log WHERE is_healthy=0 AND http_code NOT IN (0,301,302,307,308)")->fetchAll(PDO::FETCH_COLUMN); } catch (\Throwable $e) {}
+    // Include http_code=0 (curl timeout/no-connection = unreachable from server side)
+    try { $dead = $pdo->query("SELECT url FROM sitemap_url_log WHERE is_healthy=0")->fetchAll(PDO::FETCH_COLUMN); } catch (\Throwable $e) {}
     $pruned   = 0; // truly deleted (set to draft)
     $fixed    = 0; // existed at correct URL, just wrong indexed URL
     $deindexUrls = []; // old wrong URLs to de-index
@@ -6688,6 +6694,348 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'sitemap_prune' && is_admin()) {
             'info', url('admin.php?page=sitemap-health'), true, '');
     }
     echo json_encode(['ok'=>true,'pruned'=>$pruned,'fixed'=>$fixed,'deindex_count'=>count($deindexUrls),'reindex_count'=>count($reindexUrls)]);
+    exit;
+}
+
+/* ── AJAX: SLUG quality analysis ─────────────────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'slug_analysis' && is_admin()) {
+    header('Content-Type: application/json');
+    $type = in_array($_GET['type'] ?? '', ['apps','articles']) ? ($_GET['type']) : 'apps';
+    $rows = [];
+    try {
+        if ($type === 'apps') {
+            $rows = $pdo->query("SELECT id, slug, name, status FROM apps WHERE status='published' ORDER BY id DESC LIMIT 300")->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $rows = $pdo->query("SELECT id, slug, title AS name, 'published' AS status FROM app_articles ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } catch (\Throwable $e) { echo json_encode(['ok'=>false,'error'=>$e->getMessage()]); exit; }
+
+    function score_slug(string $slug): array {
+        $score = 100;
+        $issues = [];
+        // Arabic characters → fatal
+        if (preg_match('/[\x{0600}-\x{06FF}]/u', $slug)) { $score -= 60; $issues[] = 'حروف عربية'; }
+        // URL-encoded Arabic (percent-encoded sequences for Arabic range)
+        if (preg_match('/%[0-9A-Fa-f]{2}/', $slug)) { $score -= 30; $issues[] = 'ترميز URL'; }
+        // Uppercase
+        if ($slug !== strtolower($slug)) { $score -= 10; $issues[] = 'أحرف كبيرة'; }
+        // Too short
+        if (strlen($slug) < 3) { $score -= 25; $issues[] = 'قصير جداً'; }
+        // Too long
+        if (strlen($slug) > 80) { $score -= 15; $issues[] = 'طويل جداً'; }
+        // Special chars (not alphanumeric, hyphen, underscore)
+        if (preg_match('/[^a-zA-Z0-9\-_]/', $slug)) { $score -= 20; $issues[] = 'رموز خاصة'; }
+        // Starts/ends with hyphen
+        if ($slug[0] === '-' || substr($slug, -1) === '-') { $score -= 10; $issues[] = 'يبدأ/ينتهي بشرطة'; }
+        // No hyphens (single word with no separator - not ideal for SEO)
+        if (strlen($slug) > 10 && !str_contains($slug, '-') && !str_contains($slug, '_')) { $score -= 5; $issues[] = 'بدون فواصل'; }
+        // Good: contains hyphens
+        if (str_contains($slug, '-') && preg_match('/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/', $slug)) { $score += 0; } // already at 100 or deducted
+        $score = max(0, min(100, $score));
+        $grade = $score >= 90 ? 'A' : ($score >= 70 ? 'B' : ($score >= 50 ? 'C' : ($score >= 30 ? 'D' : 'F')));
+        return ['score'=>$score,'grade'=>$grade,'issues'=>$issues];
+    }
+
+    $results = [];
+    foreach ($rows as $r) {
+        $analysis = score_slug($r['slug']);
+        $results[] = [
+            'id'    => $r['id'],
+            'slug'  => $r['slug'],
+            'name'  => $r['name'],
+            'score' => $analysis['score'],
+            'grade' => $analysis['grade'],
+            'issues'=> $analysis['issues'],
+            'bad'   => $analysis['score'] < 50,
+        ];
+    }
+    usort($results, fn($a,$b) => $a['score'] <=> $b['score']);
+    echo json_encode(['ok'=>true,'results'=>$results,'total'=>count($results),'bad'=>count(array_filter($results,fn($r)=>$r['bad']))]);
+    exit;
+}
+
+/* ── AJAX: Repair bad slug ───────────────────────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'slug_repair' && is_admin()) {
+    header('Content-Type: application/json');
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id   = (int)($body['id'] ?? 0);
+    $type = in_array($body['type'] ?? '', ['app','article']) ? $body['type'] : 'app';
+    $action = in_array($body['action'] ?? '', ['rename','draft','delete']) ? $body['action'] : 'rename';
+    if (!$id) { echo json_encode(['ok'=>false,'error'=>'ID مطلوب']); exit; }
+
+    try {
+        if ($type === 'app') {
+            $row = $pdo->prepare("SELECT id,slug,name FROM apps WHERE id=?")->execute([$id]) ? null : null;
+            $st = $pdo->prepare("SELECT id,slug,name FROM apps WHERE id=?");
+            $st->execute([$id]);
+            $row = $st->fetch() ?: null;
+            if (!$row) { echo json_encode(['ok'=>false,'error'=>'التطبيق غير موجود']); exit; }
+            if ($action === 'rename') {
+                $newSlug = function_exists('slugify') ? slugify($row['name']) : preg_replace('/[^a-z0-9\-]/','',strtolower(str_replace(' ','-',$row['name'])));
+                if (!$newSlug) $newSlug = 'app-' . $id;
+                // Ensure uniqueness
+                $base = $newSlug; $i = 1;
+                while ($pdo->prepare("SELECT id FROM apps WHERE slug=? AND id!=?")->execute([$newSlug,$id]) && $pdo->query("SELECT COUNT(*) FROM apps WHERE slug=".($pdo->quote($newSlug))." AND id!={$id}")->fetchColumn() > 0) {
+                    $newSlug = $base . '-' . $i++;
+                }
+                $pdo->prepare("UPDATE apps SET slug=? WHERE id=?")->execute([$newSlug, $id]);
+                echo json_encode(['ok'=>true,'msg'=>"تم تغيير الـ slug من '{$row['slug']}' إلى '{$newSlug}'",'new_slug'=>$newSlug]);
+            } elseif ($action === 'draft') {
+                $pdo->prepare("UPDATE apps SET status='draft' WHERE id=?")->execute([$id]);
+                echo json_encode(['ok'=>true,'msg'=>"تم تحويل '{$row['name']}' إلى مسودة"]);
+            } elseif ($action === 'delete') {
+                $pdo->prepare("DELETE FROM apps WHERE id=?")->execute([$id]);
+                echo json_encode(['ok'=>true,'msg'=>"تم حذف '{$row['name']}'"]);
+            }
+        } else {
+            $st = $pdo->prepare("SELECT id,slug,title FROM app_articles WHERE id=?");
+            $st->execute([$id]);
+            $row = $st->fetch() ?: null;
+            if (!$row) { echo json_encode(['ok'=>false,'error'=>'المقالة غير موجودة']); exit; }
+            if ($action === 'rename') {
+                $newSlug = function_exists('slugify') ? slugify($row['title']) : preg_replace('/[^a-z0-9\-]/','',strtolower(str_replace(' ','-',$row['title'])));
+                if (!$newSlug) $newSlug = 'article-' . $id;
+                $base = $newSlug; $i = 1;
+                while ($pdo->query("SELECT COUNT(*) FROM app_articles WHERE slug=".($pdo->quote($newSlug))." AND id!={$id}")->fetchColumn() > 0) {
+                    $newSlug = $base . '-' . $i++;
+                }
+                $pdo->prepare("UPDATE app_articles SET slug=? WHERE id=?")->execute([$newSlug, $id]);
+                echo json_encode(['ok'=>true,'msg'=>"تم تغيير slug المقالة إلى '{$newSlug}'",'new_slug'=>$newSlug]);
+            } elseif ($action === 'delete') {
+                $pdo->prepare("DELETE FROM app_articles WHERE id=?")->execute([$id]);
+                echo json_encode(['ok'=>true,'msg'=>"تم حذف المقالة"]);
+            }
+        }
+    } catch (\Throwable $e) { echo json_encode(['ok'=>false,'error'=>$e->getMessage()]); }
+    exit;
+}
+
+/* ── AJAX: Crawl on/off toggle ───────────────────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'crawl_toggle' && is_admin()) {
+    header('Content-Type: application/json');
+    $state = $_GET['state'] ?? '';
+    if (!in_array($state, ['on','off'])) { echo json_encode(['ok'=>false,'error'=>'حالة غير صالحة']); exit; }
+    set_cfg($pdo, 'crawl_enabled', $state);
+    $msg = $state === 'on' ? 'تم تفعيل الزحف — محركات البحث يمكنها الآن الزحف على جميع الصفحات' : 'تم إيقاف الزحف — robots.txt سيُضيف Disallow: / لمنع محركات البحث';
+    echo json_encode(['ok'=>true,'state'=>$state,'msg'=>$msg]);
+    exit;
+}
+
+/* ── AJAX: Bulk delete Arabic-slug articles ─────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'delete_arabic_articles' && is_admin()) {
+    header('Content-Type: application/json');
+    try {
+        // Articles with Arabic characters in slug
+        $badArticles = $pdo->query("SELECT id,slug FROM app_articles WHERE slug REGEXP '[ء-ي]' OR slug LIKE '%\xd8%' OR slug LIKE '%\xd9%'")->fetchAll(PDO::FETCH_ASSOC);
+        $deleted = 0;
+        foreach ($badArticles as $a) {
+            $pdo->prepare("DELETE FROM app_articles WHERE id=?")->execute([$a['id']]);
+            $deleted++;
+        }
+        echo json_encode(['ok'=>true,'deleted'=>$deleted,'msg'=>"تم حذف {$deleted} مقالة تحتوي slugs بالعربية"]);
+    } catch (\Throwable $e) { echo json_encode(['ok'=>false,'error'=>$e->getMessage()]); }
+    exit;
+}
+
+/* ── AJAX: Claude Code & MCP — save connection settings ─────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'save_cc_settings' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    foreach (['claude_api_key','claude_project_id','claude_mcp_endpoint'] as $k) {
+        if (isset($input[$k])) set_cfg($pdo, $k, trim($input[$k]));
+    }
+    echo json_encode(['ok'=>true]);
+    exit;
+}
+
+/* ── AJAX: Claude Code & MCP — basic site info ───────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'site_info_basic' && is_admin()) {
+    header('Content-Type: application/json');
+    $diskFree  = @disk_free_space(__DIR__);
+    $diskTotal = @disk_total_space(__DIR__);
+    echo json_encode([
+        'ok' => true,
+        'php_version'   => phpversion(),
+        'site_url'      => defined('SITE_URL') ? SITE_URL : '',
+        'disk_free_gb'  => $diskFree  ? round($diskFree/1073741824,1) : null,
+        'disk_total_gb' => $diskTotal ? round($diskTotal/1073741824,1) : null,
+        'db_ok'         => true,
+        'memory_limit'  => ini_get('memory_limit'),
+        'max_execution' => ini_get('max_execution_time'),
+    ]);
+    exit;
+}
+
+/* ── AJAX: Claude Code & MCP — indexing health summary ───────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'indexing_status_basic' && is_admin()) {
+    header('Content-Type: application/json');
+    $totalApps = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published'")->fetchColumn();
+    $noTitle   = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (seo_title IS NULL OR seo_title='')")->fetchColumn();
+    $noDesc    = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (meta_description IS NULL OR meta_description='')")->fetchColumn();
+    $noContent = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (long_description IS NULL OR long_description='' OR LENGTH(long_description)<200)")->fetchColumn();
+    $noIcon    = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (icon_path IS NULL OR icon_path='')")->fetchColumn();
+    $noDl      = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (download_url IS NULL OR download_url='') AND (apk_path IS NULL OR apk_path='')")->fetchColumn();
+    $indexNowKey = get_cfg($pdo, 'indexnow_key', '');
+    echo json_encode([
+        'ok' => true,
+        'total_published' => $totalApps,
+        'issues' => [
+            'no_seo_title'    => $noTitle,
+            'no_meta_desc'    => $noDesc,
+            'thin_content'    => $noContent,
+            'no_icon'         => $noIcon,
+            'no_download_url' => $noDl,
+        ],
+        'health_score' => $totalApps > 0
+            ? round((1 - ($noTitle + $noDesc + $noContent) / (3 * $totalApps)) * 100)
+            : 0,
+        'indexnow_key_set' => $indexNowKey !== '',
+        'sitemap_url'      => defined('SITE_URL') ? rtrim(SITE_URL,'/') . '/sitemap.xml' : '',
+    ]);
+    exit;
+}
+
+/* ── AJAX: Claude Code & MCP — test Anthropic API key ────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'test_claude_api' && is_admin()) {
+    header('Content-Type: application/json');
+    $apiKey = get_cfg($pdo, 'claude_api_key', '');
+    if (!$apiKey) { echo json_encode(['ok'=>false,'error'=>'مفتاح Claude API غير مضبوط']); exit; }
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['x-api-key: ' . $apiKey, 'anthropic-version: 2023-06-01', 'content-type: application/json'],
+        CURLOPT_POSTFIELDS     => json_encode(['model'=>'claude-3-5-haiku-20241022','max_tokens'=>16,'messages'=>[['role'=>'user','content'=>'Reply with: CONNECTED']]]),
+    ]);
+    $resp = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $data = json_decode($resp, true) ?: [];
+    echo json_encode([
+        'ok'        => $httpCode === 200,
+        'http_code' => $httpCode,
+        'response'  => $data['content'][0]['text'] ?? ($data['error']['message'] ?? 'خطأ غير معروف'),
+    ]);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — fix missing SEO titles (rule-based, no AI call needed) ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_fix_titles' && is_admin()) {
+    header('Content-Type: application/json');
+    set_time_limit(60);
+    $apps = $pdo->query("SELECT id,name,version FROM apps WHERE status='published' AND (seo_title IS NULL OR seo_title='') LIMIT 50")->fetchAll();
+    $fixed = 0;
+    foreach ($apps as $a) {
+        $title = mb_substr($a['name'] . ($a['version'] ? ' v' . $a['version'] : '') . ' — تحميل مجاني للأندرويد ' . date('Y'), 0, 60);
+        $pdo->prepare("UPDATE apps SET seo_title=? WHERE id=?")->execute([$title, $a['id']]);
+        $fixed++;
+    }
+    echo json_encode(['ok'=>true,'fixed'=>$fixed,'message'=>"تم توليد عناوين لـ {$fixed} تطبيق"]);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — fix missing meta descriptions (rule-based) ─────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_fix_descs' && is_admin()) {
+    header('Content-Type: application/json');
+    set_time_limit(60);
+    $apps = $pdo->query("SELECT id,name,short_description FROM apps WHERE status='published' AND (meta_description IS NULL OR meta_description='') LIMIT 50")->fetchAll();
+    $fixed = 0;
+    foreach ($apps as $a) {
+        $desc = $a['short_description']
+            ? mb_substr($a['short_description'], 0, 155) . '.'
+            : "حمّل {$a['name']} مجاناً على أندرويد — أحدث إصدار برابط مباشر وسريع.";
+        $pdo->prepare("UPDATE apps SET meta_description=? WHERE id=?")->execute([$desc, $a['id']]);
+        $fixed++;
+    }
+    echo json_encode(['ok'=>true,'fixed'=>$fixed,'message'=>"تم توليد أوصاف لـ {$fixed} تطبيق"]);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — expand thin descriptions using the site's own AI keys ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_fix_thin' && is_admin()) {
+    header('Content-Type: application/json');
+    set_time_limit(180);
+    $apps = $pdo->query("SELECT id,name,short_description FROM apps WHERE status='published' AND (long_description IS NULL OR long_description='' OR LENGTH(long_description)<200) LIMIT 15")->fetchAll();
+    $keys  = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    $fixed = 0; $skipped = 0;
+    foreach ($apps as $a) {
+        if (!$keys) { $skipped++; continue; }
+        $prompt = "اكتب وصفاً احترافياً فريداً لتطبيق أندرويد اسمه \"{$a['name']}\" بأسلوب SEO محسّن، لا يقل عن 300 كلمة، "
+                . "يغطي: نظرة عامة، الميزات الرئيسية، لمن يناسب، وكيفية الاستخدام. اكتب بالعربية فقط، بدون وسوم HTML.";
+        $result = openrouter_call_rotating($keys, build_model_rotation($pdo), $prompt);
+        if ($result['ok'] && mb_strlen($result['content']) > 200) {
+            $pdo->prepare("UPDATE apps SET long_description=? WHERE id=?")->execute([trim($result['content']), $a['id']]);
+            $fixed++;
+        } else { $skipped++; }
+    }
+    $msg = $keys ? "تم توسيع محتوى {$fixed} تطبيق" . ($skipped ? " (تعذّر توليد {$skipped})" : '')
+                 : 'لا يوجد مفتاح OpenRouter مضبوط — أضفه من الإعدادات لتفعيل هذا الإصلاح';
+    echo json_encode(['ok'=>(bool)$keys,'fixed'=>$fixed,'skipped'=>$skipped,'message'=>$msg]);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — ping sitemap at Google & Bing ──────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_ping_sitemap' && is_admin()) {
+    header('Content-Type: application/json');
+    $sm = defined('SITE_URL') ? rtrim(SITE_URL,'/') . '/sitemap.xml' : '';
+    $results = [];
+    if ($sm) {
+        foreach (['Google' => 'https://www.google.com/ping?sitemap=', 'Bing' => 'https://www.bing.com/ping?sitemap='] as $engine => $base) {
+            $ch = curl_init($base . urlencode($sm));
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER=>true, CURLOPT_TIMEOUT=>8, CURLOPT_FOLLOWLOCATION=>true]);
+            curl_exec($ch);
+            $results[$engine] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+        }
+    }
+    echo json_encode(['ok'=>true,'results'=>$results,'sitemap'=>$sm,'message'=>'تم إرسال Sitemap لـ Google & Bing']);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — add missing internal category links in long descriptions ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_fix_links' && is_admin()) {
+    header('Content-Type: application/json');
+    $cats = $pdo->query("SELECT id,slug,name FROM categories")->fetchAll();
+    $catMap = [];
+    foreach ($cats as $c) $catMap[$c['id']] = $c;
+    $apps = $pdo->query("SELECT id,name,category_id,long_description FROM apps WHERE status='published' AND long_description IS NOT NULL AND long_description!='' LIMIT 50")->fetchAll();
+    $fixed = 0;
+    foreach ($apps as $a) {
+        $ld = $a['long_description'];
+        if (str_contains($ld, 'category/')) continue;
+        $cat = $catMap[$a['category_id']] ?? null;
+        if (!$cat) continue;
+        $catUrl = url('category/' . rawurlencode($cat['slug']));
+        $ld .= "\n\nانظر أيضاً: تصفح جميع تطبيقات {$cat['name']} على {$catUrl}";
+        $pdo->prepare("UPDATE apps SET long_description=? WHERE id=?")->execute([$ld, $a['id']]);
+        $fixed++;
+    }
+    echo json_encode(['ok'=>true,'fixed'=>$fixed,'message'=>"تم إضافة روابط داخلية لـ {$fixed} تطبيق"]);
+    exit;
+}
+
+/* ── AJAX: Orbit AI — free-form task planner (plans only; real execution stays
+   manual via the dedicated fix buttons or Claude Code — an AI-authored plan
+   auto-applying arbitrary DB writes from a text box is not something we allow) ── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'orbit_ai_task' && is_admin()) {
+    header('Content-Type: application/json');
+    set_time_limit(60);
+    $input  = json_decode(file_get_contents('php://input'), true) ?: [];
+    $prompt = trim($input['prompt'] ?? '');
+    if (!$prompt) { echo json_encode(['ok'=>false,'error'=>'الطلب فارغ']); exit; }
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) { echo json_encode(['ok'=>false,'error'=>'لا يوجد مفتاح OpenRouter مضبوط — أضفه من الإعدادات']); exit; }
+    $fullPrompt = "أنت مساعد إدارة موقع متخصص في SEO لمتجر تطبيقات أندرويد عربي. "
+                . "عندما يطلب المدير مهمة، اكتب خطة تنفيذ واضحة مرقمة من 3 إلى 8 خطوات فقط — لا تنفّذ شيئاً فعلياً.\n\n"
+                . "المهمة المطلوبة:\n{$prompt}";
+    $result = openrouter_call_rotating($keys, build_model_rotation($pdo), $fullPrompt);
+    echo json_encode([
+        'ok'   => $result['ok'],
+        'plan' => $result['ok'] ? $result['content'] : null,
+        'error'=> $result['ok'] ? null : 'تعذّر الاتصال بالذكاء الاصطناعي',
+        'note' => 'هذه خطة اقتراحية فقط. للتنفيذ الفعلي استخدم أزرار الإصلاح المخصصة أعلاه، أو Claude Code.',
+    ]);
     exit;
 }
 
@@ -7296,6 +7644,8 @@ $navLinks = [
     'admin-users' => ['label'=>'المشرفون والنشاط', 'icon'=>'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M9 7a4 4 0 100 8 4 4 0 000-8z'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
     'deploy'    => ['label'=>'اتصال السيرفر', 'icon'=>'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'],
+    'claude-connect' => ['label'=>'Claude Code & MCP', 'icon'=>'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'],
+    'orbit-ai'  => ['label'=>'Orbit AI — إصلاح الفهرسة', 'icon'=>'M9 3v18m6-18v18M3 9h18M3 15h18'],
 ];
 ?>
 <!DOCTYPE html>
@@ -12346,6 +12696,7 @@ function submitSitemapNow() {
 }
 </script>
 
+<?php
 /* ─────────────── YASMIN MANAGEMENT ─────────────── */
 elseif ($page === 'yasmin'):
   $yasminKeys = openrouter_keys(get_cfg($pdo, 'yasmin_api_keys', ''));
@@ -18136,52 +18487,100 @@ function deleteRead() {
 
 <?php if ($page === 'sitemap-health'): ?>
 <?php
-$sitemapApps  = $pdo->query("SELECT slug, name, updated_at FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
-$loggedUrls   = $pdo->query("SELECT * FROM sitemap_url_log ORDER BY checked_at DESC LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
-$totalHealthy = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=1")->fetchColumn();
-$totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=0 AND http_code > 0")->fetchColumn();
+$sitemapApps  = [];
+$loggedUrls   = [];
+$totalHealthy = 0;
+$totalDead    = 0;
+$crawlEnabled = get_cfg($pdo, 'crawl_enabled', 'on');
+$arabicApps   = 0;
+try {
+    $sitemapApps = $pdo->query("SELECT id, slug, name, updated_at FROM apps WHERE status='published' ORDER BY updated_at DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
+    $loggedUrls  = $pdo->query("SELECT * FROM sitemap_url_log ORDER BY checked_at DESC LIMIT 1000")->fetchAll(PDO::FETCH_ASSOC);
+    $totalHealthy = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=1")->fetchColumn();
+    $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_healthy=0")->fetchColumn();
+    // Count apps with Arabic slugs
+    try {
+        $arabicApps = (int)$pdo->query("SELECT COUNT(*) FROM apps WHERE status='published' AND (slug REGEXP '[ء-ي]' OR slug LIKE '%\xd8%' OR slug LIKE '%\xd9%' OR slug LIKE '%\xe2%')")->fetchColumn();
+    } catch (\Throwable $e) { $arabicApps = 0; }
+} catch (\Throwable $e) {}
 ?>
-<div class="admin-card">
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-    <span style="font-size:24px">🗺️</span>
+
+<!-- ═══ Crawl Control ═══ -->
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div>
-      <h2 style="margin:0;font-size:20px">صحة Sitemap</h2>
-      <p style="margin:0;color:var(--text-muted);font-size:13px">فحص وتنظيف المسارات — <?= count($sitemapApps) ?> تطبيق منشور</p>
+      <h3 style="margin:0;font-size:15px">🤖 التحكم بالزحف (Crawl)</h3>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">التبديل يؤثر على robots.txt — إيقاف الزحف يضيف Disallow: / لمنع جميع محركات البحث مؤقتاً</p>
+    </div>
+    <div style="margin-right:auto;display:flex;align-items:center;gap:12px">
+      <span id="crawl-status-label" style="font-size:13px;font-weight:700;color:<?= $crawlEnabled !== 'off' ? '#22c55e' : '#ef4444' ?>">
+        <?= $crawlEnabled !== 'off' ? '🟢 الزحف مفعّل' : '🔴 الزحف متوقف' ?>
+      </span>
+      <!-- Toggle switch -->
+      <label style="position:relative;display:inline-block;width:48px;height:26px;cursor:pointer">
+        <input type="checkbox" id="crawl-toggle" <?= $crawlEnabled !== 'off' ? 'checked' : '' ?> onchange="toggleCrawl(this)" style="opacity:0;width:0;height:0">
+        <span style="position:absolute;inset:0;border-radius:13px;background:<?= $crawlEnabled !== 'off' ? '#22c55e' : '#cbd5e1' ?>;transition:background .3s" id="crawl-slider">
+          <span style="position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;transition:left .3s;left:<?= $crawlEnabled !== 'off' ? '25px' : '3px' ?>" id="crawl-dot"></span>
+        </span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Sitemap Health ═══ -->
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:20px">🗺️</span>
+    <div>
+      <h3 style="margin:0;font-size:15px">صحة Sitemap وفحص المسارات</h3>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--muted)"><?= count($sitemapApps) ?> تطبيق منشور<?php if ($arabicApps > 0): ?> · <span style="color:#ef4444"><?= $arabicApps ?> لهم slugs عربية تضر الفهرسة</span><?php endif; ?></p>
     </div>
     <div style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="runHealthCheck()" id="btn-check" class="btn btn-sm" style="background:var(--primary);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">🔍 فحص المسارات</button>
-      <button onclick="runPrune()" class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">🗑️ تنظيف المعطوب</button>
+      <button onclick="runHealthCheck()" id="btn-check" class="btn btn-sm" style="background:var(--primary);color:#fff">🔍 فحص المسارات</button>
+      <button onclick="runPrune()" id="btn-prune" class="btn btn-sm" style="background:var(--danger);color:#fff">🗑️ إصلاح وتنظيف المعطوب</button>
+      <?php if ($arabicApps > 0): ?>
+      <button onclick="runSlugAnalysis()" class="btn btn-sm" style="background:#f59e0b;color:#fff">📊 تقييم Slugs</button>
+      <?php endif; ?>
     </div>
   </div>
 
-  <!-- Stats -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px">
-    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
-      <div style="font-size:24px;font-weight:700;color:#22c55e"><?= $totalHealthy ?></div>
-      <div style="font-size:12px;color:var(--text-muted)">سليمة</div>
+  <!-- Stats row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px">
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:#22c55e"><?= $totalHealthy ?></div>
+      <div style="font-size:11px;color:var(--muted)">سليمة</div>
     </div>
-    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
-      <div style="font-size:24px;font-weight:700;color:#ef4444"><?= $totalDead ?></div>
-      <div style="font-size:12px;color:var(--text-muted)">معطوبة</div>
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:#ef4444"><?= $totalDead ?></div>
+      <div style="font-size:11px;color:var(--muted)">معطوبة</div>
     </div>
-    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px;text-align:center">
-      <div style="font-size:24px;font-weight:700;color:var(--primary)"><?= count($sitemapApps) ?></div>
-      <div style="font-size:12px;color:var(--text-muted)">تطبيقات منشورة</div>
+    <div style="background:var(--bg-elevated);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:var(--primary)"><?= count($sitemapApps) ?></div>
+      <div style="font-size:11px;color:var(--muted)">تطبيقات</div>
     </div>
+    <?php if ($arabicApps > 0): ?>
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:#ef4444"><?= $arabicApps ?></div>
+      <div style="font-size:11px;color:var(--muted)">slugs عربية</div>
+    </div>
+    <?php endif; ?>
   </div>
 
-  <!-- Progress area -->
-  <div id="check-progress" style="display:none;margin-bottom:16px">
+  <!-- Progress -->
+  <div id="check-progress" style="display:none;margin-bottom:14px">
     <div style="background:var(--bg-elevated);border-radius:8px;padding:12px">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:13px">جارٍ الفحص...</span>
-        <span id="check-count" style="font-size:13px;color:var(--text-muted)">0 / 0</span>
+        <span id="progress-label" style="font-size:13px">جارٍ الفحص...</span>
+        <span id="check-count" style="font-size:13px;color:var(--muted)">0 / 0</span>
       </div>
       <div style="background:var(--border);border-radius:4px;height:6px">
         <div id="check-bar" style="background:var(--primary);border-radius:4px;height:6px;width:0%;transition:width 0.3s"></div>
       </div>
     </div>
   </div>
+
+  <!-- Prune result banner -->
+  <div id="prune-result" style="display:none;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px"></div>
 
   <!-- Results table -->
   <div style="overflow-x:auto">
@@ -18191,7 +18590,7 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
       </tr></thead>
       <tbody id="health-body">
       <?php if (empty($loggedUrls)): ?>
-      <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:30px">لم يتم الفحص بعد — اضغط "فحص المسارات"</td></tr>
+      <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">لم يتم الفحص بعد — اضغط "فحص المسارات"</td></tr>
       <?php else: foreach ($loggedUrls as $lu): ?>
       <tr>
         <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
@@ -18199,75 +18598,503 @@ $totalDead    = (int)$pdo->query("SELECT COUNT(*) FROM sitemap_url_log WHERE is_
         </td>
         <td><span style="font-weight:700;color:<?= $lu['is_healthy'] ? '#22c55e' : '#ef4444' ?>"><?= (int)$lu['http_code'] ?></span></td>
         <td><?= $lu['is_healthy'] ? '<span style="color:#22c55e">✅ سليم</span>' : '<span style="color:#ef4444">❌ معطوب</span>' ?></td>
-        <td style="font-size:11px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis"><?= h($lu['redirects_to'] ?? '—') ?></td>
-        <td style="font-size:11px;color:var(--text-muted)"><?= h($lu['checked_at']) ?></td>
+        <td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis"><?= h($lu['redirects_to'] ?? '—') ?></td>
+        <td style="font-size:11px;color:var(--muted)"><?= h($lu['checked_at']) ?></td>
       </tr>
       <?php endforeach; endif; ?>
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- ═══ SLUG Rating System ═══ -->
+<div class="panel" id="slug-rating-panel" style="display:none;margin-bottom:16px">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <h3 style="margin:0;font-size:15px">📊 تقييم جودة الـ Slugs (0–100%)</h3>
+    <div style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="runSlugAnalysis('apps')" class="btn btn-sm" style="background:var(--primary);color:#fff">تطبيقات</button>
+      <button onclick="runSlugAnalysis('articles')" class="btn btn-sm">مقالات</button>
+      <button onclick="deleteArabicArticles()" class="btn btn-sm" style="background:#ef4444;color:#fff">🗑️ حذف المقالات ذات Slugs عربية</button>
+    </div>
+  </div>
+  <div id="slug-rating-summary" style="display:none;margin-bottom:14px"></div>
+  <div style="overflow-x:auto">
+    <table class="admin-table" id="slug-table">
+      <thead><tr>
+        <th>الاسم</th><th>Slug</th><th>التقييم</th><th>المشاكل</th><th>إجراء</th>
+      </tr></thead>
+      <tbody id="slug-body">
+        <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">اضغط "تطبيقات" أو "مقالات" لبدء التقييم</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 (function(){
   var appUrls = <?= json_encode(array_values(array_map(fn($a) => SITE_URL . '/' . rawurlencode($a['slug']), $sitemapApps))) ?>;
   var staticUrls = [
     '<?= SITE_URL ?>/', '<?= SITE_URL ?>/blog', '<?= SITE_URL ?>/about',
-    '<?= SITE_URL ?>/contact', '<?= SITE_URL ?>/privacy-policy', '<?= SITE_URL ?>/terms',
-    '<?= SITE_URL ?>/exchange', '<?= SITE_URL ?>/gold', '<?= SITE_URL ?>/calculators',
-    '<?= SITE_URL ?>/solar', '<?= SITE_URL ?>/tools'
+    '<?= SITE_URL ?>/privacy-policy', '<?= SITE_URL ?>/terms',
+    '<?= SITE_URL ?>/exchange', '<?= SITE_URL ?>/gold', '<?= SITE_URL ?>/tools'
   ];
   var allUrls = staticUrls.concat(appUrls);
 
-  async function runHealthCheck() {
+  /* ── Crawl toggle ── */
+  window.toggleCrawl = async function(cb) {
+    var state = cb.checked ? 'on' : 'off';
+    var slider = document.getElementById('crawl-slider');
+    var dot    = document.getElementById('crawl-dot');
+    var label  = document.getElementById('crawl-status-label');
+    try {
+      var resp = await fetch('admin.php?ajax=crawl_toggle&state='+state);
+      var data = await resp.json();
+      if (data.ok) {
+        slider.style.background = state==='on' ? '#22c55e' : '#cbd5e1';
+        dot.style.left = state==='on' ? '25px' : '3px';
+        label.style.color = state==='on' ? '#22c55e' : '#ef4444';
+        label.textContent = state==='on' ? '🟢 الزحف مفعّل' : '🔴 الزحف متوقف';
+        alert(data.msg);
+      } else {
+        cb.checked = !cb.checked; // revert
+        alert('خطأ: ' + (data.error||''));
+      }
+    } catch(e) { cb.checked = !cb.checked; }
+  };
+
+  /* ── Health check ── */
+  window.runHealthCheck = async function() {
     var btn = document.getElementById('btn-check');
-    btn.disabled = true;
-    btn.textContent = '⏳ جارٍ الفحص...';
+    btn.disabled = true; btn.textContent = '⏳ جارٍ الفحص...';
     document.getElementById('check-progress').style.display = 'block';
-    document.getElementById('health-body').innerHTML = '';
-    var total = allUrls.length;
-    var done  = 0;
-    var batchSize = 10;
+    document.getElementById('progress-label').textContent = 'جارٍ فحص المسارات...';
+    document.getElementById('health-body').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">⏳ جارٍ الفحص...</td></tr>';
+    var total = allUrls.length, done = 0, batchSize = 10;
 
     for (var i = 0; i < allUrls.length; i += batchSize) {
-      var batch = allUrls.slice(i, i + batchSize);
+      var batch = allUrls.slice(i, i+batchSize);
       try {
-        var resp = await fetch('admin.php?ajax=sitemap_health_check', {
+        var r = await fetch('admin.php?ajax=sitemap_health_check', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({urls: batch})
         });
-        var data = await resp.json();
-        if (data.results) {
-          data.results.forEach(function(r){
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="'+r.url+'" target="_blank" style="color:var(--primary);font-size:12px">'+r.url+'</a></td>'
-              + '<td><span style="font-weight:700;color:'+(r.healthy?'#22c55e':'#ef4444')+'">'+r.code+'</span></td>'
-              + '<td>'+(r.healthy?'<span style="color:#22c55e">✅ سليم</span>':'<span style="color:#ef4444">❌ معطوب</span>')+'</td>'
-              + '<td style="font-size:11px;color:var(--text-muted)">'+(r.redirects_to||'—')+'</td>'
-              + '<td style="font-size:11px;color:var(--text-muted)">الآن</td>';
-            document.getElementById('health-body').appendChild(tr);
-          });
-        }
+        var d = await r.json();
+        if (i === 0) document.getElementById('health-body').innerHTML = '';
+        if (d.results) d.results.forEach(function(res){
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="'+res.url+'" target="_blank" style="color:var(--primary);font-size:12px">'+res.url+'</a></td>'
+            + '<td><b style="color:'+(res.healthy?'#22c55e':'#ef4444')+'">'+res.code+'</b></td>'
+            + '<td>'+(res.healthy?'<span style="color:#22c55e">✅ سليم</span>':'<span style="color:#ef4444">❌ معطوب</span>')+'</td>'
+            + '<td style="font-size:11px;color:var(--muted)">'+(res.redirects_to||'—')+'</td>'
+            + '<td style="font-size:11px;color:var(--muted)">الآن</td>';
+          document.getElementById('health-body').appendChild(tr);
+        });
       } catch(e) {}
       done += batch.length;
       document.getElementById('check-count').textContent = done + ' / ' + total;
-      document.getElementById('check-bar').style.width = Math.round(done/total*100) + '%';
+      document.getElementById('check-bar').style.width = Math.round(done/total*100)+'%';
     }
+    btn.disabled = false; btn.textContent = '🔍 فحص المسارات';
+  };
 
-    btn.disabled = false;
-    btn.textContent = '🔍 فحص المسارات';
+  /* ── Prune / fix broken ── */
+  window.runPrune = async function() {
+    if (!confirm('إصلاح المسارات المعطوبة؟\n• الروابط الخاطئة تُرسَل لـ Google كـ URL_DELETED\n• الروابط الصحيحة تُعاد فهرستها\n\nتأكد من ضغط "فحص المسارات" أولاً.')) return;
+    var btn = document.getElementById('btn-prune');
+    btn.disabled = true; btn.textContent = '⏳ جارٍ الإصلاح...';
+    try {
+      var r = await fetch('admin.php?ajax=sitemap_prune', {method:'POST'});
+      var d = await r.json();
+      btn.disabled = false; btn.textContent = '🗑️ إصلاح وتنظيف المعطوب';
+      var total = (d.pruned||0) + (d.fixed||0);
+      var resultDiv = document.getElementById('prune-result');
+      resultDiv.style.display = 'block';
+      if (total > 0) {
+        resultDiv.style.background = 'rgba(34,197,94,.08)';
+        resultDiv.style.borderColor = 'rgba(34,197,94,.3)';
+        resultDiv.innerHTML = '✅ <b>تم معالجة '+total+' مسار:</b><br>'
+          + '• '+d.fixed+' مسار صحيح أُعيدت فهرسته<br>'
+          + '• '+d.pruned+' مسار أُرسِل لـ Google كـ URL_DELETED<br>'
+          + '• '+d.deindex_count+' رابط خاطئ تم تقديمه للحذف من الفهرسة';
+      } else {
+        resultDiv.style.background = 'rgba(245,158,11,.08)';
+        resultDiv.style.borderColor = 'rgba(245,158,11,.3)';
+        resultDiv.innerHTML = '⚠️ لا توجد مسارات معطوبة للمعالجة. اضغط "فحص المسارات" لتسجيل الحالة أولاً.';
+      }
+    } catch(e) { btn.disabled=false; btn.textContent='🗑️ إصلاح وتنظيف المعطوب'; alert('خطأ في الشبكة'); }
+  };
+
+  /* ── SLUG analysis ── */
+  var _slugType = 'apps';
+  window.runSlugAnalysis = async function(type) {
+    _slugType = type || _slugType;
+    document.getElementById('slug-rating-panel').style.display = 'block';
+    document.getElementById('slug-rating-panel').scrollIntoView({behavior:'smooth',block:'start'});
+    document.getElementById('slug-body').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">⏳ جارٍ التحليل...</td></tr>';
+    document.getElementById('slug-rating-summary').style.display = 'none';
+    try {
+      var r = await fetch('admin.php?ajax=slug_analysis&type='+_slugType);
+      var d = await r.json();
+      if (!d.ok) { alert('خطأ: '+d.error); return; }
+      var sumDiv = document.getElementById('slug-rating-summary');
+      var pct = d.total > 0 ? Math.round((d.total-d.bad)/d.total*100) : 100;
+      var color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+      sumDiv.style.display = 'flex';
+      sumDiv.style.cssText += ';gap:16px;align-items:center;background:var(--bg-elevated);border-radius:8px;padding:12px';
+      sumDiv.innerHTML = '<div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:'+color+'">'+pct+'%</div><div style="font-size:11px;color:var(--muted)">جودة إجمالية</div></div>'
+        + '<div style="flex:1"><div style="font-size:13px">إجمالي: <b>'+d.total+'</b> · جيدة: <b style="color:#22c55e">'+(d.total-d.bad)+'</b> · تحتاج إصلاح: <b style="color:#ef4444">'+d.bad+'</b></div>'
+        + '<div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:6px;background:'+color+';border-radius:3px;width:'+pct+'%;transition:width .5s"></div></div></div>';
+
+      var tbody = document.getElementById('slug-body');
+      tbody.innerHTML = '';
+      d.results.forEach(function(item){
+        var scoreColor = item.score >= 80 ? '#22c55e' : item.score >= 50 ? '#f59e0b' : '#ef4444';
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td style="font-size:13px">'+escHtml(item.name)+'</td>'
+          + '<td><code style="font-size:11px;background:var(--bg-elevated);padding:2px 6px;border-radius:4px">'+escHtml(item.slug)+'</code></td>'
+          + '<td><div style="display:flex;align-items:center;gap:8px">'
+          + '<div style="width:60px;height:6px;background:var(--border);border-radius:3px"><div style="height:6px;width:'+item.score+'%;background:'+scoreColor+';border-radius:3px"></div></div>'
+          + '<b style="color:'+scoreColor+';font-size:13px">'+item.score+'%</b>'
+          + '<span style="background:'+scoreColor+'20;color:'+scoreColor+';font-size:10px;padding:1px 5px;border-radius:4px;font-weight:700">'+item.grade+'</span>'
+          + '</div></td>'
+          + '<td style="font-size:11px;color:var(--muted)">'+(item.issues.length ? item.issues.join('، ') : '—')+'</td>'
+          + '<td>'+(item.bad
+            ? '<div style="display:flex;gap:4px">'
+              +'<button onclick="repairSlug('+item.id+',\''+_slugType.replace('s','')+'\',\'rename\')" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:var(--primary);color:#fff">✏️ إصلاح</button>'
+              +'<button onclick="repairSlug('+item.id+',\''+_slugType.replace('s','')+'\',\'draft\')" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:#f59e0b;color:#fff">📋 مسودة</button>'
+              +'<button onclick="repairSlug('+item.id+',\''+_slugType.replace('s','')+'\',\'delete\')" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:#ef4444;color:#fff">🗑️</button>'
+              +'</div>'
+            : '<span style="color:#22c55e;font-size:11px">✅ جيد</span>')+'</td>';
+        tbody.appendChild(tr);
+      });
+    } catch(e) { alert('خطأ: '+e.message); }
+  };
+
+  /* ── Repair a single slug ── */
+  window.repairSlug = async function(id, type, action) {
+    var labels = {rename:'إعادة تسمية الـ Slug تلقائياً',draft:'تحويل إلى مسودة',delete:'حذف نهائي'};
+    if (!confirm(labels[action] + '?\nID: ' + id)) return;
+    try {
+      var r = await fetch('admin.php?ajax=slug_repair', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id:id, type:type, action:action})
+      });
+      var d = await r.json();
+      if (d.ok) {
+        alert('✅ ' + d.msg);
+        runSlugAnalysis(_slugType);
+      } else {
+        alert('❌ ' + (d.error||'فشل'));
+      }
+    } catch(e) { alert('خطأ: '+e.message); }
+  };
+
+  /* ── Delete Arabic articles ── */
+  window.deleteArabicArticles = async function() {
+    if (!confirm('حذف جميع المقالات التي تحتوي slugs بحروف عربية؟\nهذه هي المقالات التي تضر الفهرسة وتسبب تدهور ترتيب الموقع.')) return;
+    try {
+      var r = await fetch('admin.php?ajax=delete_arabic_articles');
+      var d = await r.json();
+      alert(d.ok ? '✅ ' + d.msg : '❌ ' + d.error);
+      if (d.ok) runSlugAnalysis('articles');
+    } catch(e) { alert('خطأ'); }
+  };
+
+  function escHtml(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
-  async function runPrune() {
-    if (!confirm('تنظيف التطبيقات ذات الروابط المعطوبة وتحويلها إلى مسودة؟')) return;
-    var resp = await fetch('admin.php?ajax=sitemap_prune', {method:'POST'});
-    var data = await resp.json();
-    alert('تم تنظيف ' + (data.pruned||0) + ' تطبيق');
-    location.reload();
-  }
-
-  window.runHealthCheck = runHealthCheck;
-  window.runPrune = runPrune;
 })();
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'claude-connect'):
+  $cc_endpoint = get_cfg($pdo, 'claude_mcp_endpoint', '');
+  $cc_api_key  = get_cfg($pdo, 'claude_api_key', '');
+  $cc_project  = get_cfg($pdo, 'claude_project_id', '');
+?>
+<div class="admin-header">
+  <h1>🤖 Claude Code & MCP — الاتصال بالموقع</h1>
+  <p style="color:var(--muted);font-size:13px">
+    اربط Claude Code بموقعك عبر MCP (Model Context Protocol) لتعديل الملفات والمحتوى مباشرةً من بيئتك المحلية.
+    ملاحظة: هذا القسم يضبط بيانات الاتصال فقط — Claude يعمل من جهازك (أو بيئة Claude Code الخاصة بك)
+    ويتصل بالموقع عبر SSH/cPanel أو Git، وليس من داخل هذه اللوحة.
+  </p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+  <div class="stat-card"><div class="stat-value" id="cc-stat-conn">—</div><div class="stat-label">حالة قاعدة البيانات</div></div>
+  <div class="stat-card"><div class="stat-value" style="font-size:20px"><?= phpversion() ?></div><div class="stat-label">إصدار PHP</div></div>
+  <div class="stat-card"><div class="stat-value" style="font-size:12px"><?= h(defined('SITE_URL') ? rtrim(SITE_URL,'/') : '—') ?></div><div class="stat-label">عنوان الموقع</div></div>
+  <div class="stat-card"><div class="stat-value" id="cc-disk">—</div><div class="stat-label">مساحة القرص</div></div>
+</div>
+
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap" id="cc-tabs">
+  <button class="btn btn-sm" onclick="ccTab('setup')" id="cct-setup" style="background:var(--primary);color:#fff">⚙️ الإعداد</button>
+  <button class="btn btn-sm" onclick="ccTab('mcp')"   id="cct-mcp">🔌 MCP Config</button>
+  <button class="btn btn-sm" onclick="ccTab('test')"  id="cct-test">🧪 اختبار الاتصال</button>
+  <button class="btn btn-sm" onclick="ccTab('docs')"  id="cct-docs">📖 التوثيق</button>
+</div>
+
+<div class="panel" id="cc-tab-setup">
+  <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">⚙️ بيانات الاتصال</h3>
+  <div style="margin-bottom:16px">
+    <label class="form-label">مفتاح Claude API (اختياري — من console.anthropic.com)</label>
+    <input class="form-input" id="cc-api-key" type="password" dir="ltr" placeholder="sk-ant-api03-..." value="<?= h($cc_api_key) ?>" style="font-family:var(--f-mono)">
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">
+      يُستخدم فقط لاختبار الاتصال بـ Claude API من هذه اللوحة — Claude Code نفسه لا يحتاج هذا المفتاح إذا كنت مسجلاً بحسابك الشخصي.
+      احصل عليه من <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--primary)">console.anthropic.com/settings/keys</a>
+    </p>
+  </div>
+  <div style="margin-bottom:16px">
+    <label class="form-label">Project ID (اختياري)</label>
+    <input class="form-input" id="cc-project" type="text" dir="ltr" placeholder="proj_..." value="<?= h($cc_project) ?>" style="font-family:var(--f-mono)">
+  </div>
+  <div style="margin-bottom:16px">
+    <label class="form-label">ملاحظات الاتصال (اختياري — رابط MCP endpoint خاص إن وُجد)</label>
+    <input class="form-input" id="cc-endpoint" type="url" dir="ltr" placeholder="https://example.com/mcp-server.php" value="<?= h($cc_endpoint) ?>" style="font-family:var(--f-mono)">
+  </div>
+  <button onclick="saveCCSettings()" class="btn-save" style="padding:10px 24px">💾 حفظ الإعدادات</button>
+</div>
+
+<div class="panel" id="cc-tab-mcp" style="display:none">
+  <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">🔌 الاتصال الفعلي من Claude Code</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+    Claude Code يعمل خارج هذا الموقع (على جهازك أو بيئة سحابية). الطريقة الفعلية للاتصال بالسيرفر هي عبر
+    SSH إلى استضافة cPanel، أو عبر Git (كما نعمل الآن على فرع <code style="font-size:11px">claude/app-store-platform-rebuild-l83ig3</code>).
+  </p>
+  <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:14px;margin-bottom:14px">
+    <h4 style="margin:0 0 8px;font-size:14px">⚠️ تنبيه أمني</h4>
+    <p style="margin:0;font-size:13px;line-height:1.8">
+      لا تُرسل مفاتيح SSH الخاصة (private keys) في محادثات الدردشة أو ترفعها هنا — أي مفتاح خاص يُشارك بهذه الطريقة
+      يجب اعتباره مخترقاً وإعادة توليده فوراً من cPanel.
+    </p>
+  </div>
+  <ol style="margin:0;padding-right:20px;font-size:13px;line-height:2;color:var(--text)">
+    <li>ثبّت Claude Code محلياً: <code style="font-size:11px">npm install -g @anthropic-ai/claude-code</code></li>
+    <li>استنسخ مستودع الموقع عبر Git، أو اتصل بالسيرفر عبر SSH من بيئتك (وليس من داخل هذه اللوحة)</li>
+    <li>اعمل على فرع منفصل، ثم ادفع (push) التغييرات ليتم رفعها للسيرفر</li>
+    <li>لإصلاح مشاكل الفهرسة تلقائياً، استخدم قسم "Orbit AI" المجاور لهذا القسم</li>
+  </ol>
+</div>
+
+<div class="panel" id="cc-tab-test" style="display:none">
+  <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">🧪 اختبار الاتصال بـ Claude API</h3>
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button onclick="testClaudeAPI()" class="btn-ai">🧪 اختبار Claude API</button>
+    <button onclick="testSiteInfo()" class="btn-edit" style="padding:10px 18px">📊 معلومات الموقع</button>
+    <button onclick="testIndexingStatus()" class="btn-edit" style="padding:10px 18px">🔍 حالة الفهرسة</button>
+  </div>
+  <div id="cc-test-result" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;min-height:80px;font-family:var(--f-mono);font-size:12px;white-space:pre-wrap;direction:ltr;display:none"></div>
+</div>
+
+<div class="panel" id="cc-tab-docs" style="display:none">
+  <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">📖 دليل الاستخدام</h3>
+  <div style="display:grid;gap:12px">
+    <?php
+    $ccSteps = [
+      ['📦', 'ثبّت Claude Code', 'في الطرفية: npm install -g @anthropic-ai/claude-code', 'https://docs.anthropic.com/en/docs/claude-code'],
+      ['🔑', 'سجّل دخولك', 'شغّل claude في مجلد المشروع وسجّل الدخول بحسابك — لا حاجة لصق مفاتيح API يدوياً في العادة.', null],
+      ['🌿', 'اعمل على فرع مخصص', 'أنشئ فرع Git منفصل قبل أي تعديل، وادفعه بعد المراجعة.', null],
+      ['🚀', 'إصلاح الفهرسة', 'استخدم أزرار "Orbit AI" لإصلاح العناوين والأوصاف وإعادة إرسال Sitemap تلقائياً.', null],
+    ];
+    foreach ($ccSteps as $i => [$icon, $title, $desc, $link]): ?>
+    <div style="display:flex;gap:14px;padding:14px;border:1px solid var(--border);border-radius:10px">
+      <div style="font-size:28px;flex-shrink:0;width:36px;text-align:center"><?= $icon ?></div>
+      <div>
+        <div style="font-weight:700;margin-bottom:4px"><?= ($i+1) ?>. <?= h($title) ?></div>
+        <div style="font-size:13px;color:var(--muted)"><?= h($desc) ?></div>
+        <?php if ($link): ?><a href="<?= h($link) ?>" target="_blank" style="font-size:12px;color:var(--primary);margin-top:4px;display:inline-block">🔗 <?= h($link) ?></a><?php endif; ?>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+
+<script>
+function ccTab(name) {
+  ['setup','mcp','test','docs'].forEach(t => {
+    document.getElementById('cc-tab-'+t).style.display = t===name?'':'none';
+    const btn = document.getElementById('cct-'+t);
+    if (btn) { btn.style.background = t===name?'var(--primary)':''; btn.style.color = t===name?'#fff':''; }
+  });
+}
+async function fetchCCDiskInfo() {
+  try {
+    const r = await fetch('admin.php?ajax=site_info_basic');
+    const d = await r.json();
+    if (d.disk_free_gb) document.getElementById('cc-disk').textContent = d.disk_free_gb + ' GB حر';
+    document.getElementById('cc-stat-conn').textContent = d.db_ok ? '✅ متصل' : '❌ خطأ';
+  } catch(e) {}
+}
+fetchCCDiskInfo();
+async function saveCCSettings() {
+  const data = {
+    claude_api_key:      document.getElementById('cc-api-key').value.trim(),
+    claude_project_id:   document.getElementById('cc-project').value.trim(),
+    claude_mcp_endpoint: document.getElementById('cc-endpoint').value.trim(),
+  };
+  const r = await fetch('admin.php?ajax=save_cc_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+  const d = await r.json();
+  showAdminToast(d.ok ? '✅ تم الحفظ' : '❌ خطأ', d.ok?'success':'error');
+}
+async function testClaudeAPI() {
+  const out = document.getElementById('cc-test-result');
+  out.style.display = 'block'; out.textContent = '⏳ جارٍ الاختبار...';
+  const r = await fetch('admin.php?ajax=test_claude_api', {method:'POST'});
+  out.textContent = JSON.stringify(await r.json(), null, 2);
+}
+async function testSiteInfo() {
+  const out = document.getElementById('cc-test-result');
+  out.style.display = 'block'; out.textContent = '⏳ جارٍ الجلب...';
+  out.textContent = await (await fetch('admin.php?ajax=site_info_basic')).text();
+}
+async function testIndexingStatus() {
+  const out = document.getElementById('cc-test-result');
+  out.style.display = 'block'; out.textContent = '⏳ جارٍ الجلب...';
+  out.textContent = await (await fetch('admin.php?ajax=indexing_status_basic')).text();
+}
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'orbit-ai'):
+  $oaKeys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+  $oaHasAI = !empty($oaKeys);
+?>
+<div class="admin-header">
+  <h1>🌐 Orbit AI — إصلاح الفهرسة والمحتوى</h1>
+  <p style="color:var(--muted);font-size:13px">أدوات لفحص وإصلاح مشاكل الفهرسة (SEO) وتوليد المحتوى الناقص باستخدام مفاتيح OpenRouter المضبوطة في الموقع.</p>
+</div>
+
+<?php if (!$oaHasAI): ?>
+<div class="alert alert-error">⚠️ لا يوجد مفتاح OpenRouter مضبوط. أضف مفتاحاً من الإعدادات لتفعيل التوليد بالذكاء الاصطناعي — إصلاح العناوين/الأوصاف الأساسي وإعادة الفهرسة يعملان بدونه.</div>
+<?php endif; ?>
+
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0;font-size:16px;font-weight:700">🔍 لوحة صحة الفهرسة</h3>
+    <button onclick="runFullIndexAudit()" class="btn-ai">🔧 فحص شامل وإصلاح تلقائي</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+    <div class="stat-card" id="oa-total"><div class="stat-value">—</div><div class="stat-label">تطبيقات منشورة</div></div>
+    <div class="stat-card" id="oa-score"><div class="stat-value">—</div><div class="stat-label">نقاط صحة SEO</div></div>
+    <div class="stat-card" id="oa-no-title"><div class="stat-value">—</div><div class="stat-label">بدون عنوان SEO</div></div>
+    <div class="stat-card" id="oa-no-desc"><div class="stat-value">—</div><div class="stat-label">بدون Meta Desc</div></div>
+    <div class="stat-card" id="oa-thin"><div class="stat-value">—</div><div class="stat-label">محتوى رقيق</div></div>
+    <div class="stat-card" id="oa-no-dl"><div class="stat-value">—</div><div class="stat-label">بدون رابط تحميل</div></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button onclick="fixMissingTitles()" class="btn-edit" style="padding:9px 16px;font-size:13px">✏️ توليد العناوين الناقصة</button>
+    <button onclick="fixMissingDescs()" class="btn-edit" style="padding:9px 16px;font-size:13px">📝 توليد الأوصاف الناقصة</button>
+    <button onclick="fixThinContent()" class="btn-edit" style="padding:9px 16px;font-size:13px">📄 توسيع المحتوى الرقيق (AI)</button>
+    <button onclick="resubmitIndexNow()" class="btn-ai" style="padding:9px 16px;font-size:13px">🚀 إعادة فهرسة IndexNow</button>
+    <button onclick="pingSitemaps()" class="btn-edit" style="padding:9px 16px;font-size:13px">🗺️ إرسال Sitemap لـ Google/Bing</button>
+    <button onclick="fixInternalLinks()" class="btn-edit" style="padding:9px 16px;font-size:13px">🔗 تحسين الروابط الداخلية</button>
+  </div>
+  <div id="oa-progress-wrap" style="display:none;margin-top:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+      <span id="oa-progress-label">جارٍ المعالجة...</span><span id="oa-progress-pct">0%</span>
+    </div>
+    <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+      <div id="oa-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),var(--purple));border-radius:3px;width:0%;transition:width .4s"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">🤖 مخطط مهام بالذكاء الاصطناعي</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+    اكتب طلبك ليقترح الذكاء الاصطناعي خطة تنفيذ خطوة بخطوة. هذا القسم يقترح خطة فقط ولا يُعدّل قاعدة البيانات تلقائياً —
+    للتنفيذ الفعلي استخدم الأزرار المخصصة أعلاه أو Claude Code.
+  </p>
+  <textarea id="oa-prompt" class="form-input" rows="4" style="resize:vertical;margin-bottom:12px;line-height:1.7" placeholder="مثال: كيف أحسّن SEO للتطبيقات التي نقاطها أقل من 60؟"></textarea>
+  <button onclick="runOATask()" class="btn-ai" id="oa-run-btn">▶️ اقترح خطة</button>
+  <div id="oa-log" style="display:none;margin-top:16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:var(--f-mono);font-size:12px;max-height:400px;overflow-y:auto;white-space:pre-wrap;direction:ltr"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadOAAudit);
+async function loadOAAudit() {
+  try {
+    const r = await fetch('admin.php?ajax=indexing_status_basic');
+    const d = await r.json();
+    document.getElementById('oa-total').querySelector('.stat-value').textContent    = d.total_published;
+    document.getElementById('oa-score').querySelector('.stat-value').textContent    = d.health_score + '%';
+    document.getElementById('oa-no-title').querySelector('.stat-value').textContent = d.issues.no_seo_title;
+    document.getElementById('oa-no-desc').querySelector('.stat-value').textContent  = d.issues.no_meta_desc;
+    document.getElementById('oa-thin').querySelector('.stat-value').textContent     = d.issues.thin_content;
+    document.getElementById('oa-no-dl').querySelector('.stat-value').textContent    = d.issues.no_download_url;
+    const scoreEl = document.getElementById('oa-score').querySelector('.stat-value');
+    scoreEl.style.color = d.health_score >= 80 ? 'var(--green)' : d.health_score >= 50 ? '#f59e0b' : 'var(--danger)';
+  } catch(e) {}
+}
+function showProgress(label, pct) {
+  document.getElementById('oa-progress-wrap').style.display = 'block';
+  document.getElementById('oa-progress-label').textContent = label;
+  document.getElementById('oa-progress-pct').textContent = pct + '%';
+  document.getElementById('oa-progress-bar').style.width = pct + '%';
+}
+async function runFullIndexAudit() {
+  showProgress('إصلاح العناوين...', 20);
+  await fetch('admin.php?ajax=orbit_fix_titles', {method:'POST'});
+  showProgress('إصلاح الأوصاف...', 45);
+  await fetch('admin.php?ajax=orbit_fix_descs', {method:'POST'});
+  showProgress('إعادة الفهرسة...', 75);
+  await fetch('admin.php?ajax=reindex_all', {method:'POST'});
+  showProgress('✅ اكتمل الإصلاح الشامل', 100);
+  await loadOAAudit();
+  setTimeout(() => document.getElementById('oa-progress-wrap').style.display='none', 3000);
+}
+async function fixMissingTitles() {
+  showProgress('جارٍ توليد العناوين الناقصة...', 30);
+  const d = await (await fetch('admin.php?ajax=orbit_fix_titles', {method:'POST'})).json();
+  showProgress(d.message || '✅ تم', 100);
+  await loadOAAudit();
+}
+async function fixMissingDescs() {
+  showProgress('جارٍ توليد الأوصاف الناقصة...', 30);
+  const d = await (await fetch('admin.php?ajax=orbit_fix_descs', {method:'POST'})).json();
+  showProgress(d.message || '✅ تم', 100);
+  await loadOAAudit();
+}
+async function fixThinContent() {
+  showProgress('جارٍ توسيع المحتوى الرقيق بالذكاء الاصطناعي...', 20);
+  const d = await (await fetch('admin.php?ajax=orbit_fix_thin', {method:'POST'})).json();
+  showProgress(d.message || '✅ تم', 100);
+  await loadOAAudit();
+}
+async function resubmitIndexNow() {
+  showProgress('جارٍ إعادة الفهرسة عبر IndexNow...', 40);
+  const d = await (await fetch('admin.php?ajax=reindex_all', {method:'POST'})).json();
+  showProgress((d.pinged||0) + ' رابط أُرسل من أصل ' + (d.total||0), 100);
+}
+async function pingSitemaps() {
+  showProgress('جارٍ إرسال Sitemap...', 50);
+  const d = await (await fetch('admin.php?ajax=orbit_ping_sitemap', {method:'POST'})).json();
+  showProgress(d.message || '✅ تم', 100);
+}
+async function fixInternalLinks() {
+  showProgress('جارٍ تحسين الروابط الداخلية...', 30);
+  const d = await (await fetch('admin.php?ajax=orbit_fix_links', {method:'POST'})).json();
+  showProgress(d.message || '✅ تم', 100);
+}
+async function runOATask() {
+  const prompt = document.getElementById('oa-prompt').value.trim();
+  if (!prompt) { alert('أدخل طلبك أولاً'); return; }
+  const log = document.getElementById('oa-log');
+  log.style.display = 'block'; log.textContent = '⏳ جارٍ التخطيط...\n';
+  document.getElementById('oa-run-btn').disabled = true;
+  try {
+    const r = await fetch('admin.php?ajax=orbit_ai_task', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt})});
+    const d = await r.json();
+    if (d.plan) log.textContent += '📋 خطة مقترحة:\n' + d.plan + '\n\n' + (d.note||'');
+    if (d.error) log.textContent += '❌ ' + d.error;
+  } catch(e) {
+    log.textContent += '❌ ' + e.message;
+  } finally {
+    document.getElementById('oa-run-btn').disabled = false;
+    log.scrollTop = log.scrollHeight;
+  }
+}
 </script>
 <?php endif; ?>
 

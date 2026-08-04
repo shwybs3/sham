@@ -9,6 +9,7 @@ uploads/*.log
 db-error.log
 *.log
 .DS_Store
+static-cache/*.html
 
 !uploads/icons/.gitkeep
 !uploads/screenshots/.gitkeep
