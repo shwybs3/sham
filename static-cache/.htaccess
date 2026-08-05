@@ -1,0 +1,3 @@
+# Internal render snapshots — served via readfile(), never directly.
+# Direct access would expose crawlable duplicates of canonical pages.
+Require all denied
