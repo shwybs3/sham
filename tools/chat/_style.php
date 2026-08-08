@@ -430,10 +430,17 @@ function ys_styles(): void
 
 /* ── Responsive ────────────────────────────────────────────────── */
 @media(max-width:860px){
-  .ys-wrap{padding:10px 10px 0}
+  /* Below this width the app goes edge-to-edge like a native chat app: no
+     side padding, no rounded corners, and the breadcrumb (redundant once
+     you're inside a full-screen app) is hidden so the shell can claim that
+     strip of height too. Scoped to this stylesheet, so only chat/auth pages
+     are affected — every other tool keeps its breadcrumb. */
+  .t-breadcrumb{display:none}
+  .ys-wrap{padding:0;max-width:none}
   .ys-shell{
-    height:calc(100dvh - var(--t-header-h,62px) - 74px);
-    min-height:430px;border-radius:18px;
+    height:calc(100dvh - var(--t-header-h,62px));
+    min-height:430px;border-radius:0;
+    box-shadow:none;border-inline:none;
   }
   .ys-side{
     /* Physical `right`, not `inset-inline-end`: transforms are always

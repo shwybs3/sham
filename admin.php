@@ -1709,63 +1709,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()) {
     header('Content-Type: application/json');
-    $type = trim($_GET['type'] ?? 'article');
-    if (!isset(BLOG_TYPES[$type])) $type = 'article';
+    $type  = trim($_GET['type'] ?? 'article');
     $topic = trim($_GET['topic'] ?? '');
 
-    $typeGuides = [
-        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
-        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
-        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
-        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
-        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
-        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
-    ];
-    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
-
-    $prompt = <<<P
-أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
-{$typeGuides[$type]}
-{$topicLine}
-
-المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
-اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
-
-اتبع معايير SEO:
-- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
-- meta_description: 140-160 حرفاً يلخص المقال.
-- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
-- excerpt: سطر أو سطران يظهران في بطاقة المقال.
-
-أعد JSON صالح فقط بدون أي نص خارج JSON:
-{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
-P;
-    $r = ai_text($pdo, $prompt);
-    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
-    $data = ai_extract_json($r['content']);
-    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
-    $data = clean_utf8_deep($data);
-
-    $title = trim($data['title'] ?? '');
-    $body  = trim($data['body'] ?? '');
-    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي ناقص']); exit; }
-    $slug = unique_blog_slug($pdo, $title);
-
-    // Best-effort cover image — never blocks the post from being created.
-    $coverImage = null;
-    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
-    if ($ir['ok']) {
-        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
-        file_put_contents($tmp, $ir['bin']);
-        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
-        @unlink($tmp);
-    }
-
-    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
-        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
-            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
-    $newId = (int)$pdo->lastInsertId();
-    echo json_encode(['success'=>true,'id'=>$newId,'title'=>$title], JSON_UNESCAPED_UNICODE);
+    $result = blog_ai_generate($pdo, $type, $topic);
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -2198,6 +2146,37 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_user_action' && is_admin()
     }
 
     echo json_encode(['success' => false, 'error' => 'إجراء غير معروف']);
+    exit;
+}
+
+/* ── Claude Agent API — enable/disable ───────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'agent_api_toggle' && is_admin()) {
+    header('Content-Type: application/json');
+    $input   = json_decode(file_get_contents('php://input'), true) ?: [];
+    $enabled = !empty($input['enabled']);
+    set_cfg($pdo, 'claude_api_enabled', $enabled ? '1' : '0');
+    log_admin_action($pdo, 'agent_api_toggle', 'settings', 0, $enabled ? 'enabled' : 'disabled');
+    echo json_encode(['success' => true, 'enabled' => $enabled]);
+    exit;
+}
+
+/* ── Claude Agent API — generate/regenerate key ──────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'agent_api_regen_key' && is_admin()) {
+    header('Content-Type: application/json');
+    // Shown to the admin exactly once, in this response — only the hash is
+    // ever persisted, mirroring how the admin password itself is stored.
+    $key = bin2hex(random_bytes(24));
+    set_cfg($pdo, 'claude_api_key_hash', hash('sha256', $key));
+    log_admin_action($pdo, 'agent_api_regen_key', 'settings', 0, 'Agent API key regenerated');
+    echo json_encode(['success' => true, 'key' => $key]);
+    exit;
+}
+
+/* ── Claude Agent API — recent call log ──────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'agent_api_log' && is_admin()) {
+    header('Content-Type: application/json');
+    $rows = $pdo->query("SELECT action, ip, ok, created_at FROM claude_api_log ORDER BY id DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['rows' => $rows], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -19102,6 +19081,7 @@ try {
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap" id="cc-tabs">
   <button class="btn btn-sm" onclick="ccTab('setup')" id="cct-setup" style="background:var(--primary);color:#fff">⚙️ الإعداد</button>
   <button class="btn btn-sm" onclick="ccTab('mcp')"   id="cct-mcp">🔌 MCP Config</button>
+  <button class="btn btn-sm" onclick="ccTab('agent')" id="cct-agent">🔑 API الوكيل</button>
   <button class="btn btn-sm" onclick="ccTab('test')"  id="cct-test">🧪 اختبار الاتصال</button>
   <button class="btn btn-sm" onclick="ccTab('docs')"  id="cct-docs">📖 التوثيق</button>
 </div>
@@ -19148,6 +19128,61 @@ try {
   </ol>
 </div>
 
+<?php
+$agentEnabled  = get_cfg($pdo, 'claude_api_enabled', '0') === '1';
+$agentHasKey   = get_cfg($pdo, 'claude_api_key_hash', '') !== '';
+$agentBase     = (defined('SITE_URL') ? rtrim(SITE_URL, '/') : '') . '/api/claude-agent.php';
+?>
+<div class="panel" id="cc-tab-agent" style="display:none">
+  <h3 style="margin:0 0 8px;font-size:16px;font-weight:700">🔑 API الوكيل — وصول مباشر بمفتاح</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.8">
+    مسار بديل عن SSH/Git: نقطة HTTP واحدة (<code style="font-size:11px" dir="ltr"><?= h($agentBase) ?></code>)
+    محمية بمفتاح سري، تسمح لجلسة Claude بإدارة مقالات المدونة (إنشاء، تعديل، نشر، توليد بالذكاء الاصطناعي) وقراءة
+    تشخيص أساسي عن السيرفر — <strong>بدون</strong> تعديل ملفات الكود نفسه. تعديل الكود يبقى عبر Git/PR
+    فقط، لأن نقطة HTTP تقدر تكتب ملفات PHP تعني ثغرة تنفيذ كود عن بعد بغض النظر عمّن يملك المفتاح.
+  </p>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">
+    <input type="checkbox" id="agent-enabled" <?= $agentEnabled ? 'checked' : '' ?> onchange="toggleAgentEnabled(this.checked)" style="width:18px;height:18px;flex-shrink:0">
+    <div>
+      <div style="font-weight:700;font-size:13px" id="agent-enabled-label"><?= $agentEnabled ? '✅ مفعّل' : '⭕ معطّل' ?></div>
+      <div style="font-size:11px;color:var(--muted)">وهو معطّل، النقطة ترجع 404 حتى لو حاول أحد تخمين الرابط.</div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <label class="form-label">المفتاح السري</label>
+    <?php if ($agentHasKey): ?>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" type="text" value="•••••••••••••••••••••••••••••• (محفوظ)" disabled dir="ltr" style="font-family:var(--f-mono);flex:1">
+        <button onclick="regenAgentKey()" class="btn btn-sm" style="background:var(--danger);color:#fff;white-space:nowrap">🔄 توليد مفتاح جديد</button>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:4px">لا يُعرض المفتاح بعد توليده أول مرة. توليد مفتاح جديد يُبطل القديم فوراً.</p>
+    <?php else: ?>
+      <button onclick="regenAgentKey()" class="btn-ai">🔑 توليد مفتاح API</button>
+    <?php endif; ?>
+  </div>
+
+  <div id="agent-key-reveal" style="display:none;margin-bottom:16px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:14px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#16a34a">✅ المفتاح الجديد — انسخه الآن، لن يُعرض مرة ثانية</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input class="form-input" id="agent-key-value" type="text" readonly dir="ltr" style="font-family:var(--f-mono);font-size:12px;flex:1">
+      <button class="btn btn-sm" type="button" onclick="copyAgentKey(this)">📋 نسخ</button>
+    </div>
+  </div>
+
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">مثال استدعاء</div>
+    <pre style="margin:0;font-size:11px;direction:ltr;text-align:left;overflow-x:auto;white-space:pre-wrap" dir="ltr">curl -X POST '<?= h($agentBase) ?>?action=generate_post' \
+  -H 'Authorization: Bearer YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"news","topic":"..."}'</pre>
+  </div>
+
+  <h4 style="font-size:13px;font-weight:700;margin:0 0 10px">سجل آخر الاستدعاءات</h4>
+  <div id="agent-log" style="font-size:12px;color:var(--muted)">جارٍ التحميل...</div>
+</div>
+
 <div class="panel" id="cc-tab-test" style="display:none">
   <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">🧪 اختبار الاتصال بـ Claude API</h3>
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -19183,11 +19218,12 @@ try {
 
 <script>
 function ccTab(name) {
-  ['setup','mcp','test','docs'].forEach(t => {
+  ['setup','mcp','agent','test','docs'].forEach(t => {
     document.getElementById('cc-tab-'+t).style.display = t===name?'':'none';
     const btn = document.getElementById('cct-'+t);
     if (btn) { btn.style.background = t===name?'var(--primary)':''; btn.style.color = t===name?'#fff':''; }
   });
+  if (name === 'agent') loadAgentLog();
 }
 async function fetchCCDiskInfo() {
   try {
@@ -19223,6 +19259,58 @@ async function testIndexingStatus() {
   const out = document.getElementById('cc-test-result');
   out.style.display = 'block'; out.textContent = '⏳ جارٍ الجلب...';
   out.textContent = await (await fetch('admin.php?ajax=indexing_status_basic')).text();
+}
+
+/* ── Agent API tab ────────────────────────────────────────────── */
+function copyAgentKey(btn) {
+  const val = document.getElementById('agent-key-value').value;
+  navigator.clipboard.writeText(val).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✓ تم النسخ';
+    setTimeout(() => { btn.textContent = old; }, 1600);
+  });
+}
+
+async function toggleAgentEnabled(on) {
+  const r = await fetch('admin.php?ajax=agent_api_toggle', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({enabled: on})
+  });
+  const d = await r.json();
+  document.getElementById('agent-enabled-label').textContent = d.enabled ? '✅ مفعّل' : '⭕ معطّل';
+  showAdminToast(d.enabled ? '✅ تم التفعيل' : '⭕ تم التعطيل', 'success');
+}
+
+async function regenAgentKey() {
+  if (!confirm('توليد مفتاح جديد يُبطل المفتاح الحالي فوراً — أي اتصال يستخدمه سيتوقف. متابعة؟')) return;
+  const r = await fetch('admin.php?ajax=agent_api_regen_key', {method:'POST'});
+  const d = await r.json();
+  if (!d.success) { showAdminToast('❌ فشل توليد المفتاح', 'error'); return; }
+  document.getElementById('agent-key-value').value = d.key;
+  document.getElementById('agent-key-reveal').style.display = 'block';
+  showAdminToast('✅ تم توليد مفتاح جديد — انسخه الآن', 'success');
+}
+
+async function loadAgentLog() {
+  const box = document.getElementById('agent-log');
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  box.textContent = 'جارٍ التحميل...';
+  try {
+    const r = await fetch('admin.php?ajax=agent_api_log');
+    const d = await r.json();
+    if (!d.rows || !d.rows.length) { box.innerHTML = '<p style="padding:10px 0">لا يوجد استدعاءات بعد.</p>'; return; }
+    let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="text-align:start;border-bottom:1px solid var(--border)">'
+      + '<th style="padding:6px">الإجراء</th><th style="padding:6px">IP</th>'
+      + '<th style="padding:6px;text-align:center">النتيجة</th><th style="padding:6px">الوقت</th></tr></thead><tbody>';
+    d.rows.forEach(row => {
+      html += '<tr style="border-bottom:1px solid var(--border)">'
+        + '<td style="padding:6px;font-family:var(--f-mono)">' + esc(row.action) + '</td>'
+        + '<td style="padding:6px;direction:ltr;text-align:start">' + esc(row.ip) + '</td>'
+        + '<td style="padding:6px;text-align:center">' + (row.ok==1 ? '✅' : '❌') + '</td>'
+        + '<td style="padding:6px;color:var(--muted)">' + esc(row.created_at) + '</td></tr>';
+    });
+    box.innerHTML = html + '</tbody></table></div>';
+  } catch(e) { box.textContent = 'تعذّر التحميل.'; }
 }
 </script>
 <?php endif; ?>

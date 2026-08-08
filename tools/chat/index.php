@@ -750,6 +750,32 @@ $chatUrl = ys_chat_url();
     input.focus();
   };
 
+  /* ── Mobile keyboard robustness ────────────────────────────────
+     The <meta viewport interactive-widget=resizes-content> tag (tools/_base.php)
+     is the standards-track fix for Android Chrome shrinking the visual
+     viewport without the layout one when the keyboard opens — it makes dvh
+     and the fixed header behave correctly on its own. This listener is a
+     fallback for the browsers/webviews that don't honor that tag yet: it
+     pins the shell's height to the actually-visible area so the header,
+     stream and composer never get pushed off-screen. */
+  var shellEl = document.querySelector('.ys-shell');
+  if (window.visualViewport && shellEl) {
+    var vv = window.visualViewport;
+    var syncing = false;
+    function syncViewportHeight() {
+      if (syncing) return;
+      syncing = true;
+      requestAnimationFrame(function () {
+        var keyboardLikelyOpen = vv.height < window.innerHeight - 60;
+        shellEl.style.height = keyboardLikelyOpen ? Math.max(320, vv.height - 4) + 'px' : '';
+        if (keyboardLikelyOpen) window.scrollTo(0, 0);
+        syncing = false;
+      });
+    }
+    vv.addEventListener('resize', syncViewportHeight);
+    vv.addEventListener('scroll', syncViewportHeight);
+  }
+
   /* ── Init ───────────────────────────────────────────────────── */
   renderWelcome();
   loadConvs();

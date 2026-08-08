@@ -76,7 +76,13 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 <html lang="{$uiLang}" dir="{$uiDir}">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<?php /* interactive-widget=resizes-content is the standards-track fix for the
+        classic Android Chrome bug where opening the on-screen keyboard shrinks
+        the visual viewport but not the layout one, so fixed-position headers
+        and dvh-sized panels end up displaced or scrolled out of view instead
+        of shrinking in place. Chrome/Android has supported it since 2022;
+        unsupported browsers just ignore the token. */ ?>
+<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
 <title>{$title}</title>
 <meta name="description" content="{$desc}">
 <meta property="og:title" content="{$title}">
@@ -97,7 +103,7 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 /* ── Reset & Base ─────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;font-size:16px}
-body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100vh;overflow-x:hidden;padding-top:var(--t-header-h,62px)}
+body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100dvh;overflow-x:hidden;padding-top:var(--t-header-h,62px)}
 a{color:inherit;text-decoration:none}img{max-width:100%;display:block}
 button,input,select,textarea{font-family:inherit;font-size:inherit}
 

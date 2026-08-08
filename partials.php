@@ -148,6 +148,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
       </div>
     </div>
     <a href="<?= h(url('tools')) ?>" class="<?= $activeNav === 'tools' ? 'active' : '' ?>"><?= function_exists('__') ? __('tools') : 'أدوات' ?></a>
+    <a href="<?= h(url('tools/chat/')) ?>" class="<?= $activeNav === 'yasmin' ? 'active' : '' ?>" style="display:flex;align-items:center;gap:4px">🌸 ياسمين</a>
     <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>"><?= function_exists('__') ? __('blog') : 'المدونة' ?></a>
   </nav>
 
@@ -232,6 +233,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
       <?= h(__('all_tools_label')) ?>
     </a>
+    <a href="<?= h(url('tools/chat/')) ?>" class="mobile-nav-link <?= $activeNav === 'yasmin' ? 'active' : '' ?>">🌸 ياسمين — مساعدة ذكاء اصطناعي</a>
     <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('content_label')) ?></div>
     <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> <?= h(__('latest_updates')) ?></a>
     <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> <?= h(__('blog')) ?></a>

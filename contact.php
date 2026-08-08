@@ -60,6 +60,14 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
 
   <div class="section-head reveal"><span class="section-title">اتصل بنا</span></div>
 
+  <a href="<?= h(url('tools/chat/')) ?>" class="section-box reveal" style="max-width:640px;display:flex;align-items:center;gap:16px;margin-bottom:18px;text-decoration:none;transition:transform .18s,box-shadow .18s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:26px;background:radial-gradient(circle at 35% 30%,#fff,#f0e6ff 50%,#cfbcff)">🌸</div>
+    <div>
+      <div style="font-weight:700;font-size:15px;color:var(--white,var(--text))">تحتاج جواب سريع؟ جرّب ياسمين</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:3px;line-height:1.7">مساعدة ذكاء اصطناعي متاحة على مدار الساعة — تجاوب فوراً على أسئلتك الشائعة بدون انتظار رد عبر البريد.</div>
+    </div>
+  </a>
+
   <div class="section-box reveal" style="max-width:640px">
     <p style="color:var(--muted);font-size:14px;line-height:1.8;margin-bottom:20px">
       لأي استفسار، اقتراح تطبيق، بلاغ عن رابط لا يعمل، أو طلب إزالة محتوى (DMCA)، راسلنا مباشرة على

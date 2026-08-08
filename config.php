@@ -328,6 +328,21 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'page_events';
 
+    // Every call to api/claude-agent.php, success or failure. This is the
+    // audit trail for a bearer-token endpoint that runs unattended (no admin
+    // session), so every action it takes must be traceable after the fact.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS claude_api_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      action VARCHAR(60) NOT NULL,
+      ip VARCHAR(45) NULL,
+      ok TINYINT(1) NOT NULL DEFAULT 1,
+      detail VARCHAR(500) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_created (created_at),
+      INDEX idx_action (action)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'claude_api_log';
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS security_log (
       id INT AUTO_INCREMENT PRIMARY KEY,
       event_type VARCHAR(60) NOT NULL,
@@ -4033,6 +4048,71 @@ function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {
         $stmt->execute([$slug, $excludeId]);
     }
     return $slug;
+}
+
+/**
+ * Writes one AI-authored blog post (tutorial/news/comparison/best-of/article)
+ * as a draft and returns it. The single source of truth for this prompt —
+ * both the admin "generate_blog_post" AJAX handler and api/claude-agent.php's
+ * "generate_post" action call this, so the two paths can never drift apart.
+ * Returns ['success'=>bool, 'id'=>?int, 'title'=>?string, 'error'=>?string].
+ */
+function blog_ai_generate(PDO $pdo, string $type, string $topic): array {
+    if (!isset(BLOG_TYPES[$type])) $type = 'article';
+
+    $typeGuides = [
+        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
+        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
+        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
+        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
+        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
+        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات وألعاب أندرويد.',
+    ];
+    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
+{$typeGuides[$type]}
+{$topicLine}
+
+المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
+اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
+
+اتبع معايير SEO:
+- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
+- meta_description: 140-160 حرفاً يلخص المقال.
+- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
+- excerpt: سطر أو سطران يظهران في بطاقة المقال.
+
+أعد JSON صالح فقط بدون أي نص خارج JSON:
+{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) return ['success' => false, 'error' => $r['error']];
+    $data = ai_extract_json($r['content']);
+    if (!$data) return ['success' => false, 'error' => 'رد الذكاء الاصطناعي لم يكن JSON صالحاً'];
+    $data = clean_utf8_deep($data);
+
+    $title = trim($data['title'] ?? '');
+    $body  = trim($data['body'] ?? '');
+    if (!$title || !$body) return ['success' => false, 'error' => 'رد الذكاء الاصطناعي ناقص'];
+    $slug = unique_blog_slug($pdo, $title);
+
+    // Best-effort cover image — never blocks the post from being created.
+    $coverImage = null;
+    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
+    if ($ir['ok']) {
+        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
+        file_put_contents($tmp, $ir['bin']);
+        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
+        @unlink($tmp);
+    }
+
+    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
+        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
+            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
+
+    return ['success' => true, 'id' => (int)$pdo->lastInsertId(), 'title' => $title];
 }
 
 // CSS/JS URL with a cache-busting ?v= based on the file's own mtime — required
