@@ -2129,8 +2129,95 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_stats' && is_admin()) {
         'today_conversations' => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_conversations WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
         'today_messages'      => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_messages WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
         'active_keys'         => count(openrouter_keys(get_cfg($pdo, 'yasmin_api_keys', '') ?: get_cfg($pdo, 'openrouter_key'))),
+        'total_users'         => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_users")->fetchColumn(),
+        'today_users'         => (int)$pdo->query("SELECT COUNT(*) FROM yasmin_users WHERE DATE(created_at)=CURDATE()")->fetchColumn(),
     ];
     echo json_encode($stats);
+    exit;
+}
+
+/* ── Yasmin accounts: list ─────────────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_users' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $q      = trim((string)($_GET['q'] ?? ''));
+    $limit  = min(100, max(10, (int)($_GET['limit'] ?? 50)));
+    $offset = max(0, (int)($_GET['offset'] ?? 0));
+
+    $where = '';
+    $params = [];
+    if ($q !== '') {
+        $where = "WHERE u.email LIKE ? OR u.name LIKE ?";
+        $params = ['%' . $q . '%', '%' . $q . '%'];
+    }
+
+    $countSt = $pdo->prepare("SELECT COUNT(*) FROM yasmin_users u $where");
+    $countSt->execute($params);
+    $total = (int)$countSt->fetchColumn();
+
+    $st = $pdo->prepare("SELECT u.id, u.email, u.name, u.avatar, u.provider, u.status, u.msg_count,
+                                u.last_ip, u.last_login_at, u.created_at,
+                                (SELECT COUNT(*) FROM yasmin_conversations c WHERE c.user_id = u.id) AS conv_count
+                         FROM yasmin_users u $where
+                         ORDER BY u.created_at DESC LIMIT $limit OFFSET $offset");
+    $st->execute($params);
+
+    echo json_encode(['total' => $total, 'users' => $st->fetchAll(PDO::FETCH_ASSOC)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── Yasmin accounts: ban / unban / delete ─────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_user_action' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $uid   = (int)($input['id'] ?? 0);
+    $act   = (string)($input['do'] ?? '');
+
+    if (!$uid) { echo json_encode(['success' => false, 'error' => 'مستخدم غير صالح']); exit; }
+
+    $st = $pdo->prepare("SELECT email FROM yasmin_users WHERE id=?");
+    $st->execute([$uid]);
+    $email = (string)$st->fetchColumn();
+    if ($email === '') { echo json_encode(['success' => false, 'error' => 'المستخدم غير موجود']); exit; }
+
+    if ($act === 'ban' || $act === 'unban') {
+        $status = ($act === 'ban') ? 'banned' : 'active';
+        $pdo->prepare("UPDATE yasmin_users SET status=? WHERE id=?")->execute([$status, $uid]);
+        log_admin_action($pdo, 'yasmin_user_' . $act, 'yasmin_user', $uid, $email);
+        echo json_encode(['success' => true, 'status' => $status]);
+        exit;
+    }
+
+    if ($act === 'delete') {
+        // Conversations cascade from yasmin_messages only, so detach the
+        // account's rows explicitly rather than leaving dangling user_ids.
+        $pdo->prepare("DELETE FROM yasmin_conversations WHERE user_id=?")->execute([$uid]);
+        $pdo->prepare("DELETE FROM yasmin_users WHERE id=?")->execute([$uid]);
+        log_admin_action($pdo, 'yasmin_user_delete', 'yasmin_user', $uid, $email);
+        echo json_encode(['success' => true, 'deleted' => true]);
+        exit;
+    }
+
+    echo json_encode(['success' => false, 'error' => 'إجراء غير معروف']);
+    exit;
+}
+
+/* ── Yasmin: Google OAuth credentials ──────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_auth_save' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+
+    foreach (['yasmin_google_client_id', 'yasmin_google_redirect'] as $k) {
+        if (isset($input[$k])) set_cfg($pdo, $k, trim((string)$input[$k]));
+    }
+    // An empty secret field means "leave the stored one alone", so the saved
+    // secret is never wiped just because the form rendered it masked.
+    if (isset($input['yasmin_google_client_secret'])) {
+        $secret = trim((string)$input['yasmin_google_client_secret']);
+        if ($secret !== '') set_cfg($pdo, 'yasmin_google_client_secret', $secret);
+    }
+
+    log_admin_action($pdo, 'yasmin_auth_save', 'settings', 0, 'Google OAuth (Yasmin)');
+    echo json_encode(['success' => true]);
     exit;
 }
 
@@ -12717,12 +12804,15 @@ elseif ($page === 'yasmin'):
   <div class="stat-card"><div class="stat-value" id="ys-today-conv">—</div><div class="stat-label">محادثات اليوم</div></div>
   <div class="stat-card"><div class="stat-value" id="ys-today-msg">—</div><div class="stat-label">رسائل اليوم</div></div>
   <div class="stat-card"><div class="stat-value" id="ys-keys"><?= count($activeKeys) ?></div><div class="stat-label">مفاتيح API نشطة</div></div>
+  <div class="stat-card"><div class="stat-value" id="ys-total-users">—</div><div class="stat-label">حسابات مسجّلة</div></div>
 </div>
 
 <!-- Tabs -->
 <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
   <button class="btn btn-sm" onclick="showYasminTab('keys')" id="yt-keys" style="background:var(--primary);color:#fff">مفاتيح API</button>
   <button class="btn btn-sm" onclick="showYasminTab('prompt')" id="yt-prompt">شخصية ياسمين</button>
+  <button class="btn btn-sm" onclick="showYasminTab('users')" id="yt-users">👥 المستخدمون</button>
+  <button class="btn btn-sm" onclick="showYasminTab('auth')" id="yt-auth">🔐 تسجيل الدخول</button>
   <button class="btn btn-sm" onclick="showYasminTab('logs')" id="yt-logs">سجل المحادثات</button>
 </div>
 
@@ -12773,6 +12863,71 @@ elseif ($page === 'yasmin'):
   <button onclick="saveYasminPrompt()" class="btn" style="background:var(--primary);color:#fff">💾 حفظ الإعدادات</button>
 </div>
 
+<!-- Tab: Accounts -->
+<div class="panel" id="yasmin-tab-users" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+    <h3 style="margin:0;font-size:15px">👥 مستخدمو ياسمين</h3>
+    <div style="display:flex;gap:8px">
+      <input type="search" class="form-input" id="ys-user-q" placeholder="ابحث بالاسم أو البريد…"
+             style="width:220px;font-size:13px" onkeydown="if(event.key==='Enter')loadYasminUsers()">
+      <button class="btn btn-sm" onclick="loadYasminUsers()">بحث</button>
+    </div>
+  </div>
+  <div id="yasmin-users-list" style="font-size:13px">جاري التحميل...</div>
+</div>
+
+<!-- Tab: Sign-in settings -->
+<div class="panel" id="yasmin-tab-auth" style="display:none">
+  <h3 style="margin:0 0 6px;font-size:15px">🔐 تسجيل الدخول عبر Google</h3>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 16px;line-height:1.8">
+    التسجيل بالبريد وكلمة المرور يعمل دائماً بدون أي إعداد. أما زر «تسجيل الدخول عبر Google»
+    فلا يظهر للزوار إلا بعد إدخال المفتاحين أدناه.
+  </p>
+
+  <div style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.2);border-radius:12px;padding:14px 16px;margin-bottom:18px">
+    <div style="font-size:12.5px;font-weight:700;margin-bottom:8px">خطوات الحصول على المفاتيح</div>
+    <ol style="font-size:12px;color:var(--muted);line-height:2;margin:0;padding-inline-start:18px">
+      <li>افتح <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">Google Cloud Console ← Credentials</a></li>
+      <li>اضغط <strong>Create Credentials → OAuth client ID</strong> واختر <strong>Web application</strong></li>
+      <li>في خانة <strong>Authorized redirect URIs</strong> ألصق الرابط الظاهر بالأسفل حرفياً</li>
+      <li>انسخ <strong>Client ID</strong> و <strong>Client secret</strong> والصقهما هنا ثم احفظ</li>
+    </ol>
+  </div>
+
+  <label class="form-label">Client ID</label>
+  <input type="text" class="form-input" id="ys-gcid" dir="ltr" placeholder="123456789-abc.apps.googleusercontent.com"
+         value="<?= h(get_cfg($pdo, 'yasmin_google_client_id', '')) ?>" style="font-family:var(--f-mono);font-size:12px">
+  <p style="font-size:11px;color:var(--muted);margin:4px 0 14px">معرّف عام — يظهر في رابط تسجيل الدخول، لا مشكلة في ظهوره هنا.</p>
+
+  <label class="form-label">Client Secret</label>
+  <input type="password" class="form-input" id="ys-gsecret" dir="ltr" autocomplete="new-password"
+         placeholder="<?= get_cfg($pdo, 'yasmin_google_client_secret', '') !== '' ? '•••••••• (محفوظ — اتركه فارغاً للإبقاء عليه)' : 'GOCSPX-…' ?>"
+         style="font-family:var(--f-mono);font-size:12px">
+  <p style="font-size:11px;color:var(--muted);margin:4px 0 14px">
+    لا يُعرض المفتاح المحفوظ أبداً بعد حفظه. اتركه فارغاً إذا ما بدك تغيّرو.
+  </p>
+
+  <label class="form-label">Authorized redirect URI</label>
+  <?php
+  // Shown so it can be pasted into Google exactly; it must match byte-for-byte.
+  $ysRedirectDefault = rtrim(SITE_URL, '/') . '/tools/chat/auth.php?a=google_cb';
+  $ysRedirectSaved   = get_cfg($pdo, 'yasmin_google_redirect', '');
+  ?>
+  <div style="display:flex;gap:8px;margin-bottom:6px">
+    <input type="text" class="form-input" id="ys-gredirect" dir="ltr"
+           value="<?= h($ysRedirectSaved) ?>" placeholder="<?= h($ysRedirectDefault) ?>"
+           style="flex:1;font-family:var(--f-mono);font-size:12px">
+    <button class="btn btn-sm" type="button"
+            onclick="ysCopy(document.getElementById('ys-gredirect').value || document.getElementById('ys-gredirect').placeholder, this)">📋 نسخ</button>
+  </div>
+  <p style="font-size:11px;color:var(--muted);margin:0 0 18px">
+    اتركه فارغاً ليُبنى تلقائياً من عنوان الطلب. املأه فقط إذا كانت الأداة على نطاق فرعي
+    مثل <code>chat.yassota.com</code> — عندها ضع الرابط الكامل الذي سجّلته في Google.
+  </p>
+
+  <button onclick="saveYasminAuth()" class="btn" style="background:var(--primary);color:#fff">💾 حفظ إعدادات الدخول</button>
+</div>
+
 <!-- Tab: Conversation Logs -->
 <div class="panel" id="yasmin-tab-logs" style="display:none">
   <h3 style="margin:0 0 12px;font-size:15px">💬 سجل المحادثات</h3>
@@ -12790,12 +12945,127 @@ elseif ($page === 'yasmin'):
 
 <script>
 function showYasminTab(tab) {
-  ['keys','prompt','logs'].forEach(t => {
+  ['keys','prompt','users','auth','logs'].forEach(t => {
     document.getElementById('yasmin-tab-'+t).style.display = t===tab?'block':'none';
     document.getElementById('yt-'+t).style.background = t===tab?'var(--primary)':'var(--card-bg)';
     document.getElementById('yt-'+t).style.color = t===tab?'#fff':'var(--text)';
   });
-  if (tab === 'logs') loadYasminLogs();
+  if (tab === 'logs')  loadYasminLogs();
+  if (tab === 'users') loadYasminUsers();
+}
+
+/* ── Accounts ─────────────────────────────────────────────────── */
+function ysEsc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function ysCopy(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✓ تم النسخ';
+    setTimeout(() => { btn.textContent = old; }, 1600);
+  });
+}
+
+async function loadYasminUsers() {
+  const box = document.getElementById('yasmin-users-list');
+  const q   = document.getElementById('ys-user-q').value.trim();
+  box.innerHTML = 'جاري التحميل...';
+  try {
+    const r = await fetch('?ajax=yasmin_users&q=' + encodeURIComponent(q));
+    const d = await r.json();
+
+    if (!d.users || !d.users.length) {
+      box.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">'
+        + (q ? 'ما في نتائج لهذا البحث.' : 'ما في مستخدمين مسجّلين بعد.') + '</p>';
+      return;
+    }
+
+    let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+      + '<thead><tr style="text-align:start;border-bottom:2px solid var(--border)">'
+      + '<th style="padding:8px;text-align:start">المستخدم</th>'
+      + '<th style="padding:8px;text-align:start">الطريقة</th>'
+      + '<th style="padding:8px;text-align:center">محادثات</th>'
+      + '<th style="padding:8px;text-align:center">رسائل</th>'
+      + '<th style="padding:8px;text-align:start">آخر دخول</th>'
+      + '<th style="padding:8px;text-align:center">الحالة</th>'
+      + '<th style="padding:8px;text-align:center">إجراءات</th>'
+      + '</tr></thead><tbody>';
+
+    d.users.forEach(u => {
+      const banned  = u.status === 'banned';
+      const avatar  = u.avatar
+        ? '<img src="' + ysEsc(u.avatar) + '" referrerpolicy="no-referrer" width="28" height="28" style="border-radius:50%;object-fit:cover;flex-shrink:0">'
+        : '<div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'
+          + ysEsc((u.name || u.email || '?').trim().charAt(0).toUpperCase()) + '</div>';
+
+      html += '<tr style="border-bottom:1px solid var(--border)' + (banned ? ';opacity:.55' : '') + '">'
+        + '<td style="padding:8px"><div style="display:flex;align-items:center;gap:8px">' + avatar
+        + '<div style="min-width:0"><div style="font-weight:700">' + ysEsc(u.name || '—') + '</div>'
+        + '<div style="font-size:11px;color:var(--muted);direction:ltr;text-align:start">' + ysEsc(u.email) + '</div></div></div></td>'
+        + '<td style="padding:8px">' + (u.provider === 'google' ? '🔵 Google' : '✉️ بريد') + '</td>'
+        + '<td style="padding:8px;text-align:center">' + ysEsc(u.conv_count) + '</td>'
+        + '<td style="padding:8px;text-align:center">' + ysEsc(u.msg_count) + '</td>'
+        + '<td style="padding:8px;font-size:11px;color:var(--muted)">' + ysEsc(u.last_login_at || '—') + '</td>'
+        + '<td style="padding:8px;text-align:center">'
+        + (banned
+            ? '<span style="background:rgba(220,38,38,.12);color:var(--danger);padding:2px 8px;border-radius:99px;font-size:11px">موقوف</span>'
+            : '<span style="background:rgba(22,163,74,.12);color:#16a34a;padding:2px 8px;border-radius:99px;font-size:11px">نشط</span>')
+        + '</td>'
+        + '<td style="padding:8px;text-align:center;white-space:nowrap">'
+        + '<button class="btn btn-sm" onclick="ysUserAction(' + Number(u.id) + ',\'' + (banned ? 'unban' : 'ban') + '\')" style="padding:3px 8px;font-size:11px">'
+        + (banned ? 'رفع الإيقاف' : 'إيقاف') + '</button> '
+        + '<button class="btn btn-sm" onclick="ysUserAction(' + Number(u.id) + ',\'delete\')" style="padding:3px 8px;font-size:11px;background:var(--danger);color:#fff">حذف</button>'
+        + '</td></tr>';
+    });
+
+    html += '</tbody></table></div>'
+      + '<p style="font-size:11.5px;color:var(--muted);margin:12px 0 0">الإجمالي: ' + ysEsc(d.total) + ' مستخدم</p>';
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<p style="color:var(--danger);padding:16px">تعذّر تحميل قائمة المستخدمين.</p>';
+  }
+}
+
+async function ysUserAction(id, act) {
+  const prompts = {
+    ban:    'إيقاف هذا المستخدم؟ لن يعود قادراً على تسجيل الدخول.',
+    unban:  'رفع الإيقاف عن هذا المستخدم؟',
+    delete: 'حذف المستخدم نهائياً مع كل محادثاته؟ لا يمكن التراجع.'
+  };
+  if (!confirm(prompts[act])) return;
+
+  const r = await fetch('?ajax=yasmin_user_action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, do: act })
+  });
+  const d = await r.json();
+  if (!d.success) { alert(d.error || 'فشل الإجراء'); return; }
+  loadYasminUsers();
+  loadYasminStats();
+}
+
+async function saveYasminAuth() {
+  const r = await fetch('?ajax=yasmin_auth_save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      yasmin_google_client_id:     document.getElementById('ys-gcid').value,
+      yasmin_google_client_secret: document.getElementById('ys-gsecret').value,
+      yasmin_google_redirect:      document.getElementById('ys-gredirect').value
+    })
+  });
+  const d = await r.json();
+  if (d.success) {
+    // Clear the secret box so the value never lingers in the DOM after saving.
+    document.getElementById('ys-gsecret').value = '';
+    alert('✅ تم حفظ إعدادات تسجيل الدخول');
+  } else {
+    alert('فشل الحفظ');
+  }
 }
 
 function addYasminKey() {
@@ -12845,6 +13115,7 @@ function loadYasminStats() {
     document.getElementById('ys-today-conv').textContent = d.today_conversations || 0;
     document.getElementById('ys-today-msg').textContent = d.today_messages || 0;
     document.getElementById('ys-keys').textContent = d.active_keys || 0;
+    document.getElementById('ys-total-users').textContent = d.total_users || 0;
   });
 }
 

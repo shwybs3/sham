@@ -996,6 +996,40 @@ function ensure_schema(PDO $pdo): array {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'yasmin_messages';
 
+    // ── Yasmin accounts — Google OAuth and email/password ────────────
+    // pass_hash is NULL for Google-only accounts and google_id is NULL for
+    // password-only ones; an account may end up with both if the same email
+    // signs in each way, which is why neither column is NOT NULL.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS yasmin_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(190) NOT NULL,
+      name VARCHAR(120) NOT NULL DEFAULT '',
+      avatar VARCHAR(255) DEFAULT NULL,
+      google_id VARCHAR(64) DEFAULT NULL,
+      pass_hash VARCHAR(255) DEFAULT NULL,
+      provider ENUM('google','password') NOT NULL DEFAULT 'password',
+      status ENUM('active','banned') NOT NULL DEFAULT 'active',
+      msg_count INT UNSIGNED NOT NULL DEFAULT 0,
+      last_ip VARCHAR(45) DEFAULT NULL,
+      last_login_at DATETIME DEFAULT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_email (email),
+      UNIQUE KEY uniq_google (google_id),
+      INDEX idx_created (created_at),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'yasmin_users';
+
+    // Conversations stay usable for signed-out visitors, so user_id is
+    // nullable and the session_id path keeps working unchanged.
+    try {
+        $ysCols = $pdo->query("SHOW COLUMNS FROM yasmin_conversations")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('user_id', $ysCols, true)) {
+            @$pdo->exec("ALTER TABLE yasmin_conversations ADD COLUMN user_id INT NULL AFTER session_id");
+            @$pdo->exec("ALTER TABLE yasmin_conversations ADD INDEX idx_user (user_id)");
+        }
+    } catch (Throwable $e) {}
+
     // Prune old Yasmin conversations (keep 30 days)
     try { @$pdo->exec("DELETE FROM yasmin_conversations WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 500"); }
     catch (Throwable $e) {}

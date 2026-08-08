@@ -36,6 +36,17 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
     $canonical   = tool_canonical_url();
     $schemaBlock = $schema ? "\n<script type=\"application/ld+json\">$schema</script>" : '';
 
+    /* The tools section is Arabic-only: the header, breadcrumb and footer
+       strings below are hardcoded Arabic and this file's own stylesheet sets
+       `direction:rtl` unconditionally. So the document declares ar/rtl rather
+       than following the site-wide UI_LANG, which auto-detects from the
+       visitor's browser — an English-locale visitor would otherwise get
+       `dir="ltr"` on a page whose CSS and content are both RTL.
+       If this section is ever translated, change these together with the
+       hardcoded strings and the `direction` rules. */
+    $uiLang = 'ar';
+    $uiDir  = 'rtl';
+
     // Derive light variant of the tool color for backgrounds
     $c = ltrim($color, '#');
     $r = hexdec(substr($c, 0, 2));
@@ -62,7 +73,7 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 
     echo <<<HTML
 <!DOCTYPE html>
-<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
+<html lang="{$uiLang}" dir="{$uiDir}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -86,7 +97,7 @@ function tool_head(string $title, string $desc, string $schema = '', string $col
 /* ── Reset & Base ─────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;font-size:16px}
-body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100vh;overflow-x:hidden;padding-top:62px}
+body{font-family:'Segoe UI',system-ui,-apple-system,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);direction:rtl;line-height:1.65;min-height:100vh;overflow-x:hidden;padding-top:var(--t-header-h,62px)}
 a{color:inherit;text-decoration:none}img{max-width:100%;display:block}
 button,input,select,textarea{font-family:inherit;font-size:inherit}
 
@@ -107,6 +118,11 @@ button,input,select,textarea{font-family:inherit;font-size:inherit}
   --muted:      #64748b;
   --muted2:     #94a3b8;
 
+  /* Single source of truth for the fixed header's height. body padding-top,
+     .t-header height and any full-viewport tool all read this, so the three
+     can never drift out of sync again. */
+  --t-header-h: 62px;
+
   --radius-sm:  8px;
   --radius:     12px;
   --radius-lg:  18px;
@@ -121,7 +137,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit}
   background:#0b1120;
   color:#e2e8f0;
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 24px;height:62px;
+  padding:0 24px;height:var(--t-header-h,62px);
   position:fixed;top:0;left:0;right:0;z-index:200;
   box-shadow:0 2px 16px rgba(0,0,0,.3);
   border-top:4px solid var(--tool-h);
