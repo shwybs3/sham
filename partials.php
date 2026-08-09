@@ -150,6 +150,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <a href="<?= h(url('tools')) ?>" class="<?= $activeNav === 'tools' ? 'active' : '' ?>"><?= function_exists('__') ? __('tools') : 'أدوات' ?></a>
     <a href="<?= h(url('tools/chat/')) ?>" class="<?= $activeNav === 'yasmin' ? 'active' : '' ?>" style="display:flex;align-items:center;gap:4px">🌸 ياسمين</a>
     <a href="<?= h(url('blog')) ?>" class="<?= $activeNav === 'blog' ? 'active' : '' ?>"><?= function_exists('__') ? __('blog') : 'المدونة' ?></a>
+    <a href="<?= h(url('products')) ?>" class="<?= $activeNav === 'products' ? 'active' : '' ?>">🛒 المنتجات</a>
   </nav>
 
   <!-- Mobile-only buttons — hidden on desktop, shown by CSS at ≤1024px -->
@@ -237,6 +238,7 @@ function render_site_header(string $search = '', string $activeNav = 'home'): vo
     <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:10px 16px 4px;opacity:.7"><?= h(__('content_label')) ?></div>
     <a href="<?= h(url('updates')) ?>" class="mobile-nav-link"><?= partial_icon('clock') ?> <?= h(__('latest_updates')) ?></a>
     <a href="<?= h(url('blog')) ?>" class="mobile-nav-link <?= $activeNav === 'blog' ? 'active' : '' ?>"><?= partial_icon('article') ?> <?= h(__('blog')) ?></a>
+    <a href="<?= h(url('products')) ?>" class="mobile-nav-link <?= $activeNav === 'products' ? 'active' : '' ?>">🛒 المنتجات الموصى بها</a>
     <a href="<?= h(url('about')) ?>" class="mobile-nav-link"><?= partial_icon('info') ?> <?= h(__('about')) ?></a>
     <a href="<?= h(url('contact')) ?>" class="mobile-nav-link"><?= partial_icon('mail') ?> <?= h(__('contact')) ?></a>
   </div>
@@ -466,6 +468,7 @@ function render_site_footer(): void { ?>
             url('top?by=views')     => __('top_views'),
             url('updates')          => __('latest_updates'),
             url('blog')             => __('blog'),
+            url('products')         => '🛒 ' . __('products', 'المنتجات'),
             url('tools')            => __('tools') . ' (20+)',
             url('exchange')         => __('exchange'),
             url('gold')             => __('gold'),
@@ -648,6 +651,7 @@ function navbar(): void {
     if (basename($_SERVER['PHP_SELF']) === 'tools.php') $activeNav = 'tools';
     if (basename($_SERVER['PHP_SELF']) === 'blog.php') $activeNav = 'blog';
     if (basename($_SERVER['PHP_SELF']) === 'app.php') $activeNav = 'app';
+    if (basename($_SERVER['PHP_SELF']) === 'products.php') $activeNav = 'products';
     ?>
 <header class="navbar" role="banner">
   <div class="container" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;gap:20px">

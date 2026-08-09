@@ -82,6 +82,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
   <url><loc><?= SITE_URL ?>/top?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/updates</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/blog</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/products</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc><?= SITE_URL ?>/exchange</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc><?= SITE_URL ?>/gold</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <url><loc><?= SITE_URL ?>/calculators</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
@@ -168,5 +169,18 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 
   <!-- ياسمين للمحادثة الذكاء الاصطناعي -->
   <url><loc><?= h($toolsBase . '/tools/chat/') ?></loc><changefreq>weekly</changefreq><priority>0.85</priority></url>
+
+  <!-- المنتجات الموصى بها -->
+  <?php
+  try {
+    $prodRows = $pdo->query("SELECT slug, created_at FROM products WHERE status='published' ORDER BY sort_order")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($prodRows as $pr): ?>
+  <url>
+    <loc><?= h(SITE_URL . '/products?slug=' . rawurlencode($pr['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($pr['created_at'] ?: 'now')) ?></lastmod>
+    <changefreq>weekly</changefreq><priority>0.65</priority>
+  </url>
+  <?php endforeach;
+  } catch (\Throwable $e) {} ?>
 
 </urlset>

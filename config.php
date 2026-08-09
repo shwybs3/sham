@@ -479,6 +479,27 @@ function ensure_schema(PDO $pdo): array {
         }
     } catch (Throwable $e) {}
 
+    // Blog articles seed v2: 3 trending news articles (August 2026)
+    try {
+        if (get_cfg($pdo, 'blog_seeded_v2', '') !== '1') {
+            require __DIR__ . '/install/blog_articles_seed_v2.php';
+        }
+    } catch (Throwable $e) {}
+
+    // Products seed v1: 10 initial marketplace products
+    try {
+        if (get_cfg($pdo, 'products_seeded_v1', '') !== '1') {
+            $seedProducts = require __DIR__ . '/install/products_seed.php';
+            if (is_array($seedProducts)) {
+                $ps = $pdo->prepare("INSERT IGNORE INTO products (slug,name,category,short_description,description,price,original_price,currency,icon_svg,icon_color,icon_bg,buy_url,badge,rating,reviews_count,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                foreach ($seedProducts as $i => $p) {
+                    $ps->execute([$p['slug'],$p['name'],$p['category'],$p['short'],$p['desc'],$p['price'],$p['original_price'],$p['currency'],$p['icon'],$p['color'],$p['bg'],$p['buy_url'],$p['badge'],$p['rating'],$p['reviews'],$i+1]);
+                }
+                set_cfg($pdo, 'products_seeded_v1', '1');
+            }
+        }
+    } catch (Throwable $e) {}
+
     // Additive migrations for blog_posts table
     try {
         $blogCols = $pdo->query("SHOW COLUMNS FROM blog_posts")->fetchAll(PDO::FETCH_COLUMN);
@@ -1101,6 +1122,31 @@ function ensure_schema(PDO $pdo): array {
       INDEX idx_ys_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $log[] = 'yasmin_subscriptions';
+
+    // ── Products marketplace ───────────────────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(200) NOT NULL UNIQUE,
+      name VARCHAR(300) NOT NULL,
+      category VARCHAR(100) NOT NULL DEFAULT 'digital',
+      short_description VARCHAR(500),
+      description TEXT,
+      price DECIMAL(10,2) DEFAULT NULL,
+      original_price DECIMAL(10,2) DEFAULT NULL,
+      currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+      icon_svg TEXT,
+      icon_color VARCHAR(20) DEFAULT '#6366f1',
+      icon_bg VARCHAR(20) DEFAULT '#eef2ff',
+      cover_image VARCHAR(500),
+      buy_url VARCHAR(1000),
+      badge VARCHAR(80) COMMENT 'e.g. الأكثر مبيعاً, جديد, عرض',
+      rating DECIMAL(3,1) DEFAULT NULL,
+      reviews_count INT DEFAULT 0,
+      status ENUM(\"published\",\"draft\") NOT NULL DEFAULT \"published\",
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'products';
 
     return $log;
 }
@@ -2053,18 +2099,19 @@ function set_cfg(PDO $pdo, string $k, string $v): void {
 // "openrouter/free" هو الموجّه التلقائي الرسمي من OpenRouter نفسه ويختار نموذجاً مجانياً متاحاً
 // تلقائياً، لذا نضعه أولاً كضمان يعمل دائماً حتى لو تغيّرت أسماء النماذج الفردية لاحقاً.
 function openrouter_default_free_models(): array {
-    // Prefer open-source models — they are least likely to be blocked by
-    // OpenRouter guardrail / data-policy restrictions on user accounts.
-    // openai/* and anthropic/* models often require explicit data-policy
-    // acceptance, so we skip them here.
+    // Open-source models confirmed free on OpenRouter — ordered by quality.
+    // deepseek/deepseek-r1-0528:free removed (moved to paid-only in mid-2026).
     return [
         'openrouter/free',
         'meta-llama/llama-3.3-70b-instruct:free',
-        'meta-llama/llama-3.1-8b-instruct:free',
+        'qwen/qwen3-235b-a22b:free',
         'qwen/qwen3-14b:free',
-        'mistralai/mistral-7b-instruct:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
         'google/gemma-3-27b-it:free',
-        'deepseek/deepseek-r1-0528:free',
+        'microsoft/phi-4:free',
+        'nvidia/llama-3.1-nemotron-70b-instruct:free',
+        'mistralai/mistral-7b-instruct:free',
     ];
 }
 
@@ -2107,16 +2154,22 @@ function openrouter_keys(string $raw): array {
     return array_values(array_filter($parts, fn($k) => $k !== ''));
 }
 
-// يخزّن نتيجة /models مؤقتاً (6 ساعات) لتفادي استدعاء بطيء متكرر في كل طلب
+// يخزّن نتيجة /models مؤقتاً (2 ساعات) لتفادي استدعاء بطيء متكرر في كل طلب
 function get_cached_free_models(): array {
     $cacheFile = UPLOAD_PATH . '/.openrouter_models_cache.json';
-    if (is_file($cacheFile) && (time() - filemtime($cacheFile) < 21600)) {
+    if (is_file($cacheFile) && (time() - filemtime($cacheFile) < 7200)) {
         $cached = json_decode((string)file_get_contents($cacheFile), true);
         if (is_array($cached)) return $cached;
     }
     $live = fetch_openrouter_free_models();
     if ($live) { @file_put_contents($cacheFile, json_encode($live)); }
     return $live;
+}
+
+// Purge the cached models list — called when a cached model turns out to be no longer free.
+function purge_free_models_cache(): void {
+    $cacheFile = UPLOAD_PATH . '/.openrouter_models_cache.json';
+    @unlink($cacheFile);
 }
 
 /**
@@ -2215,14 +2268,22 @@ function openrouter_call_rotating(array $keys, array $models, string $prompt, in
     $trace = [];
     $attempts = 0;
     $maxAttempts = 12;
+    $cacheInvalidated = false;
+    $deadModels = []; // models confirmed paid-only this session
     foreach ($keys as $key) {
         foreach ($models as $model) {
             if ($attempts >= $maxAttempts) break 2;
+            if (in_array($model, $deadModels, true)) continue;
             $attempts++;
             $r = openrouter_call($key, $model, $prompt, $timeout, $maxTokens);
             $trace[] = ['model' => $model, 'key_tail' => substr($key, -4), 'ok' => $r['ok'], 'error' => $r['error'], 'http' => $r['http']];
             if ($r['ok']) {
                 return ['ok' => true, 'content' => $r['content'], 'model' => $model, 'trace' => $trace];
+            }
+            // Model became paid-only: purge cache so next request gets a fresh list
+            if ($r['http'] === 404 && str_contains((string)($r['error'] ?? ''), 'unavailable for free')) {
+                $deadModels[] = $model;
+                if (!$cacheInvalidated) { purge_free_models_cache(); $cacheInvalidated = true; }
             }
         }
     }
