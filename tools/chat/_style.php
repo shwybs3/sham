@@ -435,6 +435,11 @@ function ys_styles(): void
      you're inside a full-screen app) is hidden so the shell can claim that
      strip of height too. Scoped to this stylesheet, so only chat/auth pages
      are affected — every other tool keeps its breadcrumb. */
+  /* Lock the page height so the SEO article below the shell can't scroll
+     into view on mobile. The article remains in DOM for search engines
+     (which crawl in desktop viewport) but is invisible to users. */
+  html,body{overflow:hidden;height:100dvh}
+  .t-main{display:none}
   .t-breadcrumb{display:none}
   .ys-wrap{padding:0;max-width:none}
   .ys-shell{

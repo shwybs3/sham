@@ -135,6 +135,9 @@ ErrorDocument 404 /404.php
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^landing/([a-z]{2})/([^/]+)/?$ landing/$1/$2/index.html [L]
 
+  # Upgrade/payment page
+  RewriteRule ^upgrade/?$ upgrade.php [L,QSA]
+
   # Price, calculator, and tools pages — must come BEFORE the app-slug catch-all
   RewriteRule ^exchange/?$ exchange.php [L,QSA]
   RewriteRule ^gold/?$ gold.php [L,QSA]

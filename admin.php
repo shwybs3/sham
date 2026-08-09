@@ -1,4 +1,6 @@
 <?php
+ob_start(); // capture any stray PHP error/warning HTML so AJAX responses stay clean JSON
+
 // Raise PHP limits for admin only — long descriptions can be several MBs
 @ini_set('post_max_size', '512M');
 @ini_set('upload_max_filesize', '500M');
@@ -17,6 +19,8 @@ admin_ip_check($pdo);
 // below write to $_SESSION after this point, so closing it early is safe.
 if (isset($_GET['ajax']) && is_admin()) {
     session_write_close();
+    ob_clean();        // discard any PHP warning/notice HTML emitted before this point
+    error_reporting(0); // suppress future notices/warnings from corrupting JSON
 }
 
 /* ══════════════════════════════════════════════════════

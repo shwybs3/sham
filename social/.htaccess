@@ -1,0 +1,47 @@
+Options -Indexes
+RewriteEngine On
+
+# Security
+<FilesMatch "\.(sql|log|env|local\.php)$">
+  Order deny,allow
+  Deny from all
+</FilesMatch>
+
+# Auth routes
+RewriteRule ^auth/login$               auth/login.php  [L,QSA]
+RewriteRule ^auth/register$            auth/register.php [L,QSA]
+RewriteRule ^auth/register-post$       auth/register-post.php [L,QSA]
+RewriteRule ^auth/login-post$          auth/login-post.php [L,QSA]
+RewriteRule ^auth/google$              auth/google.php [L,QSA]
+RewriteRule ^auth/google/callback$     auth/google-callback.php [L,QSA]
+RewriteRule ^auth/setup$               auth/setup.php [L,QSA]
+RewriteRule ^logout$                   auth/logout.php [L]
+
+# API
+RewriteRule ^api/(.+)$                 api/index.php?action=$1 [L,QSA]
+
+# Profile
+RewriteRule ^profile/([a-zA-Z0-9_]+)$ profile/index.php?u=$1 [L,QSA]
+RewriteRule ^profile/([a-zA-Z0-9_]+)/(.+)$ profile/index.php?u=$1&tab=$2 [L,QSA]
+RewriteRule ^profile/edit$             profile/edit.php [L,QSA]
+
+# Messages
+RewriteRule ^messages$                 messages/index.php [L,QSA]
+RewriteRule ^messages/(.+)$            messages/index.php [L,QSA]
+
+# Post
+RewriteRule ^post/([0-9]+)$            post/index.php?id=$1 [L,QSA]
+
+# Marketplace
+RewriteRule ^marketplace$              marketplace/index.php [L,QSA]
+RewriteRule ^marketplace/publish$      marketplace/publish.php [L,QSA]
+RewriteRule ^marketplace/tool/([^/]+)$ marketplace/tool.php?slug=$1 [L,QSA]
+
+# Upgrade
+RewriteRule ^upgrade$                  upgrade/index.php [L,QSA]
+
+# Terms
+RewriteRule ^terms$                    terms.php [L]
+
+# Root
+RewriteRule ^$                         index.php [L,QSA]

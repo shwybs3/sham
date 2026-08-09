@@ -264,7 +264,7 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;overflow:hidden;height:100dvh;padding-top:0!important}
-.sz-wrap{display:flex;flex-direction:column;height:100dvh;max-height:100dvh}
+.sz-wrap{display:flex;flex-direction:column;height:100dvh;max-height:100dvh;padding-top:var(--t-header-h,62px)}
 /* Header */
 .sz-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--sz-surface);border-bottom:1px solid var(--sz-border);flex-shrink:0;gap:12px}
 .sz-burger{background:none;border:none;color:var(--sz-text);cursor:pointer;padding:6px;border-radius:8px;line-height:0}
@@ -302,7 +302,7 @@ body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,Blin
 .sz-thinking{background:#0a0a0f;border:1px solid rgba(204,0,0,.2);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--sz-muted);margin-bottom:8px;font-style:italic;line-height:1.6}
 .sz-thinking::before{content:'⚙️ التفكير العميق…';display:block;color:#cc0000;font-weight:700;font-style:normal;margin-bottom:4px;font-size:11px}
 /* Welcome */
-.sz-welcome{text-align:center;padding:40px 20px;color:var(--sz-muted)}
+.sz-welcome{text-align:center;padding:40px 20px;color:var(--sz-muted);margin:auto 0}
 .sz-welcome-icon{font-size:48px;margin-bottom:16px}
 .sz-welcome h2{font-size:22px;color:var(--sz-text);font-weight:800;margin-bottom:8px}
 .sz-welcome p{font-size:14px;max-width:400px;margin:0 auto;line-height:1.8}
@@ -327,7 +327,7 @@ body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,Blin
 @keyframes szBlink{0%,100%{opacity:1}50%{opacity:0}}
 .sz-cursor{display:inline-block;width:2px;height:14px;background:var(--sz-red2);vertical-align:middle;animation:szBlink 1s ease-in-out infinite;margin-inline-start:2px}
 /* Sidebar */
-.sz-side{position:fixed;top:0;right:0;width:260px;height:100dvh;background:var(--sz-surface);border-left:1px solid var(--sz-border);z-index:200;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;overflow:hidden}
+.sz-side{position:fixed;top:var(--t-header-h,62px);right:0;width:260px;height:calc(100dvh - var(--t-header-h,62px));background:var(--sz-surface);border-left:1px solid var(--sz-border);z-index:200;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;overflow:hidden}
 .sz-side.open{transform:translateX(0)}
 .sz-side-header{padding:14px 16px;border-bottom:1px solid var(--sz-border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .sz-side-header h3{font-size:14px;font-weight:700;color:#fff}
