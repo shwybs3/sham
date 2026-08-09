@@ -472,6 +472,13 @@ function ensure_schema(PDO $pdo): array {
         }
     } catch (Throwable $e) {}
 
+    // Blog articles seed v1: 10 professional Arabic articles
+    try {
+        if (get_cfg($pdo, 'blog_seeded_v1', '') !== '1') {
+            require __DIR__ . '/install/blog_articles_seed.php';
+        }
+    } catch (Throwable $e) {}
+
     // Additive migrations for blog_posts table
     try {
         $blogCols = $pdo->query("SHOW COLUMNS FROM blog_posts")->fetchAll(PDO::FETCH_COLUMN);
@@ -2009,15 +2016,31 @@ function public_cache_headers(int $maxAge = 60): void {
     header('Vary: Accept-Encoding, Accept-Language');
 }
 
+// Shared in-memory settings cache — populated once per request by get_cfg().
+// set_cfg() writes through to keep it consistent within the same request.
+function &_cfg_store(): array {
+    static $store = ['_loaded' => false, '_data' => []];
+    return $store;
+}
 function get_cfg(PDO $pdo, string $k, string $d = ''): string {
-    $r = $pdo->prepare("SELECT `value` FROM settings WHERE `key`=?");
-    $r->execute([$k]);
-    $v = $r->fetchColumn();
-    return $v !== false ? $v : $d;
+    $store = &_cfg_store();
+    if (!$store['_loaded']) {
+        $store['_loaded'] = true;
+        try {
+            foreach ($pdo->query("SELECT `key`,`value` FROM settings")->fetchAll(PDO::FETCH_KEY_PAIR) as $ck => $cv) {
+                $store['_data'][$ck] = (string)$cv;
+            }
+        } catch (\Throwable $e) {}
+    }
+    return array_key_exists($k, $store['_data']) ? $store['_data'][$k] : $d;
 }
 function set_cfg(PDO $pdo, string $k, string $v): void {
     $pdo->prepare("INSERT INTO settings(`key`,`value`) VALUES(?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)")->execute([$k, $v]);
+    $store = &_cfg_store();
+    $store['_data'][$k] = $v;
+    if (!$store['_loaded']) $store['_loaded'] = true;
 }
+
 
 /* ═══════════════════════════════════════════════
    OpenRouter helpers — multi-key rotation +

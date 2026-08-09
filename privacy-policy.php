@@ -21,8 +21,6 @@ $metaDesc     = 'سياسة الخصوصية الكاملة لموقع yassota: 
   <link rel="canonical" href="<?= h(url('privacy-policy')) ?>">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 

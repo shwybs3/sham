@@ -31,7 +31,6 @@ $schema = json_encode([
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json"><?= $schema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
   <style>
   .gold-hero{background:linear-gradient(135deg,#78350f,#92400e);color:#fef9c3;border-radius:18px;padding:28px 24px;margin-bottom:24px;position:relative;overflow:hidden}
   .gold-hero::before{content:'◆';position:absolute;font-size:120px;opacity:.08;right:-20px;top:-20px;color:#fde047}

@@ -69,8 +69,6 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 

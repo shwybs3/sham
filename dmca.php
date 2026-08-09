@@ -69,8 +69,6 @@ $metaDesc = 'قدّم طلب إزالة محتوى أو تطبيق من موقع
   <meta name="description" content="<?= h($metaDesc) ?>">
   <link rel="canonical" href="<?= h(url('dmca')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
   <style>
     .dmca-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
     @media(max-width:720px){.dmca-grid{grid-template-columns:1fr}}

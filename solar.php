@@ -30,7 +30,6 @@ $schema = json_encode([
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json"><?= $schema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
   <style>
   .solar-hero{background:linear-gradient(135deg,#0c4a6e,#0369a1);color:#e0f2fe;border-radius:18px;padding:28px 24px;margin-bottom:24px}
   .solar-box{background:var(--surface);border:1px solid var(--border-c);border-radius:14px;padding:22px 20px;margin-bottom:20px}

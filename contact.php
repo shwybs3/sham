@@ -44,8 +44,6 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
   <meta name="description" content="<?= h($metaDesc) ?>">
   <link rel="canonical" href="<?= h(url('contact')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 

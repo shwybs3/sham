@@ -33,8 +33,6 @@ $metaDesc     = 'إفصاح كامل عن طبيعة الإعلانات في م�
       ['@type'=>'ListItem','position'=>2,'name'=>'الإفصاح وإخلاء المسؤولية'],
     ]],
   ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?></script>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 

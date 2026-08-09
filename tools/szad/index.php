@@ -263,7 +263,7 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
   --sz-accent:#cc0000;--sz-user-bg:#1a0008;--sz-ai-bg:#0e0e16;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;overflow:hidden;height:100dvh}
+body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;overflow:hidden;height:100dvh;padding-top:0!important}
 .sz-wrap{display:flex;flex-direction:column;height:100dvh;max-height:100dvh}
 /* Header */
 .sz-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--sz-surface);border-bottom:1px solid var(--sz-border);flex-shrink:0;gap:12px}

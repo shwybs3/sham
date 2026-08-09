@@ -124,7 +124,6 @@ $dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
   <?php if ($customAdCode): ?>
   <script><?= $customAdCode ?></script>
   <?php endif; ?>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189" crossorigin="anonymous"></script>
   <?php if ($captchaType === 'turnstile'): ?>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <?php endif; ?>
