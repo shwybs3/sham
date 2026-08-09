@@ -2055,6 +2055,185 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AUTO-PUBLISHER AJAX HANDLERS
+   ══════════════════════════════════════════════════════ */
+
+/* Toggle auto-publisher on/off and set frequency */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'auto_pub_toggle' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $enabled = !empty($input['enabled']) ? '1' : '0';
+    $freq    = in_array($input['frequency'] ?? '', ['hourly','every6h','daily','weekly'], true)
+               ? $input['frequency'] : 'daily';
+    $types   = is_array($input['types'] ?? null)
+               ? implode(',', array_filter($input['types'], fn($t)=>in_array($t,['article','tutorial','comparison','review'],true)))
+               : 'article,tutorial';
+    set_cfg($pdo, 'auto_pub_enabled', $enabled);
+    set_cfg($pdo, 'auto_pub_frequency', $freq);
+    set_cfg($pdo, 'auto_pub_types', $types);
+    if ($enabled === '0') set_cfg($pdo, 'auto_pub_next_run', '');
+    else {
+        $intervals = ['hourly'=>3600,'every6h'=>21600,'daily'=>86400,'weekly'=>604800];
+        set_cfg($pdo, 'auto_pub_next_run', (string)(time() + ($intervals[$freq] ?? 86400)));
+    }
+    log_admin_action($pdo, 'auto_pub_toggle', 'settings', 0, "enabled=$enabled freq=$freq");
+    echo json_encode(['success'=>true,'enabled'=>$enabled==='1']);
+    exit;
+}
+
+/* Get auto-publisher status and recent articles */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'auto_pub_status' && is_admin()) {
+    header('Content-Type: application/json');
+    $enabled  = get_cfg($pdo, 'auto_pub_enabled', '0') === '1';
+    $freq     = get_cfg($pdo, 'auto_pub_frequency', 'daily');
+    $types    = get_cfg($pdo, 'auto_pub_types', 'article,tutorial');
+    $lastRun  = get_cfg($pdo, 'auto_pub_last_run', '');
+    $nextRun  = get_cfg($pdo, 'auto_pub_next_run', '');
+    $total    = (int)get_cfg($pdo, 'auto_pub_total', '0');
+    try {
+        $recent = $pdo->query("SELECT id,title,type,status,created_at FROM blog_posts
+                               WHERE title LIKE '[auto]%' OR meta_description LIKE '%auto_pub%'
+                               ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    } catch(Throwable $e) { $recent = []; }
+    echo json_encode(['success'=>true,'enabled'=>$enabled,'frequency'=>$freq,'types'=>$types,
+        'last_run'=>$lastRun,'next_run'=>$nextRun?date('Y-m-d H:i',(int)$nextRun):'',
+        'total'=>$total,'recent'=>$recent], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* Ask AI for trending topic ideas */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'auto_pub_topics' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(60);
+    $type = in_array($_GET['type'] ?? '', ['article','tutorial','comparison','review'], true)
+            ? $_GET['type'] : 'article';
+
+    $typeLabel = ['article'=>'مقال','tutorial'=>'شرح وتعليم','comparison'=>'مقارنة','review'=>'مراجعة'][$type];
+
+    $prompt = "أنت محرر محتوى متخصص في المحتوى التقني العربي. اقترح 5 مواضيع رائجة ومطلوبة جداً الآن عالمياً في مجال التقنية والذكاء الاصطناعي والتطبيقات، تصلح لكتابة {$typeLabel} بالعربية.
+
+المطلوب: قائمة JSON فقط — 5 مواضيع، كل موضوع يحتوي:
+- title: عنوان المقال بالعربية (جذاب وSEO-friendly، 50-70 حرف)
+- slug: slug إنجليزي (lowercase-kebab-case)
+- type: نوع المقال (واحد من: article, tutorial, comparison, review)
+- keywords: كلمات مفتاحية (مفصولة بفاصلة)
+- brief: وصف مختصر (1-2 جملة) لما سيغطيه المقال
+
+أمثلة على المواضيع المطلوبة: أفضل نماذج AI مجانية 2025، Claude مقابل ChatGPT، شرح استخدام Gemini، أفضل تطبيقات الإنتاجية.
+الرد: JSON array فقط بدون أي نص إضافي.";
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key', ''));
+    if (!$keys) { echo json_encode(['success'=>false,'error'=>'لا توجد مفاتيح API']); exit; }
+    $models = build_model_rotation($pdo, true);
+    $r = openrouter_call_rotating($keys, $models, $prompt, 1000);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']??'فشل الاتصال']); exit; }
+
+    $raw = trim($r['content']);
+    $raw = preg_replace('/^```(?:json)?\s*/i','',preg_replace('/\s*```\s*$/i','',$raw));
+    if (preg_match('/\[.*\]/s',$raw,$m)) $raw=$m[0];
+    $topics = json_decode($raw, true);
+    if (!is_array($topics)) { echo json_encode(['success'=>false,'error'=>'تعذّر تحليل الرد']); exit; }
+    echo json_encode(['success'=>true,'topics'=>array_slice($topics,0,5)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* Generate one chunk of an auto-published article */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'auto_pub_chunk' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(120);
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $title    = trim($input['title'] ?? '');
+    $keywords = trim($input['keywords'] ?? '');
+    $type     = in_array($input['type']??'', ['article','tutorial','comparison','review'],true) ? $input['type'] : 'article';
+    $chunk    = max(1, min(5, (int)($input['chunk'] ?? 1)));
+    $prevHtml = trim($input['prev_html'] ?? '');
+    if (!$title) { echo json_encode(['success'=>false,'error'=>'title مطلوب']); exit; }
+
+    $typeLabel = ['article'=>'مقال','tutorial'=>'شرح تعليمي','comparison'=>'مقارنة','review'=>'مراجعة'][$type];
+    $sections  = [
+        1 => 'المقدمة + خلفية عامة + لماذا هذا الموضوع مهم الآن',
+        2 => 'التفاصيل العملية + الأمثلة التطبيقية + المعلومات التقنية',
+        3 => 'المميزات والعيوب + التجارب الحقيقية + البدائل المتاحة',
+        4 => 'نصائح احترافية + أخطاء يجب تجنبها + مقارنة موسعة',
+        5 => 'خلاصة وتوصيات + أسئلة شائعة (10 أسئلة) + خاتمة مقنعة',
+    ];
+    $prevNote = $prevHtml ? "ما كُتب سابقاً (لا تكرره، أكمل بعده): [".mb_strlen($prevHtml)." حرف مكتوب]" : '';
+
+    $prompt = "أنت كاتب محتوى تقني عربي محترف. اكتب القسم رقم {$chunk} من {$typeLabel} بعنوان: «{$title}»
+الكلمات المفتاحية: {$keywords}
+موضوع هذا القسم: {$sections[$chunk]}
+{$prevNote}
+
+المتطلبات:
+- 700-1000 كلمة لهذا القسم (مهم جداً — لا تكتب أقل من 700 كلمة)
+- HTML فقط (لا Markdown، لا نص خام)
+- <h2> للعناوين الرئيسية، <h3> للفرعية، <p> للفقرات، <ul><li> للقوائم
+- <strong> للمصطلحات المهمة، <em> للتأكيد
+- لغة عربية فصيحة واضحة ومفيدة — لا ملء ولا تكرار
+- محتوى حقيقي ومتعمق يفيد القارئ فعلاً
+- لا تضع مقدمات مثل 'في هذا القسم...'";
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key', ''));
+    if (!$keys) { echo json_encode(['success'=>false,'error'=>'لا توجد مفاتيح API']); exit; }
+    $models = build_model_rotation($pdo, true);
+    $r = openrouter_call_rotating($keys, $models, $prompt, 2000);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']??'فشل']); exit; }
+    echo json_encode(['success'=>true,'html'=>$r['content'],'chunk'=>$chunk,'model'=>$r['model']??''], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* Save auto-generated article to blog_posts */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'auto_pub_save' && is_admin()) {
+    header('Content-Type: application/json');
+    @set_time_limit(60);
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $title    = trim($input['title'] ?? '');
+    $slug     = trim($input['slug'] ?? '');
+    $type     = in_array($input['type']??'', ['article','tutorial','comparison','review'],true) ? $input['type'] : 'article';
+    $keywords = trim($input['keywords'] ?? '');
+    $body     = trim($input['body'] ?? '');
+    $publish  = !empty($input['publish']);
+    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'title و body مطلوبان']); exit; }
+
+    // Generate unique slug
+    $base = $slug ?: preg_replace('/[^a-z0-9]+/','-',strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII',$title) ?? $title));
+    $base = trim($base,'-') ?: 'auto-article-'.time();
+    $finalSlug = $base;
+    $n = 0;
+    while ($pdo->prepare("SELECT id FROM blog_posts WHERE slug=?")->execute([$finalSlug]) &&
+           $pdo->prepare("SELECT id FROM blog_posts WHERE slug=?")->execute([$finalSlug]) &&
+           (bool)$pdo->query("SELECT COUNT(*) FROM blog_posts WHERE slug=".json_encode($finalSlug))->fetchColumn()) {
+        $n++; $finalSlug = $base . '-' . $n;
+        if ($n > 99) { $finalSlug = $base.'-'.time(); break; }
+    }
+
+    // Quick SEO meta from first 160 chars of body text
+    $excerpt = mb_substr(strip_tags($body), 0, 160);
+    $status  = $publish ? 'published' : 'draft';
+
+    try {
+        $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,status) VALUES (?,?,?,?,?,?,?,?,?)")
+            ->execute([$type, $title, $finalSlug, $title, $excerpt, $keywords, $excerpt, $body, $status]);
+        $newId = (int)$pdo->lastInsertId();
+    } catch (Throwable $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+        exit;
+    }
+
+    $total = (int)get_cfg($pdo,'auto_pub_total','0') + 1;
+    set_cfg($pdo, 'auto_pub_total', (string)$total);
+    set_cfg($pdo, 'auto_pub_last_run', date('Y-m-d H:i:s'));
+    $freq = get_cfg($pdo, 'auto_pub_frequency', 'daily');
+    $intervals = ['hourly'=>3600,'every6h'=>21600,'daily'=>86400,'weekly'=>604800];
+    if (get_cfg($pdo,'auto_pub_enabled','0')==='1')
+        set_cfg($pdo,'auto_pub_next_run',(string)(time()+($intervals[$freq]??86400)));
+
+    log_admin_action($pdo,'auto_pub_save','blog_posts',$newId,"Auto-published: $title");
+    echo json_encode(['success'=>true,'id'=>$newId,'slug'=>$finalSlug,'status'=>$status], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -2230,6 +2409,52 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'agent_api_log' && is_admin()) {
     header('Content-Type: application/json');
     $rows = $pdo->query("SELECT action, ip, ok, created_at FROM claude_api_log ORDER BY id DESC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode(['rows' => $rows], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ── MCP File API — save settings (token + IP whitelist) ─────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'mcp_save_settings' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $input    = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ipList   = trim($input['ip_whitelist'] ?? '');
+    set_cfg($pdo, 'mcp_ip_whitelist', $ipList);
+    log_admin_action($pdo, 'mcp_save_settings', 'settings', 0, 'MCP IP whitelist updated');
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+/* ── MCP File API — regenerate token ─────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'mcp_regen_token' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = bin2hex(random_bytes(24));
+    set_cfg($pdo, 'mcp_api_token', $token);
+    log_admin_action($pdo, 'mcp_regen_token', 'settings', 0, 'MCP API token regenerated');
+    echo json_encode(['success' => true, 'token' => $token]);
+    exit;
+}
+
+/* ── MCP File API — ping endpoint ────────────────────────────── */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'mcp_ping' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $token   = get_cfg($pdo, 'mcp_api_token', '');
+    $base    = (defined('SITE_URL') ? rtrim(SITE_URL, '/') : '') . '/api/mcp.php';
+    if (!$token) { echo json_encode(['success' => false, 'error' => 'لا يوجد مفتاح MCP — ولّد مفتاحاً أولاً']); exit; }
+    $ch = curl_init($base);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode(['action' => 'ping']),
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($err) { echo json_encode(['success' => false, 'error' => $err]); exit; }
+    $data = json_decode($resp, true);
+    echo json_encode(['success' => ($code === 200 && !empty($data['ok'])), 'code' => $code, 'response' => $data]);
     exit;
 }
 
@@ -7805,6 +8030,7 @@ $navLinks = [
     'article-gen'=> ['label'=>'توليد مقالات التطبيقات','icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
     'web-tools' => ['label'=>'إدارة أدوات الويب', 'icon'=>'M12 6V4m0 2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zm7-2v2m0-2a2 2 0 100 4 2 2 0 000-4zm0 2a2 2 0 100 4 2 2 0 000-4zM5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
     'tool-content-gen' => ['label'=>'توليد محتوى الأدوات', 'icon'=>'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
+    'auto-publisher' => ['label'=>'النشر التلقائي (AI)', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     // ── الإحصائيات
     '__sec_stats' => ['_section'=>'الإحصائيات'],
     'stats'     => ['label'=>'إحصائيات الموقع', 'icon'=>'M3 3v18h18M8 17V9m4 8V5m4 12v-6'],
@@ -13484,8 +13710,8 @@ function saveYasminKeys() {
   const keys = [...document.querySelectorAll('.ys-key-input')].map(i=>i.value.trim()).filter(Boolean);
   fetch('admin.php?ajax=yasmin_save', {
     method: 'POST', credentials: 'same-origin',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({yasmin_keys_array: keys, csrf_token: '<?= $_SESSION['csrf'] ?? '' ?>'})
+    headers: {'Content-Type':'application/json','X-CSRF-Token':'<?= $_SESSION['csrf'] ?? '' ?>'},
+    body: JSON.stringify({yasmin_keys_array: keys})
   }).then(r=>r.json()).then(d=>{
     alert(d.success ? 'تم حفظ المفاتيح بنجاح ✅' : 'خطأ: ' + (d.error||''));
     loadYasminStats();
@@ -13495,12 +13721,11 @@ function saveYasminKeys() {
 function saveYasminPrompt() {
   fetch('admin.php?ajax=yasmin_save', {
     method: 'POST', credentials: 'same-origin',
-    headers: {'Content-Type':'application/json'},
+    headers: {'Content-Type':'application/json','X-CSRF-Token':'<?= $_SESSION['csrf'] ?? '' ?>'},
     body: JSON.stringify({
       yasmin_system_prompt: document.getElementById('yasmin-prompt').value,
       yasmin_max_tokens: document.getElementById('yasmin-max-tokens').value,
-      yasmin_temperature: document.getElementById('yasmin-temp').value,
-      csrf_token: '<?= $_SESSION['csrf'] ?? '' ?>'
+      yasmin_temperature: document.getElementById('yasmin-temp').value
     })
   }).then(r=>r.json()).then(d=>{
     alert(d.success ? 'تم حفظ إعدادات ياسمين ✅' : 'خطأ: ' + (d.error||''));
@@ -19502,6 +19727,7 @@ try {
   <button class="btn btn-sm" onclick="ccTab('setup')" id="cct-setup" style="background:var(--primary);color:#fff">⚙️ الإعداد</button>
   <button class="btn btn-sm" onclick="ccTab('mcp')"   id="cct-mcp">🔌 MCP Config</button>
   <button class="btn btn-sm" onclick="ccTab('agent')" id="cct-agent">🔑 API الوكيل</button>
+  <button class="btn btn-sm" onclick="ccTab('fileapi')" id="cct-fileapi">📁 File API</button>
   <button class="btn btn-sm" onclick="ccTab('test')"  id="cct-test">🧪 اختبار الاتصال</button>
   <button class="btn btn-sm" onclick="ccTab('docs')"  id="cct-docs">📖 التوثيق</button>
 </div>
@@ -19603,6 +19829,75 @@ $agentBase     = (defined('SITE_URL') ? rtrim(SITE_URL, '/') : '') . '/api/claud
   <div id="agent-log" style="font-size:12px;color:var(--muted)">جارٍ التحميل...</div>
 </div>
 
+<?php
+$mcpToken  = get_cfg($pdo,'mcp_api_token','');
+$mcpIpList = get_cfg($pdo,'mcp_ip_whitelist','');
+$mcpBase   = (defined('SITE_URL')?rtrim(SITE_URL,'/'):'').'/api/mcp.php';
+?>
+<div class="panel" id="cc-tab-fileapi" style="display:none">
+  <h3 style="margin:0 0 8px;font-size:16px;font-weight:700">📁 File API — قراءة وكتابة الملفات من Claude</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.8">
+    نقطة HTTP آمنة (<code dir="ltr" style="font-size:11px"><?= h($mcpBase) ?></code>) تتيح لـ Claude
+    قراءة وكتابة وفحص ملفات موقعك مباشرةً — بدون GitHub — محمية بمفتاح Bearer سري.
+    ملفات PHP تُفحص بـ <code>php -l</code> قبل أي كتابة. كل ملف يُحفظ تلقائياً كـ backup قبل التعديل.
+  </p>
+
+  <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px">
+    ⚠️ <strong>تنبيه:</strong> هذه الأداة تمنح Claude صلاحية كتابة أي ملف في webroot. تأكد من حفاظ المفتاح وعدم مشاركته مع أي شخص آخر.
+  </div>
+
+  <div style="margin-bottom:16px">
+    <label class="form-label">مفتاح API (Bearer Token)</label>
+    <?php if ($mcpToken): ?>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" type="password" id="mcp-token-show" value="<?= h($mcpToken) ?>" dir="ltr" style="font-family:var(--f-mono);flex:1">
+        <button onclick="toggleMcpToken()" class="btn btn-sm">👁 إظهار</button>
+        <button onclick="regenMcpToken()" class="btn btn-sm" style="background:var(--danger);color:#fff">🔄 توليد جديد</button>
+      </div>
+    <?php else: ?>
+      <button onclick="regenMcpToken()" class="btn-ai">🔑 توليد مفتاح MCP API</button>
+    <?php endif; ?>
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">احتفظ بهذا المفتاح — اجعله طويلاً وعشوائياً (على الأقل 32 حرف).</p>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <label class="form-label">IP Whitelist (اختياري — اتركه فارغاً للسماح لجميع IPs)</label>
+    <input class="form-input" id="mcp-ip-list" type="text" dir="ltr" value="<?= h($mcpIpList) ?>" placeholder="1.2.3.4, 5.6.7.8">
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">IPs مفصولة بفاصلة. إذا فارغ = أي IP مسموح (مع المفتاح).</p>
+  </div>
+  <button onclick="saveMcpSettings()" class="btn-save" style="padding:10px 24px;margin-bottom:20px">💾 حفظ إعدادات MCP</button>
+  <span id="mcp-save-st" style="font-size:12px;color:var(--muted)"></span>
+
+  <h4 style="font-size:14px;font-weight:700;margin:16px 0 10px">استخدام من Claude Code</h4>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:10px">أضف هذا إلى ملف <code>.claude/CLAUDE.md</code> في بيئة Claude Code لتفعيل الاتصال المباشر:</p>
+  <pre style="font-size:11px;direction:ltr;text-align:left;overflow-x:auto;background:var(--bg);padding:12px;border-radius:8px;white-space:pre-wrap" id="mcp-example-block">
+# Site File API
+API_BASE: <?= h($mcpBase) ?>
+
+Bearer Token: [mcp_api_token from admin]
+
+## Actions available:
+- read     {"path":"tools/chat/index.php"}
+- write    {"path":"...","content":"..."}
+- list     {"path":"tools/"}
+- grep     {"path":".","pattern":"csrf_check","ext":"php"}
+- lint     {"path":"config.php"}
+- lint_all {"path":"."}
+- error_log {"lines":50}
+- info     {}
+- ping     {}
+</pre>
+
+  <h4 style="font-size:14px;font-weight:700;margin:16px 0 10px">مثال curl</h4>
+  <pre style="font-size:11px;direction:ltr;text-align:left;overflow-x:auto;background:var(--bg);padding:12px;border-radius:8px;white-space:pre-wrap">curl -X POST '<?= h($mcpBase) ?>' \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"read","path":"tools/chat/index.php"}'</pre>
+
+  <div id="mcp-ping-result" style="font-size:13px;margin-top:12px;display:none"></div>
+  <button onclick="mcpPing()" class="btn btn-sm" style="margin-top:10px">🏓 اختبار الاتصال (Ping)</button>
+</div>
+
 <div class="panel" id="cc-tab-test" style="display:none">
   <h3 style="margin:0 0 16px;font-size:16px;font-weight:700">🧪 اختبار الاتصال بـ Claude API</h3>
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -19638,7 +19933,7 @@ $agentBase     = (defined('SITE_URL') ? rtrim(SITE_URL, '/') : '') . '/api/claud
 
 <script>
 function ccTab(name) {
-  ['setup','mcp','agent','test','docs'].forEach(t => {
+  ['setup','mcp','agent','fileapi','test','docs'].forEach(t => {
     document.getElementById('cc-tab-'+t).style.display = t===name?'':'none';
     const btn = document.getElementById('cct-'+t);
     if (btn) { btn.style.background = t===name?'var(--primary)':''; btn.style.color = t===name?'#fff':''; }
@@ -19708,6 +20003,58 @@ async function regenAgentKey() {
   document.getElementById('agent-key-value').value = d.key;
   document.getElementById('agent-key-reveal').style.display = 'block';
   showAdminToast('✅ تم توليد مفتاح جديد — انسخه الآن', 'success');
+}
+
+/* ── File API (MCP) tab ───────────────────────────────────────── */
+function toggleMcpToken() {
+  const inp = document.getElementById('mcp-token-show');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function regenMcpToken() {
+  if (!confirm('توليد مفتاح MCP جديد يُبطل المفتاح الحالي فوراً. متابعة؟')) return;
+  const r = await fetch('admin.php?ajax=mcp_regen_token', {method:'POST'});
+  const d = await r.json();
+  if (!d.success) { showAdminToast('❌ فشل توليد المفتاح', 'error'); return; }
+  const inp = document.getElementById('mcp-token-show');
+  if (inp) { inp.value = d.token; inp.type = 'text'; }
+  else {
+    // If token field didn't exist yet (first-time gen), reload page
+    showAdminToast('✅ تم توليد المفتاح — جارٍ تحديث الصفحة', 'success');
+    setTimeout(() => location.reload(), 1200);
+    return;
+  }
+  showAdminToast('✅ تم توليد مفتاح MCP جديد — انسخه الآن', 'success');
+}
+
+async function saveMcpSettings() {
+  const ipList = document.getElementById('mcp-ip-list').value.trim();
+  const st     = document.getElementById('mcp-save-st');
+  st.textContent = '⏳ جارٍ الحفظ...';
+  const r = await fetch('admin.php?ajax=mcp_save_settings', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ip_whitelist: ipList})
+  });
+  const d = await r.json();
+  st.textContent = d.success ? '✅ تم حفظ الإعدادات' : '❌ فشل الحفظ';
+  setTimeout(() => { st.textContent = ''; }, 3000);
+}
+
+async function mcpPing() {
+  const out = document.getElementById('mcp-ping-result');
+  out.style.display = 'block';
+  out.textContent = '⏳ جارٍ الاختبار...';
+  try {
+    const r = await fetch('admin.php?ajax=mcp_ping', {method:'POST'});
+    const d = await r.json();
+    if (d.success) {
+      out.innerHTML = '<span style="color:var(--success)">✅ الاتصال ناجح — الخادم يستجيب</span>';
+    } else {
+      out.innerHTML = '<span style="color:var(--danger)">❌ فشل: ' + (d.error || JSON.stringify(d)) + '</span>';
+    }
+  } catch(e) {
+    out.innerHTML = '<span style="color:var(--danger)">❌ خطأ في الاتصال: ' + e.message + '</span>';
+  }
 }
 
 async function loadAgentLog() {
@@ -20492,6 +20839,256 @@ function runBulkSeoFix(){
   next();
 }
 window.runBulkSeoFix=runBulkSeoFix;
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($page === 'auto-publisher'): ?>
+<?php
+$apEnabled  = get_cfg($pdo, 'auto_pub_enabled', '0') === '1';
+$apFreq     = get_cfg($pdo, 'auto_pub_frequency', 'daily');
+$apTypes    = get_cfg($pdo, 'auto_pub_types', 'article,tutorial');
+$apLastRun  = get_cfg($pdo, 'auto_pub_last_run', '');
+$apNextRun  = get_cfg($pdo, 'auto_pub_next_run', '');
+$apTotal    = (int)get_cfg($pdo, 'auto_pub_total', '0');
+$apTypeArr  = explode(',', $apTypes);
+try {
+    $apRecent = $pdo->query("SELECT id,title,type,status,created_at FROM blog_posts ORDER BY id DESC LIMIT 15")->fetchAll(PDO::FETCH_ASSOC);
+} catch(Throwable $e) { $apRecent = []; }
+$siteUrl = defined('SITE_URL') ? rtrim(SITE_URL,'/') : '';
+?>
+<div class="admin-header" style="display:flex;align-items:center;gap:12px;justify-content:space-between">
+  <div>
+    <h1>🤖 النشر التلقائي بالذكاء الاصطناعي</h1>
+    <p style="margin:0;color:var(--muted);font-size:13px">توليد مقالات ومراجعات وشروحات تلقائياً من المواضيع الرائجة عالمياً</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span id="ap-status-badge" style="padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;background:<?= $apEnabled?'var(--success)':'var(--muted)' ?>;color:#fff">
+      <?= $apEnabled ? '🟢 مفعّل' : '⭕ متوقف' ?>
+    </span>
+    <button class="btn" onclick="apToggle()" id="ap-toggle-btn" style="background:<?= $apEnabled?'var(--danger)':'var(--success)' ?>;color:#fff">
+      <?= $apEnabled ? 'إيقاف تشغيل' : 'تشغيل' ?>
+    </button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+  <!-- Stats -->
+  <div class="panel">
+    <h3 style="margin:0 0 14px;font-size:14px;color:var(--muted)">الإحصائيات</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <?php foreach([
+        ['إجمالي المقالات المولّدة', $apTotal, '📝'],
+        ['آخر تشغيل', $apLastRun ?: 'لم يُشغَّل بعد', '🕐'],
+        ['التشغيل القادم', $apNextRun ? date('d/m H:i',(int)$apNextRun) : '—', '⏰'],
+        ['التكرار', ['hourly'=>'كل ساعة','every6h'=>'كل 6 ساعات','daily'=>'يومياً','weekly'=>'أسبوعياً'][$apFreq]??$apFreq, '🔄'],
+      ] as $st): ?>
+      <div style="background:var(--bg);border:1px solid var(--border-c);border-radius:8px;padding:12px">
+        <div style="font-size:18px;margin-bottom:4px"><?= $st[2] ?></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px"><?= h($st[0]) ?></div>
+        <div style="font-size:13px;font-weight:700;color:var(--primary)"><?= h((string)$st[1]) ?></div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="panel">
+    <h3 style="margin:0 0 14px;font-size:14px;color:var(--muted)">الإعدادات</h3>
+    <div style="margin-bottom:12px">
+      <label class="form-label">تكرار النشر</label>
+      <select class="form-input" id="ap-freq">
+        <?php foreach(['hourly'=>'كل ساعة','every6h'=>'كل 6 ساعات','daily'=>'يومياً','weekly'=>'أسبوعياً'] as $v=>$l): ?>
+        <option value="<?= $v ?>" <?= $apFreq===$v?'selected':'' ?>><?= $l ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="form-label">أنواع المحتوى</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <?php foreach(['article'=>'مقال','tutorial'=>'شرح','comparison'=>'مقارنة','review'=>'مراجعة'] as $v=>$l): ?>
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
+          <input type="checkbox" class="ap-type-cb" value="<?= $v ?>" <?= in_array($v,$apTypeArr)?'checked':'' ?>> <?= $l ?>
+        </label>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <button class="btn btn-sm" onclick="apSaveSettings()" style="background:var(--primary);color:#fff">حفظ الإعدادات</button>
+    <span id="ap-settings-st" style="font-size:12px;color:var(--muted);margin-right:8px"></span>
+  </div>
+</div>
+
+<!-- Manual Run Section -->
+<div class="panel" style="margin-bottom:20px">
+  <h3 style="margin:0 0 14px;font-size:15px">⚡ توليد مقال الآن</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    <select class="form-input" id="ap-run-type" style="max-width:180px">
+      <option value="article">مقال عام</option>
+      <option value="tutorial">شرح تعليمي</option>
+      <option value="comparison">مقارنة</option>
+      <option value="review">مراجعة</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+      <input type="checkbox" id="ap-auto-publish" checked> نشر فوراً
+    </label>
+    <button class="btn" onclick="apRunNow()" id="ap-run-btn" style="background:var(--primary);color:#fff">
+      🚀 توليد ونشر
+    </button>
+  </div>
+  <div id="ap-log" style="background:var(--bg);border:1px solid var(--border-c);border-radius:8px;padding:12px;min-height:60px;font-family:var(--f-mono);font-size:12px;display:none;max-height:240px;overflow-y:auto"></div>
+</div>
+
+<!-- Recent Articles -->
+<div class="panel">
+  <h3 style="margin:0 0 14px;font-size:15px">📋 آخر المقالات المنشورة</h3>
+  <?php if (empty($apRecent)): ?>
+  <p style="color:var(--muted);font-size:13px">لا توجد مقالات بعد — اضغط "توليد ونشر" لإنشاء أول مقال.</p>
+  <?php else: ?>
+  <table class="admin-table">
+    <thead><tr><th>#</th><th>العنوان</th><th>النوع</th><th>الحالة</th><th>التاريخ</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach($apRecent as $ar): ?>
+    <tr>
+      <td><?= (int)$ar['id'] ?></td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= h($ar['title']) ?></td>
+      <td><?= h($ar['type']) ?></td>
+      <td><span style="padding:2px 8px;border-radius:10px;font-size:11px;background:<?= $ar['status']==='published'?'rgba(34,197,94,.15)':'rgba(234,179,8,.15)' ?>;color:<?= $ar['status']==='published'?'#16a34a':'#a16207' ?>"><?= $ar['status']==='published'?'منشور':'مسودة' ?></span></td>
+      <td style="font-size:11px"><?= h($ar['created_at']) ?></td>
+      <td>
+        <a href="<?= h($siteUrl) ?>/blog/<?= h($ar['id']) ?>" target="_blank" class="btn btn-sm">👁</a>
+        <a href="admin.php?page=blog-edit&id=<?= (int)$ar['id'] ?>" class="btn btn-sm">✏️</a>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</div>
+
+<!-- Cron Setup Instructions -->
+<div class="panel" style="border:1px solid var(--border-c);background:var(--bg)">
+  <h3 style="margin:0 0 10px;font-size:14px">⚙️ إعداد النشر التلقائي في السيرفر (اختياري)</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+    للنشر التلقائي بدون تدخل بشري، أضف هذا الأمر في cPanel → Cron Jobs:
+  </p>
+  <code style="display:block;background:var(--card);padding:10px 14px;border-radius:6px;font-size:12px;direction:ltr;text-align:left;overflow-x:auto">
+    0 * * * * php <?= h($_SERVER['DOCUMENT_ROOT'] ?? '/home/user/public_html') ?>/auto-publish-cron.php >> /dev/null 2>&1
+  </code>
+  <p style="font-size:12px;color:var(--muted);margin-top:8px">
+    الملف <code>auto-publish-cron.php</code> موجود في جذر الموقع. يتحقق تلقائياً من الإعدادات ولا ينشر إذا كانت الجدولة لم تحن بعد.
+  </p>
+</div>
+
+<script>
+(function(){
+var apEnabled = <?= $apEnabled ? 'true' : 'false' ?>;
+
+function apToggle() {
+  var btn = document.getElementById('ap-toggle-btn');
+  var badge = document.getElementById('ap-status-badge');
+  var freq = document.getElementById('ap-freq').value;
+  var types = [...document.querySelectorAll('.ap-type-cb:checked')].map(c=>c.value);
+  fetch('admin.php?ajax=auto_pub_toggle',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled:!apEnabled,frequency:freq,types:types})
+  }).then(r=>r.json()).then(d=>{
+    if(!d.success){alert('فشل: '+(d.error||''));return;}
+    apEnabled = d.enabled;
+    badge.textContent = apEnabled ? '🟢 مفعّل' : '⭕ متوقف';
+    badge.style.background = apEnabled ? 'var(--success)' : 'var(--muted)';
+    btn.textContent = apEnabled ? 'إيقاف تشغيل' : 'تشغيل';
+    btn.style.background = apEnabled ? 'var(--danger)' : 'var(--success)';
+  }).catch(e=>alert('خطأ: '+e.message));
+}
+
+function apSaveSettings() {
+  var st = document.getElementById('ap-settings-st');
+  var freq = document.getElementById('ap-freq').value;
+  var types = [...document.querySelectorAll('.ap-type-cb:checked')].map(c=>c.value);
+  st.textContent = '⏳ جاري الحفظ…';
+  fetch('admin.php?ajax=auto_pub_toggle',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled:apEnabled,frequency:freq,types:types})
+  }).then(r=>r.json()).then(d=>{
+    st.textContent = d.success ? '✅ تم الحفظ' : '❌ فشل';
+    st.style.color = d.success ? 'var(--success)' : 'var(--danger)';
+    setTimeout(()=>{st.textContent='';},3000);
+  });
+}
+
+function apLog(msg, color) {
+  var el = document.getElementById('ap-log');
+  el.style.display = '';
+  var line = document.createElement('div');
+  line.style.color = color || 'var(--text)';
+  line.textContent = '[' + new Date().toLocaleTimeString('ar') + '] ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function apRunNow() {
+  var btn = document.getElementById('ap-run-btn');
+  var type = document.getElementById('ap-run-type').value;
+  var autoPublish = document.getElementById('ap-auto-publish').checked;
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري التوليد…';
+  document.getElementById('ap-log').innerHTML = '';
+  apLog('🔍 جاري البحث عن مواضيع رائجة…');
+
+  try {
+    // Step 1: Get topics
+    var tr = await fetch('admin.php?ajax=auto_pub_topics&type='+encodeURIComponent(type));
+    var td = await tr.json();
+    if (!td.success || !td.topics || !td.topics.length) {
+      apLog('❌ فشل في جلب المواضيع: ' + (td.error||''), 'var(--danger)');
+      btn.disabled=false; btn.textContent='🚀 توليد ونشر'; return;
+    }
+    var topic = td.topics[0];
+    apLog('✅ تم اختيار الموضوع: ' + topic.title);
+    apLog('🔑 الكلمات المفتاحية: ' + (topic.keywords||''));
+
+    // Step 2: Generate 3 chunks
+    var fullHtml = '';
+    for (var c = 1; c <= 3; c++) {
+      apLog('✍️ جاري كتابة القسم ' + c + ' من 3…');
+      var cr = await fetch('admin.php?ajax=auto_pub_chunk', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({title:topic.title, keywords:topic.keywords||'', type:topic.type||type, chunk:c, prev_html:fullHtml})
+      });
+      var cd = await cr.json();
+      if (!cd.success) {
+        apLog('❌ فشل القسم ' + c + ': ' + (cd.error||''), 'var(--danger)');
+        btn.disabled=false; btn.textContent='🚀 توليد ونشر'; return;
+      }
+      fullHtml += '\n' + cd.html;
+      apLog('✅ القسم ' + c + ' مكتمل (' + cd.html.length + ' حرف) — ' + (cd.model||''));
+    }
+
+    // Step 3: Save
+    apLog('💾 جاري الحفظ' + (autoPublish?' والنشر…':'…'));
+    var sr = await fetch('admin.php?ajax=auto_pub_save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({title:topic.title, slug:topic.slug||'', type:topic.type||type,
+                            keywords:topic.keywords||'', body:fullHtml, publish:autoPublish})
+    });
+    var sd = await sr.json();
+    if (!sd.success) {
+      apLog('❌ فشل الحفظ: ' + (sd.error||''), 'var(--danger)');
+    } else {
+      apLog('🎉 تم ' + (autoPublish?'النشر':'الحفظ كمسودة') + ' بنجاح! ID=' + sd.id + ' / slug=' + sd.slug, 'var(--success)');
+      apLog('📖 الحجم الإجمالي: ' + fullHtml.length + ' حرف من HTML');
+      setTimeout(()=>location.reload(), 2500);
+    }
+  } catch(e) {
+    apLog('❌ خطأ غير متوقع: ' + e.message, 'var(--danger)');
+  }
+  btn.disabled = false;
+  btn.textContent = '🚀 توليد ونشر';
+}
+
+window.apToggle = apToggle;
+window.apSaveSettings = apSaveSettings;
+window.apRunNow = apRunNow;
 })();
 </script>
 <?php endif; ?>

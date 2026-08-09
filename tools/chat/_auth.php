@@ -388,7 +388,7 @@ function nowpay_create_invoice(PDO $pdo, int $userId, string $tier, float $price
         'cancel_url'       => rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/tools/chat/pricing.php',
     ], JSON_UNESCAPED_UNICODE);
 
-    $ch = curl_init('https://api.nowpayments.io/v1/invoice');
+    $ch = curl_init('https://api.nowpayments.io/v1/payment');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
@@ -404,14 +404,15 @@ function nowpay_create_invoice(PDO $pdo, int $userId, string $tier, float $price
     curl_close($ch);
 
     $data = json_decode($raw ?: '{}', true);
-    if ($code !== 200 || empty($data['id'])) {
+    // /v1/payment returns 201 Created and uses payment_id (not id)
+    if (!in_array($code, [200, 201], true) || empty($data['payment_id'])) {
         @$pdo->prepare("UPDATE yasmin_orders SET payment_status='api_error' WHERE id=?")
              ->execute([$orderId]);
         return null;
     }
 
     @$pdo->prepare("UPDATE yasmin_orders SET nowpay_invoice_id=?, payment_status='waiting' WHERE id=?")
-         ->execute([$data['id'], $orderId]);
+         ->execute([$data['payment_id'], $orderId]);
 
     $data['_order_id'] = $orderId;
     return $data;

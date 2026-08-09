@@ -74,15 +74,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_msgs') {
 
 /* ── SSE chat endpoint ───────────────────────────────────── */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
-    ini_set('output_buffering', 'off');
-    ini_set('implicit_flush', 1);
+    @set_time_limit(90);
+    if (ob_get_level()) ob_end_clean();
     header('Content-Type: text/event-stream; charset=utf-8');
     header('Cache-Control: no-cache');
     header('X-Accel-Buffering: no');
 
     function szad_sse(string $event, $data): void {
-        echo 'event: ' . $event . "\n";
-        echo 'data: ' . (is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_UNICODE)) . "\n\n";
+        echo "event: {$event}\ndata: " . (is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_UNICODE)) . "\n\n";
         if (ob_get_level()) ob_flush();
         flush();
     }
@@ -639,97 +638,39 @@ function szSend() {
   var accumulated = '';
   bubble.innerHTML = '<span class="sz-cursor"></span>';
 
-  var fd = new FormData();
-  fd.append('msg', msg);
-  fd.append('conv_id', szConvId);
-  fd.append('mode', szMode_);
-
-  var es = new EventSource('index.php?ajax=szad_chat&' + new URLSearchParams({msg:msg,conv_id:szConvId,mode:szMode_}));
-
-  /* POST via fetch instead (SSE must be GET — use query param approach) */
-  es.close();
-
-  // Use XHR+fetch SSE approach by sending POST data in URL (msg is too long for URL)
-  // Better: use a session-based approach
   var xhr = new XMLHttpRequest();
-  var lastPos = 0;
+  var lastPos = 0, szBuf = '';
   xhr.open('POST', 'index.php?ajax=szad_chat', true);
   xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
   xhr.onprogress = function() {
-    var chunk = xhr.responseText.substring(lastPos);
-    lastPos = xhr.responseText.length;
-    var lines = chunk.split('\n');
-    lines.forEach(function(line){
-      if (line.startsWith('event: token\ndata: ')) return; // wrong split
-      if (line.startsWith('data: ') && xhr._lastEvent === 'token') {
-        accumulated += line.slice(6);
-        bubble.innerHTML = szMd(accumulated) + '<span class="sz-cursor"></span>';
-        document.getElementById('sz-stream').scrollTop = 9999;
-      }
-      if (line.startsWith('event: ')) xhr._lastEvent = line.slice(7).trim();
-      if (line.startsWith('data: ') && xhr._lastEvent === 'conv') {
-        try { var d = JSON.parse(line.slice(6)); if (d.id) szConvId = d.id; } catch(e){}
-      }
-      if (line.startsWith('data: ') && xhr._lastEvent === 'done') {
-        szStreaming = false;
-        document.getElementById('sz-send').disabled = false;
-        bubble.innerHTML = szMd(accumulated);
-        szLoadConvs();
-      }
-      if (line.startsWith('data: ') && xhr._lastEvent === 'error') {
-        szStreaming = false;
-        document.getElementById('sz-send').disabled = false;
-        try { var e = JSON.parse(line.slice(6)); bubble.innerHTML = '<span style="color:#ef4444">'+szEsc(e.msg||'خطأ')+'</span>'; } catch(ex){}
-      }
-    });
-  };
-  xhr.onloadend = function() {
-    szStreaming = false;
-    document.getElementById('sz-send').disabled = false;
-    if (accumulated && bubble.querySelector('.sz-cursor')) {
-      bubble.innerHTML = szMd(accumulated);
-    }
-    szLoadConvs();
-  };
-
-  // Parse SSE from XHR properly
-  xhr._lastEvent = '';
-  var body = 'msg='+encodeURIComponent(msg)+'&conv_id='+szConvId+'&mode='+szMode_;
-  xhr.send(body);
-
-  // Override onprogress for proper SSE parsing
-  var szBuf = '';
-  xhr.onprogress = function(){
     var newText = xhr.responseText.substring(lastPos);
     lastPos = xhr.responseText.length;
     szBuf += newText;
     var evBlocks = szBuf.split('\n\n');
     szBuf = evBlocks.pop() || '';
-    evBlocks.forEach(function(block){
+    evBlocks.forEach(function(block) {
       var evName = 'message', data = '';
-      block.split('\n').forEach(function(l){
+      block.split('\n').forEach(function(l) {
         if (l.startsWith('event: ')) evName = l.slice(7).trim();
-        if (l.startsWith('data: ')) data = l.slice(6);
+        if (l.startsWith('data: '))  data  = l.slice(6);
       });
       if (evName === 'token') {
         accumulated += data;
         bubble.innerHTML = szMd(accumulated) + '<span class="sz-cursor"></span>';
         document.getElementById('sz-stream').scrollTop = 9999;
       }
-      if (evName === 'conv') { try { var d=JSON.parse(data); if(d.id) szConvId=d.id; } catch(e){} }
-      if (evName === 'done') {
-        szStreaming = false;
-        document.getElementById('sz-send').disabled = false;
-        bubble.innerHTML = szMd(accumulated);
-        szLoadConvs();
-      }
-      if (evName === 'error') {
-        szStreaming = false;
-        document.getElementById('sz-send').disabled = false;
-        try { var e=JSON.parse(data); bubble.innerHTML='<span style="color:#ef4444">'+szEsc(e.msg)+'</span>'; } catch(ex){}
-      }
+      if (evName === 'conv')  { try { var d = JSON.parse(data); if (d.id) szConvId = d.id; } catch(e){} }
+      if (evName === 'done')  { szStreaming = false; document.getElementById('sz-send').disabled = false; bubble.innerHTML = szMd(accumulated); szLoadConvs(); }
+      if (evName === 'error') { szStreaming = false; document.getElementById('sz-send').disabled = false; try { var e = JSON.parse(data); bubble.innerHTML = '<span style="color:#ef4444">' + szEsc(e.msg || 'خطأ في الاتصال') + '</span>'; } catch(ex){} }
     });
   };
+  xhr.onloadend = function() {
+    szStreaming = false;
+    document.getElementById('sz-send').disabled = false;
+    if (accumulated && bubble.querySelector('.sz-cursor')) bubble.innerHTML = szMd(accumulated);
+    szLoadConvs();
+  };
+  xhr.send('msg=' + encodeURIComponent(msg) + '&conv_id=' + szConvId + '&mode=' + szMode_);
 }
 
 /* ── Helpers ─────────────────────────────────────────── */

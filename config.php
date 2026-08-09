@@ -3956,7 +3956,12 @@ function csrf_token(): string {
 }
 function csrf_field(): string { return '<input type="hidden" name="_csrf" value="' . csrf_token() . '">'; }
 function csrf_check(): bool {
-    return isset($_POST['_csrf'], $_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $_POST['_csrf']);
+    if (!isset($_SESSION['csrf'])) return false;
+    // Classic form POST field
+    if (isset($_POST['_csrf']) && hash_equals($_SESSION['csrf'], $_POST['_csrf'])) return true;
+    // JSON AJAX via X-CSRF-Token header (safe to read multiple times, unlike php://input)
+    $h = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    return $h !== '' && hash_equals($_SESSION['csrf'], $h);
 }
 
 function slugify(string $t): string {

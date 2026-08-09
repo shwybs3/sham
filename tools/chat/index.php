@@ -787,7 +787,8 @@ $chatUrl = ys_chat_url();
       syncing = true;
       requestAnimationFrame(function () {
         var keyboardLikelyOpen = vv.height < window.innerHeight - 60;
-        shellEl.style.height = keyboardLikelyOpen ? Math.max(320, vv.height - 4) + 'px' : '';
+        var headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--t-header-h')) || 62;
+        shellEl.style.height = keyboardLikelyOpen ? Math.max(320, vv.height - headerH) + 'px' : '';
         if (keyboardLikelyOpen) window.scrollTo(0, 0);
         syncing = false;
       });
