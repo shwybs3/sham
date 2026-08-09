@@ -179,6 +179,32 @@ $articleSchema = json_encode(array_filter([
   <div class="section-box" style="margin-bottom:20px">
     <div class="blog-body"><?= render_blog_body($body) ?></div>
   </div>
+
+  <?php
+    // Body images gallery — up to 10 photos added by admin per post
+    $bodyImages = [];
+    if (!empty($post['body_images'])) {
+        $decoded = json_decode($post['body_images'], true);
+        if (is_array($decoded)) $bodyImages = array_filter($decoded);
+    }
+  ?>
+  <?php if (!empty($bodyImages)): ?>
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">صور المقال</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+      <?php foreach ($bodyImages as $idx => $imgPath): ?>
+      <a href="<?= h(url($imgPath)) ?>" target="_blank" rel="noopener"
+         style="display:block;border-radius:10px;overflow:hidden;aspect-ratio:4/3;border:1px solid var(--border-c);transition:transform .2s,box-shadow .2s"
+         onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.18)'"
+         onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <img src="<?= h(url($imgPath)) ?>" alt="<?= h($post['title']) ?> — صورة <?= $idx + 1 ?>"
+             loading="lazy" style="width:100%;height:100%;object-fit:cover">
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <?php endif; ?>
 
   <?php if ($relatedApps): ?>

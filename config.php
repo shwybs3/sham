@@ -472,6 +472,13 @@ function ensure_schema(PDO $pdo): array {
         }
     } catch (Throwable $e) {}
 
+    // Additive migrations for blog_posts table
+    try {
+        $blogCols = $pdo->query("SHOW COLUMNS FROM blog_posts")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('body_images', $blogCols))
+            @$pdo->exec("ALTER TABLE blog_posts ADD COLUMN body_images TEXT NULL COMMENT 'JSON array of up to 10 body image paths' AFTER cover_image");
+    } catch (Throwable $e) {}
+
     // Additive migrations for apps table (existing installs don't have new columns)
     $appCols = $pdo->query("SHOW COLUMNS FROM apps")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('parent_id', $appCols))

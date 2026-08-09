@@ -251,6 +251,78 @@ $orgSchema = json_encode([
   <?php endif; ?>
   <?php endif; ?>
 
+  <!-- ── AI Services Promo: ياسمين + Szad AI ── -->
+  <?php if (!$search && !$catSlug): ?>
+  <?= partial_wave() ?>
+  <section style="margin-top:8px" id="ai-services">
+    <div class="section-head reveal">
+      <span class="section-title">خدمات الذكاء الاصطناعي</span>
+      <a href="<?= h(url('tools/chat')) ?>" style="font-size:12px;color:var(--cyan);text-decoration:none">استكشف الكل <?= partial_icon('arrow-r') ?></a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px" class="reveal">
+
+      <!-- ياسمين Card -->
+      <a href="<?= h(url('tools/chat')) ?>" style="display:block;background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(99,102,241,.08));border:1px solid rgba(139,92,246,.3);border-radius:var(--radius-lg);padding:20px;text-decoration:none;transition:border-color .2s,transform .2s,box-shadow .2s"
+         onmouseover="this.style.borderColor='rgba(139,92,246,.6)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(139,92,246,.2)'"
+         onmouseout="this.style.borderColor='rgba(139,92,246,.3)';this.style.transform='';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(124,58,237,.35)">
+            <svg width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:800;font-size:17px;color:var(--white);letter-spacing:-.3px">ياسمين AI</div>
+            <div style="font-size:11px;color:#a78bfa;font-weight:600;margin-top:1px">المساعد الذكي العربي</div>
+          </div>
+          <div style="margin-inline-start:auto;background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;color:#c4b5fd;white-space:nowrap">مجاني</div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0 0 14px">
+          مساعد ذكاء اصطناعي عربي متكامل — يجيب على أسئلتك، يكتب وينظّم ويلخّص، يولّد أكوادًا برمجية، ويدعم ذاكرة المحادثات مع اشتراكات متعددة المستويات للاستخدام المكثّف.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+          <?php foreach (['محادثة ذكية', 'دعم عربي كامل', 'ذاكرة محادثات', 'اشتراكات مرنة'] as $feat): ?>
+          <span style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.25);border-radius:20px;padding:3px 10px;font-size:11px;color:#c4b5fd"><?= $feat ?></span>
+          <?php endforeach; ?>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#a78bfa">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          ابدأ المحادثة مجاناً
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </a>
+
+      <!-- Szad AI Card -->
+      <a href="<?= h(url('tools/szad')) ?>" style="display:block;background:linear-gradient(135deg,rgba(220,38,38,.1),rgba(185,28,28,.06));border:1px solid rgba(220,38,38,.25);border-radius:var(--radius-lg);padding:20px;text-decoration:none;transition:border-color .2s,transform .2s,box-shadow .2s"
+         onmouseover="this.style.borderColor='rgba(220,38,38,.5)';this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(220,38,38,.18)'"
+         onmouseout="this.style.borderColor='rgba(220,38,38,.25)';this.style.transform='';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#cc0000,#ef4444);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(204,0,0,.35)">
+            <span style="font-weight:900;font-size:18px;color:#fff;font-family:monospace;letter-spacing:-1px">SZ</span>
+          </div>
+          <div>
+            <div style="font-weight:800;font-size:17px;color:var(--white);letter-spacing:-.3px">Szad AI</div>
+            <div style="font-size:11px;color:#fca5a5;font-weight:600;margin-top:1px">بحث + تفكير عميق</div>
+          </div>
+          <div style="margin-inline-start:auto;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;color:#fca5a5;white-space:nowrap">جديد</div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0 0 14px">
+          ذكاء اصطناعي متقدم مزوّد بالبحث الحي في الإنترنت وقدرات التفكير العميق — يعطيك إجابات دقيقة ومحدّثة من الويب، ويحلّل المشكلات المعقدة خطوةً خطوة باستخدام أقوى النماذج الاستدلالية.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+          <?php foreach (['بحث حي في الإنترنت', 'تفكير عميق', 'أقوى النماذج', 'إجابات محدّثة'] as $feat): ?>
+          <span style="background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.2);border-radius:20px;padding:3px 10px;font-size:11px;color:#fca5a5"><?= $feat ?></span>
+          <?php endforeach; ?>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#f87171">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          جرّب Szad AI الآن
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </a>
+
+    </div>
+  </section>
+  <?php endif; ?>
+
   <!-- ── Latest Blog Posts (homepage only) ── -->
   <?php if ($latestPosts && !$search && !$catSlug): ?>
   <?= partial_wave() ?>

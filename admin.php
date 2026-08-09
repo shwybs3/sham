@@ -98,6 +98,59 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: Generate complete blog post from name/topic
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'gen_blog_ai' && is_admin()) {
+    @set_time_limit(120);
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $name  = trim($input['name'] ?? '');
+    $btype = trim($input['type'] ?? 'article');
+    if (!$name) { echo json_encode(['success'=>false,'error'=>'الاسم أو الموضوع مطلوب']); exit; }
+
+    $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
+    if (!$keys) { echo json_encode(['success'=>false,'error'=>'لم يتم إضافة مفتاح OpenRouter بعد. أضفه من الإعدادات.']); exit; }
+    $models = build_model_rotation($pdo);
+
+    $typeLabels = ['tutorial'=>'شرح وتعليم','news'=>'خبر تقني','comparison'=>'مقارنة','best-apps'=>'أفضل التطبيقات','best-games'=>'أفضل الألعاب','article'=>'مقال عام','code-page'=>'صفحة كود'];
+    $typeLabel = $typeLabels[$btype] ?? 'مقال';
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي خبير في SEO وتحسين محركات البحث. اكتب {$typeLabel} شاملاً عن الموضوع: "{$name}".
+
+المطلوب بالضبط (JSON صالح فقط، بدون Markdown أو نص آخر):
+{
+  "title": "عنوان مقنع وأصلي (50-80 حرف)",
+  "seo_title": "عنوان SEO مثالي يبدأ بالكلمة المفتاحية ويوضح الفائدة + سنة إن ناسب (55-65 حرف)",
+  "meta_description": "وصف ميتا مقنع 140-160 حرف يحتوي الكلمة المفتاحية",
+  "keywords": "5-8 كلمات مفتاحية مفصولة بفواصل",
+  "excerpt": "ملخص موجز 100-140 كلمة يشوق القارئ",
+  "slug": "url-slug-in-english-with-hyphens-only",
+  "body": "نص HTML كامل ومفصّل للمقال لا يقل عن 1500 كلمة — بنية h2 وh3 وفقرات وقوائم ul/ol، محتوى أصيل ومعلوماتي فعلياً وغير مكرر، يستفيد منه القارئ حقاً"
+}
+P;
+
+    $result = openrouter_call_rotating($keys, $models, $prompt);
+    if (!$result['ok']) {
+        echo json_encode(['success'=>false,'error'=>openrouter_diagnose_trace($result['trace']),'trace'=>$result['trace']]); exit;
+    }
+    $data = ai_extract_json($result['content']);
+    if (!$data || empty($data['title'])) {
+        // retry with stricter prompt
+        $strict = "أجب بـJSON فقط لا غير:\n\n" . $prompt;
+        $r2 = openrouter_call_rotating($keys, array_slice($models, 0, 4), $strict);
+        $data = $r2['ok'] ? ai_extract_json($r2['content']) : null;
+    }
+    if (!$data || empty($data['title'])) {
+        echo json_encode(['success'=>false,'error'=>'لم يُرجع الذكاء الاصطناعي JSON صالح — جرّب مرة أخرى']); exit;
+    }
+    $data['success'] = true;
+    $data['used_model'] = $result['model'];
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: Generate AI data — SSE streaming progress log
    ══════════════════════════════════════════════════════ */
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_sse' && is_admin()) {
@@ -3959,6 +4012,17 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
         } else {
             $bodyVal = trim($_POST['body'] ?? '');
         }
+        // Body images: 10 AJAX-uploaded paths sent as hidden fields
+        $bodyImgArr = [];
+        for ($bi = 0; $bi < 10; $bi++) {
+            $p = trim($_POST['body_images'][$bi] ?? '');
+            $bodyImgArr[] = $p;
+        }
+        // Cover image: either newly uploaded (AJAX) path in hidden field, or preserve existing
+        $coverImg = trim($_POST['cover_image'] ?? '');
+        if (!$coverImg && $id) {
+            try { $coverImg = (string)($pdo->query("SELECT cover_image FROM blog_posts WHERE id=$id")->fetchColumn() ?? ''); } catch (\Throwable $e) {}
+        }
         $d = [
             'type' => $type,
             'title' => $title,
@@ -3968,6 +4032,8 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             'keywords' => trim($_POST['keywords'] ?? ''),
             'excerpt' => trim($_POST['excerpt'] ?? ''),
             'body' => $bodyVal,
+            'cover_image' => $coverImg,
+            'body_images' => json_encode($bodyImgArr, JSON_UNESCAPED_UNICODE),
             'status' => ($_POST['status'] ?? 'draft') === 'published' ? 'published' : 'draft',
         ];
         $wasPublished = false;
@@ -5914,6 +5980,33 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'domain_file_upload' && is_admin()
     } else {
         echo json_encode(['ok'=>false,'error'=>'فشل رفع الملف']);
     }
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_blog_img' && is_admin()) {
+    header('Content-Type: application/json');
+    if (!isset($_FILES['img']) || $_FILES['img']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['ok'=>false,'error'=>'فشل الرفع']); exit;
+    }
+    $file = $_FILES['img'];
+    $allowed = ['jpg','jpeg','png','webp','gif'];
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed)) {
+        echo json_encode(['ok'=>false,'error'=>'صيغة غير مسموح بها — jpg/png/webp/gif']); exit;
+    }
+    if ($file['size'] > 10 * 1024 * 1024) {
+        echo json_encode(['ok'=>false,'error'=>'الحجم يتجاوز 10 ميغابايت']); exit;
+    }
+    $dir = UPLOAD_PATH . '/blog/';
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $prefix = (int)($_GET['slot'] ?? 0) === 0 ? 'cover' : 'img' . (int)$_GET['slot'];
+    $fname  = 'blog_' . $prefix . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $dest   = $dir . $fname;
+    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+        echo json_encode(['ok'=>false,'error'=>'فشل نقل الملف']); exit;
+    }
+    $relPath = 'uploads/blog/' . $fname;
+    echo json_encode(['ok'=>true,'path'=>$relPath,'url'=>UPLOAD_URL.'/blog/'.$fname]);
     exit;
 }
 
@@ -10552,8 +10645,197 @@ elseif ($page === 'blog-edit'):
       </div>
     </div>
   </div>
+      <!-- ══ AI Auto-Generate Panel ══ -->
+      <div class="form-group full" style="margin-bottom:0">
+        <div style="background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(37,99,235,.08));border:1px solid rgba(124,58,237,.25);border-radius:10px;padding:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+            <div>
+              <div style="font-weight:700;font-size:14px;color:var(--accent)">🤖 توليد المقال بالذكاء الاصطناعي</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">أدخل اسم الموضوع ثم اضغط — يولّد العنوان والوصف والكلمات المفتاحية والمقال كاملاً</div>
+            </div>
+            <button type="button" id="btn-ai-gen-blog" onclick="aiBlogGenerate()" class="btn-primary" style="font-size:13px;padding:8px 18px;display:flex;align-items:center;gap:8px">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              توليد شامل
+            </button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="text" id="ai-blog-topic" class="form-input" style="flex:1;min-width:200px" placeholder="مثال: أفضل تطبيقات ترجمة النصوص 2024 أو كيف تحمي هاتفك من الاختراق">
+            <div id="ai-blog-status" style="font-size:12px;color:var(--muted);align-self:center;min-width:120px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Cover Image ══ -->
+      <div class="form-group full">
+        <label class="form-label">صورة الغلاف</label>
+        <input type="hidden" name="cover_image" id="blog-cover-path" value="<?= h($blogPost['cover_image'] ?? '') ?>">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+          <div id="blog-cover-preview" style="width:120px;height:80px;border:2px dashed var(--border-c);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer" onclick="document.getElementById('blog-cover-file').click()" title="انقر لرفع صورة">
+            <?php if (!empty($blogPost['cover_image'])): ?>
+              <img src="<?= h(url($blogPost['cover_image'])) ?>" style="width:100%;height:100%;object-fit:cover" alt="">
+            <?php else: ?>
+              <svg width="24" height="24" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            <?php endif; ?>
+          </div>
+          <div style="flex:1">
+            <input type="file" id="blog-cover-file" accept="image/*" style="display:none" onchange="blogUploadImg(this,0,'blog-cover-path','blog-cover-preview')">
+            <button type="button" class="btn-edit" style="font-size:12px" onclick="document.getElementById('blog-cover-file').click()">📂 اختر صورة غلاف</button>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">jpg / png / webp — حتى 10 MB</div>
+            <?php if (!empty($blogPost['cover_image'])): ?>
+            <button type="button" class="btn-edit" style="font-size:11px;margin-top:6px;color:#ef4444;border-color:#ef4444" onclick="blogClearImg(0,'blog-cover-path','blog-cover-preview')">✕ إزالة الصورة</button>
+            <?php endif; ?>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Body Images (10 slots) ══ -->
+      <div class="form-group full">
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>صور المقال الداخلية (10 أماكن محجوزة)</span>
+          <span style="font-size:11px;color:var(--muted)">تظهر كمعرض صور أسفل المقال</span>
+        </label>
+        <?php
+          $savedBodyImgs = [];
+          if (!empty($blogPost['body_images'])) {
+              $decoded = json_decode($blogPost['body_images'], true);
+              if (is_array($decoded)) $savedBodyImgs = $decoded;
+          }
+          while (count($savedBodyImgs) < 10) $savedBodyImgs[] = '';
+        ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px">
+          <?php for ($bi = 0; $bi < 10; $bi++): ?>
+          <?php $bimg = $savedBodyImgs[$bi] ?? ''; ?>
+          <div style="position:relative">
+            <input type="hidden" name="body_images[<?= $bi ?>]" id="blog-img-path-<?= $bi ?>" value="<?= h($bimg) ?>">
+            <div id="blog-img-preview-<?= $bi ?>"
+                 style="width:100%;height:90px;border:2px dashed var(--border-c);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:border-color .2s"
+                 onclick="document.getElementById('blog-img-file-<?= $bi ?>').click()"
+                 onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-c)'">
+              <?php if ($bimg): ?>
+              <img src="<?= h(url($bimg)) ?>" style="width:100%;height:100%;object-fit:cover" alt="">
+              <?php else: ?>
+              <div style="text-align:center;pointer-events:none">
+                <svg width="20" height="20" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                <div style="font-size:10px;color:var(--muted);margin-top:3px">صورة <?= $bi + 1 ?></div>
+              </div>
+              <?php endif; ?>
+            </div>
+            <input type="file" id="blog-img-file-<?= $bi ?>" accept="image/*" style="display:none"
+                   onchange="blogUploadImg(this,<?= $bi + 1 ?>,'blog-img-path-<?= $bi ?>','blog-img-preview-<?= $bi ?>')">
+            <?php if ($bimg): ?>
+            <button type="button" onclick="blogClearImg(<?= $bi + 1 ?>,'blog-img-path-<?= $bi ?>','blog-img-preview-<?= $bi ?>')"
+                    style="position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;border:none;border-radius:4px;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>
+            <?php endif; ?>
+          </div>
+          <?php endfor; ?>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">انقر على أي مكان لرفع الصورة — jpg/png/webp حتى 10MB لكل صورة</div>
+      </div>
+
   <button type="submit" class="btn-save" style="margin-bottom:40px">حفظ المقال</button>
 </form>
+
+<script>
+(function(){
+  // Upload one blog image via AJAX
+  function blogUploadImg(input, slot, pathFieldId, previewId) {
+    if (!input.files || !input.files[0]) return;
+    var f = input.files[0];
+    var fd = new FormData();
+    fd.append('img', f);
+    var preview = document.getElementById(previewId);
+    preview.style.opacity = '0.4';
+    fetch('admin.php?ajax=upload_blog_img&slot='+slot, {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        preview.style.opacity = '1';
+        if (d.ok) {
+          document.getElementById(pathFieldId).value = d.path;
+          preview.innerHTML = '<img src="'+d.url+'" style="width:100%;height:100%;object-fit:cover" alt="">';
+          // Add remove button
+          var rm = document.createElement('button');
+          rm.type = 'button';
+          rm.innerHTML = '✕';
+          rm.setAttribute('style', 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;border:none;border-radius:4px;width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1');
+          rm.onclick = function(){ blogClearImg(slot, pathFieldId, previewId); };
+          preview.parentNode.style.position = 'relative';
+          preview.parentNode.appendChild(rm);
+        } else {
+          alert('خطأ في الرفع: ' + (d.error||'غير معروف'));
+        }
+      })
+      .catch(function(e){ preview.style.opacity='1'; alert('خطأ في الشبكة: '+e.message); });
+  }
+  window.blogUploadImg = blogUploadImg;
+
+  function blogClearImg(slot, pathFieldId, previewId) {
+    document.getElementById(pathFieldId).value = '';
+    var preview = document.getElementById(previewId);
+    if (slot === 0) {
+      preview.innerHTML = '<svg width="24" height="24" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+    } else {
+      var num = slot;
+      preview.innerHTML = '<div style="text-align:center"><svg width="20" height="20" fill="none" stroke="var(--muted)" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><div style="font-size:10px;color:var(--muted);margin-top:3px">صورة '+num+'</div></div>';
+    }
+    // Remove the ✕ button if present
+    var rmBtn = preview.parentNode.querySelector('button[style*="absolute"]');
+    if (rmBtn) rmBtn.remove();
+  }
+  window.blogClearImg = blogClearImg;
+
+  // AI blog post generation
+  window.aiBlogGenerate = function() {
+    var topic = document.getElementById('ai-blog-topic').value.trim();
+    if (!topic) {
+      // Try using the post title if topic field is empty
+      topic = (document.getElementById('blog-title').value || '').trim();
+    }
+    if (!topic) { alert('أدخل موضوع المقال أولاً'); return; }
+    var type = document.querySelector('select[name="type"]').value;
+    var btn = document.getElementById('btn-ai-gen-blog');
+    var st  = document.getElementById('ai-blog-status');
+    btn.disabled = true;
+    btn.textContent = '⏳ جارٍ التوليد...';
+    st.textContent = 'يعمل الذكاء الاصطناعي...';
+
+    fetch('admin.php?ajax=gen_blog_ai', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name: topic, type: type})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> توليد شامل';
+      if (!d.success) { st.textContent = '⚠ ' + (d.error||'خطأ'); return; }
+
+      // Fill all form fields
+      if (d.title)            document.getElementById('blog-title').value = d.title;
+      if (d.seo_title)        document.querySelector('input[name="seo_title"]').value = d.seo_title;
+      if (d.meta_description) document.querySelector('input[name="meta_description"]').value = d.meta_description;
+      if (d.keywords)         document.querySelector('input[name="keywords"]').value = d.keywords;
+      if (d.excerpt)          document.querySelector('input[name="excerpt"]').value = d.excerpt;
+      if (d.slug)             document.getElementById('blog-slug').value = d.slug;
+      if (d.body) {
+        // Fill both the WYSIWYG and hidden textarea
+        var ed = document.getElementById('wysiwyg-editor');
+        var hid = document.getElementById('blog-body-hidden');
+        var src = document.getElementById('blog-body-source');
+        if (ed)  ed.innerHTML = d.body;
+        if (hid) hid.value = d.body;
+        if (src) src.value = d.body;
+      }
+      st.textContent = '✓ تم التوليد — راجع وعدّل قبل الحفظ';
+      st.style.color = '#22c55e';
+    })
+    .catch(function(e){
+      btn.disabled = false;
+      btn.textContent = 'توليد شامل';
+      st.textContent = '⚠ خطأ في الشبكة';
+    });
+  };
+})();
+</script>
 
 <?php
 /* ─────────────── WEB TOOLS MANAGER ─────────────── */
