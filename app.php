@@ -977,7 +977,7 @@ $_htmlDir = $_isRtl ? 'rtl' : 'ltr';
   <div class="section-head reveal"><span class="section-title"><?= h(__('useful_tools')) ?></span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
     <?php foreach ($relatedTools as $t): ?>
-    <a href="<?= h(url('tools.php?slug=' . urlencode($t['slug']))) ?>" class="app-card reveal" data-hardnav="1" style="text-decoration:none">
+    <a href="<?= h(url('tools/' . urlencode($t['slug']) . '/')) ?>" class="app-card reveal" data-hardnav="1" style="text-decoration:none">
       <div class="app-card-body" style="padding:16px;border-bottom:none">
         <?php if (!empty($t['icon_path'])): ?>
         <img src="<?= h(media_url($t['icon_path'])) ?>" alt="<?= h($t['name']) ?>" class="app-card-icon" loading="lazy" style="margin:0 auto 10px">
