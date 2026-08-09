@@ -62,6 +62,9 @@ ErrorDocument 404 /404.php
   # Press Pro: plugin management system
   RewriteRule ^press/?$ press.php [L,QSA,NS]
 
+  # Subdomains admin tool
+  RewriteRule ^admin-subdomains/?$ admin-subdomains.php [L,QSA,NS]
+
   # Products: /products → products.php
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

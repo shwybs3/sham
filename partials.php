@@ -510,6 +510,19 @@ function render_site_footer(): void { ?>
       </p>
     </div>
   </div>
+
+  <!-- ── Legal Pages Strip — prominent for AdSense compliance ── -->
+  <div class="footer-legal-strip" aria-label="<?= h(__('legal_pages_label', 'الصفحات القانونية')) ?>">
+    <span class="footer-legal-strip-label"><?= h(__('legal', 'قانوني')) ?></span>
+    <a href="<?= h(url('about')) ?>"><?= h(__('about')) ?></a>
+    <a href="<?= h(url('privacy-policy')) ?>"><?= h(__('privacy')) ?></a>
+    <a href="<?= h(url('terms')) ?>"><?= h(__('terms')) ?></a>
+    <a href="<?= h(url('cookie-policy')) ?>"><?= h(__('cookie_policy')) ?></a>
+    <a href="<?= h(url('disclosure')) ?>"><?= h(__('disclosure_link')) ?></a>
+    <a href="<?= h(url('dmca')) ?>"><?= h(__('dmca_link')) ?></a>
+    <a href="<?= h(url('contact')) ?>"><?= h(__('contact')) ?></a>
+    <a href="<?= h(url('faq')) ?>"><?= h(__('faq')) ?></a>
+  </div>
 </footer>
 <?php
 render_cookie_banner();

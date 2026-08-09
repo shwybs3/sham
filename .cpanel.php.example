@@ -1,0 +1,10 @@
+<?php
+/* ════════════════════════════════════════════════════
+   .cpanel.php — cPanel API credentials
+   COPY this file to .cpanel.php (without .example)
+   and fill in your real values.
+   .cpanel.php is in .gitignore and must NEVER be committed.
+   ════════════════════════════════════════════════════ */
+
+$CP_USER  = 'your_cpanel_username'; // e.g. yassota
+$CP_TOKEN = 'YOUR_API_TOKEN_HERE';  // From cPanel > API Tokens

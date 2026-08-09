@@ -1,5 +1,6 @@
 # Local/dev-only — never commit real credentials or uploaded user content
 config.local.php
+.cpanel.php
 assets/css/*.min.css
 uploads/icons/*
 uploads/screenshots/*
