@@ -52,8 +52,7 @@ function ys_recent_msg_count(PDO $pdo, ?array $user, string $sid): int {
     } catch (Throwable $e) { return 0; }
 }
 
-// Signing in lifts the ceiling; both limits exist to keep the shared
-// OpenRouter keys from being drained by a single client.
+// Base caps; subscribers get higher limits (see ys_hourly_cap() in _auth.php).
 const YS_HOURLY_ANON = 40;
 const YS_HOURLY_USER = 160;
 
@@ -139,11 +138,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
         ]);
     }
 
-    $cap = $me ? YS_HOURLY_USER : YS_HOURLY_ANON;
+    $cap = ys_hourly_cap($me, $pdo);
     if (ys_recent_msg_count($pdo, $me, $sessionId) >= $cap) {
+        $upgradeHint = ($me && !ys_active_sub($pdo, (int)$me['id']))
+            ? ' <a href="pricing.php" style="color:#a389ff">رقّي باشتراكك</a> لرسائل أكثر.'
+            : '';
         sse('error', ['msg' => $me
-            ? 'وصلت للحد الأقصى من الرسائل بهالساعة 😅 جرّب بعد شوي.'
-            : 'وصلت للحد الأقصى للزوار بهالساعة. سجّل دخولك وخود حد أعلى 🌸']);
+            ? 'وصلت للحد الأقصى من الرسائل بهالساعة 😅 جرّب بعد شوي.' . $upgradeHint
+            : 'وصلت للحد الأقصى للزوار بهالساعة. <a href="auth.php?a=login" style="color:#a389ff">سجّل دخولك</a> وخود حد أعلى 🌸']);
         exit;
     }
 
@@ -155,8 +157,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
         exit;
     }
 
-    $models = build_model_rotation($pdo, false);
-    if (!$models) $models = ['openrouter/free'];
+    // Subscribers get dedicated higher-quality models for their tier.
+    $tierModelOverride = ys_tier_models($me, $pdo);
+    $models = $tierModelOverride ?: build_model_rotation($pdo, false);
+    if (!$models) $models = ['openrouter/auto'];
 
     // Yasmin system prompt — Syrian coastal dialect, feminine personality
     $customPrompt = get_cfg($pdo, 'yasmin_system_prompt', '');
@@ -335,7 +339,23 @@ $chatUrl = ys_chat_url();
     <div class="ys-convs" id="ys-convs"></div>
 
     <div class="ys-acct">
+      <?php
+      $meSub = $me ? ys_active_sub($pdo, (int)$me['id']) : null;
+      ?>
       <?php if ($me): ?>
+        <?php if ($meSub): ?>
+          <div style="background:linear-gradient(135deg,#1a1035,#0d0a1f);border:1px solid #312660;border-radius:10px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:12px">
+            <span style="color:<?= $h(YS_TIERS[$meSub['tier']]['color'] ?? '#7c5cff') ?>">●</span>
+            <span style="color:#c4b8ef;flex:1"><?= $h(YS_TIERS[$meSub['tier']]['label'] ?? $meSub['tier']) ?></span>
+            <span style="color:#a89ecc">حتى <?= $h(substr($meSub['expires_at'],0,10)) ?></span>
+          </div>
+        <?php else: ?>
+          <a href="pricing.php" style="display:flex;align-items:center;gap:8px;background:#1a1035;border:1px dashed #312660;border-radius:10px;padding:8px 12px;margin-bottom:8px;text-decoration:none;font-size:12px;color:#a89ecc;transition:border-color .15s" onmouseover="this.style.borderColor='#7c5cff'" onmouseout="this.style.borderColor='#312660'">
+            <span style="font-size:14px">✨</span>
+            <span style="flex:1">ترقية للبريميوم</span>
+            <span style="color:#7c5cff">من $5/شهر</span>
+          </a>
+        <?php endif; ?>
         <div class="ys-acct-row">
           <?php if (!empty($me['avatar'])): ?>
             <img class="ys-avatar" src="<?= $h($me['avatar']) ?>" alt="" referrerpolicy="no-referrer" width="34" height="34">

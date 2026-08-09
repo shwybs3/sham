@@ -309,3 +309,194 @@ function ys_chat_url(): string
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/tools/chat/index.php')), '/');
     return $dir . '/';
 }
+
+/* ── Subscription helpers ────────────────────────────────────────── */
+
+const YS_TIERS = [
+    'plus'    => ['label' => 'ياسمين بلاس',    'price' => 5,  'hourly' => 300,  'color' => '#10b981'],
+    'pro'     => ['label' => 'ياسمين برو',      'price' => 10, 'hourly' => 800,  'color' => '#3b82f6'],
+    'premium' => ['label' => 'ياسمين بريميوم',  'price' => 20, 'hourly' => 9999, 'color' => '#8b5cf6'],
+];
+
+// Models served per tier.
+const YS_TIER_MODELS = [
+    'plus'    => ['google/gemini-flash-1.5', 'meta-llama/llama-3.1-70b-instruct:free', 'openrouter/auto'],
+    'pro'     => ['openai/gpt-4o-mini', 'anthropic/claude-3-haiku', 'google/gemini-pro'],
+    'premium' => ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'anthropic/claude-3-opus'],
+];
+
+/**
+ * Active subscription row for $userId, or null.
+ * Automatically marks expired rows so the check stays cheap.
+ */
+function ys_active_sub(PDO $pdo, int $userId): ?array
+{
+    try {
+        // expire stale rows silently
+        @$pdo->prepare("UPDATE yasmin_subscriptions SET status='expired'
+                         WHERE user_id=? AND status='active' AND expires_at < NOW()")
+             ->execute([$userId]);
+
+        $st = $pdo->prepare("SELECT * FROM yasmin_subscriptions
+                              WHERE user_id=? AND status='active' AND expires_at >= NOW()
+                              ORDER BY expires_at DESC LIMIT 1");
+        $st->execute([$userId]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) { return null; }
+}
+
+/** Effective hourly message cap for a user, considering their subscription. */
+function ys_hourly_cap(?array $user, PDO $pdo): int
+{
+    if (!$user) return YS_HOURLY_ANON;
+    $sub = ys_active_sub($pdo, (int)$user['id']);
+    if (!$sub) return YS_HOURLY_USER;
+    return YS_TIERS[$sub['tier']]['hourly'] ?? YS_HOURLY_USER;
+}
+
+/** Model list to use for a given user (respects their tier). */
+function ys_tier_models(?array $user, PDO $pdo): ?array
+{
+    if (!$user) return null; // caller falls back to free pool
+    $sub = ys_active_sub($pdo, (int)$user['id']);
+    if (!$sub) return null;
+    return YS_TIER_MODELS[$sub['tier']] ?? null;
+}
+
+/** NOWPayments: create an invoice and return the JSON response or null on error. */
+function nowpay_create_invoice(PDO $pdo, int $userId, string $tier, float $priceUsd, int $durationDays = 30): ?array
+{
+    $apiKey  = get_cfg($pdo, 'nowpay_api_key', '');
+    if (!$apiKey) return null;
+
+    // Record the pending order first so we have the order_id
+    try {
+        $pdo->prepare("INSERT INTO yasmin_orders (user_id,tier,price_usd,duration_days,payment_status)
+                        VALUES (?,?,?,?,'pending')")
+            ->execute([$userId, $tier, $priceUsd, $durationDays]);
+        $orderId = (int)$pdo->lastInsertId();
+    } catch (Throwable $e) { return null; }
+
+    $payload = json_encode([
+        'price_amount'    => $priceUsd,
+        'price_currency'  => 'usd',
+        'pay_currency'    => 'usdttrc20',
+        'order_id'        => 'ys_' . $orderId,
+        'order_description' => 'ياسمين ' . (YS_TIERS[$tier]['label'] ?? $tier) . ' — ' . $durationDays . ' يوم',
+        'ipn_callback_url' => rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/tools/chat/ipn.php',
+        'success_url'      => rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/tools/chat/?sub=ok',
+        'cancel_url'       => rtrim(defined('SITE_URL') ? SITE_URL : '', '/') . '/tools/chat/pricing.php',
+    ], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init('https://api.nowpayments.io/v1/invoice');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'x-api-key: ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+    ]);
+    $raw  = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $data = json_decode($raw ?: '{}', true);
+    if ($code !== 200 || empty($data['id'])) {
+        @$pdo->prepare("UPDATE yasmin_orders SET payment_status='api_error' WHERE id=?")
+             ->execute([$orderId]);
+        return null;
+    }
+
+    @$pdo->prepare("UPDATE yasmin_orders SET nowpay_invoice_id=?, payment_status='waiting' WHERE id=?")
+         ->execute([$data['id'], $orderId]);
+
+    $data['_order_id'] = $orderId;
+    return $data;
+}
+
+/** Verify and process a NOWPayments IPN request. Returns true if handled OK. */
+function nowpay_handle_ipn(PDO $pdo): bool
+{
+    $ipnSecret = get_cfg($pdo, 'nowpay_ipn_secret', '');
+    $raw = file_get_contents('php://input');
+    if ($raw === false || $raw === '') return false;
+
+    if ($ipnSecret !== '') {
+        $sig = $_SERVER['HTTP_X_NOWPAYMENTS_SIG'] ?? '';
+        $data = json_decode($raw, true);
+        if (!is_array($data)) return false;
+        // NOWPayments sorts the JSON keys before signing
+        ksort($data);
+        $expected = hash_hmac('sha512', json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $ipnSecret);
+        if (!hash_equals($expected, $sig)) {
+            log_security_event($pdo, 'yasmin_ipn_bad_sig', 'warning', 'Bad NOWPayments IPN sig');
+            return false;
+        }
+    } else {
+        $data = json_decode($raw, true);
+        if (!is_array($data)) return false;
+    }
+
+    $invoiceId     = (string)($data['invoice_id'] ?? '');
+    $paymentId     = (string)($data['payment_id'] ?? '');
+    $paymentStatus = (string)($data['payment_status'] ?? '');
+    $orderId       = ltrim((string)($data['order_id'] ?? ''), 'ys_');
+
+    // Store IPN status on the order
+    try {
+        $pdo->prepare("UPDATE yasmin_orders
+                        SET payment_status=?, nowpay_pay_id=?, ipn_verified=1, updated_at=NOW()
+                        WHERE id=? OR nowpay_invoice_id=?")
+            ->execute([$paymentStatus, $paymentId, (int)$orderId, $invoiceId]);
+    } catch (Throwable $e) {}
+
+    // Only activate subscription on confirmed/finished statuses
+    if (!in_array($paymentStatus, ['finished', 'confirmed', 'sending', 'partially_paid'], true)) {
+        return true; // acknowledged, no activation needed yet
+    }
+
+    // Fetch the order
+    try {
+        $row = null;
+        if ($orderId) {
+            $st = $pdo->prepare("SELECT * FROM yasmin_orders WHERE id=? LIMIT 1");
+            $st->execute([(int)$orderId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$row && $invoiceId) {
+            $st = $pdo->prepare("SELECT * FROM yasmin_orders WHERE nowpay_invoice_id=? LIMIT 1");
+            $st->execute([$invoiceId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$row) return false;
+
+        $userId  = (int)$row['user_id'];
+        $tier    = (string)$row['tier'];
+        $days    = max(1, (int)$row['duration_days']);
+        $price   = (float)$row['price_usd'];
+
+        // Idempotent: don't create a duplicate subscription for the same order
+        $dup = $pdo->prepare("SELECT id FROM yasmin_subscriptions WHERE order_id=? LIMIT 1");
+        $dup->execute([(int)$row['id']]);
+        if ($dup->fetch()) return true;
+
+        // Extend from now or from current expiry if already subscribed
+        $sub = ys_active_sub($pdo, $userId);
+        $expiresAt = $sub
+            ? date('Y-m-d H:i:s', strtotime($sub['expires_at']) + $days * 86400)
+            : date('Y-m-d H:i:s', time() + $days * 86400);
+
+        $pdo->prepare("INSERT INTO yasmin_subscriptions
+                        (user_id,tier,price_usd,order_id,expires_at,status)
+                        VALUES (?,?,?,?,?,'active')")
+            ->execute([$userId, $tier, $price, (int)$row['id'], $expiresAt]);
+
+        log_security_event($pdo, 'yasmin_sub_activated', 'info',
+            "Activated $tier for user $userId until $expiresAt (order {$row['id']})");
+    } catch (Throwable $e) { return false; }
+
+    return true;
+}

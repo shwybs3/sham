@@ -2200,6 +2200,46 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_auth_save' && is_admin()) 
     exit;
 }
 
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_nowpay_save' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    foreach (['nowpay_api_key', 'nowpay_ipn_secret'] as $k) {
+        if (isset($input[$k])) {
+            $v = trim((string)$input[$k]);
+            if ($v !== '') set_cfg($pdo, $k, $v);
+        }
+    }
+    log_admin_action($pdo, 'nowpay_save', 'settings', 0, 'NOWPayments keys saved');
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_subs' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $q      = trim($_GET['q'] ?? '');
+    $offset = max(0, (int)($_GET['offset'] ?? 0));
+    $limit  = 30;
+    $where  = $q ? "WHERE u.email LIKE ?" : '';
+    $params = $q ? ['%' . $q . '%'] : [];
+    $countSt = $pdo->prepare("SELECT COUNT(*) FROM yasmin_subscriptions s JOIN yasmin_users u ON u.id=s.user_id $where");
+    $countSt->execute($params);
+    $total = (int)$countSt->fetchColumn();
+    $rows  = $pdo->prepare("SELECT s.*,u.email,u.name FROM yasmin_subscriptions s
+                             JOIN yasmin_users u ON u.id=s.user_id $where
+                             ORDER BY s.created_at DESC LIMIT $limit OFFSET $offset");
+    $rows->execute($params);
+    echo json_encode(['total' => $total, 'rows' => $rows->fetchAll(PDO::FETCH_ASSOC)]);
+    exit;
+}
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'yasmin_sub_cancel' && is_admin()) {
+    header('Content-Type: application/json; charset=utf-8');
+    $sid = (int)($_POST['sub_id'] ?? 0);
+    if ($sid) $pdo->prepare("UPDATE yasmin_subscriptions SET status='cancelled' WHERE id=?")->execute([$sid]);
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'assistant' && is_admin()) {
     header('Content-Type: application/json');
     $input   = json_decode(file_get_contents('php://input'), true);
@@ -12792,6 +12832,8 @@ elseif ($page === 'yasmin'):
   <button class="btn btn-sm" onclick="showYasminTab('prompt')" id="yt-prompt">شخصية ياسمين</button>
   <button class="btn btn-sm" onclick="showYasminTab('users')" id="yt-users">👥 المستخدمون</button>
   <button class="btn btn-sm" onclick="showYasminTab('auth')" id="yt-auth">🔐 تسجيل الدخول</button>
+  <button class="btn btn-sm" onclick="showYasminTab('subs')" id="yt-subs">💳 الاشتراكات</button>
+  <button class="btn btn-sm" onclick="showYasminTab('billing')" id="yt-billing">⚙️ إعداد الدفع</button>
   <button class="btn btn-sm" onclick="showYasminTab('logs')" id="yt-logs">سجل المحادثات</button>
 </div>
 
@@ -12907,6 +12949,46 @@ elseif ($page === 'yasmin'):
   <button onclick="saveYasminAuth()" class="btn" style="background:var(--primary);color:#fff">💾 حفظ إعدادات الدخول</button>
 </div>
 
+<!-- Tab: Subscriptions -->
+<div class="panel" id="yasmin-tab-subs" style="display:none">
+  <h3 style="margin:0 0 12px;font-size:15px">💳 إدارة الاشتراكات</h3>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input type="text" id="ys-sub-q" class="form-input" placeholder="بحث بالبريد الإلكتروني…" style="flex:1;max-width:300px" oninput="loadYasminSubs()">
+    <button onclick="loadYasminSubs()" class="btn btn-sm" style="background:var(--primary);color:#fff">بحث</button>
+  </div>
+  <div id="yasmin-subs-list" style="font-size:13px">جاري التحميل...</div>
+</div>
+
+<!-- Tab: Payment Settings -->
+<div class="panel" id="yasmin-tab-billing" style="display:none">
+  <h3 style="margin:0 0 12px;font-size:15px">⚙️ إعدادات NOWPayments</h3>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 16px">
+    نظام الدفع بالعملات الرقمية لباقات ياسمين. احصل على المفاتيح من
+    <a href="https://nowpayments.io" target="_blank" rel="noopener" style="color:var(--primary)">nowpayments.io</a>.
+  </p>
+  <div class="form-group" style="margin-bottom:12px">
+    <label class="form-label">مفتاح API (API Key)</label>
+    <input type="password" id="ys-nowpay-key" class="form-input"
+           placeholder="<?= get_cfg($pdo, 'nowpay_api_key', '') !== '' ? '•••••••• (محفوظ)' : 'أدخل مفتاح API' ?>"
+           dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">من لوحة NOWPayments → Settings → API Keys</p>
+  </div>
+  <div class="form-group" style="margin-bottom:16px">
+    <label class="form-label">مفتاح IPN السري (IPN Secret)</label>
+    <input type="password" id="ys-nowpay-ipn" class="form-input"
+           placeholder="<?= get_cfg($pdo, 'nowpay_ipn_secret', '') !== '' ? '•••••••• (محفوظ)' : 'أدخل IPN Secret' ?>"
+           dir="ltr" style="font-family:var(--f-mono);font-size:12px">
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">من لوحة NOWPayments → Settings → IPN → Secret Key</p>
+  </div>
+  <div style="background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px">
+    <strong>رابط IPN الخاص بك:</strong><br>
+    <code style="font-size:11px;word-break:break-all"><?= h(rtrim(SITE_URL, '/')) ?>/tools/chat/ipn.php</code>
+    <p style="color:var(--muted);margin:6px 0 0">أضفه في NOWPayments → Settings → IPN → Callback URL</p>
+  </div>
+  <button onclick="saveNowpaySettings()" class="btn" style="background:var(--primary);color:#fff">💾 حفظ إعدادات الدفع</button>
+  <span id="ys-nowpay-save-st" style="font-size:12px;margin-right:10px;color:var(--muted)"></span>
+</div>
+
 <!-- Tab: Conversation Logs -->
 <div class="panel" id="yasmin-tab-logs" style="display:none">
   <h3 style="margin:0 0 12px;font-size:15px">💬 سجل المحادثات</h3>
@@ -12924,13 +13006,69 @@ elseif ($page === 'yasmin'):
 
 <script>
 function showYasminTab(tab) {
-  ['keys','prompt','users','auth','logs'].forEach(t => {
-    document.getElementById('yasmin-tab-'+t).style.display = t===tab?'block':'none';
-    document.getElementById('yt-'+t).style.background = t===tab?'var(--primary)':'var(--card-bg)';
-    document.getElementById('yt-'+t).style.color = t===tab?'#fff':'var(--text)';
+  ['keys','prompt','users','auth','subs','billing','logs'].forEach(t => {
+    const el = document.getElementById('yasmin-tab-'+t);
+    const bt = document.getElementById('yt-'+t);
+    if (el) el.style.display = t===tab?'block':'none';
+    if (bt) { bt.style.background = t===tab?'var(--primary)':'var(--card-bg)'; bt.style.color = t===tab?'#fff':'var(--text)'; }
   });
   if (tab === 'logs')  loadYasminLogs();
   if (tab === 'users') loadYasminUsers();
+  if (tab === 'subs')  loadYasminSubs();
+}
+
+async function loadYasminSubs() {
+  const box = document.getElementById('yasmin-subs-list');
+  const q   = (document.getElementById('ys-sub-q')||{value:''}).value.trim();
+  box.innerHTML = 'جاري التحميل...';
+  try {
+    const r = await fetch('?ajax=yasmin_subs&q='+encodeURIComponent(q));
+    const d = await r.json();
+    if (!d.rows || !d.rows.length) { box.innerHTML = '<p style="color:var(--muted)">لا توجد اشتراكات</p>'; return; }
+    const tierColors = {plus:'#10b981',pro:'#3b82f6',premium:'#8b5cf6'};
+    const tierLabels = {plus:'بلاس',pro:'برو',premium:'بريميوم'};
+    let html = '<table class="data-table"><thead><tr><th>#</th><th>المستخدم</th><th>الباقة</th><th>السعر</th><th>تاريخ الانتهاء</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>';
+    d.rows.forEach(s => {
+      const c = tierColors[s.tier]||'#888';
+      const status = s.status === 'active' ? '<span style="color:#10b981">نشط</span>' : `<span style="color:var(--muted)">${ysEsc(s.status)}</span>`;
+      html += `<tr>
+        <td>${ysEsc(s.id)}</td>
+        <td><div style="font-weight:600">${ysEsc(s.name||'—')}</div><div style="font-size:11px;color:var(--muted)">${ysEsc(s.email)}</div></td>
+        <td><span style="color:${c};font-weight:600">${ysEsc(tierLabels[s.tier]||s.tier)}</span></td>
+        <td>$${parseFloat(s.price_usd).toFixed(2)}</td>
+        <td style="font-size:12px">${ysEsc((s.expires_at||'').substring(0,10))}</td>
+        <td>${status}</td>
+        <td>${s.status==='active'?`<button onclick="cancelSub(${s.id},this)" class="btn btn-sm" style="background:var(--danger);color:#fff;padding:3px 8px">إلغاء</button>`:'—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table><p style="font-size:12px;color:var(--muted);margin-top:8px">الإجمالي: '+d.total+' اشتراك</p>';
+    box.innerHTML = html;
+  } catch(e) { box.innerHTML = 'خطأ: '+e.message; }
+}
+
+async function cancelSub(id, btn) {
+  if (!confirm('إلغاء هذا الاشتراك؟')) return;
+  btn.disabled = true; btn.textContent = '...';
+  const fd = new FormData(); fd.append('sub_id', id);
+  await fetch('?ajax=yasmin_sub_cancel', {method:'POST', body:fd});
+  loadYasminSubs();
+}
+
+async function saveNowpaySettings() {
+  const st = document.getElementById('ys-nowpay-save-st');
+  st.textContent = '⏳ جاري الحفظ…';
+  const body = {
+    nowpay_api_key:   document.getElementById('ys-nowpay-key').value,
+    nowpay_ipn_secret: document.getElementById('ys-nowpay-ipn').value,
+  };
+  try {
+    const r = await fetch('?ajax=yasmin_nowpay_save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d = await r.json();
+    st.textContent = d.success ? '✅ تم الحفظ' : '❌ خطأ';
+    st.style.color = d.success ? '#10b981' : '#ef4444';
+    document.getElementById('ys-nowpay-key').value = '';
+    document.getElementById('ys-nowpay-ipn').value = '';
+  } catch(e) { st.textContent = '❌ '+e.message; }
 }
 
 /* ── Accounts ─────────────────────────────────────────────────── */

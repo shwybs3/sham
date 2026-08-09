@@ -1049,6 +1049,45 @@ function ensure_schema(PDO $pdo): array {
     try { @$pdo->exec("DELETE FROM yasmin_conversations WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 500"); }
     catch (Throwable $e) {}
 
+    // ── Yasmin subscriptions — paid tiers ────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS yasmin_orders (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      tier ENUM('plus','pro','premium') NOT NULL,
+      price_usd DECIMAL(8,2) NOT NULL,
+      nowpay_invoice_id VARCHAR(64) DEFAULT NULL,
+      nowpay_order_id   VARCHAR(64) DEFAULT NULL,
+      nowpay_pay_id     VARCHAR(64) DEFAULT NULL COMMENT 'actual payment_id from IPN',
+      payment_status    VARCHAR(32) NOT NULL DEFAULT 'waiting',
+      pay_address       VARCHAR(120) DEFAULT NULL,
+      pay_currency      VARCHAR(16) DEFAULT NULL,
+      pay_amount        DECIMAL(18,8) DEFAULT NULL,
+      ipn_verified      TINYINT(1) NOT NULL DEFAULT 0,
+      duration_days     SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_yo_user (user_id),
+      INDEX idx_yo_nowpay (nowpay_invoice_id),
+      INDEX idx_yo_status (payment_status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'yasmin_orders';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS yasmin_subscriptions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      tier ENUM('plus','pro','premium') NOT NULL,
+      price_usd DECIMAL(8,2) NOT NULL,
+      order_id INT NOT NULL,
+      starts_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      status ENUM('active','expired','cancelled') NOT NULL DEFAULT 'active',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_ys_user (user_id),
+      INDEX idx_ys_expire (expires_at),
+      INDEX idx_ys_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'yasmin_subscriptions';
+
     return $log;
 }
 ensure_schema($pdo);
