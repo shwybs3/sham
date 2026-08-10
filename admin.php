@@ -969,6 +969,10 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
     set_cfg($pdo, 'admin_email_notifications',   isset($_POST['admin_email_notifications'])   ? '1' : '0');
     set_cfg($pdo, 'telegram_enabled',            isset($_POST['telegram_enabled'])            ? '1' : '0');
 
+    // MCP token — only update if the field was submitted (non-empty or explicitly cleared)
+    $newMcpToken = trim($_POST['mcp_token'] ?? '');
+    if (isset($_POST['mcp_token'])) set_cfg($pdo, 'mcp_token', $newMcpToken);
+
     // Optional IP allowlist — auto-include the saving admin's current IP so a save can never lock them out.
     $newAllowlist = trim($_POST['admin_ip_allowlist'] ?? '');
     if ($newAllowlist !== '') {
@@ -2871,8 +2875,73 @@ elseif ($page === 'settings'): ?>
     </div>
   </div>
 
+  <div class="panel">
+    <h2>Claude MCP — اتصال مباشر</h2>
+    <p style="color:var(--muted);font-size:13px;line-height:1.8;margin:0 0 14px">
+      أضف هذا الخادم إلى Claude Code للتحكم المباشر بملفات الموقع وقاعدة البيانات دون الحاجة لـ SSH.
+    </p>
+    <div class="form-group">
+      <label class="form-label">رمز الوصول (Bearer Token)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" type="text" name="mcp_token" id="mcp-token-input"
+               value="<?= h(get_cfg($pdo,'mcp_token')) ?>"
+               placeholder="اضغط 'توليد' لإنشاء رمز جديد"
+               dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
+        <button type="button" id="btn-gen-mcp-token"
+                style="padding:8px 14px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);border-radius:8px;color:var(--cyan);font-size:12px;cursor:pointer;white-space:nowrap">
+          توليد رمز
+        </button>
+      </div>
+      <div class="form-hint">احفظ الإعدادات بعد توليد الرمز. لا يمكن استرداد الرمز القديم بعد التغيير.</div>
+    </div>
+    <?php $mcpEndpoint = rtrim(SITE_URL, '/') . '/mcp.php'; $mcpToken = get_cfg($pdo,'mcp_token'); ?>
+    <?php if ($mcpToken !== ''): ?>
+    <div class="form-group">
+      <label class="form-label">أمر الإضافة إلى Claude Code</label>
+      <pre dir="ltr" style="background:rgba(0,0,0,.3);border:1px solid var(--border-c);border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;color:var(--cyan);margin:0">claude mcp add --transport http szad-ai <?= h($mcpEndpoint) ?> \
+  --header "Authorization: Bearer <?= h($mcpToken) ?>"</pre>
+      <div class="form-hint">انسخ هذا الأمر وشغّله من جهازك.</div>
+    </div>
+    <div style="margin-top:8px">
+      <button type="button" id="btn-ping-mcp"
+              style="padding:8px 16px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);border-radius:8px;color:var(--cyan);font-size:12px;cursor:pointer">
+        اختبر الاتصال (ping)
+      </button>
+      <span id="mcp-ping-result" style="margin-right:10px;font-size:12px"></span>
+    </div>
+    <?php endif; ?>
+  </div>
+
   <button type="submit" class="btn-save">حفظ الإعدادات</button>
 </form>
+
+<script>
+(function(){
+  var genBtn = document.getElementById('btn-gen-mcp-token');
+  if (genBtn) genBtn.addEventListener('click', function(){
+    var hex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                   .map(b => b.toString(16).padStart(2,'0')).join('');
+    document.getElementById('mcp-token-input').value = hex;
+  });
+
+  var pingBtn = document.getElementById('btn-ping-mcp');
+  if (pingBtn) pingBtn.addEventListener('click', function(){
+    var el = document.getElementById('mcp-ping-result');
+    el.style.color = 'var(--muted)'; el.textContent = 'جاري الاختبار…';
+    fetch('<?= h($mcpEndpoint) ?>', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer <?= h($mcpToken) ?>'},
+      body: JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'ping',arguments:{}}})
+    })
+    .then(r => r.json())
+    .then(d => {
+      var txt = d.result?.content?.[0]?.text || JSON.stringify(d);
+      el.style.color = 'var(--success, #22c55e)'; el.textContent = '✓ ' + txt;
+    })
+    .catch(e => { el.style.color = 'var(--danger)'; el.textContent = '✗ ' + e.message; });
+  });
+})();
+</script>
 
 <?php
 /* ─────────────── AI ASSISTANT ─────────────── */
