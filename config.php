@@ -224,6 +224,17 @@ function install_db(): void {
         expires_at DATETIME NOT NULL
     )$engine");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS reviews (
+        id           $pk,
+        product_slug VARCHAR(191) NOT NULL,
+        name         VARCHAR(150) NOT NULL,
+        rating       TINYINT NOT NULL DEFAULT 5,
+        text         TEXT NOT NULL,
+        ip_hash      VARCHAR(64),
+        status       VARCHAR(20) DEFAULT 'pending',
+        created_at   $dt
+    )$engine");
+
     // ترقية الأعمدة لإصدارات قديمة (آمن على MySQL وSQLite)
     try { $db->query("SELECT download_url FROM products LIMIT 1"); }
     catch (Throwable) {
@@ -257,6 +268,8 @@ function install_db(): void {
         'rl_contact_window'  => '600',
         'rl_download_max'    => '10',
         'rl_download_window' => '600',
+        'rl_review_max'      => '3',
+        'rl_review_window'   => '3600',
     ];
     foreach ($defaults as $k => $v) {
         dbInsertIgnore('settings', ['k', 'v'], [$k, $v]);
@@ -437,6 +450,17 @@ function allRefundRequests(): array {
 }
 function allContactMessages(): array {
     return db()->query("SELECT * FROM contact_messages ORDER BY id DESC")->fetchAll();
+}
+function productReviews(string $slug): array {
+    $s = db()->prepare("SELECT * FROM reviews WHERE product_slug=? AND status='approved' ORDER BY id DESC LIMIT 20");
+    $s->execute([$slug]);
+    return $s->fetchAll();
+}
+function allReviews(): array {
+    return db()->query("SELECT r.*, p.name_ar, p.name_en FROM reviews r LEFT JOIN products p ON r.product_slug=p.slug ORDER BY r.id DESC")->fetchAll();
+}
+function pendingReviewCount(): int {
+    return (int)db()->query("SELECT COUNT(*) c FROM reviews WHERE status='pending'")->fetch()['c'];
 }
 
 /* ============================================================

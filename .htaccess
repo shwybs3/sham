@@ -90,3 +90,8 @@ FileETag MTime Size
 <FilesMatch "config\.php$">
   Require all denied
 </FilesMatch>
+
+# -- block direct access to data/ (DB + cache files)
+<IfModule mod_rewrite.c>
+  RewriteRule ^data/ - [F,L]
+</IfModule>

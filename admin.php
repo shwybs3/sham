@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/config.php';
+require_once __DIR__.'/cache.php';
 
 // ===== AUTH =====
 $loginErr = '';
@@ -110,6 +111,10 @@ if ($isPost && isset($_POST['save_product'])) {
             duration_ar=?,duration_en=?,rating=?,sales=?,badge_ar=?,badge_en=?,badge_color=?,
             short_ar=?,short_en=?,long_ar=?,long_en=?,features_ar=?,features_en=?,
             delivery_ar=?,delivery_en=?,download_url=?,featured=?,active=? WHERE id=?")->execute($data);
+        // حذف كاش هذا المنتج + الصفحة الرئيسية
+        $srow = db()->prepare("SELECT slug FROM products WHERE id=?"); $srow->execute([$id]);
+        if ($sr = $srow->fetch()) cache_clear('product', $sr['slug']);
+        cache_clear('index');
         $message = 'تم تحديث المنتج بنجاح';
     } else {
         $sl = slug($data[0]?:$data[1]);
@@ -122,13 +127,17 @@ if ($isPost && isset($_POST['save_product'])) {
              'delivery_ar','delivery_en','download_url','featured','active'],
             $data
         );
+        cache_clear('index');
         $message = 'تمت إضافة المنتج بنجاح';
     }
     header('Location: admin.php?action=products&msg='.urlencode($message)); exit;
 }
 
 if ($action==='del_product' && isset($_GET['id'])) {
+    $srow = db()->prepare("SELECT slug FROM products WHERE id=?"); $srow->execute([(int)$_GET['id']]);
+    if ($sr = $srow->fetch()) cache_clear('product', $sr['slug']);
     db()->prepare("DELETE FROM products WHERE id=?")->execute([(int)$_GET['id']]);
+    cache_clear('index');
     header('Location: admin.php?action=products&msg=تم+الحذف'); exit;
 }
 
@@ -198,6 +207,30 @@ if ($action==='del_cat' && isset($_GET['id'])) {
     header('Location: admin.php?action=categories&msg=تم+الحذف'); exit;
 }
 
+if ($action==='review_action' && isset($_GET['id'],$_GET['status'])) {
+    $st = clean($_GET['status']);
+    if (in_array($st, ['approved','rejected'], true)) {
+        // عند الموافقة على تقييم، ابطل كاش المنتج
+        if ($st === 'approved') {
+            $rrow = db()->prepare("SELECT product_slug FROM reviews WHERE id=?");
+            $rrow->execute([(int)$_GET['id']]);
+            if ($rr = $rrow->fetch()) cache_clear('product', $rr['product_slug']);
+        }
+        db()->prepare("UPDATE reviews SET status=? WHERE id=?")->execute([$st,(int)$_GET['id']]);
+    }
+    header('Location: admin.php?action=reviews&msg=تم+التحديث'); exit;
+}
+
+if ($action==='del_review' && isset($_GET['id'])) {
+    db()->prepare("DELETE FROM reviews WHERE id=?")->execute([(int)$_GET['id']]);
+    header('Location: admin.php?action=reviews&msg=تم+الحذف'); exit;
+}
+
+if ($action==='clear_cache') {
+    cache_clear();
+    header('Location: admin.php?action=dashboard&msg=تم+مسح+الكاش'); exit;
+}
+
 } // end csrf-guarded actions
 
 if (isset($_GET['msg'])) { $message = clean($_GET['msg']); }
@@ -207,10 +240,12 @@ $prods     = allProducts();
 $cats      = categoryList();
 $refunds   = allRefundRequests();
 $messages  = allContactMessages();
+$reviews   = allReviews();
 $pendingCnt= count(array_filter($orders, fn($o)=>$o['status']==='pending'));
 $paidCnt   = count(array_filter($orders, fn($o)=>$o['status']==='paid'));
 $revenue   = array_sum(array_map(fn($o)=>$o['status']==='paid'?$o['amount']:0, $orders));
-$pendingRefunds = count(array_filter($refunds, fn($r)=>$r['status']==='pending'));
+$pendingRefunds  = count(array_filter($refunds, fn($r)=>$r['status']==='pending'));
+$pendingReviews  = count(array_filter($reviews, fn($r)=>$r['status']==='pending'));
 
 $editProd = null;
 if ($action==='edit_product' && isset($_GET['id'])) {
@@ -241,8 +276,10 @@ if ($action==='edit_product' && isset($_GET['id'])) {
     <a href="admin.php?action=orders" class="<?= $action==='orders'?'active':'' ?>"><i class="fa-solid fa-receipt"></i> الطلبات <?php if($pendingCnt): ?><span style="background:var(--red);color:#fff;font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingCnt ?></span><?php endif; ?></a>
     <a href="admin.php?action=refunds" class="<?= $action==='refunds'?'active':'' ?>"><i class="fa-solid fa-rotate-left"></i> طلبات الاسترداد <?php if($pendingRefunds): ?><span style="background:var(--gold);color:var(--bg);font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingRefunds ?></span><?php endif; ?></a>
     <a href="admin.php?action=messages" class="<?= $action==='messages'?'active':'' ?>"><i class="fa-solid fa-envelope"></i> الرسائل</a>
+    <a href="admin.php?action=reviews" class="<?= $action==='reviews'?'active':'' ?>"><i class="fa-solid fa-star"></i> التقييمات <?php if($pendingReviews): ?><span style="background:var(--gold);color:var(--bg);font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingReviews ?></span><?php endif; ?></a>
     <a href="admin.php?action=settings" class="<?= $action==='settings'?'active':'' ?>"><i class="fa-solid fa-gear"></i> الإعدادات</a>
     <hr style="border-color:var(--border);margin:12px 0;">
+    <a href="admin.php?action=clear_cache" onclick="return confirm('مسح كاش الصفحات؟')" style="color:var(--dim)!important;"><i class="fa-solid fa-broom"></i> مسح الكاش</a>
     <a href="index.php" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i> عرض الموقع</a>
     <a href="admin.php?logout=1" style="color:var(--red)!important;"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a>
   </nav>
@@ -625,6 +662,44 @@ if ($action==='edit_product' && isset($_GET['id'])) {
     </tr>
     <?php endforeach; ?>
     <?php if(empty($messages)): ?><tr><td colspan="6" style="text-align:center;color:var(--dim);">لا توجد رسائل</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<?php elseif ($action==='reviews'): ?>
+<div class="admin-topbar">
+  <h1><i class="fa-solid fa-star text-cyan"></i> التقييمات</h1>
+</div>
+<div class="admin-card">
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>المنتج</th><th>الاسم</th><th>التقييم</th><th>التعليق</th><th>الحالة</th><th>التاريخ</th><th>إجراء</th></tr></thead>
+    <tbody>
+    <?php foreach($reviews as $r): ?>
+    <tr>
+      <td style="font-size:13px;font-weight:600;"><?= clean($r['name_ar']??$r['product_slug']) ?></td>
+      <td><?= clean($r['name']) ?></td>
+      <td>
+        <div style="display:flex;gap:2px;">
+          <?php for($i=0;$i<5;$i++): ?>
+          <i class="fa-solid fa-star" style="color:<?= $i<(int)$r['rating']?'var(--gold)':'var(--border)' ?>;font-size:12px;"></i>
+          <?php endfor; ?>
+        </div>
+      </td>
+      <td style="max-width:280px;font-size:12px;color:var(--dim);"><?= nl2br(clean(mb_substr($r['text'],0,200))) ?><?= mb_strlen($r['text'])>200?'…':'' ?></td>
+      <td><span class="badge-status" style="background:<?= $r['status']==='approved'?'rgba(0,255,102,.1)':($r['status']==='rejected'?'rgba(255,0,85,.1)':'rgba(255,184,0,.1)') ?>;color:<?= $r['status']==='approved'?'var(--green)':($r['status']==='rejected'?'var(--red)':'var(--gold)') ?>;"><?= ['pending'=>'معلق','approved'=>'موافق عليه','rejected'=>'مرفوض'][$r['status']]??$r['status'] ?></span></td>
+      <td style="font-size:11px;color:var(--dim);"><?= substr($r['created_at'],0,16) ?></td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        <?php if($r['status']==='pending'): ?>
+        <a href="admin.php?action=review_action&id=<?= $r['id'] ?>&status=approved" class="btn btn-sm" style="background:rgba(0,255,102,.1);color:var(--green);border:1px solid rgba(0,255,102,.2);" title="قبول"><i class="fa-solid fa-check"></i></a>
+        <a href="admin.php?action=review_action&id=<?= $r['id'] ?>&status=rejected" class="btn btn-sm btn-danger" title="رفض"><i class="fa-solid fa-xmark"></i></a>
+        <?php endif; ?>
+        <a href="admin.php?action=del_review&id=<?= $r['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('حذف التقييم نهائياً؟')" title="حذف"><i class="fa-solid fa-trash"></i></a>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if(empty($reviews)): ?><tr><td colspan="7" style="text-align:center;color:var(--dim);">لا توجد تقييمات بعد</td></tr><?php endif; ?>
     </tbody>
   </table>
   </div>

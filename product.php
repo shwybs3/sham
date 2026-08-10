@@ -1,27 +1,64 @@
 <?php
 require_once __DIR__.'/config.php';
+require_once __DIR__.'/cache.php';
+
 $slug = clean($_GET['slug'] ?? '');
 $p    = $slug ? productBySlug($slug) : null;
 if (!$p) { header('Location: index.php'); exit; }
 
-// تحقق من رمز التحميل (العودة من download.php)
+$lang     = getLang();
 $dlToken  = clean($_GET['dl'] ?? '');
 $dlInfo   = null;
 if ($dlToken) {
     $dlInfo = validateDownloadToken($dlToken);
-    // إبطال مبكر للرمز إن لم يكن للمنتج نفسه
     if ($dlInfo && $dlInfo['product_slug'] !== $slug) $dlInfo = null;
 }
 
-// increment views
-db()->prepare("UPDATE products SET views=views+1 WHERE slug=?")->execute([$slug]);
+// ── نموذج إضافة تقييم ──
+$reviewMsg  = '';
+$reviewErr  = '';
+$reviewOk   = false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['do_review'])) {
+    if (!csrfCheck()) {
+        $reviewErr = t('انتهت صلاحية الجلسة، أعد تحميل الصفحة','Session expired, please reload');
+    } elseif (rateLimited('review')) {
+        $reviewErr = t('عدد محاولات كبير، يرجى الانتظار قليلاً','Too many attempts, please wait');
+    } else {
+        $rName   = trim($_POST['rv_name'] ?? '');
+        $rRating = min(5, max(1, (int)($_POST['rv_rating'] ?? 5)));
+        $rText   = trim($_POST['rv_text'] ?? '');
+        if (!$rName || strlen($rName) < 2 || strlen($rName) > 100) {
+            $reviewErr = t('يرجى إدخال اسم صحيح (2-100 حرف)','Please enter a valid name (2-100 chars)');
+        } elseif (strlen($rText) < 15 || strlen($rText) > 2000) {
+            $reviewErr = t('يرجى كتابة تقييم لا يقل عن 15 حرفاً ولا يتجاوز 2000','Review must be 15-2000 characters');
+        } else {
+            db()->prepare("INSERT INTO reviews(product_slug,name,rating,text,ip_hash) VALUES(?,?,?,?,?)")
+                ->execute([$slug, $rName, $rRating, $rText, clientIpHash()]);
+            // إبطال الكاش عند وصول تقييم جديد
+            cache_clear('product', $slug);
+            $reviewOk  = true;
+            $reviewMsg = t('شكراً! تقييمك في انتظار المراجعة وسيظهر قريباً.','Thank you! Your review is pending approval and will appear soon.');
+        }
+    }
+}
 
-$lang  = getLang();
+// increment views (بعد معالجة POST لتجنب العَدّ المزدوج)
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    db()->prepare("UPDATE products SET views=views+1 WHERE slug=?")->execute([$slug]);
+}
+
 $fAr   = $p['features_ar'] ? explode("\n",$p['features_ar']) : [];
 $fEn   = $p['features_en'] ? explode("\n",$p['features_en']) : [];
 $feats = $lang==='ar' ? $fAr : $fEn;
 
+$reviews   = productReviews($slug);
+$cacheable = ($dlToken === '' && $_SERVER['REQUEST_METHOD'] === 'GET');
+
+if ($cacheable && cache_serve('product', $slug)) exit;
+
 $pageTitle = t(clean($p['name_ar']),clean($p['name_en']));
+
+if ($cacheable) cache_start('product', $slug);
 require_once __DIR__.'/header.php';
 ?>
 
@@ -84,7 +121,7 @@ require_once __DIR__.'/header.php';
       </div>
       <?php endif; ?>
 
-      <div class="admin-card" style="border-color:rgba(0,255,102,.2);">
+      <div class="admin-card" style="border-color:rgba(0,255,136,.2);">
         <h3 style="color:var(--green);"><i class="fa-solid fa-bolt"></i> <?= t('طريقة التسليم','Delivery Method') ?></h3>
         <p style="font-size:14px;color:#c0c0c0;"><?= t(clean($p['delivery_ar']),clean($p['delivery_en'])) ?></p>
       </div>
@@ -126,7 +163,7 @@ require_once __DIR__.'/header.php';
 
   </div>
 
-  <!-- ===== RATINGS & DELIVERY SECTION ===== -->
+  <!-- ===== RATINGS & DOWNLOAD SECTION ===== -->
   <div id="ratings" style="margin-top:40px;">
 
     <?php if($dlInfo): ?>
@@ -157,8 +194,8 @@ require_once __DIR__.'/header.php';
     </div>
     <?php endif; ?>
 
-    <!-- التقييمات -->
-    <div class="admin-card" style="border-color:rgba(255,184,0,.15);">
+    <!-- ===== تقييمات العملاء ===== -->
+    <div class="admin-card" style="border-color:rgba(255,184,0,.15);margin-bottom:24px;">
       <h3><i class="fa-solid fa-star" style="color:var(--gold);"></i> <?= t('تقييمات العملاء','Customer Reviews') ?></h3>
 
       <div style="display:flex;align-items:center;gap:24px;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap;">
@@ -187,39 +224,101 @@ require_once __DIR__.'/header.php';
         </div>
       </div>
 
-      <!-- تعليقات عملاء -->
-      <?php
-      $reviews = [
-        ['name'=>'Ahmed K.','date'=>'2025-06-12','rating'=>5,'text_ar'=>'منتج احترافي جداً، التسليم كان فورياً والدعم ممتاز. أنصح به بشدة!','text_en'=>'Very professional product, delivery was instant and support is excellent. Highly recommended!'],
-        ['name'=>'Mohammed S.','date'=>'2025-05-28','rating'=>5,'text_ar'=>'أفضل ما اشتريته من هذا المتجر. الكود نظيف ومنظم ويعمل بشكل مثالي.','text_en'=>'Best purchase from this store. Code is clean, organized and works perfectly.'],
-        ['name'=>'Sara A.','date'=>'2025-05-10','rating'=>4,'text_ar'=>'جيد جداً وسهل التخصيص. أتمنى تحديثات أكثر تفصيلاً في الوثائق.','text_en'=>'Very good and easy to customize. I wish for more detailed documentation updates.'],
-      ];
-      foreach($reviews as $rv): ?>
-      <div style="padding:16px 0;border-bottom:1px solid rgba(42,42,63,.5);">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--bg);">
-              <?= strtoupper(substr($rv['name'],0,1)) ?>
+      <!-- تعليقات عملاء حقيقية من قاعدة البيانات -->
+      <?php if(!empty($reviews)): ?>
+        <?php foreach($reviews as $rv): ?>
+        <div style="padding:16px 0;border-bottom:1px solid rgba(42,42,63,.5);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--bg);">
+                <?= strtoupper(mb_substr($rv['name'],0,1)) ?>
+              </div>
+              <div>
+                <div style="font-size:14px;font-weight:600;"><?= clean($rv['name']) ?></div>
+                <div style="font-size:12px;color:var(--dim);"><?= substr($rv['created_at'],0,10) ?></div>
+              </div>
             </div>
-            <div>
-              <div style="font-size:14px;font-weight:600;"><?= clean($rv['name']) ?></div>
-              <div style="font-size:12px;color:var(--dim);"><?= clean($rv['date']) ?></div>
+            <div style="display:flex;gap:3px;">
+              <?php for($i=0;$i<5;$i++): ?>
+                <i class="fa-solid fa-star" style="color:<?= $i<(int)$rv['rating']?'var(--gold)':'var(--border)' ?>;font-size:13px;"></i>
+              <?php endfor; ?>
             </div>
           </div>
-          <div style="display:flex;gap:3px;">
-            <?php for($i=0;$i<5;$i++): ?>
-              <i class="fa-solid fa-star" style="color:<?= $i<$rv['rating']?'var(--gold)':'var(--border)' ?>;font-size:13px;"></i>
-            <?php endfor; ?>
-          </div>
+          <p style="font-size:14px;color:#c0c0c0;line-height:1.7;"><?= nl2br(clean($rv['text'])) ?></p>
         </div>
-        <p style="font-size:14px;color:#c0c0c0;line-height:1.7;"><?= t(clean($rv['text_ar']),clean($rv['text_en'])) ?></p>
-      </div>
-      <?php endforeach; ?>
-
+        <?php endforeach; ?>
+      <?php else: ?>
+        <p style="color:var(--dim);font-size:14px;text-align:center;padding:16px 0;"><?= t('لا توجد تقييمات بعد — كن أول من يقيّم هذا المنتج!','No reviews yet — be the first to review this product!') ?></p>
+      <?php endif; ?>
     </div>
+
+    <!-- ===== نموذج إضافة تقييم ===== -->
+    <div class="admin-card" style="border-color:rgba(0,240,255,.15);">
+      <h3><i class="fa-solid fa-pen-to-square" style="color:var(--cyan);"></i> <?= t('أضف تقييمك','Add Your Review') ?></h3>
+
+      <?php if($reviewOk): ?>
+      <div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> <?= $reviewMsg ?></div>
+      <?php else: ?>
+        <?php if($reviewErr): ?>
+        <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> <?= $reviewErr ?></div>
+        <?php endif; ?>
+        <form method="POST" class="admin-form" style="margin-top:16px;">
+          <input type="hidden" name="slug" value="<?= clean($slug) ?>">
+          <?php csrfField(); ?>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-user"></i> <?= t('الاسم *','Name *') ?></label>
+            <input type="text" name="rv_name" required minlength="2" maxlength="100"
+              placeholder="<?= t('اسمك أو اسم مستعار...','Your name or alias...') ?>"
+              value="<?= clean($_POST['rv_name']??'') ?>">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-star" style="color:var(--gold);"></i> <?= t('التقييم *','Rating *') ?></label>
+            <div class="star-picker" id="starPicker">
+              <?php for($i=1;$i<=5;$i++): ?>
+              <i class="fa-solid fa-star star-pick" data-val="<?= $i ?>" style="font-size:26px;cursor:pointer;color:var(--border);transition:color .15s;"></i>
+              <?php endfor; ?>
+            </div>
+            <input type="hidden" name="rv_rating" id="rvRating" value="<?= (int)($_POST['rv_rating']??5) ?>">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fa-solid fa-comment"></i> <?= t('تقييمك *','Your Review *') ?></label>
+            <textarea name="rv_text" required minlength="15" maxlength="2000" rows="4"
+              placeholder="<?= t('اكتب تجربتك مع المنتج...','Write your experience with this product...') ?>"><?= clean($_POST['rv_text']??'') ?></textarea>
+            <div style="font-size:12px;color:var(--dim);margin-top:5px;"><?= t('التقييم يظهر بعد مراجعة الأدمن','Review appears after admin approval') ?></div>
+          </div>
+
+          <button type="submit" name="do_review" class="btn btn-primary" style="font-size:15px;padding:12px 28px;">
+            <i class="fa-solid fa-paper-plane"></i> <?= t('إرسال التقييم','Submit Review') ?>
+          </button>
+        </form>
+      <?php endif; ?>
+    </div>
+
   </div>
 
 </main>
+
+<script>
+// Star picker for review form
+(function(){
+  var stars = document.querySelectorAll('.star-pick');
+  var input = document.getElementById('rvRating');
+  if(!stars.length) return;
+  var cur = parseInt(input ? input.value : 5) || 5;
+  function paint(n){
+    stars.forEach(function(s,i){ s.style.color = i < n ? 'var(--gold)' : 'var(--border)'; });
+  }
+  paint(cur);
+  stars.forEach(function(s){
+    s.addEventListener('mouseover', function(){ paint(parseInt(this.dataset.val)); });
+    s.addEventListener('mouseout',  function(){ paint(cur); });
+    s.addEventListener('click',     function(){ cur = parseInt(this.dataset.val); if(input) input.value = cur; paint(cur); });
+  });
+})();
+</script>
 
 <style>
 .product-layout{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;}
@@ -227,6 +326,8 @@ require_once __DIR__.'/header.php';
   .product-layout{grid-template-columns:1fr;}
   .order-box{position:static!important;}
 }
+.star-picker{display:flex;gap:8px;margin-bottom:8px;}
+.star-pick:hover{transform:scale(1.15);}
 </style>
 
 <?php require_once __DIR__.'/footer.php'; ?>
