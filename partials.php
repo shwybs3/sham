@@ -116,6 +116,43 @@ function render_app_card(array $app): void { ?>
 </div>
 <?php }
 
+/* ── One "latest content" card — a single visual shape for apps AND blog
+   posts mixed together, so the homepage can show "whatever was published
+   most recently" instead of only apps. ── */
+function render_latest_item_card(array $item): void {
+    $isApp = $item['kind'] === 'app';
+    ?>
+<a href="<?= h($item['url']) ?>" class="latest-card reveal" data-hardnav="1">
+  <?php if ($item['image']): ?>
+    <img src="<?= h($item['image']) ?>" alt="<?= h($item['title']) ?>" class="latest-card-img <?= $isApp ? 'latest-card-img-app' : '' ?>" loading="lazy">
+  <?php else: ?>
+    <div class="latest-card-img latest-card-img-placeholder"><?= partial_icon($isApp ? 'apps' : 'article') ?></div>
+  <?php endif; ?>
+  <div class="latest-card-body">
+    <span class="latest-card-badge <?= $isApp ? 'latest-card-badge-app' : 'latest-card-badge-blog' ?>">
+      <?= partial_icon($item['badge_icon']) ?> <?= h($item['badge_label']) ?>
+    </span>
+    <div class="latest-card-title"><?= h($item['title']) ?></div>
+    <?php if ($item['excerpt']): ?>
+      <p class="latest-card-excerpt"><?= h(mb_strimwidth($item['excerpt'], 0, 90, '...')) ?></p>
+    <?php endif; ?>
+    <span class="latest-card-time"><?= partial_icon('clock') ?> <?= h(time_ago($item['created_at'])) ?></span>
+  </div>
+</a>
+<?php }
+
+/* ── A grid of "latest content" cards, with an empty-state message ── */
+function render_latest_feed(array $items, string $emptyMessage = 'لا يوجد محتوى بعد'): void {
+    if (!$items) {
+        echo '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><p style="font-size:16px">' . h($emptyMessage) . '</p></div>';
+        return;
+    }
+    ?>
+  <div class="latest-grid">
+    <?php foreach ($items as $item): render_latest_item_card($item); endforeach; ?>
+  </div>
+<?php }
+
 /* ── A grid of app cards, with an empty-state message ── */
 function render_app_grid(array $apps, string $emptyMessage = 'لا توجد نتائج'): void {
     if (!$apps) {

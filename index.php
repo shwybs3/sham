@@ -41,6 +41,33 @@ $apps = $stmt->fetchAll();
 // Featured: أحدث تطبيق منشور
 $featured = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.id DESC LIMIT 1")->fetch();
 
+// ── Unified "latest content" feed: newest apps + blog posts of every type,
+//    merged and sorted together — shown only on the plain homepage (no
+//    search/category filter active), same rule the app grid below follows.
+$latestFeed = [];
+if (!$search && !$catSlug) {
+    $latestApps = $pdo->query("SELECT a.*, c.name AS cat_name FROM apps a LEFT JOIN categories c ON a.category_id=c.id WHERE a.status='published' ORDER BY a.created_at DESC LIMIT 8")->fetchAll();
+    foreach ($latestApps as $a) {
+        $latestFeed[] = [
+            'kind' => 'app', 'title' => $a['name'], 'url' => app_url($a['slug']),
+            'image' => $a['icon_path'] ?: '', 'badge_icon' => 'apps',
+            'badge_label' => $a['cat_name'] ?: 'تطبيق', 'excerpt' => $a['short_description'] ?? '',
+            'created_at' => $a['created_at'],
+        ];
+    }
+    $latestPosts = $pdo->query("SELECT * FROM blog_posts WHERE status='published' ORDER BY created_at DESC LIMIT 8")->fetchAll();
+    foreach ($latestPosts as $p) {
+        $latestFeed[] = [
+            'kind' => 'blog', 'title' => $p['title'], 'url' => blog_post_url($p['slug']),
+            'image' => $p['cover_image'] ? url($p['cover_image']) : '', 'badge_icon' => 'article',
+            'badge_label' => blog_type_label($p['type']), 'excerpt' => $p['excerpt'] ?? '',
+            'created_at' => $p['created_at'],
+        ];
+    }
+    usort($latestFeed, fn($x, $y) => strtotime($y['created_at']) <=> strtotime($x['created_at']));
+    $latestFeed = array_slice($latestFeed, 0, 12);
+}
+
 $activeNav = $catSlug === 'games' ? 'games' : ($catSlug === 'apps' ? 'apps' : 'home');
 $siteName = 'yassota';
 
@@ -134,10 +161,21 @@ $orgSchema = json_encode([
   <?= partial_wave() ?>
   <?php endif; ?>
 
+  <!-- Unified latest-content feed: apps + blog posts, newest first -->
+  <?php if ($latestFeed): ?>
+  <div class="section-head reveal">
+    <span class="section-title"><?= partial_icon('clock') ?> أحدث ما نُشر</span>
+    <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= count($latestFeed) ?> عنصر</span>
+  </div>
+  <?php render_latest_feed($latestFeed); ?>
+  <?= partial_wave() ?>
+  <?php endif; ?>
+
   <!-- Apps Grid -->
   <div class="section-head reveal">
     <span class="section-title">
-      <?= $search ? 'نتائج: ' . h($search) : ($catSlug ? h($categories[array_search($catSlug, array_column($categories,'slug'))]['name'] ?? 'التطبيقات') : 'أحدث التطبيقات') ?>
+      <?= partial_icon($catSlug === 'games' ? 'games' : 'apps') ?>
+      <?= $search ? 'نتائج: ' . h($search) : ($catSlug ? h($categories[array_search($catSlug, array_column($categories,'slug'))]['name'] ?? 'التطبيقات') : 'كل التطبيقات') ?>
     </span>
     <span style="font-family:var(--f-mono);font-size:12px;color:var(--muted)"><?= number_format($totalApps) ?> تطبيق</span>
   </div>
@@ -154,7 +192,7 @@ $orgSchema = json_encode([
   <!-- About Section -->
   <section id="about" style="margin-top:12px">
     <?= partial_wave() ?>
-    <div class="section-head reveal"><span class="section-title">من نحن</span></div>
+    <div class="section-head reveal"><span class="section-title"><?= partial_icon('info') ?> من نحن</span></div>
     <div style="background:var(--navy-700);border:1px solid var(--border-c);border-radius:var(--radius-lg);padding:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px" class="reveal">
       <div>
         <h2 style="font-family:var(--f-head);font-size:20px;font-weight:900;margin-bottom:12px;background:linear-gradient(135deg,var(--white),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">

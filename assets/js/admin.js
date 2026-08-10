@@ -916,12 +916,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const titleInput = document.getElementById('blog-title');
   if (!slugInput || !slugPreview) return;
 
+  // Arabic-only slug: strip Latin letters so the preview always matches what
+  // unique_blog_slug() (config.php) will actually save.
   const clientSlugify = s => (s || '').trim()
     .replace(/\s+/g, '-')
-    .replace(/[^؀-ۿa-zA-Z0-9\-]/g, '')
+    .replace(/[^؀-ۿ0-9\-]/g, '')
     .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase() || 'post-slug';
+    .replace(/^-|-$/g, '') || 'مقال';
 
   const updatePreview = () => {
     slugPreview.textContent = clientSlugify(slugInput.value || titleInput?.value || '');
@@ -929,6 +930,110 @@ document.addEventListener('DOMContentLoaded', () => {
   slugInput.addEventListener('input', updatePreview);
   titleInput?.addEventListener('input', () => { if (!slugInput.value) updatePreview(); });
   updatePreview();
+})();
+
+/* ══════════════════════════════════════════
+   Blog: content readiness score (informational, rule-based)
+   + AI SEO auto-fill button
+   ══════════════════════════════════════════ */
+(function () {
+  const titleIn      = document.getElementById('blog-title');
+  const seoIn         = document.getElementById('blog-seo-title');
+  const metaIn        = document.getElementById('blog-meta-description');
+  const keywordsIn    = document.getElementById('blog-keywords');
+  const excerptIn     = document.getElementById('blog-excerpt');
+  const editor        = document.getElementById('wysiwyg-editor');
+  const source        = document.getElementById('blog-body-source');
+  const scoreValueEl  = document.getElementById('blog-score-value');
+  const scoreBarEl    = document.getElementById('blog-score-bar');
+  const checklistEl   = document.getElementById('blog-score-checklist');
+  if (!scoreValueEl || !scoreBarEl || !checklistEl) return;
+
+  const bodyText = () => {
+    const isSourceMode = source && source.style.display !== 'none';
+    const html = isSourceMode ? source.value : (editor ? editor.innerHTML : '');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html || '';
+    return (tmp.textContent || '').trim();
+  };
+  const wordCount = t => t ? t.split(/\s+/).filter(Boolean).length : 0;
+
+  function computeScore() {
+    const title = (titleIn?.value || '').trim();
+    const seo = (seoIn?.value || '').trim();
+    const meta = (metaIn?.value || '').trim();
+    const keywords = (keywordsIn?.value || '').trim();
+    const excerpt = (excerptIn?.value || '').trim();
+    const words = wordCount(bodyText());
+
+    const items = [];
+    let score = 0;
+
+    if (title.length >= 10) { score += 15; items.push(['✅ العنوان', true]); }
+    else { score += title.length ? 7 : 0; items.push(['⚠️ العنوان قصير جداً', false]); }
+
+    if (seo.length >= 40 && seo.length <= 70) { score += 15; items.push(['✅ SEO Title', true]); }
+    else { score += seo.length ? 7 : 0; items.push([seo.length ? '⚠️ SEO Title بحاجة لضبط الطول (40-70)' : '❌ SEO Title فارغ', false]); }
+
+    if (meta.length >= 100 && meta.length <= 170) { score += 20; items.push(['✅ Meta Description', true]); }
+    else { score += meta.length ? 10 : 0; items.push([meta.length ? '⚠️ Meta Description بحاجة لضبط الطول (100-170)' : '❌ Meta Description فارغ', false]); }
+
+    const kwCount = keywords ? keywords.split(/[,،]/).map(s => s.trim()).filter(Boolean).length : 0;
+    if (kwCount >= 3) { score += 15; items.push(['✅ الكلمات المفتاحية', true]); }
+    else { score += kwCount ? 7 : 0; items.push([kwCount ? '⚠️ أضف كلمات مفتاحية أكثر' : '❌ لا توجد كلمات مفتاحية', false]); }
+
+    if (excerpt.length >= 40) { score += 10; items.push(['✅ الملخص القصير', true]); }
+    else { score += excerpt.length ? 5 : 0; items.push([excerpt.length ? '⚠️ الملخص قصير' : '❌ لا يوجد ملخص', false]); }
+
+    if (words >= 300) { score += 20; items.push(['✅ طول المقال (' + words + ' كلمة)', true]); }
+    else { score += Math.round((words / 300) * 20); items.push(['⚠️ المقال قصير (' + words + ' كلمة، يُفضّل 300+)', false]); }
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    scoreValueEl.textContent = score + '/100';
+    scoreBarEl.style.width = score + '%';
+    scoreBarEl.style.background = score >= 75 ? 'var(--success)' : score >= 50 ? '#e69a00' : 'var(--danger)';
+    checklistEl.innerHTML = items.map(([label, ok]) =>
+      `<span style="padding:3px 9px;border-radius:99px;background:${ok ? 'rgba(21,148,71,.12)' : 'rgba(217,45,32,.1)'};color:${ok ? 'var(--success)' : 'var(--muted)'}">${label}</span>`
+    ).join('');
+  }
+
+  [titleIn, seoIn, metaIn, keywordsIn, excerptIn].forEach(el => el && el.addEventListener('input', computeScore));
+  editor && editor.addEventListener('input', computeScore);
+  source && source.addEventListener('input', computeScore);
+  computeScore();
+
+  const aiBtn = document.getElementById('btn-ai-fill-seo');
+  const aiStatus = document.getElementById('blog-ai-fill-status');
+  if (aiBtn) {
+    aiBtn.addEventListener('click', async () => {
+      const title = (titleIn?.value || '').trim();
+      if (!title) { if (aiStatus) aiStatus.innerHTML = '<span style="color:var(--danger)">أدخل عنوان المقال أولاً</span>'; return; }
+      aiBtn.disabled = true;
+      const original = aiBtn.textContent;
+      aiBtn.textContent = '...جاري التوليد';
+      if (aiStatus) aiStatus.textContent = '';
+      try {
+        const r = await fetch('admin.php?ajax=ai_fill_blog_seo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, body: bodyText() }),
+        });
+        const d = await r.json();
+        if (!d.success) { if (aiStatus) aiStatus.innerHTML = `<span style="color:var(--danger)">${d.error || 'فشل التوليد'}</span>`; return; }
+        if (d.seo_title && seoIn) seoIn.value = d.seo_title;
+        if (d.meta_description && metaIn) metaIn.value = d.meta_description;
+        if (d.keywords && keywordsIn) keywordsIn.value = d.keywords;
+        if (d.excerpt && excerptIn) excerptIn.value = d.excerpt;
+        computeScore();
+        if (aiStatus) aiStatus.innerHTML = '<span style="color:var(--success)">✓ تم تعبئة حقول SEO تلقائياً — راجعها قبل النشر</span>';
+      } catch (e) {
+        if (aiStatus) aiStatus.innerHTML = '<span style="color:var(--danger)">خطأ في الاتصال</span>';
+      } finally {
+        aiBtn.disabled = false;
+        aiBtn.textContent = original;
+      }
+    });
+  }
 })();
 
 /* ── Internal security verification (replaces VirusTotal) ── */
@@ -1093,6 +1198,65 @@ document.addEventListener('DOMContentLoaded', () => {
     editor.innerHTML = html;
     btn.textContent = '✓ تم التحويل';
     setTimeout(() => btn.textContent = '🔧 تحويل لـ HTML', 2500);
+  });
+})();
+
+/* ══════════════════════════════════════════
+   Blog: upload a ready-made HTML file — auto-fills title, description,
+   keywords and body content literally from the file
+   ══════════════════════════════════════════ */
+(function () {
+  const trigger  = document.getElementById('btn-upload-html');
+  const fileIn   = document.getElementById('blog-html-upload');
+  const statusEl = document.getElementById('blog-html-upload-status');
+  if (!trigger || !fileIn) return;
+
+  const titleIn   = document.getElementById('blog-title');
+  const seoIn     = document.querySelector('input[name="seo_title"]');
+  const metaDescIn= document.querySelector('input[name="meta_description"]');
+  const keywordsIn= document.querySelector('input[name="keywords"]');
+  const excerptIn = document.querySelector('input[name="excerpt"]');
+  const typeSel   = document.querySelector('select[name="type"]');
+  const editor    = document.getElementById('wysiwyg-editor');
+  const source    = document.getElementById('blog-body-source');
+
+  trigger.addEventListener('click', () => fileIn.click());
+
+  fileIn.addEventListener('change', () => {
+    const file = fileIn.files && fileIn.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const html = String(reader.result || '');
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const filled = [];
+
+      const title = (doc.querySelector('title')?.textContent || doc.querySelector('h1')?.textContent || '').trim()
+        || file.name.replace(/\.(html?|htm)$/i, '').replace(/[-_]+/g, ' ').trim();
+      if (title && titleIn) { titleIn.value = title; titleIn.dispatchEvent(new Event('input')); filled.push('العنوان'); }
+      if (title && seoIn && !seoIn.value) { seoIn.value = title; filled.push('SEO Title'); }
+
+      const metaDesc = doc.querySelector('meta[name="description" i]')?.getAttribute('content')?.trim() || '';
+      if (metaDesc && metaDescIn) { metaDescIn.value = metaDesc; filled.push('Meta Description'); }
+
+      const keywords = doc.querySelector('meta[name="keywords" i]')?.getAttribute('content')?.trim() || '';
+      if (keywords && keywordsIn) { keywordsIn.value = keywords; filled.push('الكلمات المفتاحية'); }
+
+      const excerptSrc = metaDesc || doc.querySelector('p')?.textContent?.trim() || '';
+      if (excerptSrc && excerptIn) { excerptIn.value = excerptSrc.slice(0, 160); filled.push('الملخص القصير'); }
+
+      // Body content is inserted literally, exactly as authored in the file
+      const bodyHtml = doc.body ? doc.body.innerHTML.trim() : html;
+      if (typeSel && typeSel.value === 'code-page') { typeSel.value = 'article'; typeSel.dispatchEvent(new Event('change')); }
+      if (editor) editor.innerHTML = bodyHtml;
+      if (source) source.value = bodyHtml;
+      filled.push('نص المقال');
+
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✓ تم استخراج: ${filled.join('، ')}</span>`;
+      fileIn.value = '';
+    };
+    reader.onerror = () => { if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">تعذّرت قراءة الملف</span>'; };
+    reader.readAsText(file, 'utf-8');
   });
 })();
 
