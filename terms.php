@@ -1,70 +1,46 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/partials.php';
-
-$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . parse_url(SITE_URL, PHP_URL_HOST);
-$seoTitle = 'شروط الاستخدام — yassota';
-$metaDesc = 'شروط استخدام منصة yassota لتحميل التطبيقات والألعاب.';
+require_once __DIR__.'/config.php';
+$pageTitle = t('شروط الاستخدام','Terms of Service');
+require_once __DIR__.'/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <?= nav_guard_script() ?>
-  <meta charset="UTF-8">
-  <?= head_extras($pdo) ?>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($seoTitle) ?></title>
-  <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('terms.php')) ?>">
-  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
-</head>
-<body>
+<main class="page-content">
+  <h1><?= t('شروط الاستخدام','Terms of Service') ?></h1>
+  <div class="page-meta"><?= t('آخر تحديث','Last updated') ?>: <?= date('Y-m-d') ?></div>
 
-<?php render_site_header(); ?>
+  <p><?= t(
+    'باستخدامك لموقع '.clean(setting('site_name_ar','DarkStore')).' فإنك توافق على الشروط التالية. يرجى قراءتها بعناية قبل الشراء.',
+    'By using '.clean(setting('site_name_en','DarkStore')).' you agree to the following terms. Please read them carefully before purchasing.'
+  ) ?></p>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+  <h2><?= t('طبيعة المنتجات','Nature of Products') ?></h2>
+  <p><?= t(
+    'جميع المنتجات المعروضة هي منتجات رقمية (سكريبتات، بوتات، قوالب، أدوات). لا يوجد شحن مادي؛ التسليم يتم إلكترونياً عبر البريد الإلكتروني بعد التحقق من الدفع.',
+    'All products listed are digital (scripts, bots, templates, tools). There is no physical shipping; delivery is electronic via email after payment verification.'
+  ) ?></p>
 
-<main class="main-content">
-  <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="/" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>شروط الاستخدام</span>
-  </nav>
+  <h2><?= t('الدفع','Payment') ?></h2>
+  <p><?= t(
+    'نقبل الدفع بعملة USDT فقط عبر شبكتي TRC20 أو ERC20. يتحمّل المشتري مسؤولية إرسال المبلغ الصحيح إلى العنوان الصحيح والشبكة الصحيحة. لا نتحمل مسؤولية تحويلات خاطئة لعناوين أو شبكات غير صحيحة.',
+    'We accept payment in USDT only via TRC20 or ERC20 networks. The buyer is responsible for sending the correct amount to the correct address and network. We are not responsible for transfers to wrong addresses or wrong networks.'
+  ) ?></p>
 
-  <div class="section-head reveal"><span class="section-title">شروط الاستخدام</span></div>
+  <h2><?= t('التحقق من الطلب','Order Verification') ?></h2>
+  <p><?= t(
+    'بعد إرسال الدفع وتعبئة نموذج الطلب، يقوم فريقنا بالتحقق يدوياً من معاملة الدفع قبل تسليم المنتج. قد تستغرق عملية التحقق بضع دقائق حتى ساعات حسب الحمل.',
+    'After sending payment and submitting the order form, our team manually verifies the payment transaction before delivering the product. Verification may take a few minutes up to a few hours depending on load.'
+  ) ?></p>
 
-  <div class="section-box reveal" style="color:var(--muted);font-size:14px;line-height:1.9">
-    <p>يرجى قراءة هذه الشروط بعناية قبل استخدام موقع yassota. باستخدامك للموقع فإنك توافق على الالتزام بهذه الشروط بالكامل.</p>
+  <h2><?= t('الاستخدام المقبول','Acceptable Use') ?></h2>
+  <ul>
+    <li><?= t('يُمنع استخدام أي نموذج في الموقع لإرسال بيانات مزوّرة أو محاولة التحايل على أنظمة الحماية','Using any form on the site to submit fraudulent data or attempt to bypass protection systems is prohibited') ?></li>
+    <li><?= t('يُمنع إعادة بيع المنتجات دون ترخيص صريح منا','Reselling products without our explicit authorization is prohibited') ?></li>
+    <li><?= t('نحتفظ بحق رفض أو إلغاء أي طلب مشبوه','We reserve the right to refuse or cancel any suspicious order') ?></li>
+  </ul>
 
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">١. قبول الشروط</h3>
-    <p>يُعد دخولك واستخدامك لهذا الموقع موافقة صريحة منك على هذه الشروط وأي تحديثات لاحقة عليها. إن لم توافق على أي جزء منها، يرجى التوقف عن استخدام الموقع.</p>
+  <h2><?= t('الاسترداد','Refunds') ?></h2>
+  <p><?= t('راجع','See our') ?> <a href="refund-policy.php"><?= t('سياسة الاسترداد الكاملة','full Refund Policy') ?></a>.</p>
 
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٢. طبيعة الخدمة</h3>
-    <p>yassota منصة عربية تعمل كدليل لعرض معلومات عن تطبيقات وألعاب أندرويد (الاسم، الوصف، الإصدار، الصور) وتوجيه الزوار نحو روابط تحميل، سواء كانت رسمية من مطوّري التطبيقات أو من مصادر خارجية موثوقة. الموقع ليس الجهة المطوّرة لهذه التطبيقات ما لم يُذكر ذلك صراحةً.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٣. الاستخدام المسموح به</h3>
-    <p>يُسمح باستخدام الموقع للأغراض الشخصية وغير التجارية فقط. يُمنع محاولة اختراق الموقع، أو استخراج بياناته بشكل آلي مكثف (Scraping) دون إذن، أو استخدامه بأي شكل يضر بالخدمة أو بمستخدمين آخرين.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٤. إخلاء المسؤولية</h3>
-    <p>التطبيقات المعروضة قد تكون من تطوير أطراف ثالثة. نبذل جهداً معقولاً للتحقق من دقة المعلومات المعروضة، لكننا لا نضمن خلوّ أي تطبيق من الأخطاء، ولا نتحمل مسؤولية أي ضرر ناتج عن تحميل أو استخدام تطبيق تم الوصول إليه عبر الموقع. يقع على عاتق المستخدم التحقق من ملاءمة أي تطبيق قبل تثبيته.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٥. حقوق الملكية الفكرية</h3>
-    <p>جميع أسماء التطبيقات والعلامات التجارية والشعارات الظاهرة في الموقع مملوكة لأصحابها الأصليين. يحتفظ yassota بحقوق التصميم والمحتوى الأصلي الخاص بالموقع نفسه (النصوص التعريفية، التصميم، الشعار).</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٦. حدود المسؤولية</h3>
-    <p>يُقدَّم الموقع "كما هو" دون أي ضمانات صريحة أو ضمنية. لن يكون yassota مسؤولاً عن أي أضرار مباشرة أو غير مباشرة تنتج عن استخدام الموقع أو التعذر عن استخدامه.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٧. التعديلات على الشروط</h3>
-    <p>نحتفظ بالحق في تعديل هذه الشروط في أي وقت. يسري أي تعديل فور نشره على هذه الصفحة، ويُعد استمرارك في استخدام الموقع موافقة على النسخة المحدثة.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">٨. التواصل معنا</h3>
-    <p>لأي استفسار بخصوص هذه الشروط: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a></p>
-  </div>
+  <h2><?= t('تعديل الشروط','Changes to These Terms') ?></h2>
+  <p><?= t('نحتفظ بحق تعديل هذه الشروط في أي وقت، وسيُنشر أي تعديل على هذه الصفحة.','We reserve the right to modify these terms at any time; any change will be published on this page.') ?></p>
 </main>
-</div>
-
-<?php render_site_footer(); ?>
-<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
-</body>
-</html>
+<?php require_once __DIR__.'/footer.php'; ?>

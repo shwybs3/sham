@@ -1,56 +1,23 @@
 <?php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/partials.php';
-
-$contactEmail = get_cfg($pdo, 'contact_email') ?: 'contact@' . parse_url(SITE_URL, PHP_URL_HOST);
-$seoTitle = 'سياسة ملفات تعريف الارتباط — yassota';
-$metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
+require_once __DIR__.'/config.php';
+$pageTitle = t('سياسة الكوكيز','Cookie Policy');
+require_once __DIR__.'/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <?= nav_guard_script() ?>
-  <meta charset="UTF-8">
-  <?= head_extras($pdo) ?>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title><?= h($seoTitle) ?></title>
-  <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('cookie-policy.php')) ?>">
-  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
-</head>
-<body>
+<main class="page-content">
+  <h1><?= t('سياسة الكوكيز','Cookie Policy') ?></h1>
+  <div class="page-meta"><?= t('آخر تحديث','Last updated') ?>: <?= date('Y-m-d') ?></div>
 
-<?php render_site_header(); ?>
+  <p><?= t('يستخدم هذا الموقع عدداً محدوداً من ملفات تعريف الارتباط (كوكيز) الضرورية فقط لعمل الموقع بشكل صحيح:','This site uses a limited number of cookies that are strictly necessary for the site to function correctly:') ?></p>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+  <ul>
+    <li><code>PHPSESSID</code> — <?= t('كوكي الجلسة، لحفظ حالة تسجيل الدخول والحماية من CSRF','Session cookie, used to keep login state and CSRF protection') ?></li>
+    <li><code>pv_ok</code> — <?= t('لحفظ موافقتك على سياسة الخصوصية والشروط لمدة سنة',"To remember your acceptance of the privacy policy and terms for one year") ?></li>
+  </ul>
 
-<main class="main-content">
-  <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <a href="/" style="color:var(--cyan)">الرئيسية</a><span>/</span><span>سياسة ملفات تعريف الارتباط</span>
-  </nav>
-
-  <div class="section-head reveal"><span class="section-title">سياسة ملفات تعريف الارتباط (Cookies)</span></div>
-
-  <div class="section-box reveal" style="color:var(--muted);font-size:14px;line-height:1.9">
-    <p>ملفات تعريف الارتباط (Cookies) هي ملفات نصية صغيرة يخزّنها متصفحك عند زيارة موقع إلكتروني، وتُستخدم لتذكّر تفضيلاتك أو نشاطك أثناء التصفح.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">أنواع الكوكيز التي نستخدمها</h3>
-    <p><strong style="color:var(--white)">كوكيز أساسية (ضرورية):</strong> مثل كوكي الجلسة (PHPSESSID) المستخدم فقط داخل لوحة تحكم الإدارة لتسجيل الدخول، وكوكيز CSRF لحماية النماذج من الهجمات. هذه الكوكيز ضرورية لعمل الموقع ولا تُستخدم لتتبع الزوار العاديين.</p>
-    <p><strong style="color:var(--white)">كوكيز الإعلانات:</strong> تضعها شبكة Google AdSense لعرض إعلانات، وقد تُستخدم لعرض إعلانات مبنية على اهتماماتك عبر مواقع مختلفة.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">كيفية التحكم بالكوكيز</h3>
-    <p>يمكنك حذف أو حظر الكوكيز من إعدادات متصفحك في أي وقت؛ لاحظ أن تعطيل بعض الكوكيز قد يؤثر على بعض وظائف الموقع. للتحكم في إعلانات Google المخصصة تحديداً، تفضّل بزيارة <a href="https://adssettings.google.com" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">إعدادات إعلانات Google</a>. يمكنك أيضاً استخدام إضافات المتصفح لمنع التتبع الإعلاني إن رغبت.</p>
-
-    <h3 style="color:var(--white);margin:22px 0 8px;font-size:16px">مزيد من المعلومات</h3>
-    <p>لأي استفسار حول استخدامنا لملفات تعريف الارتباط، راجع <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--cyan)">سياسة الخصوصية</a> أو تواصل معنا على: <a href="mailto:<?= h($contactEmail) ?>" style="color:var(--cyan)"><?= h($contactEmail) ?></a></p>
+  <div class="highlight-box">
+    <?= t('لا نستخدم أي كوكيز إعلانية أو تتبع تسويقي طرف ثالث.','We do not use any advertising or third-party marketing tracking cookies.') ?>
   </div>
-</main>
-</div>
 
-<?php render_site_footer(); ?>
-<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
-</body>
-</html>
+  <p><?= t('يمكنك حذف الكوكيز في أي وقت من إعدادات متصفحك، لكن هذا قد يعطّل بعض وظائف الموقع (مثل حفظ لغة العرض أو الموافقة على الشروط).','You can delete cookies at any time from your browser settings, but this may break some site functionality (like the display language or terms acceptance).') ?></p>
+</main>
+<?php require_once __DIR__.'/footer.php'; ?>

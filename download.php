@@ -1,287 +1,145 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/partials.php';
 
-$slug   = trim($_GET['slug'] ?? '');
-$id     = (int)($_GET['id'] ?? 0);
-$mirror = (int)($_GET['m'] ?? 1);
+$orderId = clean($_GET['order'] ?? '');
+$dlToken = clean($_GET['token'] ?? '');
+$error   = '';
 
-if ($slug !== '') {
-    $stmt = $pdo->prepare("SELECT * FROM apps WHERE slug=? AND status='published'");
-    $stmt->execute([$slug]);
-} else {
-    $stmt = $pdo->prepare("SELECT * FROM apps WHERE id=? AND status='published'");
-    $stmt->execute([$id]);
-}
-$app = $stmt->fetch();
-
-if (!$app) {
-    http_response_code(404);
-    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#f5f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
-    exit;
-}
-
-$pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
-$pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
-
-$archivedVersion = null;
-if (!empty($_GET['ver'])) {
-    $verStmt = $pdo->prepare("SELECT * FROM app_versions WHERE id=? AND app_id=?");
-    $verStmt->execute([(int)$_GET['ver'], $app['id']]);
-    $archivedVersion = $verStmt->fetch();
-}
-
-if ($archivedVersion && !empty($archivedVersion['download_url'])) {
-    $url            = $archivedVersion['download_url'];
-    $displayVersion = $archivedVersion['version'];
-} else {
-    $url = $app['download_url'];
-    if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
-    if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
-    $displayVersion = $app['version'];
-}
-$hasLink = !empty($url);
-if (!$hasLink) $url = '#';
-
-$features    = json_decode($app['features']     ?? '[]', true) ?: [];
-$screenshots = json_decode($app['screenshots']  ?? '[]', true) ?: [];
-$tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
-?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <?= nav_guard_script() ?>
-  <meta charset="UTF-8">
-  <?= head_extras($pdo) ?>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>تحميل <?= h($app['name']) ?> — yassota</title>
-  <meta name="robots" content="noindex,follow">
-  <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
-</head>
-<body>
-
-<header class="site-header">
-  <a href="<?= h(url('')) ?>" class="logo">yass<span>ota</span></a>
-  <nav class="header-nav">
-    <a href="<?= h(url('')) ?>">الرئيسية</a>
-    <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
-  </nav>
-</header>
-
-<div class="dl-page">
-  <div class="dl-box">
-
-    <!-- Top Ad -->
-    <div class="ad-zone" style="margin-bottom:24px;min-height:60px">
-      <?= ad_slot() ?>
-    </div>
-
-    <!-- App icon + name -->
-    <?php if ($app['icon_path']): ?>
-      <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dl-app-icon">
-    <?php else: ?>
-      <div class="dl-icon-placeholder">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5">
-          <rect x="5" y="2" width="14" height="20" rx="3"/>
-          <path d="M9 7h6M9 11h6M9 15h4"/>
-        </svg>
-      </div>
-    <?php endif; ?>
-
-    <div class="dl-app-name"><?= h($app['name']) ?></div>
-    <div class="dl-app-version">
-      <?php if ($displayVersion): ?>
-        <span style="font-family:var(--f-mono)">v<?= h($displayVersion) ?></span>
-      <?php endif; ?>
-      <?php if ($app['size_mb']): ?>
-        · <span style="font-family:var(--f-mono)"><?= h($app['size_mb']) ?> MB</span>
-      <?php endif; ?>
-    </div>
-
-    <?php if ($app['link_verified']): ?>
-    <div class="verified-badge" style="justify-content:center;margin:10px auto">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-      رابط تم التحقق من سلامته بواسطة فريق yassota
-    </div>
-    <?php endif; ?>
-
-    <!-- Short description -->
-    <?php if (!empty($app['short_description'])): ?>
-    <p class="dl-short-desc"><?= h($app['short_description']) ?></p>
-    <?php endif; ?>
-
-    <!-- Features list -->
-    <?php if ($features): ?>
-    <div class="dl-features">
-      <div class="dl-features-title">✨ مميزات التطبيق</div>
-      <ul class="dl-features-list">
-        <?php foreach (array_slice($features, 0, 8) as $feat): ?>
-        <li><?= h($feat) ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </div>
-    <?php endif; ?>
-
-    <!-- Screenshots gallery -->
-    <?php if ($screenshots): ?>
-    <div class="dl-screenshots">
-      <div class="dl-features-title" style="margin-bottom:10px">📱 صور من التطبيق</div>
-      <div class="dl-screenshots-track">
-        <?php foreach (array_slice($screenshots, 0, 6) as $shot): ?>
-        <img src="<?= h(url($shot)) ?>" alt="<?= h($app['name']) ?> screenshot" class="dl-screenshot-img" loading="lazy">
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Early scroll-to-download button -->
-    <?php if ($hasLink): ?>
-    <button type="button" class="btn-scroll-early" onclick="document.getElementById('dl-timer-section').scrollIntoView({behavior:'smooth'})">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-      انتقل لزر التحميل ↓
-    </button>
-    <?php endif; ?>
-
-    <!-- Mid Ad -->
-    <div class="ad-zone" style="margin:20px 0;min-height:60px">
-      <?= ad_slot() ?>
-    </div>
-
-    <!-- ══ Download section ══ -->
-    <div id="dl-timer-section">
-
-      <?php if ($hasLink): ?>
-      <!-- Circular Timer -->
-      <div class="dl-timer-wrap">
-        <svg width="110" height="110" class="dl-ring" viewBox="0 0 110 110">
-          <circle class="dl-ring-bg" cx="55" cy="55" r="48" fill="none" stroke-width="4"/>
-          <circle class="dl-ring-prog" id="ring-prog" cx="55" cy="55" r="48" fill="none" stroke-width="4"
-            stroke-dasharray="301.59" stroke-dashoffset="0" stroke-linecap="round"/>
-        </svg>
-        <div class="dl-count" id="dl-count">10</div>
-      </div>
-
-      <div class="dl-status" id="dl-status">
-        <strong style="color:var(--cyan)">جاري تجهيز التحميل...</strong><br>
-        سيبدأ التحميل تلقائياً خلال <span id="sec-text">10</span> ثوانٍ
-      </div>
-
-      <!-- Progress bar -->
-      <div class="dl-progress-bar">
-        <div class="dl-progress-fill" id="dl-progress"></div>
-      </div>
-
-      <!-- Manual download button (shown after countdown) -->
-      <a id="btn-manual" href="<?= h($url) ?>" class="btn-manual hidden" download data-hardnav="1">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
-          <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
-        </svg>
-        ابدأ التحميل الآن
-      </a>
-      <div class="dl-manual-label" id="manual-label" style="display:none">
-        لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
-      </div>
-
-      <?php else: ?>
-      <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
-        <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
-        لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق.
-      </div>
-      <?php endif; ?>
-
-    </div><!-- /dl-timer-section -->
-
-    <!-- Telegram subscribe button -->
-    <?php if ($tgUrl): ?>
-    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-      اشترك في قناة تيليجرام yassota
-    </a>
-    <?php endif; ?>
-
-    <!-- Mirror links -->
-    <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
-    <div class="dl-mirrors" style="margin-top:16px">
-      <span style="font-size:12px;color:var(--muted)">روابط بديلة:</span>
-      <?php if ($app['mirror2_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 2</a>
-      <?php endif; ?>
-      <?php if ($app['mirror3_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 3</a>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- Back link -->
-    <a href="<?= h(app_url($app['slug'])) ?>"
-       style="display:block;margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
-      ← العودة لصفحة <?= h($app['name']) ?>
-    </a>
-
-    <nav style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:20px;font-size:11px">
-      <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--muted)">سياسة الخصوصية</a>
-      <a href="<?= h(url('terms')) ?>" style="color:var(--muted)">شروط الاستخدام</a>
-      <a href="<?= h(url('contact')) ?>" style="color:var(--muted)">اتصل بنا</a>
-      <a href="<?= h(url('dmca')) ?>" style="color:var(--muted)">DMCA</a>
-    </nav>
+// ─── تحقق من رمز التحميل (العودة من صفحة المنتج بعد الكابتشا) ───
+if ($dlToken) {
+    $dl = validateDownloadToken($dlToken);
+    if (!$dl) {
+        $error = t('رابط التحميل منتهي أو غير صالح، ابدأ من جديد','Download link expired or invalid, please start over');
+    } else {
+        $dlUrl = $dl['download_url'] ?? '';
+        if ($dlUrl) {
+            // لوغ التحميل ثم توجيه مباشر لرابط الملف
+            error_log('[DL] token=' . $dlToken . ' order=' . $dl['order_id'] . ' product=' . $dl['product_slug']);
+            header('Location: ' . $dlUrl);
+            exit;
+        }
+        // لا يوجد رابط — عرض رسالة جاهزية
+        $pageTitle = t('جاري تجهيز ملفك', 'Preparing Your File');
+        require_once __DIR__ . '/header.php';
+        ?>
+<main style="max-width:580px;margin:60px auto;padding:0 20px 80px;text-align:center;">
+  <svg width="80" height="80" viewBox="0 0 80 80" fill="none" style="display:block;margin:0 auto 20px;">
+    <circle cx="40" cy="40" r="40" fill="rgba(0,240,255,0.08)"/>
+    <path d="M40 22L46 34H58L48 41L52 54L40 47L28 54L32 41L22 34H34L40 22Z" fill="#00f0ff" opacity=".9"/>
+  </svg>
+  <h1 style="font-size:26px;font-weight:900;color:var(--cyan);margin-bottom:12px;">
+    <?= t('تم التحقق بنجاح!','Verification Successful!') ?>
+  </h1>
+  <p style="color:#c0c0c0;font-size:15px;line-height:1.8;margin-bottom:24px;">
+    <?= t(
+      'تم تأكيد طلبك ويجري تجهيز ملفك. ستتلقى رابط التحميل على بريدك الإلكتروني خلال دقائق قليلة بعد تأكيد الأدمن للمعاملة.',
+      'Your order is confirmed and your file is being prepared. You will receive the download link via email within minutes after the admin verifies the transaction.'
+    ) ?>
+  </p>
+  <div class="alert alert-success" style="justify-content:center;">
+    <i class="fa-solid fa-circle-check"></i>
+    <?= t('رقم طلبك', 'Order ID') ?>: <strong><?= clean($dl['order_id']) ?></strong>
   </div>
-</div>
-
-<?php render_cookie_banner(); ?>
-
-<script>
-const DOWNLOAD_URL = <?= json_encode($url) ?>;
-const HAS_LINK = <?= $hasLink ? 'true' : 'false' ?>;
-const TOTAL = 10;
-let remaining = TOTAL;
-
-const countEl   = document.getElementById('dl-count');
-const statusEl  = document.getElementById('dl-status');
-const secText   = document.getElementById('sec-text');
-const progressEl= document.getElementById('dl-progress');
-const ringProg  = document.getElementById('ring-prog');
-const btnManual = document.getElementById('btn-manual');
-const manualLbl = document.getElementById('manual-label');
-
-const CIRC = 301.59;
-
-function tick() {
-  remaining--;
-  const pct = (TOTAL - remaining) / TOTAL;
-  countEl.textContent = remaining;
-  if (secText) secText.textContent = remaining;
-  progressEl.style.width = (pct * 100) + '%';
-  ringProg.style.strokeDashoffset = CIRC * (1 - pct);
-
-  if (remaining <= 0) {
-    statusEl.innerHTML = '<strong style="color:var(--success)">✓ يبدأ التحميل الآن...</strong>';
-    countEl.textContent = '✓';
-    countEl.style.fontSize = '22px';
-
-    const a = document.createElement('a');
-    a.href = DOWNLOAD_URL; a.download = '';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-    setTimeout(() => {
-      if (btnManual) btnManual.classList.remove('hidden');
-      if (manualLbl) manualLbl.style.display = 'block';
-    }, 2000);
-  }
+  <div style="margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+    <a href="index.php" class="btn btn-outline"><i class="fa-solid fa-house"></i> <?= t('الرئيسية','Home') ?></a>
+    <a href="contact.php" class="btn btn-primary"><i class="fa-brands fa-telegram"></i> <?= t('تواصل معنا','Contact Us') ?></a>
+  </div>
+</main>
+        <?php
+        require_once __DIR__ . '/footer.php';
+        exit;
+    }
 }
 
-if (HAS_LINK && countEl) {
-  const timer = setInterval(() => {
-    if (remaining <= 0) { clearInterval(timer); return; }
-    tick();
-  }, 1000);
-  if (ringProg) ringProg.style.strokeDashoffset = '0';
-}
-</script>
-<script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
+// ─── صفحة الكابتشا الرئيسية ───
+if (!$orderId) { header('Location: index.php'); exit; }
 
-</body>
-</html>
+$s = db()->prepare("SELECT o.*, p.slug as product_slug, p.name_ar, p.name_en, p.icon, p.color, p.download_url FROM orders o LEFT JOIN products p ON o.product_slug=p.slug WHERE o.order_id=?");
+$s->execute([$orderId]);
+$order = $s->fetch();
+
+if (!$order) {
+    header('Location: index.php'); exit;
+}
+
+$productSlug = $order['product_slug'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrfCheck()) {
+        $error = t('انتهت صلاحية الجلسة، أعد المحاولة','Session expired, try again');
+    } elseif (rateLimited('download')) {
+        $error = t('محاولات كثيرة جداً، انتظر قليلاً','Too many attempts, please wait');
+    } elseif (!verifyCaptcha()) {
+        $error = t('يرجى إتمام التحقق الأمني','Please complete the security check');
+    } else {
+        $token = genDownloadToken($orderId, $productSlug);
+        // توجيه لأسفل صفحة المنتج قسم التقييمات مع رمز التحميل
+        header('Location: product.php?slug=' . urlencode($productSlug) . '&dl=' . urlencode($token) . '#ratings');
+        exit;
+    }
+}
+
+$pageTitle = t('التحقق للتحميل', 'Download Verification');
+require_once __DIR__ . '/header.php';
+?>
+
+<main style="max-width:500px;margin:50px auto;padding:0 20px 80px;">
+
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="width:72px;height:72px;border-radius:18px;background:<?= clean($order['color']??'#00f0ff') ?>18;color:<?= clean($order['color']??'#00f0ff') ?>;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">
+      <i class="fa-solid <?= clean($order['icon']??'fa-cube') ?>"></i>
+    </div>
+    <h1 style="font-size:22px;font-weight:800;margin-bottom:8px;">
+      <?= t(clean($order['name_ar']??''),clean($order['name_en']??'')) ?>
+    </h1>
+    <p style="color:var(--dim);font-size:14px;">
+      <?= t('أكمل التحقق الأمني للوصول إلى ملفك','Complete the security check to access your file') ?>
+    </p>
+  </div>
+
+  <?php if($error): ?>
+  <div class="alert alert-error"><i class="fa-solid fa-circle-xmark"></i> <?= $error ?></div>
+  <?php endif; ?>
+
+  <div class="checkout-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+      <span class="badge-status badge-<?= $order['status'] ?>">
+        <?= ['pending'=>t('معلق','Pending'),'paid'=>t('مدفوع','Paid'),'cancelled'=>t('ملغي','Cancelled')][$order['status']]??$order['status'] ?>
+      </span>
+      <span style="font-size:13px;color:var(--dim);">
+        <?= t('رقم الطلب','Order') ?>: <strong style="font-family:monospace;"><?= clean($orderId) ?></strong>
+      </span>
+    </div>
+
+    <p style="font-size:14px;color:#c0c0c0;margin-bottom:20px;line-height:1.75;">
+      <i class="fa-solid fa-shield-halved" style="color:var(--cyan);margin-<?= getLang()==='ar'?'left':'right' ?>:6px;"></i>
+      <?= t(
+        'للحماية من البوتات والاستخدام العشوائي، نحتاج منك إتمام هذا التحقق السريع قبل الوصول لملفك.',
+        'To protect against bots and unauthorized access, please complete this quick check before downloading your file.'
+      ) ?>
+    </p>
+
+    <form method="POST">
+      <?php csrfField(); ?>
+      <?php renderCaptcha(); ?>
+      <?php if(!captchaEnabled()): ?>
+      <div class="alert alert-info" style="margin-bottom:18px;">
+        <i class="fa-solid fa-circle-info"></i>
+        <?= t('الكابتشا غير مفعّلة — سيتم التوجيه مباشرة','CAPTCHA not enabled — will redirect directly') ?>
+      </div>
+      <?php endif; ?>
+      <button type="submit" class="btn btn-primary w-full" style="justify-content:center;font-size:16px;padding:14px;">
+        <i class="fa-solid fa-arrow-down-to-line"></i>
+        <?= t('تأكيد والوصول للتحميل','Confirm & Access Download') ?>
+      </button>
+    </form>
+  </div>
+
+  <div style="text-align:center;margin-top:22px;">
+    <a href="product.php?slug=<?= urlencode($productSlug) ?>" style="font-size:13px;color:var(--dim);">
+      <i class="fa-solid fa-arrow-right"></i> <?= t('العودة لصفحة المنتج','Back to Product') ?>
+    </a>
+  </div>
+</main>
+
+<?php require_once __DIR__ . '/footer.php'; ?>
