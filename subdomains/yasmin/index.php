@@ -1,126 +1,220 @@
 <?php
-/* ════════════════════════════════════════════════════
-   yasmin.yassota.com — Yasmin AI Chat subdomain
-   Serves the Yasmin chat tool from its own domain.
-   Includes full legal pages for AdSense compliance.
-   ════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   yasmin.yassota.com — Yasmin AI dedicated subdomain
+   Full-screen chat interface + legal pages
+   ═══════════════════════════════════════════════════════════ */
 
-// Redirect to main site's Yasmin tool
-// Set the canonical back to yassota.com for SEO
-$main_url = 'https://yassota.com/tools/chat/';
-$page     = $_GET['page'] ?? '';
+$page = $_GET['page'] ?? '';
 
-// Legal pages served locally on this subdomain
-if (in_array($page, ['privacy', 'terms', 'about', 'contact', 'dmca'])) {
+if (in_array($page, ['privacy','terms','about','contact','dmca'])) {
     serve_legal_page($page);
     exit;
 }
 
-// For all other requests: show a lightweight wrapper that loads the chat
-?>
-<!DOCTYPE html>
+if ($page === 'sitemap') {
+    header('Content-Type: application/xml; charset=utf-8');
+    header('Cache-Control: public, max-age=3600');
+    echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+    echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    echo "  <url><loc>https://yasmin.yassota.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n";
+    foreach (['about','privacy','terms','contact','dmca'] as $p) {
+        echo "  <url><loc>https://yasmin.yassota.com/?page={$p}</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>\n";
+    }
+    echo '</urlset>';
+    exit;
+}
+
+$schema = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'WebApplication',
+    'name'     => 'ياسمين — مساعدة الذكاء الاصطناعي العربية',
+    'url'      => 'https://yasmin.yassota.com/',
+    'description' => 'ياسمين مساعدة ذكاء اصطناعي باللغة العربية. تحدثي معها، اسأليها عن أي شيء، واحصل على إجابات فورية.',
+    'applicationCategory' => 'AIApplication',
+    'operatingSystem' => 'All',
+    'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'USD'],
+    'author' => ['@type' => 'Organization', 'name' => 'yassota.com', 'url' => 'https://yassota.com'],
+    'inLanguage' => 'ar',
+];
+?><!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<title>ياسمين — مساعدة ذكاء اصطناعي | yasmin.yassota.com</title>
-<meta name="description" content="ياسمين هي مساعدتك الذكية باللغة العربية — اسألها عن أي شيء، احصل على إجابات فورية ودقيقة.">
+<title>ياسمين AI — مساعدتك الذكية باللغة العربية | yasmin.yassota.com</title>
+<meta name="description" content="ياسمين هي مساعدتك الذكية باللغة العربية من يسوتا. اسألها عن أي شيء — إجابات فورية، محادثات طبيعية، مجاناً وبدون تسجيل.">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta property="og:title" content="ياسمين — مساعدة ذكاء اصطناعي">
-<meta property="og:description" content="مساعدة ذكاء اصطناعي باللغة العربية من يسوتا">
-<meta property="og:url" content="https://yasmin.yassota.com/">
+<meta name="robots" content="index,follow">
 <link rel="canonical" href="https://yasmin.yassota.com/">
-<link rel="icon" href="https://yassota.com/favicon.ico">
+<meta property="og:type"        content="website">
+<meta property="og:title"       content="ياسمين AI — مساعدتك الذكية بالعربية">
+<meta property="og:description" content="مساعدة ذكاء اصطناعي عربية مجانية. محادثات طبيعية، إجابات فورية.">
+<meta property="og:url"         content="https://yasmin.yassota.com/">
+<meta property="og:image"       content="https://yassota.com/assets/img/yasmin-og.png">
+<meta property="og:site_name"   content="ياسمين AI — yassota.com">
+<meta name="twitter:card"       content="summary_large_image">
+<link rel="sitemap" type="application/xml" href="https://yasmin.yassota.com/sitemap.xml">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230ea5e9'/><text y='.9em' font-size='75' x='12'>🌸</text></svg>">
+<script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-body{font-family:'Cairo','Tajawal',sans-serif;background:#0c1e36;color:#e2e8f0;direction:rtl}
+body{font-family:'Cairo','Tajawal',system-ui,sans-serif;background:#0c1e36;color:#e2e8f0;direction:rtl;display:flex;flex-direction:column}
+
+/* ── Top bar ── */
 .top-bar{
-  position:fixed;top:0;left:0;right:0;height:42px;
-  background:rgba(12,30,54,.95);
-  border-bottom:1px solid rgba(14,165,233,.2);
+  flex-shrink:0;height:48px;
+  background:rgba(12,30,54,.96);
+  border-bottom:1px solid rgba(14,165,233,.25);
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 20px;z-index:100;backdrop-filter:blur(10px);
+  padding:0 16px;z-index:200;
+  backdrop-filter:blur(16px);
+  box-shadow:0 1px 20px rgba(14,165,233,.1);
 }
-.top-bar-logo{
-  font-family:monospace;font-size:15px;font-weight:700;letter-spacing:2px;
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{
+  width:30px;height:30px;border-radius:8px;
+  background:linear-gradient(135deg,#0ea5e9,#7c3aed);
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.brand-name{
+  font-family:monospace;font-size:16px;font-weight:800;letter-spacing:2px;
   background:linear-gradient(135deg,#22d3ee,#7c3aed);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
 }
-.top-bar-links{display:flex;gap:12px}
-.top-bar-links a{color:rgba(226,232,240,.55);font-size:12px;text-decoration:none;transition:color .15s}
-.top-bar-links a:hover{color:#0ea5e9}
-iframe{
-  position:fixed;top:42px;left:0;right:0;bottom:0;
-  width:100%;height:calc(100% - 42px);
-  border:none;background:#0c1e36;
+.badge-live{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:20px;
+  background:rgba(14,165,233,.15);border:1px solid rgba(14,165,233,.3);
+  font-size:10.5px;font-weight:700;color:#7dd3fc;
 }
+.badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#0ea5e9;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.top-links{display:flex;align-items:center;gap:4px}
+.top-links a{color:rgba(226,232,240,.45);font-size:11.5px;text-decoration:none;padding:4px 8px;border-radius:6px;transition:all .15s}
+.top-links a:hover{color:#38bdf8;background:rgba(14,165,233,.1)}
+.top-links .btn-szad{
+  background:linear-gradient(135deg,#7c3aed,#4f46e5);
+  color:#fff;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:700;
+}
+.top-links .btn-main{
+  background:linear-gradient(135deg,#0ea5e9,#0284c7);
+  color:#fff;border-radius:8px;padding:5px 12px;font-size:11.5px;font-weight:700;
+}
+.top-links .btn-main:hover,.top-links .btn-szad:hover{opacity:.9}
+
+/* ── Chat iframe ── */
+.chat-frame{
+  flex:1;width:100%;border:none;
+  background:#0c1e36;
+  display:block;
+}
+
+.seo-section{display:none}
 </style>
 </head>
 <body>
+
 <div class="top-bar">
-  <span class="top-bar-logo">ياسمين</span>
-  <div class="top-bar-links">
-    <a href="https://yassota.com">يسوتا الرئيسية</a>
+  <div class="brand">
+    <div class="brand-icon">🌸</div>
+    <span class="brand-name">ياسمين</span>
+    <span class="badge-live">متصلة الآن</span>
+  </div>
+  <div class="top-links">
+    <a href="https://szad.yassota.com/" class="btn-szad" title="Szad AI">⚡ صزاد</a>
+    <a href="https://yassota.com">يسوتا</a>
     <a href="?page=about">من نحن</a>
     <a href="?page=privacy">الخصوصية</a>
-    <a href="?page=contact">تواصل</a>
+    <a href="https://yassota.com/upgrade" class="btn-main">⭐ ترقية</a>
   </div>
 </div>
-<iframe src="https://yassota.com/tools/chat/" title="ياسمين — مساعدة ذكاء اصطناعي" loading="eager" allowfullscreen></iframe>
+
+<iframe
+  src="https://yassota.com/tools/chat/"
+  class="chat-frame"
+  title="ياسمين AI — مساعدة الذكاء الاصطناعي العربية"
+  loading="eager"
+  allow="clipboard-write; microphone"
+  referrerpolicy="origin"
+  id="yasmin-frame">
+</iframe>
+
+<div class="seo-section" aria-hidden="true">
+  <h1>ياسمين AI — مساعدتك الذكية باللغة العربية</h1>
+  <p>ياسمين مساعدة ذكاء اصطناعي عربية من منصة يسوتا. اسألها عن أي شيء واحصل على إجابات فورية.</p>
+  <p><a href="https://yassota.com/tools/chat/">تحدث مع ياسمين الآن</a></p>
+</div>
+
+<script>
+document.getElementById('yasmin-frame').addEventListener('error', function() {
+  window.location.href = 'https://yassota.com/tools/chat/';
+});
+setTimeout(function() {
+  try {
+    var f = document.getElementById('yasmin-frame');
+    if (!f.contentDocument && !f.contentWindow) {
+      window.location.href = 'https://yassota.com/tools/chat/';
+    }
+  } catch(e) {
+    // Cross-origin = iframe loading correctly
+  }
+}, 5000);
+</script>
 </body>
 </html>
 <?php
 
 function serve_legal_page(string $page): void {
     $pages = [
-        'about'   => ['title' => 'من نحن — ياسمين AI', 'content' => '<h2>عن ياسمين</h2><p>ياسمين هي مساعدة ذكاء اصطناعي باللغة العربية تعمل بواسطة منصة يسوتا (yassota.com). تهدف ياسمين إلى تقديم إجابات دقيقة وفورية لأسئلتك باللغة العربية.</p><h2>من نحن</h2><p>يسوتا هو دليل تطبيقات أندرويد العربي الأكبر، يقدم معلومات ومراجعات وتطبيقات موثوقة للمستخدمين العرب حول العالم.</p>'],
-        'privacy' => ['title' => 'سياسة الخصوصية — ياسمين AI', 'content' => '<h2>سياسة الخصوصية</h2><p>تحترم ياسمين خصوصيتك الكاملة. نحن لا نجمع بيانات شخصية من محادثاتك. المحادثات تُعالج بشكل مؤقت ولا تُخزن بصورة دائمة.</p><h2>ملفات تعريف الارتباط</h2><p>نستخدم ملفات تعريف الارتباط الأساسية فقط لتحسين تجربة الاستخدام. لا نشارك بياناتك مع أطراف ثالثة.</p><p>للمزيد: <a href="https://yassota.com/privacy-policy">سياسة خصوصية يسوتا</a></p>'],
-        'terms'   => ['title' => 'شروط الاستخدام — ياسمين AI', 'content' => '<h2>شروط الاستخدام</h2><p>باستخدام ياسمين، توافق على عدم استخدامها لأغراض غير قانونية أو ضارة. ياسمين أداة مساعدة ذكاء اصطناعي ولا تُعتبر إجاباتها بديلاً عن الاستشارة المتخصصة.</p><p>تفاصيل إضافية في <a href="https://yassota.com/terms">شروط استخدام يسوتا</a></p>'],
-        'contact' => ['title' => 'تواصل معنا — ياسمين AI', 'content' => '<h2>تواصل معنا</h2><p>للاستفسارات المتعلقة بياسمين، تواصل معنا عبر <a href="https://yassota.com/contact">صفحة التواصل على يسوتا</a>.</p>'],
-        'dmca'    => ['title' => 'DMCA — ياسمين AI', 'content' => '<h2>إشعار DMCA</h2><p>لإرسال إشعار حقوق ملكية، تواصل معنا عبر <a href="https://yassota.com/dmca">صفحة DMCA على يسوتا</a>.</p>'],
+        'about' => [
+            'title' => 'من نحن — ياسمين AI',
+            'h'     => 'عن ياسمين AI',
+            'body'  => '<p>ياسمين هي مساعدة ذكاء اصطناعي عربية من منصة <a href="https://yassota.com">يسوتا</a>، تتحدث بطريقة طبيعية وودية.</p>
+                        <p>يمكنك سؤال ياسمين عن أي شيء — معلومات، كتابة، ترجمة، تلخيص — وستحصل على إجابة فورية.</p>
+                        <p>الاستخدام الأساسي مجاني بالكامل. <a href="https://yassota.com/upgrade">الاشتراك المدفوع</a> يوفر حدوداً أعلى.</p>
+                        <p><a href="https://yassota.com/about">المزيد عن يسوتا ←</a></p>',
+        ],
+        'privacy' => [
+            'title' => 'سياسة الخصوصية — ياسمين AI',
+            'h'     => 'سياسة الخصوصية',
+            'body'  => '<p>آخر تحديث: ' . date('Y-m-d') . '</p>
+                        <p>لا تُحفظ المحادثات دون تسجيل. عند التسجيل، تُحفظ مشفرة ولا تُشارك مع أطراف ثالثة.</p>
+                        <p>قد تظهر إعلانات AdSense خاضعة <a href="https://policies.google.com/privacy">لسياسة جوجل</a>.</p>
+                        <p><a href="https://yassota.com/privacy-policy">سياسة الخصوصية الكاملة ←</a></p>',
+        ],
+        'terms' => [
+            'title' => 'شروط الاستخدام — ياسمين AI',
+            'h'     => 'شروط الاستخدام',
+            'body'  => '<p>باستخدام ياسمين AI توافق على <a href="https://yassota.com/terms">شروط استخدام يسوتا</a>.</p>
+                        <p>ياسمين أداة مساعدة ذكاء اصطناعي ولا تُعتبر إجاباتها بديلاً عن الاستشارة المتخصصة.</p>',
+        ],
+        'contact' => [
+            'title' => 'تواصل — ياسمين AI',
+            'h'     => 'تواصل معنا',
+            'body'  => '<p>للتواصل: <a href="https://yassota.com/contact">نموذج التواصل على يسوتا ←</a></p>',
+        ],
+        'dmca' => [
+            'title' => 'DMCA — ياسمين AI',
+            'h'     => 'إشعار DMCA',
+            'body'  => '<p>لإرسال إشعار إزالة: <a href="https://yassota.com/dmca">نموذج DMCA ←</a></p>',
+        ],
     ];
     $p = $pages[$page] ?? $pages['about'];
-    ?>
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<title><?= htmlspecialchars($p['title']) ?></title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="canonical" href="https://yasmin.yassota.com/?page=<?= htmlspecialchars($page) ?>">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Cairo','Tajawal',sans-serif;background:#f4f7fb;color:#0f172a;direction:rtl;line-height:1.7;padding:0 0 60px}
-.top-bar{background:#0c1e36;color:#e2e8f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
-.top-bar a{color:rgba(226,232,240,.6);font-size:13px;text-decoration:none}
-.top-bar a:hover{color:#0ea5e9}
-.top-bar-logo{font-family:monospace;font-size:15px;font-weight:700;letter-spacing:2px}
-.wrap{max-width:780px;margin:0 auto;padding:40px 20px}
-h2{font-size:22px;font-weight:800;margin-bottom:12px;margin-top:24px;color:#0f172a}
-p{color:#475569;margin-bottom:14px;font-size:15px}
-a{color:#0ea5e9}
-.legal-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:32px;padding-top:20px;border-top:1px solid #e2e8f0}
-.legal-links a{font-size:13px;color:#64748b;text-decoration:none;padding:4px 10px;border:1px solid #e2e8f0;border-radius:20px}
-.legal-links a:hover{color:#0ea5e9;border-color:#0ea5e9}
-</style>
-</head>
-<body>
-<div class="top-bar">
-  <span class="top-bar-logo">ياسمين</span>
-  <a href="/">← العودة للمحادثة</a>
-</div>
-<div class="wrap">
-  <?= $p['content'] ?>
-  <div class="legal-links">
-    <a href="?page=about">من نحن</a>
-    <a href="?page=privacy">الخصوصية</a>
-    <a href="?page=terms">الشروط</a>
-    <a href="?page=contact">تواصل</a>
-    <a href="?page=dmca">DMCA</a>
-    <a href="https://yassota.com">يسوتا الرئيسية</a>
-  </div>
-</div>
-</body>
-</html>
-<?php
+    echo "<!DOCTYPE html><html lang='ar' dir='rtl'><head><meta charset='utf-8'>"
+        . "<title>" . htmlspecialchars($p['title']) . "</title>"
+        . "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        . "<meta name='robots' content='noindex,follow'>"
+        . "<style>*{box-sizing:border-box}body{font-family:Cairo,system-ui,sans-serif;background:#0c1e36;color:#e2e8f0;direction:rtl;line-height:1.75}"
+        . "header{background:rgba(12,30,54,.98);padding:14px 20px;border-bottom:1px solid rgba(14,165,233,.25);display:flex;align-items:center;justify-content:space-between}"
+        . ".brand{font-family:monospace;font-size:15px;font-weight:800;background:linear-gradient(135deg,#22d3ee,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}"
+        . ".wrap{max-width:720px;margin:0 auto;padding:36px 20px}"
+        . "h1{font-size:22px;font-weight:800;margin-bottom:16px;color:#e2e8f0}"
+        . "p{color:#94a3b8;margin-bottom:12px;font-size:14px;line-height:1.8}"
+        . "a{color:#38bdf8}.back{display:inline-flex;align-items:center;gap:6px;margin-bottom:24px;color:#38bdf8;text-decoration:none;font-weight:600;font-size:13px}"
+        . "footer{background:rgba(12,30,54,.98);color:rgba(226,232,240,.35);text-align:center;padding:16px;font-size:12px;margin-top:40px}footer a{color:rgba(226,232,240,.3);margin:0 6px;text-decoration:none}"
+        . "</style></head><body>"
+        . "<header><span class='brand'>ياسمين AI</span><a href='/' style='color:#38bdf8;font-size:12px;text-decoration:none'>← العودة للمحادثة</a></header>"
+        . "<div class='wrap'><a href='/' class='back'>← العودة</a><h1>{$p['h']}</h1>{$p['body']}</div>"
+        . "<footer><a href='/'>الرئيسية</a><a href='/?page=privacy'>الخصوصية</a><a href='/?page=contact'>تواصل</a><a href='https://yassota.com'>يسوتا</a></footer>"
+        . "</body></html>";
 }

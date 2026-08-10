@@ -4,5 +4,7 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^$ index.php [L]
+  RewriteRule ^sitemap\.xml$ index.php?page=sitemap [L,QSA]
+  RewriteRule ^favicon\.svg$ index.php?page=favicon [L,QSA]
   RewriteRule ^(about|privacy|terms|contact|dmca)/?$ index.php?page=$1 [L,QSA]
 </IfModule>

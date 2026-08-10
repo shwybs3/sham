@@ -194,7 +194,8 @@ ErrorDocument 404 /404.php
 <IfModule mod_headers.c>
   # Security
   Header set X-Content-Type-Options  "nosniff"
-  Header set X-Frame-Options         "SAMEORIGIN"
+  # Allow *.yassota.com subdomains to embed this site in iframes (for AI tool subdomains)
+  Header always set Content-Security-Policy "frame-ancestors 'self' https://*.yassota.com"
   Header set Referrer-Policy         "strict-origin-when-cross-origin"
   Header set X-XSS-Protection        "1; mode=block"
   # Keep-alive

@@ -1050,13 +1050,192 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Image by URL
+  // Image — upload modal with HTML copy-paste
   const imgBtn = document.getElementById('ws-image');
   if (imgBtn) {
     imgBtn.addEventListener('click', () => {
-      const url = prompt('رابط الصورة (URL):', 'https://');
-      if (url) document.execCommand('insertImage', false, url);
-      editor.focus();
+      // Save caret position before modal steals focus
+      const sel = window.getSelection();
+      let savedRange = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+      wsOpenImageModal(editor, savedRange);
+    });
+  }
+
+  function wsOpenImageModal(editorEl, savedRange) {
+    // Remove any existing modal
+    const old = document.getElementById('ws-img-modal');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ws-img-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+    overlay.innerHTML = `
+<div style="background:var(--panel-bg,#1a2035);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:14px;padding:24px;width:min(520px,100%);max-height:90vh;overflow-y:auto;direction:rtl;position:relative">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <h3 style="font-size:15px;font-weight:700;color:var(--text,#e2e8f0);margin:0">🖼️ رفع صورة في المقال</h3>
+    <button id="wsimg-close" type="button" style="background:none;border:none;color:var(--muted,#94a3b8);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
+  </div>
+
+  <div id="wsimg-drop" style="border:2px dashed var(--border,rgba(255,255,255,.15));border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:16px">
+    <div style="font-size:32px;margin-bottom:8px;pointer-events:none">📤</div>
+    <div style="font-size:14px;color:var(--text,#e2e8f0);margin-bottom:6px;pointer-events:none">اسحب وأفلت صورة هنا</div>
+    <div style="font-size:12px;color:var(--muted,#94a3b8);margin-bottom:14px;pointer-events:none">أو</div>
+    <label style="display:inline-block;background:var(--accent,#2563eb);color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+      📂 اختر صورة
+      <input type="file" id="wsimg-file" accept="image/*" style="display:none">
+    </label>
+    <div style="font-size:11px;color:var(--muted,#94a3b8);margin-top:10px;pointer-events:none">jpg · png · webp · gif — حتى 10 MB</div>
+  </div>
+
+  <div id="wsimg-uploading" style="display:none;text-align:center;padding:20px 0;color:var(--muted,#94a3b8);font-size:13px">
+    <div style="width:32px;height:32px;border:3px solid rgba(37,99,235,.2);border-top-color:var(--accent,#2563eb);border-radius:50%;animation:wsimg-spin 1s linear infinite;margin:0 auto 12px"></div>
+    جارٍ الرفع...
+  </div>
+
+  <div id="wsimg-result" style="display:none">
+    <div style="border-radius:10px;overflow:hidden;background:rgba(0,0,0,.25);margin-bottom:14px;text-align:center;max-height:220px">
+      <img id="wsimg-preview-img" style="max-width:100%;max-height:220px;object-fit:contain;display:block;margin:0 auto" alt="">
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted,#94a3b8);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px">HTML جاهز — انسخ والصق في أي مكان</div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <textarea id="wsimg-html-code" readonly style="flex:1;background:rgba(0,0,0,.35);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:8px;padding:10px 12px;font-family:monospace;font-size:11.5px;color:#a5f3fc;direction:ltr;resize:none;height:50px;line-height:1.5;white-space:nowrap;overflow-x:auto"></textarea>
+        <button id="wsimg-copy-btn" type="button" style="flex-shrink:0;background:rgba(14,165,233,.12);border:1px solid rgba(14,165,233,.25);color:#38bdf8;border-radius:8px;padding:0 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap">📋 نسخ</button>
+      </div>
+    </div>
+
+    <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#4ade80;margin-bottom:16px">✓ تم الرفع — يمكنك إدراج الصورة في المقال أو نسخ الرابط HTML</div>
+  </div>
+
+  <div id="wsimg-error" style="display:none;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#f87171;margin-bottom:16px"></div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button id="wsimg-url-btn" type="button" style="background:none;border:1px solid var(--border,rgba(255,255,255,.1));color:var(--muted,#94a3b8);padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer">🔗 رابط URL</button>
+    <button id="wsimg-cancel" type="button" style="background:rgba(255,255,255,.06);border:1px solid var(--border,rgba(255,255,255,.1));color:var(--text,#e2e8f0);padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer">إلغاء</button>
+    <button id="wsimg-insert" type="button" disabled style="background:var(--accent,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.4;transition:opacity .2s">إدراج في المقال ←</button>
+  </div>
+
+  <style>
+    @keyframes wsimg-spin{to{transform:rotate(360deg)}}
+    #ws-img-modal *:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+  </style>
+</div>`;
+
+    document.body.appendChild(overlay);
+
+    let uploadedUrl = '';
+
+    function closeModal() { overlay.remove(); }
+
+    overlay.querySelector('#wsimg-close').onclick = closeModal;
+    overlay.querySelector('#wsimg-cancel').onclick = closeModal;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+    function showUploading() {
+      overlay.querySelector('#wsimg-drop').style.display = 'none';
+      overlay.querySelector('#wsimg-uploading').style.display = 'block';
+      overlay.querySelector('#wsimg-result').style.display = 'none';
+      overlay.querySelector('#wsimg-error').style.display = 'none';
+    }
+
+    function showResult(url) {
+      uploadedUrl = url;
+      overlay.querySelector('#wsimg-uploading').style.display = 'none';
+      overlay.querySelector('#wsimg-result').style.display = 'block';
+      overlay.querySelector('#wsimg-preview-img').src = url;
+      overlay.querySelector('#wsimg-html-code').value = `<img src="${url}" alt="" style="max-width:100%;height:auto">`;
+      const ins = overlay.querySelector('#wsimg-insert');
+      ins.disabled = false;
+      ins.style.opacity = '1';
+    }
+
+    function showError(msg) {
+      overlay.querySelector('#wsimg-uploading').style.display = 'none';
+      overlay.querySelector('#wsimg-drop').style.display = 'block';
+      const err = overlay.querySelector('#wsimg-error');
+      err.style.display = 'block';
+      err.textContent = '⚠ ' + msg;
+    }
+
+    function doUpload(file) {
+      if (!file) return;
+      const allowed = ['image/jpeg','image/png','image/webp','image/gif'];
+      if (!allowed.includes(file.type)) { showError('الصيغة غير مدعومة — jpg/png/webp/gif فقط'); return; }
+      if (file.size > 10 * 1024 * 1024) { showError('الحجم يتجاوز 10 ميغابايت'); return; }
+      showUploading();
+      const fd = new FormData();
+      fd.append('img', file);
+      fetch('admin.php?ajax=upload_blog_img&slot=99', {method:'POST', body:fd})
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) showResult(d.url);
+          else showError(d.error || 'فشل الرفع');
+        })
+        .catch(e => showError('خطأ في الشبكة: ' + e.message));
+    }
+
+    // File input
+    overlay.querySelector('#wsimg-file').addEventListener('change', e => {
+      if (e.target.files[0]) doUpload(e.target.files[0]);
+    });
+
+    // Drag & drop
+    const dz = overlay.querySelector('#wsimg-drop');
+    dz.addEventListener('click', () => overlay.querySelector('#wsimg-file').click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='var(--accent,#2563eb)'; dz.style.background='rgba(37,99,235,.06)'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor=''; dz.style.background=''; });
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.style.borderColor=''; dz.style.background='';
+      if (e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]);
+    });
+
+    // Copy HTML
+    overlay.querySelector('#wsimg-copy-btn').addEventListener('click', () => {
+      const ta = overlay.querySelector('#wsimg-html-code');
+      ta.select();
+      try { document.execCommand('copy'); } catch(e) { navigator.clipboard && navigator.clipboard.writeText(ta.value); }
+      const btn = overlay.querySelector('#wsimg-copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✓ تم النسخ!';
+      btn.style.background = 'rgba(34,197,94,.15)';
+      btn.style.borderColor = 'rgba(34,197,94,.3)';
+      btn.style.color = '#4ade80';
+      setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; }, 1800);
+    });
+
+    // URL fallback button
+    overlay.querySelector('#wsimg-url-btn').addEventListener('click', () => {
+      const url = prompt('أدخل رابط الصورة (URL):', 'https://');
+      if (url && url.startsWith('http')) {
+        showResult(url);
+      }
+    });
+
+    // Insert into editor
+    overlay.querySelector('#wsimg-insert').addEventListener('click', () => {
+      if (!uploadedUrl) return;
+      editorEl.focus();
+      if (savedRange) {
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(savedRange);
+      }
+      document.execCommand('insertHTML', false, `<img src="${uploadedUrl}" alt="" style="max-width:100%;height:auto"><p><br></p>`);
+      closeModal();
+      editorEl.focus();
+    });
+
+    // Paste image from clipboard
+    overlay.addEventListener('paste', e => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          doUpload(item.getAsFile());
+          break;
+        }
+      }
     });
   }
 
