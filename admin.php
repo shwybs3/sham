@@ -2268,6 +2268,14 @@ elseif ($page === 'blog-edit'):
 
 <?php if (!empty($blogError)): ?><div class="alert alert-error"><?= h($blogError) ?></div><?php endif; ?>
 
+<div class="panel" id="blog-upload-zone" style="margin-bottom:16px;padding:18px;border:2px dashed var(--border-c);text-align:center">
+  <div style="font-weight:700;margin-bottom:4px">⚡ الطريقة السريعة</div>
+  <div style="color:var(--muted);font-size:13px;margin-bottom:12px">ارفع ملف HTML جاهز وسيتم تعبئة العنوان والوصف والمحتوى تلقائياً وحرفياً كما هو بالملف</div>
+  <input type="file" id="blog-html-upload" accept=".html,.htm,text/html" style="display:none">
+  <button type="button" id="btn-upload-html" class="btn-ai">📤 رفع ملف HTML جاهز</button>
+  <div id="blog-html-upload-status" style="margin-top:10px;font-size:12px"></div>
+</div>
+
 <form method="post" action="admin.php?page=blog-edit" id="blog-edit-form">
   <?= csrf_field() ?>
   <input type="hidden" name="id" value="<?= (int)$blogPost['id'] ?>">

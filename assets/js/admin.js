@@ -1097,6 +1097,65 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 
 /* ══════════════════════════════════════════
+   Blog: upload a ready-made HTML file — auto-fills title, description,
+   keywords and body content literally from the file
+   ══════════════════════════════════════════ */
+(function () {
+  const trigger  = document.getElementById('btn-upload-html');
+  const fileIn   = document.getElementById('blog-html-upload');
+  const statusEl = document.getElementById('blog-html-upload-status');
+  if (!trigger || !fileIn) return;
+
+  const titleIn   = document.getElementById('blog-title');
+  const seoIn     = document.querySelector('input[name="seo_title"]');
+  const metaDescIn= document.querySelector('input[name="meta_description"]');
+  const keywordsIn= document.querySelector('input[name="keywords"]');
+  const excerptIn = document.querySelector('input[name="excerpt"]');
+  const typeSel   = document.querySelector('select[name="type"]');
+  const editor    = document.getElementById('wysiwyg-editor');
+  const source    = document.getElementById('blog-body-source');
+
+  trigger.addEventListener('click', () => fileIn.click());
+
+  fileIn.addEventListener('change', () => {
+    const file = fileIn.files && fileIn.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const html = String(reader.result || '');
+      const doc  = new DOMParser().parseFromString(html, 'text/html');
+      const filled = [];
+
+      const title = (doc.querySelector('title')?.textContent || doc.querySelector('h1')?.textContent || '').trim()
+        || file.name.replace(/\.(html?|htm)$/i, '').replace(/[-_]+/g, ' ').trim();
+      if (title && titleIn) { titleIn.value = title; titleIn.dispatchEvent(new Event('input')); filled.push('العنوان'); }
+      if (title && seoIn && !seoIn.value) { seoIn.value = title; filled.push('SEO Title'); }
+
+      const metaDesc = doc.querySelector('meta[name="description" i]')?.getAttribute('content')?.trim() || '';
+      if (metaDesc && metaDescIn) { metaDescIn.value = metaDesc; filled.push('Meta Description'); }
+
+      const keywords = doc.querySelector('meta[name="keywords" i]')?.getAttribute('content')?.trim() || '';
+      if (keywords && keywordsIn) { keywordsIn.value = keywords; filled.push('الكلمات المفتاحية'); }
+
+      const excerptSrc = metaDesc || doc.querySelector('p')?.textContent?.trim() || '';
+      if (excerptSrc && excerptIn) { excerptIn.value = excerptSrc.slice(0, 160); filled.push('الملخص القصير'); }
+
+      // Body content is inserted literally, exactly as authored in the file
+      const bodyHtml = doc.body ? doc.body.innerHTML.trim() : html;
+      if (typeSel && typeSel.value === 'code-page') { typeSel.value = 'article'; typeSel.dispatchEvent(new Event('change')); }
+      if (editor) editor.innerHTML = bodyHtml;
+      if (source) source.value = bodyHtml;
+      filled.push('نص المقال');
+
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--success)">✓ تم استخراج: ${filled.join('، ')}</span>`;
+      fileIn.value = '';
+    };
+    reader.onerror = () => { if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">تعذّرت قراءة الملف</span>'; };
+    reader.readAsText(file, 'utf-8');
+  });
+})();
+
+/* ══════════════════════════════════════════
    Code-page editor — blog-edit form
    ══════════════════════════════════════════ */
 (function () {
