@@ -21,6 +21,7 @@
         <h4><?= t('روابط سريعة','Quick Links') ?></h4>
         <a href="index.php"><?= t('الرئيسية','Home') ?></a>
         <a href="index.php#products"><?= t('المنتجات','Products') ?></a>
+        <a href="articles.php"><?= t('المقالات','Articles') ?></a>
         <a href="about.php"><?= t('من نحن','About') ?></a>
         <a href="contact.php"><?= t('تواصل معنا','Contact') ?></a>
       </div>

@@ -235,6 +235,30 @@ function install_db(): void {
         created_at   $dt
     )$engine");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS articles (
+        id         $pk,
+        slug       VARCHAR(191) UNIQUE NOT NULL,
+        title_ar   VARCHAR(255) NOT NULL,
+        title_en   VARCHAR(255) NOT NULL,
+        summary_ar TEXT,
+        summary_en TEXT,
+        content_ar MEDIUMTEXT NOT NULL,
+        content_en MEDIUMTEXT NOT NULL,
+        image      VARCHAR(500) DEFAULT '',
+        category   VARCHAR(120) DEFAULT 'عام',
+        views      INT DEFAULT 0,
+        active     TINYINT DEFAULT 1,
+        created_at $dt
+    )$engine");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS media (
+        id            $pk,
+        filename      VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255),
+        size_bytes    INT DEFAULT 0,
+        created_at    $dt
+    )$engine");
+
     // ترقية الأعمدة لإصدارات قديمة (آمن على MySQL وSQLite)
     try { $db->query("SELECT download_url FROM products LIMIT 1"); }
     catch (Throwable) {
@@ -461,6 +485,27 @@ function allReviews(): array {
 }
 function pendingReviewCount(): int {
     return (int)db()->query("SELECT COUNT(*) c FROM reviews WHERE status='pending'")->fetch()['c'];
+}
+function allArticles(bool $activeOnly = true): array {
+    $sql = "SELECT * FROM articles" . ($activeOnly ? " WHERE active=1" : "") . " ORDER BY id DESC";
+    return db()->query($sql)->fetchAll();
+}
+function articleBySlug(string $slug): ?array {
+    $s = db()->prepare("SELECT * FROM articles WHERE slug=? AND active=1");
+    $s->execute([$slug]);
+    return $s->fetch() ?: null;
+}
+function allArticlesAdmin(): array {
+    return db()->query("SELECT * FROM articles ORDER BY id DESC")->fetchAll();
+}
+function allMedia(): array {
+    return db()->query("SELECT * FROM media ORDER BY id DESC LIMIT 100")->fetchAll();
+}
+function uploadDir(): string {
+    return __DIR__ . '/uploads';
+}
+function uploadUrl(string $filename): string {
+    return siteUrl('uploads/' . $filename);
 }
 
 /* ============================================================

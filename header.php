@@ -108,6 +108,7 @@ if (setting('maintenance', '0') === '1' && !isAdmin()) {
   <nav>
     <a href="index.php"><i class="fa-solid fa-house"></i> <?= t('الرئيسية','Home') ?></a>
     <a href="index.php#products"><i class="fa-solid fa-store"></i> <?= t('المنتجات','Products') ?></a>
+    <a href="articles.php"><i class="fa-solid fa-newspaper"></i> <?= t('المقالات','Articles') ?></a>
     <a href="about.php"><i class="fa-solid fa-circle-info"></i> <?= t('من نحن','About Us') ?></a>
     <a href="contact.php"><i class="fa-solid fa-envelope"></i> <?= t('تواصل معنا','Contact') ?></a>
     <a href="privacy-policy.php"><i class="fa-solid fa-shield-halved"></i> <?= t('سياسة الخصوصية','Privacy Policy') ?></a>

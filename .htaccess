@@ -35,6 +35,14 @@ DirectoryIndex index.php
   # صفحة تحميل المنتج
   RewriteRule ^download/?$ download.php [L,QSA]
 
+  # صفحة قائمة المقالات
+  RewriteRule ^articles/?$ articles.php [L,QSA]
+
+  # رابط نظيف للمقالة: /a/{slug} → article.php?slug={slug}
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^a/([^/]+)/?$ article.php?slug=$1 [L,QSA]
+
   # صفحات ثابتة بدون امتداد .php
   RewriteRule ^about/?$ about.php [L]
   RewriteRule ^contact/?$ contact.php [L]

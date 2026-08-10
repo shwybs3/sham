@@ -231,6 +231,75 @@ if ($action==='clear_cache') {
     header('Location: admin.php?action=dashboard&msg=تم+مسح+الكاش'); exit;
 }
 
+// ── إدارة المقالات ──
+if ($isPost && isset($_POST['save_article'])) {
+    $artId = (int)($_POST['art_id'] ?? 0);
+    $tAr   = clean($_POST['title_ar'] ?? '');
+    $tEn   = clean($_POST['title_en'] ?? '');
+    $sAr   = clean($_POST['summary_ar'] ?? '');
+    $sEn   = clean($_POST['summary_en'] ?? '');
+    $cAr   = $_POST['content_ar'] ?? ''; // HTML — not sanitized (admin-authored)
+    $cEn   = $_POST['content_en'] ?? '';
+    $img   = clean($_POST['image'] ?? '');
+    $catA  = clean($_POST['art_cat'] ?? 'عام');
+    $actv  = isset($_POST['art_active']) ? 1 : 0;
+    if ($artId) {
+        db()->prepare("UPDATE articles SET title_ar=?,title_en=?,summary_ar=?,summary_en=?,content_ar=?,content_en=?,image=?,category=?,active=? WHERE id=?")
+            ->execute([$tAr,$tEn,$sAr,$sEn,$cAr,$cEn,$img,$catA,$actv,$artId]);
+        cache_clear('article', db()->prepare("SELECT slug FROM articles WHERE id=?")->execute([$artId]) ? (db()->prepare("SELECT slug FROM articles WHERE id=?")->execute([$artId]) ?: '') : '');
+        cache_clear('articles');
+        $message = 'تم تحديث المقالة بنجاح';
+    } else {
+        $sl = slug($tEn ?: $tAr);
+        if (!$sl) $sl = 'article-' . time();
+        dbInsertIgnore('articles',
+            ['slug','title_ar','title_en','summary_ar','summary_en','content_ar','content_en','image','category','active'],
+            [$sl,$tAr,$tEn,$sAr,$sEn,$cAr,$cEn,$img,$catA,$actv]
+        );
+        cache_clear('articles');
+        $message = 'تمت إضافة المقالة بنجاح';
+    }
+    header('Location: admin.php?action=articles&msg=' . urlencode($message)); exit;
+}
+
+if ($action === 'del_article' && isset($_GET['id'])) {
+    $srow = db()->prepare("SELECT slug FROM articles WHERE id=?"); $srow->execute([(int)$_GET['id']]);
+    if ($sr = $srow->fetch()) { cache_clear('article', $sr['slug']); }
+    db()->prepare("DELETE FROM articles WHERE id=?")->execute([(int)$_GET['id']]);
+    cache_clear('articles');
+    header('Location: admin.php?action=articles&msg=تم+الحذف'); exit;
+}
+
+// ── رفع الصور ──
+if ($action === 'upload_image') {
+    header('Content-Type: application/json');
+    if (!csrfCheck()) { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+    $file = $_FILES['img'] ?? null;
+    if (!$file || $file['error'] !== UPLOAD_ERR_OK) { echo json_encode(['ok'=>false,'error'=>'لم يُرسل ملف صالح']); exit; }
+    $allow = ['image/jpeg','image/png','image/gif','image/webp'];
+    if (!in_array($file['type'], $allow, true)) { echo json_encode(['ok'=>false,'error'=>'نوع الملف غير مدعوم (jpg/png/gif/webp فقط)']); exit; }
+    if ($file['size'] > 8 * 1024 * 1024) { echo json_encode(['ok'=>false,'error'=>'حجم الملف يتجاوز 8 ميغابايت']); exit; }
+    $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $name = 'img_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $dir  = uploadDir();
+    @mkdir($dir, 0755, true);
+    // protect uploads dir
+    $htFile = $dir . '/.htaccess';
+    if (!file_exists($htFile)) file_put_contents($htFile, "Options -Indexes\n<FilesMatch '\\.php$'>\nRequire all denied\n</FilesMatch>\n");
+    if (!move_uploaded_file($file['tmp_name'], $dir . '/' . $name)) { echo json_encode(['ok'=>false,'error'=>'فشل حفظ الملف']); exit; }
+    db()->prepare("INSERT INTO media(filename,original_name,size_bytes) VALUES(?,?,?)")->execute([$name,$file['name'],$file['size']]);
+    $url  = uploadUrl($name);
+    $html = '<img src="' . $url . '" alt="" style="max-width:100%;border-radius:8px;" loading="lazy">';
+    echo json_encode(['ok'=>true,'url'=>$url,'html'=>$html,'name'=>$name]); exit;
+}
+
+if ($action === 'del_media' && isset($_GET['name'])) {
+    $fname = basename(clean($_GET['name']));
+    @unlink(uploadDir() . '/' . $fname);
+    db()->prepare("DELETE FROM media WHERE filename=?")->execute([$fname]);
+    header('Location: admin.php?action=articles&tab=media&msg=تم+الحذف'); exit;
+}
+
 } // end csrf-guarded actions
 
 if (isset($_GET['msg'])) { $message = clean($_GET['msg']); }
@@ -241,6 +310,8 @@ $cats      = categoryList();
 $refunds   = allRefundRequests();
 $messages  = allContactMessages();
 $reviews   = allReviews();
+$articles  = allArticlesAdmin();
+$media     = allMedia();
 $pendingCnt= count(array_filter($orders, fn($o)=>$o['status']==='pending'));
 $paidCnt   = count(array_filter($orders, fn($o)=>$o['status']==='paid'));
 $revenue   = array_sum(array_map(fn($o)=>$o['status']==='paid'?$o['amount']:0, $orders));
@@ -252,6 +323,12 @@ if ($action==='edit_product' && isset($_GET['id'])) {
     $s = db()->prepare("SELECT * FROM products WHERE id=?"); $s->execute([(int)$_GET['id']]);
     $editProd = $s->fetch();
 }
+$editArt = null;
+if ($action==='edit_article' && isset($_GET['id'])) {
+    $s = db()->prepare("SELECT * FROM articles WHERE id=?"); $s->execute([(int)$_GET['id']]);
+    $editArt = $s->fetch();
+}
+$activeTab = clean($_GET['tab'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -276,6 +353,7 @@ if ($action==='edit_product' && isset($_GET['id'])) {
     <a href="admin.php?action=orders" class="<?= $action==='orders'?'active':'' ?>"><i class="fa-solid fa-receipt"></i> الطلبات <?php if($pendingCnt): ?><span style="background:var(--red);color:#fff;font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingCnt ?></span><?php endif; ?></a>
     <a href="admin.php?action=refunds" class="<?= $action==='refunds'?'active':'' ?>"><i class="fa-solid fa-rotate-left"></i> طلبات الاسترداد <?php if($pendingRefunds): ?><span style="background:var(--gold);color:var(--bg);font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingRefunds ?></span><?php endif; ?></a>
     <a href="admin.php?action=messages" class="<?= $action==='messages'?'active':'' ?>"><i class="fa-solid fa-envelope"></i> الرسائل</a>
+    <a href="admin.php?action=articles" class="<?= in_array($action,['articles','add_article','edit_article'])?'active':'' ?>"><i class="fa-solid fa-newspaper"></i> المقالات</a>
     <a href="admin.php?action=reviews" class="<?= $action==='reviews'?'active':'' ?>"><i class="fa-solid fa-star"></i> التقييمات <?php if($pendingReviews): ?><span style="background:var(--gold);color:var(--bg);font-size:11px;padding:2px 7px;border-radius:10px;margin-right:4px;"><?= $pendingReviews ?></span><?php endif; ?></a>
     <a href="admin.php?action=settings" class="<?= $action==='settings'?'active':'' ?>"><i class="fa-solid fa-gear"></i> الإعدادات</a>
     <hr style="border-color:var(--border);margin:12px 0;">
@@ -666,6 +744,218 @@ if ($action==='edit_product' && isset($_GET['id'])) {
   </table>
   </div>
 </div>
+
+<?php elseif (in_array($action, ['articles','add_article','edit_article'])): ?>
+<div class="admin-topbar">
+  <h1><i class="fa-solid fa-newspaper text-cyan"></i> المقالات والشروحات</h1>
+  <div style="display:flex;gap:8px;">
+    <a href="admin.php?action=articles" class="btn btn-sm btn-outline"><i class="fa-solid fa-list"></i> القائمة</a>
+    <a href="admin.php?action=add_article" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> مقالة جديدة</a>
+  </div>
+</div>
+
+<!-- ── Tabs: Articles / Image Library ── -->
+<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:22px;">
+  <a href="admin.php?action=<?= $action==='articles'?'articles':$action ?>" style="padding:10px 20px;font-size:14px;font-weight:600;border-bottom:2px solid <?= $activeTab!=='media'?'var(--cyan)':'transparent' ?>;color:<?= $activeTab!=='media'?'var(--cyan)':'var(--dim)' ?>;"><?= t('المقالات','Articles') ?></a>
+  <a href="admin.php?action=articles&tab=media" style="padding:10px 20px;font-size:14px;font-weight:600;border-bottom:2px solid <?= $activeTab==='media'?'var(--cyan)':'transparent' ?>;color:<?= $activeTab==='media'?'var(--cyan)':'var(--dim)' ?>;"><i class="fa-solid fa-images"></i> <?= t('مكتبة الصور','Image Library') ?></a>
+</div>
+
+<?php if($activeTab === 'media'): ?>
+<!-- ═══════ IMAGE LIBRARY + UPLOADER ═══════ -->
+<div class="admin-card" style="margin-bottom:22px;">
+  <h3><i class="fa-solid fa-cloud-arrow-up" style="color:var(--cyan);"></i> رفع صورة جديدة</h3>
+  <p style="font-size:13px;color:var(--dim);margin-bottom:14px;">بعد الرفع ستحصل على رابط الصورة ومقتطف HTML جاهز للنسخ والإدراج في المقالة.</p>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <label style="flex:1;min-width:220px;border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;" id="dropZone">
+      <i class="fa-solid fa-image" style="font-size:28px;color:var(--dim);display:block;margin-bottom:8px;"></i>
+      <span style="font-size:14px;color:var(--dim);">اسحب صورة هنا أو انقر للاختيار</span><br>
+      <span style="font-size:12px;color:var(--dim);opacity:.7;">jpg / png / gif / webp — أقصى 8 ميغابايت</span>
+      <input type="file" id="imgFile" accept="image/*" style="display:none;" onchange="previewImg(this)">
+    </label>
+    <div style="text-align:center;">
+      <img id="imgPreview" src="" alt="" style="max-width:140px;max-height:100px;border-radius:8px;display:none;margin-bottom:8px;">
+      <br>
+      <button onclick="doUpload()" class="btn btn-primary" id="uploadBtn" style="display:none;">
+        <i class="fa-solid fa-cloud-arrow-up"></i> رفع الصورة
+      </button>
+    </div>
+  </div>
+  <div id="uploadResult" style="display:none;margin-top:16px;">
+    <div style="margin-bottom:10px;">
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;color:var(--green);">✅ رابط الصورة (URL)</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="resultUrl" readonly style="flex:1;font-family:monospace;font-size:12px;" onclick="this.select()">
+        <button onclick="copyField('resultUrl',this)" class="btn btn-sm" style="background:rgba(0,240,255,.1);color:var(--cyan);border:1px solid rgba(0,240,255,.2);white-space:nowrap;">نسخ</button>
+      </div>
+    </div>
+    <div>
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;color:var(--cyan);">📋 HTML جاهز للصق في المقالة</label>
+      <div style="display:flex;gap:8px;">
+        <textarea id="resultHtml" readonly rows="3" style="flex:1;font-family:monospace;font-size:12px;" onclick="this.select()"></textarea>
+        <button onclick="copyField('resultHtml',this)" class="btn btn-sm" style="background:rgba(0,240,255,.1);color:var(--cyan);border:1px solid rgba(0,240,255,.2);white-space:nowrap;">نسخ</button>
+      </div>
+    </div>
+  </div>
+  <div id="uploadError" style="display:none;color:var(--red);font-size:13px;margin-top:10px;"></div>
+</div>
+
+<!-- Image gallery -->
+<div class="admin-card">
+  <h3><i class="fa-solid fa-images"></i> الصور المرفوعة (<?= count($media) ?>)</h3>
+  <?php if(empty($media)): ?>
+  <p style="color:var(--dim);font-size:14px;">لا توجد صور مرفوعة بعد.</p>
+  <?php else: ?>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-top:14px;">
+    <?php foreach($media as $m): $imgUrl = uploadUrl($m['filename']); ?>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="height:110px;background:center/cover no-repeat url('<?= clean($imgUrl) ?>');" title="<?= clean($m['original_name']??$m['filename']) ?>"></div>
+      <div style="padding:8px;">
+        <div style="font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;"><?= clean($m['filename']) ?></div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button onclick="copyText2('<?= addslashes($imgUrl) ?>',this)" class="btn btn-sm" style="font-size:11px;background:rgba(0,240,255,.08);color:var(--cyan);border:1px solid rgba(0,240,255,.2);flex:1;justify-content:center;">URL</button>
+          <button onclick="copyText2('<img src=&quot;<?= addslashes($imgUrl) ?>&quot; alt=&quot;&quot; style=&quot;max-width:100%;border-radius:8px;&quot; loading=&quot;lazy&quot;>',this)" class="btn btn-sm" style="font-size:11px;background:rgba(124,58,237,.1);color:var(--purple);border:1px solid rgba(124,58,237,.2);flex:1;justify-content:center;">HTML</button>
+          <a href="admin.php?action=del_media&name=<?= urlencode($m['filename']) ?>" onclick="return confirm('حذف الصورة؟')" class="btn btn-sm btn-danger" style="font-size:11px;"><i class="fa-solid fa-trash"></i></a>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
+
+<script>
+function previewImg(input){
+  const f=input.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=e=>{ const img=document.getElementById('imgPreview'); img.src=e.target.result; img.style.display='block'; document.getElementById('uploadBtn').style.display='inline-flex'; }; r.readAsDataURL(f);
+  const zone=document.getElementById('dropZone'); if(zone) zone.style.borderColor='var(--cyan)';
+}
+document.getElementById('dropZone').addEventListener('click',()=>document.getElementById('imgFile').click());
+document.getElementById('dropZone').addEventListener('dragover',e=>{e.preventDefault();});
+document.getElementById('dropZone').addEventListener('drop',e=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f){ const dt=new DataTransfer(); dt.items.add(f); document.getElementById('imgFile').files=dt.files; previewImg(document.getElementById('imgFile')); }});
+async function doUpload(){
+  const file=document.getElementById('imgFile').files[0]; if(!file) return;
+  const btn=document.getElementById('uploadBtn'); btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> جاري الرفع...';
+  document.getElementById('uploadError').style.display='none';
+  const fd=new FormData(); fd.append('img',file); fd.append('csrf','<?= clean(csrfToken()) ?>');
+  try {
+    const res=await fetch('admin.php?action=upload_image',{method:'POST',body:fd});
+    const json=await res.json();
+    if(json.ok){
+      document.getElementById('resultUrl').value=json.url;
+      document.getElementById('resultHtml').value=json.html;
+      document.getElementById('uploadResult').style.display='block';
+      btn.innerHTML='<i class="fa-solid fa-check"></i> تم الرفع!'; btn.style.background='rgba(0,255,136,.15)'; btn.style.color='var(--green)';
+      setTimeout(()=>location.reload(),1800);
+    } else {
+      document.getElementById('uploadError').textContent=json.error||'خطأ غير معروف'; document.getElementById('uploadError').style.display='block';
+      btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-cloud-arrow-up"></i> رفع الصورة';
+    }
+  } catch(e){ document.getElementById('uploadError').textContent='فشل الاتصال بالخادم'; document.getElementById('uploadError').style.display='block'; btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-cloud-arrow-up"></i> رفع الصورة'; }
+}
+function copyField(id,btn){
+  const el=document.getElementById(id); el.select(); navigator.clipboard.writeText(el.value).then(()=>{ const o=btn.textContent; btn.textContent='✅ تم'; setTimeout(()=>btn.textContent=o,2000); });
+}
+function copyText2(text,btn){
+  navigator.clipboard.writeText(text).then(()=>{ const o=btn.textContent; btn.textContent='✅'; setTimeout(()=>btn.textContent=o,2000); });
+}
+</script>
+
+<?php else: ?>
+<!-- ═══════ ARTICLES LIST / ADD / EDIT ═══════ -->
+
+<?php if(in_array($action,['add_article','edit_article'])): ?>
+<form method="POST" class="admin-form" enctype="multipart/form-data">
+  <?php csrfField(); ?>
+  <?php if($editArt): ?><input type="hidden" name="art_id" value="<?= $editArt['id'] ?>"><?php endif; ?>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start;">
+
+    <div class="admin-card">
+      <h3>العنوان والتصنيف</h3>
+      <div class="form-group"><label>العنوان (عربي) *</label><input type="text" name="title_ar" required value="<?= clean($editArt['title_ar']??'') ?>"></div>
+      <div class="form-group"><label>Title (English)</label><input type="text" name="title_en" value="<?= clean($editArt['title_en']??'') ?>"></div>
+      <div class="form-group"><label>التصنيف</label><input type="text" name="art_cat" placeholder="شروحات" value="<?= clean($editArt['category']??'شروحات') ?>"></div>
+      <div class="form-group"><label>ملخص قصير (عربي)</label><textarea name="summary_ar" rows="2"><?= clean($editArt['summary_ar']??'') ?></textarea></div>
+      <div class="form-group"><label>Short summary (English)</label><textarea name="summary_en" rows="2"><?= clean($editArt['summary_en']??'') ?></textarea></div>
+      <div class="form-group">
+        <label><i class="fa-solid fa-image"></i> رابط الصورة الرئيسية</label>
+        <input type="text" name="image" id="featImg" placeholder="https://... أو /uploads/img_xxx.jpg" value="<?= clean($editArt['image']??'') ?>" oninput="document.getElementById('featPreview').src=this.value">
+        <div style="margin-top:8px;"><img id="featPreview" src="<?= clean($editArt['image']??'') ?>" alt="" style="max-height:80px;border-radius:8px;<?= ($editArt['image']??'')?'':'display:none;' ?>"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+          <input type="checkbox" name="art_active" value="1" <?= ($editArt['active']??1)?'checked':'' ?>> نشط
+        </label>
+        <a href="admin.php?action=articles&tab=media" target="_blank" style="font-size:13px;color:var(--cyan);">
+          <i class="fa-solid fa-images"></i> فتح مكتبة الصور
+        </a>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h3>المحتوى</h3>
+      <div class="form-group">
+        <label>المحتوى (عربي) — يقبل HTML *</label>
+        <textarea name="content_ar" rows="14" required style="font-family:monospace;font-size:13px;"><?= htmlspecialchars($editArt['content_ar']??'',ENT_QUOTES,'UTF-8') ?></textarea>
+        <div style="font-size:12px;color:var(--dim);margin-top:4px;">يمكنك استخدام HTML: &lt;h2&gt;, &lt;p&gt;, &lt;img&gt;, &lt;ul&gt;, &lt;strong&gt;...</div>
+      </div>
+      <div class="form-group">
+        <label>Content (English) — accepts HTML</label>
+        <textarea name="content_en" rows="10" style="font-family:monospace;font-size:13px;"><?= htmlspecialchars($editArt['content_en']??'',ENT_QUOTES,'UTF-8') ?></textarea>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:20px;display:flex;gap:12px;">
+    <button type="submit" name="save_article" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> <?= $editArt?'حفظ التعديلات':'نشر المقالة' ?></button>
+    <a href="admin.php?action=articles" class="btn btn-outline">إلغاء</a>
+    <?php if($editArt): ?>
+    <a href="a/<?= urlencode($editArt['slug']) ?>" target="_blank" class="btn btn-sm" style="background:rgba(255,184,0,.1);color:var(--gold);border:1px solid rgba(255,184,0,.2);">
+      <i class="fa-solid fa-eye"></i> معاينة
+    </a>
+    <?php endif; ?>
+  </div>
+</form>
+
+<?php else: ?>
+<!-- List -->
+<div class="admin-card">
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>الصورة</th><th>العنوان</th><th>التصنيف</th><th>المشاهدات</th><th>الحالة</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+    <tbody>
+    <?php foreach($articles as $ar): ?>
+    <tr>
+      <td>
+        <?php if($ar['image']): ?>
+        <div style="width:52px;height:36px;background:center/cover no-repeat url('<?= clean($ar['image']) ?>');border-radius:6px;"></div>
+        <?php else: ?>
+        <div style="width:52px;height:36px;background:var(--bg3);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:16px;"><i class="fa-solid fa-newspaper"></i></div>
+        <?php endif; ?>
+      </td>
+      <td>
+        <div style="font-weight:600;max-width:240px;"><?= clean($ar['title_ar']) ?></div>
+        <div style="font-size:11px;color:var(--dim);"><?= clean($ar['slug']) ?></div>
+      </td>
+      <td><?= clean($ar['category']) ?></td>
+      <td><?= number_format($ar['views']) ?></td>
+      <td><span class="badge-status" style="background:<?= $ar['active']?'rgba(0,255,102,.1)':'rgba(255,0,85,.1)' ?>;color:<?= $ar['active']?'var(--green)':'var(--red)' ?>;"><?= $ar['active']?'نشط':'مخفي' ?></span></td>
+      <td style="font-size:12px;color:var(--dim);"><?= substr($ar['created_at'],0,10) ?></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
+        <a href="admin.php?action=edit_article&id=<?= $ar['id'] ?>" class="btn btn-sm" style="background:rgba(0,240,255,.1);color:var(--cyan);border:1px solid rgba(0,240,255,.2);"><i class="fa-solid fa-pen"></i></a>
+        <a href="a/<?= urlencode($ar['slug']) ?>" target="_blank" class="btn btn-sm" style="background:rgba(255,184,0,.1);color:var(--gold);border:1px solid rgba(255,184,0,.2);"><i class="fa-solid fa-eye"></i></a>
+        <a href="admin.php?action=del_article&id=<?= $ar['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('حذف المقالة نهائياً؟')"><i class="fa-solid fa-trash"></i></a>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if(empty($articles)): ?><tr><td colspan="7" style="text-align:center;color:var(--dim);">لا توجد مقالات بعد — <a href="admin.php?action=add_article">أضف مقالة الآن</a></td></tr><?php endif; ?>
+    </tbody>
+  </table>
+  </div>
+</div>
+<?php endif; ?>
+<?php endif; ?>
 
 <?php elseif ($action==='reviews'): ?>
 <div class="admin-topbar">

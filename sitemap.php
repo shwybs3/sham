@@ -2,8 +2,9 @@
 require_once __DIR__ . '/config.php';
 header('Content-Type: application/xml; charset=utf-8');
 
-$prods = db()->query("SELECT slug, created_at, name_ar FROM products WHERE active=1 ORDER BY id DESC")->fetchAll();
-$baseUrl = rtrim(SITE_URL, '/');
+$prods    = db()->query("SELECT slug, created_at, name_ar FROM products WHERE active=1 ORDER BY id DESC")->fetchAll();
+$arts     = db()->query("SELECT slug, created_at FROM articles WHERE active=1 ORDER BY id DESC")->fetchAll();
+$baseUrl  = rtrim(SITE_URL, '/');
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -36,4 +37,19 @@ foreach ($prods as $p) {
     echo "    <changefreq>weekly</changefreq><priority>0.85</priority>\n";
     echo "  </url>\n";
 }
+
+// صفحة قائمة المقالات
+echo "  <url><loc>{$baseUrl}/articles</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n";
+
+// صفحات المقالات — روابط نظيفة /a/{slug}
+foreach ($arts as $a) {
+    $lastmod = date('Y-m-d', strtotime($a['created_at'] ?? 'now'));
+    $loc     = $baseUrl . '/a/' . rawurlencode($a['slug']);
+    echo "  <url>\n";
+    echo "    <loc>{$loc}</loc>\n";
+    echo "    <lastmod>{$lastmod}</lastmod>\n";
+    echo "    <changefreq>monthly</changefreq><priority>0.7</priority>\n";
+    echo "  </url>\n";
+}
+
 echo '</urlset>';
