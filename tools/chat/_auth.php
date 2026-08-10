@@ -18,6 +18,49 @@ const YS_LOGIN_WINDOW_MIN  = 15;
 const YS_SIGNUP_MAX_PER_IP = 5;
 const YS_PASS_MIN          = 8;
 
+/* ── Conversation scoping ────────────────────────────────────────── */
+
+/**
+ * Which conversations the caller may see.
+ *
+ * Signed in  → everything owned by the account, on any device.
+ * Signed out → only rows still tied to this browser's cookie and not yet
+ *              claimed by an account, so signing out really does hide the
+ *              conversations that were adopted at sign-in.
+ *
+ * Returns [sqlFragment, params] to splice into a WHERE clause.
+ *
+ * Lives here rather than in chat/index.php because Szad loads this file
+ * without loading the ياسمين page — every Szad request used to fatal on
+ * "Call to undefined function ys_scope()", which surfaced to users as a
+ * chat bubble that stayed permanently empty.
+ */
+function ys_scope(?array $user, string $sid): array {
+    if ($user) return ['user_id = ?', [(int)$user['id']]];
+    return ['session_id = ? AND user_id IS NULL', [$sid]];
+}
+
+/** User messages sent in the last hour, by account when known, else by cookie. */
+function ys_recent_msg_count(PDO $pdo, ?array $user, string $sid): int {
+    try {
+        if ($user) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM yasmin_messages m
+                                 JOIN yasmin_conversations c ON c.id = m.conversation_id
+                                 WHERE c.user_id = ? AND m.role='user'
+                                   AND m.created_at > (NOW() - INTERVAL 1 HOUR)");
+            $st->execute([(int)$user['id']]);
+        } else {
+            if ($sid === '') return 0;
+            $st = $pdo->prepare("SELECT COUNT(*) FROM yasmin_messages m
+                                 JOIN yasmin_conversations c ON c.id = m.conversation_id
+                                 WHERE c.session_id = ? AND m.role='user'
+                                   AND m.created_at > (NOW() - INTERVAL 1 HOUR)");
+            $st->execute([$sid]);
+        }
+        return (int)$st->fetchColumn();
+    } catch (Throwable $e) { return 0; }
+}
+
 /* ── Session ─────────────────────────────────────────────────────── */
 
 /** The signed-in user row, or null. Result is cached per request. */

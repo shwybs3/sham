@@ -157,7 +157,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
 
     // Keys
     $keys = openrouter_keys(get_cfg($pdo, 'openrouter_key'));
-    if (!$keys) { szad_sse('error', ['msg' => 'مفاتيح API غير متاحة.']); exit; }
+    if (!$keys) {
+        szad_sse('error', ['msg' => 'لم يُضبط مفتاح OpenRouter بعد. أضفه من لوحة التحكم ← الإعدادات ← openrouter_key.']);
+        exit;
+    }
 
     // Save/update conversation
     [$scopeWhere, $scopeParams] = ys_scope($me, $sessionId);
@@ -177,6 +180,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
     // Stream response
     $streamed = false;
     $fullResponse = '';
+    $lastReason = '';
     shuffle($keys);
 
     foreach ($keys as $key) {
@@ -191,7 +195,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
                 'temperature' => $mode === 'think' ? 0.3 : 0.7,
             ], JSON_UNESCAPED_UNICODE);
 
-            $buffer = ''; $gotData = false;
+            $buffer = ''; $gotData = false; $errBody = '';
 
             $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
             curl_setopt_array($ch, [
@@ -206,8 +210,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
                     'HTTP-Referer: https://yassota.com',
                     'X-Title: Szad AI',
                 ],
-                CURLOPT_WRITEFUNCTION => function($ch, $data) use (&$buffer, &$gotData, &$fullResponse) {
+                CURLOPT_WRITEFUNCTION => function($ch, $data) use (&$buffer, &$gotData, &$fullResponse, &$errBody) {
                     $buffer .= $data;
+                    // Non-stream JSON error payload (bad key, no credit, bad model)
+                    if (!$gotData && $errBody === '' && str_starts_with(ltrim($buffer), '{')) {
+                        $errBody .= $data;
+                    }
                     while (($pos = strpos($buffer, "\n")) !== false) {
                         $line   = substr($buffer, 0, $pos);
                         $buffer = substr($buffer, $pos + 1);
@@ -219,7 +227,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
                         $delta = $obj['choices'][0]['delta']['content'] ?? '';
                         if ($delta !== '' && $delta !== null) {
                             $fullResponse .= $delta;
-                            szad_sse('token', $delta);
+                            // JSON-encode: raw deltas may contain newlines which
+                            // would otherwise break the SSE frame boundary.
+                            szad_sse('token', json_encode($delta, JSON_UNESCAPED_UNICODE));
                             $gotData = true;
                         }
                     }
@@ -227,15 +237,43 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'szad_chat') {
                 },
             ]);
             curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr  = curl_error($ch);
             curl_close($ch);
             if ($gotData && $fullResponse !== '') { $streamed = true; break; }
+
+            // Remember why this attempt failed so we can report something useful
+            if ($lastReason === '') {
+                if ($curlErr !== '') {
+                    $lastReason = 'تعذّر الاتصال بمزوّد الذكاء الاصطناعي (' . mb_substr($curlErr, 0, 90) . ').';
+                } elseif ($errBody !== '') {
+                    $eo  = json_decode($errBody, true);
+                    $msg = $eo['error']['message'] ?? '';
+                    if ($httpCode === 401 || $httpCode === 403) {
+                        $lastReason = 'مفتاح OpenRouter غير صالح أو منتهي — حدّثه من لوحة التحكم ← الإعدادات.';
+                    } elseif ($httpCode === 402) {
+                        $lastReason = 'رصيد حساب OpenRouter غير كافٍ. أضف رصيداً أو استخدم نماذج مجانية.';
+                    } elseif ($httpCode === 429) {
+                        $lastReason = 'تم تجاوز حد الطلبات مؤقتاً. جرّب بعد دقيقة.';
+                    } elseif ($msg !== '') {
+                        $lastReason = 'المزوّد رفض الطلب: ' . mb_substr($msg, 0, 140);
+                    }
+                } elseif ($httpCode >= 400) {
+                    $lastReason = 'المزوّد أعاد الرمز ' . $httpCode . '. جرّب مجدداً بعد قليل.';
+                }
+            }
         }
     }
 
     if ($fullResponse) {
         $pdo->prepare("INSERT INTO yasmin_messages (conversation_id,role,content) VALUES (?,'assistant',?)")->execute([$convId, $fullResponse]);
     }
-    if (!$streamed) szad_sse('error', ['msg' => 'لم أتمكن من الاتصال. جرّب مجدداً.']);
+    if (!$streamed) {
+        // Send the error LAST — a trailing 'done' would overwrite the message
+        // in the client bubble and leave the user staring at an empty box.
+        szad_sse('error', ['msg' => $lastReason !== '' ? $lastReason : 'لم أتمكن من الاتصال. جرّب مجدداً.']);
+        exit;
+    }
     szad_sse('done', '1');
     exit;
 }
@@ -326,6 +364,8 @@ body{background:var(--sz-bg);color:var(--sz-text);font-family:-apple-system,Blin
 /* Cursor */
 @keyframes szBlink{0%,100%{opacity:1}50%{opacity:0}}
 .sz-cursor{display:inline-block;width:2px;height:14px;background:var(--sz-red2);vertical-align:middle;animation:szBlink 1s ease-in-out infinite;margin-inline-start:2px}
+.sz-err{display:block;color:#fca5a5;background:rgba(220,38,38,.09);border:1px solid rgba(220,38,38,.28);
+  border-radius:10px;padding:10px 13px;font-size:13.5px;line-height:1.7}
 /* Sidebar */
 .sz-side{position:fixed;top:var(--t-header-h,62px);right:0;width:260px;height:calc(100dvh - var(--t-header-h,62px));background:var(--sz-surface);border-left:1px solid var(--sz-border);z-index:200;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;overflow:hidden}
 .sz-side.open{transform:translateX(0)}
@@ -572,6 +612,9 @@ function szDel(id) {
 
 /* ── Render messages ─────────────────────────────────── */
 function szEsc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function szFallbackMsg(){
+  return '<span class="sz-err">⚠ لم يصل أي رد من المزوّد. جرّب مجدداً، وإن تكرر الأمر تحقّق من مفتاح OpenRouter في الإعدادات.</span>';
+}
 function szAppend(role, text) {
   var s = document.getElementById('sz-stream');
   var welcome = document.getElementById('sz-welcome');
@@ -639,7 +682,7 @@ function szSend() {
   bubble.innerHTML = '<span class="sz-cursor"></span>';
 
   var xhr = new XMLHttpRequest();
-  var lastPos = 0, szBuf = '';
+  var lastPos = 0, szBuf = '', szErrored = false;
   xhr.open('POST', 'index.php?ajax=szad_chat', true);
   xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
   xhr.onprogress = function() {
@@ -655,20 +698,49 @@ function szSend() {
         if (l.startsWith('data: '))  data  = l.slice(6);
       });
       if (evName === 'token') {
-        accumulated += data;
+        // Tokens arrive JSON-encoded so newlines survive the SSE framing
+        var piece = data;
+        try { piece = JSON.parse(data); } catch (e) { /* legacy raw token */ }
+        accumulated += piece;
         bubble.innerHTML = szMd(accumulated) + '<span class="sz-cursor"></span>';
         document.getElementById('sz-stream').scrollTop = 9999;
       }
       if (evName === 'conv')  { try { var d = JSON.parse(data); if (d.id) szConvId = d.id; } catch(e){} }
-      if (evName === 'done')  { szStreaming = false; document.getElementById('sz-send').disabled = false; bubble.innerHTML = szMd(accumulated); szLoadConvs(); }
-      if (evName === 'error') { szStreaming = false; document.getElementById('sz-send').disabled = false; try { var e = JSON.parse(data); bubble.innerHTML = '<span style="color:#ef4444">' + szEsc(e.msg || 'خطأ في الاتصال') + '</span>'; } catch(ex){} }
+      if (evName === 'done')  {
+        szStreaming = false;
+        document.getElementById('sz-send').disabled = false;
+        // Never blank an already-rendered error bubble
+        if (!szErrored) bubble.innerHTML = accumulated ? szMd(accumulated) : szFallbackMsg();
+        szLoadConvs();
+      }
+      if (evName === 'error') {
+        szStreaming = false;
+        szErrored = true;
+        document.getElementById('sz-send').disabled = false;
+        var emsg = 'تعذّر الاتصال. جرّب مجدداً.';
+        try { var e = JSON.parse(data); if (e && e.msg) emsg = e.msg; } catch (ex) { if (data) emsg = data; }
+        bubble.innerHTML = '<span class="sz-err">⚠ ' + szEsc(emsg) + '</span>';
+        document.getElementById('sz-stream').scrollTop = 9999;
+      }
     });
   };
   xhr.onloadend = function() {
     szStreaming = false;
     document.getElementById('sz-send').disabled = false;
-    if (accumulated && bubble.querySelector('.sz-cursor')) bubble.innerHTML = szMd(accumulated);
+    if (szErrored) return;
+    if (accumulated) {
+      if (bubble.querySelector('.sz-cursor')) bubble.innerHTML = szMd(accumulated);
+    } else {
+      // Stream ended without a single token — never leave a blank bubble
+      bubble.innerHTML = szFallbackMsg();
+    }
     szLoadConvs();
+  };
+  xhr.onerror = function() {
+    szStreaming = false;
+    szErrored = true;
+    document.getElementById('sz-send').disabled = false;
+    bubble.innerHTML = '<span class="sz-err">⚠ انقطع الاتصال بالخادم. تحقّق من الإنترنت وجرّب مجدداً.</span>';
   };
   xhr.send('msg=' + encodeURIComponent(msg) + '&conv_id=' + szConvId + '&mode=' + szMode_);
 }

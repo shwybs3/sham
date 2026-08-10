@@ -50,8 +50,44 @@ try {
         ]
     );
 } catch (PDOException $e) {
-    http_response_code(503);
     @file_put_contents(__DIR__ . '/db-error.log', '[' . date('Y-m-d H:i:s') . '] ' . $e->getMessage() . PHP_EOL, FILE_APPEND);
+
+    /* ── Legal pages must survive a database outage ──────────────────
+       Everything on this site funnels through config.php, so without
+       this branch a MySQL hiccup turns /about and /privacy-policy into
+       503 + noindex. AdSense reviewers and Googlebot read that as "the
+       required pages are missing", which is exactly how the site got
+       rejected before. These documents are static text and have no
+       reason to need a database, so serve them from legal-static.php
+       with a normal 200 and index,follow instead. */
+    $__path  = strtolower(rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/'));
+    $__legal = [
+        '/about'          => 'about',
+        '/about.php'      => 'about',
+        '/privacy-policy' => 'privacy',
+        '/privacy-policy.php' => 'privacy',
+        '/privacy'        => 'privacy',
+        '/terms'          => 'terms',
+        '/terms.php'      => 'terms',
+        '/contact'        => 'contact',
+        '/contact.php'    => 'contact',
+        '/dmca'           => 'dmca',
+        '/dmca.php'       => 'dmca',
+        '/cookie-policy'  => 'cookies',
+        '/cookie-policy.php' => 'cookies',
+        '/disclosure'     => 'disclosure',
+        '/disclosure.php' => 'disclosure',
+    ];
+    if (isset($__legal[$__path]) && is_file(__DIR__ . '/legal-static.php')) {
+        require_once __DIR__ . '/legal-static.php';
+        if (function_exists('legal_static_render')) {
+            legal_static_render($__legal[$__path]);
+            exit;
+        }
+    }
+
+    http_response_code(503);
+    header('Retry-After: 900');
     /* Maintenance countdown duration in minutes (shown to visitors) */
     $maint_minutes = defined('MAINTENANCE_MINUTES') ? (int)MAINTENANCE_MINUTES : 15;
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">

@@ -16,41 +16,8 @@ function yasmin_cfg(PDO $pdo, string $k, string $default = ''): string {
     return $v !== '' ? $v : get_cfg($pdo, $k, $default);
 }
 
-/**
- * Which conversations the caller may see.
- *
- * Signed in  → everything owned by the account, on any device.
- * Signed out → only rows still tied to this browser's cookie and not yet
- *              claimed by an account, so signing out really does hide the
- *              conversations that were adopted at sign-in.
- *
- * Returns [sqlFragment, params] to splice into a WHERE clause.
- */
-function ys_scope(?array $user, string $sid): array {
-    if ($user) return ['user_id = ?', [(int)$user['id']]];
-    return ['session_id = ? AND user_id IS NULL', [$sid]];
-}
-
-/** User messages sent in the last hour, by account when known, else by cookie. */
-function ys_recent_msg_count(PDO $pdo, ?array $user, string $sid): int {
-    try {
-        if ($user) {
-            $st = $pdo->prepare("SELECT COUNT(*) FROM yasmin_messages m
-                                 JOIN yasmin_conversations c ON c.id = m.conversation_id
-                                 WHERE c.user_id = ? AND m.role='user'
-                                   AND m.created_at > (NOW() - INTERVAL 1 HOUR)");
-            $st->execute([(int)$user['id']]);
-        } else {
-            if ($sid === '') return 0;
-            $st = $pdo->prepare("SELECT COUNT(*) FROM yasmin_messages m
-                                 JOIN yasmin_conversations c ON c.id = m.conversation_id
-                                 WHERE c.session_id = ? AND m.role='user'
-                                   AND m.created_at > (NOW() - INTERVAL 1 HOUR)");
-            $st->execute([$sid]);
-        }
-        return (int)$st->fetchColumn();
-    } catch (Throwable $e) { return 0; }
-}
+// ys_scope() and ys_recent_msg_count() live in _auth.php — Szad reuses that
+// file without loading this one, and calling them from there used to fatal.
 
 // Base caps; subscribers get higher limits (see ys_hourly_cap() in _auth.php).
 const YS_HOURLY_ANON = 40;
@@ -153,7 +120,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
     $yasminKeys = get_cfg($pdo, 'yasmin_api_keys', '');
     $keys = openrouter_keys($yasminKeys ?: get_cfg($pdo, 'openrouter_key'));
     if (!$keys) {
-        sse('error', ['msg' => 'الخدمة غير متاحة حالياً — يرجى المحاولة لاحقاً']);
+        sse('error', ['msg' => is_admin()
+            ? 'لم يُضبط مفتاح OpenRouter. أضفه من لوحة التحكم ← الإعدادات ← yasmin_api_keys أو openrouter_key.'
+            : 'الخدمة غير متاحة حالياً — يرجى المحاولة لاحقاً']);
         exit;
     }
 
@@ -214,6 +183,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
     $tried      = 0;
     $maxTry     = min(8, count($keys) * count($models));
     $fullResponse = '';
+    $lastCode   = 0;
 
     shuffle($keys); // randomize key order for even distribution
 
@@ -278,7 +248,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
             ]);
 
             curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
+
+            if (!$gotData && $lastCode === 0 && $httpCode >= 400) $lastCode = $httpCode;
 
             if ($gotData && $fullResponse !== '') {
                 $streamed = true;
@@ -291,7 +264,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'chat') {
     }
 
     if (!$streamed) {
-        sse('error', ['msg' => 'عذراً حبيبي، ما قدرت وصل للسيرفر هلأ 😔 جرّب كمان مرة بعد شوي']);
+        $why = match (true) {
+            $lastCode === 401, $lastCode === 403 => ' (مفتاح OpenRouter غير صالح)',
+            $lastCode === 402 => ' (رصيد OpenRouter غير كافٍ)',
+            $lastCode === 429 => ' (تجاوز حد الطلبات — جرّب بعد دقيقة)',
+            default => '',
+        };
+        sse('error', ['msg' => 'عذراً حبيبي، ما قدرت وصل للسيرفر هلأ 😔 جرّب كمان مرة بعد شوي' . $why]);
     }
     exit;
 }
