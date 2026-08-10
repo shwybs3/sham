@@ -6226,14 +6226,57 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_blog_img' && is_admin()) {
     if ($file['size'] > 10 * 1024 * 1024) {
         echo json_encode(['ok'=>false,'error'=>'الحجم يتجاوز 10 ميغابايت']); exit;
     }
+    if (function_exists('scan_file_for_threats')) {
+        $threats = scan_file_for_threats($file['tmp_name'], 'image');
+        if ($threats) {
+            if (function_exists('log_security_event')) {
+                log_security_event($pdo, 'upload_blocked', 'critical',
+                    'Blog image upload blocked: ' . implode('; ', $threats), $file['name'] ?? '');
+            }
+            echo json_encode(['ok'=>false,'error'=>'الملف مرفوض لأسباب أمنية']); exit;
+        }
+    }
     $dir = UPLOAD_PATH . '/blog/';
     if (!is_dir($dir)) @mkdir($dir, 0755, true);
     $prefix = (int)($_GET['slot'] ?? 0) === 0 ? 'cover' : 'img' . (int)$_GET['slot'];
-    $fname  = 'blog_' . $prefix . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-    $dest   = $dir . $fname;
-    if (!move_uploaded_file($file['tmp_name'], $dest)) {
-        echo json_encode(['ok'=>false,'error'=>'فشل نقل الملف']); exit;
+    $base   = 'blog_' . $prefix . '_' . time() . '_' . bin2hex(random_bytes(4));
+
+    // Animated GIFs would lose their animation if re-encoded through GD, so
+    // those are stored as-is. Everything else — the vast majority of blog
+    // uploads — gets resized and re-encoded to WebP, same pipeline app icons
+    // and screenshots already use. Uncompressed originals from a phone
+    // camera can run 4-8MB; this routinely brings that under 200KB.
+    $isAnimatedGif = false;
+    if ($ext === 'gif') {
+        $raw = @file_get_contents($file['tmp_name'], false, null, 0, 1_000_000);
+        $isAnimatedGif = $raw !== false && preg_match('/\x00\x21\xF9\x04.{4}\x00[\x2C\x21]/s', $raw) === 1;
     }
+
+    if ($ext === 'gif' && $isAnimatedGif) {
+        $fname = $base . '.gif';
+        $dest  = $dir . $fname;
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            echo json_encode(['ok'=>false,'error'=>'فشل نقل الملف']); exit;
+        }
+    } else {
+        $info = @getimagesize($file['tmp_name']);
+        $mime = $info['mime'] ?? '';
+        $fname = $base . '.webp';
+        $dest  = $dir . $fname;
+        $compressed = $mime && function_exists('compress_image_to')
+            ? compress_image_to($file['tmp_name'], $mime, $dest, 1920, 1920, 82)
+            : false;
+        if (!$compressed) {
+            // Compression failed (unrecognized mime, GD hiccup) — fall back
+            // to storing the original rather than losing the upload.
+            $fname = $base . '.' . $ext;
+            $dest  = $dir . $fname;
+            if (!move_uploaded_file($file['tmp_name'], $dest)) {
+                echo json_encode(['ok'=>false,'error'=>'فشل نقل الملف']); exit;
+            }
+        }
+    }
+
     $relPath = 'uploads/blog/' . $fname;
     echo json_encode(['ok'=>true,'path'=>$relPath,'url'=>UPLOAD_URL.'/blog/'.$fname]);
     exit;
