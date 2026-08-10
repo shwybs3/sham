@@ -1075,9 +1075,19 @@ function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'م
 function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
 function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
 
+// Arabic-only slug for blog posts — strips Latin letters (Arabic-Indic and
+// Latin digits both stay) so blog URLs never mix in a foreign-language slug.
+function blog_slugify(string $t): string {
+    $t = trim($t);
+    $t = preg_replace('/\s+/u', '-', $t);
+    $t = preg_replace('/[^\p{Arabic}0-9\-]/u', '', $t);
+    $t = preg_replace('/-+/', '-', $t);
+    return trim($t, '-');
+}
+
 function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {
-    $slug = slugify($base);
-    if (!$slug) $slug = 'post-' . time();
+    $slug = blog_slugify($base);
+    if (!$slug) $slug = 'مقال-' . time();
     $orig = $slug; $i = 1;
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM blog_posts WHERE slug=? AND id<>?");
     $stmt->execute([$slug, $excludeId]);

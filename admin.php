@@ -618,6 +618,44 @@ P;
 }
 
 /* ══════════════════════════════════════════════════════
+   AJAX: auto-fill SEO fields (SEO title, meta description,
+   keywords, excerpt) for a blog post already being written —
+   used by the "🪄 تعبئة SEO تلقائياً" button on the blog-edit
+   form. Only suggests metadata; never touches the article body.
+   ══════════════════════════════════════════════════════ */
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'ai_fill_blog_seo' && is_admin()) {
+    header('Content-Type: application/json');
+    $input = json_decode(file_get_contents('php://input'), true);
+    $title = trim($input['title'] ?? '');
+    $body  = trim(strip_tags($input['body'] ?? ''));
+    if (!$title) { echo json_encode(['success'=>false,'error'=>'أدخل عنوان المقال أولاً']); exit; }
+
+    $bodyExcerpt = mb_substr($body, 0, 2000);
+    $prompt = <<<P
+أنت خبير SEO عربي. بناءً على عنوان المقال والنص التالي، أنشئ بيانات SEO بالعربية فقط:
+
+العنوان: {$title}
+نص المقال (مقتطف): {$bodyExcerpt}
+
+أعد JSON صالح فقط بدون أي نص خارج JSON:
+{"seo_title":"عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية","meta_description":"140-160 حرفاً يلخص المقال","keywords":"10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة","excerpt":"سطر أو سطران يظهران في بطاقة المقال"}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
+    $data = ai_extract_json($r['content']);
+    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
+    $data = clean_utf8_deep($data);
+    echo json_encode([
+        'success' => true,
+        'seo_title' => trim($data['seo_title'] ?? ''),
+        'meta_description' => trim($data['meta_description'] ?? ''),
+        'keywords' => trim($data['keywords'] ?? ''),
+        'excerpt' => trim($data['excerpt'] ?? ''),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
    the model maps it to ONE of a fixed set of actions below
@@ -2276,27 +2314,42 @@ elseif ($page === 'blog-edit'):
   <div id="blog-html-upload-status" style="margin-top:10px;font-size:12px"></div>
 </div>
 
+<div class="panel" id="blog-score-panel" style="margin-bottom:16px;padding:18px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="font-weight:700;display:flex;align-items:center;gap:6px">📊 تقييم جاهزية المقال</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" id="btn-ai-fill-seo" class="btn-ai" style="font-size:12px;padding:6px 12px">🪄 تعبئة SEO تلقائياً بالذكاء الاصطناعي</button>
+      <div id="blog-score-value" style="font-size:20px;font-weight:900">0/100</div>
+    </div>
+  </div>
+  <div style="height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden">
+    <div id="blog-score-bar" style="height:100%;width:0%;border-radius:99px;background:var(--danger);transition:width .3s ease,background .3s ease"></div>
+  </div>
+  <div id="blog-score-checklist" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:12px"></div>
+  <div id="blog-ai-fill-status" style="margin-top:10px;font-size:12px"></div>
+</div>
+
 <form method="post" action="admin.php?page=blog-edit" id="blog-edit-form">
   <?= csrf_field() ?>
   <input type="hidden" name="id" value="<?= (int)$blogPost['id'] ?>">
   <div class="panel">
     <div class="form-grid">
       <div class="form-group full">
-        <label class="form-label">العنوان *</label>
+        <label class="form-label">📝 العنوان *</label>
         <input class="form-input" id="blog-title" type="text" name="title" value="<?= h($blogPost['title']) ?>" required>
       </div>
       <div class="form-group full">
-        <label class="form-label">الرابط (Slug)</label>
-        <input class="form-input" id="blog-slug" type="text" name="slug" dir="ltr" style="text-align:left"
+        <label class="form-label">🔗 الرابط (Slug — عربي فقط)</label>
+        <input class="form-input" id="blog-slug" type="text" name="slug" dir="rtl"
                value="<?= h($blogPost['slug'] ?? '') ?>"
-               placeholder="سيُنشأ تلقائياً من العنوان إن تُرك فارغاً"
-               pattern="[a-zA-Z0-9؀-ۿ\-]*">
+               placeholder="سيُنشأ تلقائياً من العنوان إن تُرك فارغاً — أحرف عربية وأرقام فقط"
+               pattern="[0-9؀-ۿ\-]*">
         <span style="font-size:11px;color:var(--muted);display:block;margin-top:4px" dir="ltr">
-          <?= h(SITE_URL) ?>/blog/<span id="blog-slug-preview"><?= h($blogPost['slug'] ?? 'post-slug') ?></span>
+          <?= h(SITE_URL) ?>/blog/<span id="blog-slug-preview"><?= h($blogPost['slug'] ?? 'مقال') ?></span>
         </span>
       </div>
       <div class="form-group">
-        <label class="form-label">القسم</label>
+        <label class="form-label">🗂️ القسم</label>
         <select class="form-select" name="type">
           <?php foreach (BLOG_TYPES as $t => $label): ?>
           <option value="<?= h($t) ?>" <?= $blogPost['type']===$t?'selected':'' ?>><?= h($label) ?></option>
@@ -2304,32 +2357,32 @@ elseif ($page === 'blog-edit'):
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">الحالة</label>
+        <label class="form-label">🚦 الحالة</label>
         <select class="form-select" name="status">
           <option value="draft" <?= $blogPost['status']==='draft'?'selected':'' ?>>مسودة</option>
           <option value="published" <?= $blogPost['status']==='published'?'selected':'' ?>>منشور</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">SEO Title</label>
-        <input class="form-input" type="text" name="seo_title" value="<?= h($blogPost['seo_title']) ?>">
+        <label class="form-label">🔍 SEO Title</label>
+        <input class="form-input" id="blog-seo-title" type="text" name="seo_title" value="<?= h($blogPost['seo_title']) ?>">
       </div>
       <div class="form-group">
-        <label class="form-label">الكلمات المفتاحية</label>
-        <input class="form-input" type="text" name="keywords" value="<?= h($blogPost['keywords']) ?>">
+        <label class="form-label">🏷️ الكلمات المفتاحية</label>
+        <input class="form-input" id="blog-keywords" type="text" name="keywords" value="<?= h($blogPost['keywords']) ?>">
       </div>
       <div class="form-group full">
-        <label class="form-label">Meta Description</label>
-        <input class="form-input" type="text" name="meta_description" value="<?= h($blogPost['meta_description']) ?>">
+        <label class="form-label">📄 Meta Description</label>
+        <input class="form-input" id="blog-meta-description" type="text" name="meta_description" value="<?= h($blogPost['meta_description']) ?>">
       </div>
       <div class="form-group full">
-        <label class="form-label">ملخص قصير (يظهر في بطاقة المقال)</label>
-        <input class="form-input" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
+        <label class="form-label">✂️ ملخص قصير (يظهر في بطاقة المقال)</label>
+        <input class="form-input" id="blog-excerpt" type="text" name="excerpt" value="<?= h($blogPost['excerpt']) ?>">
       </div>
       <!-- ══ WYSIWYG editor (shown for all types EXCEPT code-page) ══ -->
       <div class="form-group full" id="blog-wysiwyg-wrap">
         <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
-          <span>نص المقال</span>
+          <span>📰 نص المقال</span>
           <span style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" id="btn-fix-body-html" class="btn-edit" style="font-size:12px;padding:5px 10px" title="تحويل النص العادي لفقرات HTML — مفيد للمقالات القديمة">🔧 تحويل لـ HTML</button>
             <select id="blog-template-select" class="form-select" style="font-size:12px;padding:4px 8px;height:auto">
@@ -2449,7 +2502,7 @@ elseif ($page === 'blog-edit'):
       </div>
     </div>
   </div>
-  <button type="submit" class="btn-save" style="margin-bottom:40px">حفظ المقال</button>
+  <button type="submit" class="btn-save" style="margin-bottom:40px">💾 حفظ المقال</button>
 </form>
 
 <?php
