@@ -13,7 +13,7 @@ $currentUser = getCurrentSiteUser($pdo);
 // GET — جلب الرسائل الجديدة
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $afterId = (int)($_GET['after'] ?? 0);
-    if (!$currentUser) { echo json_encode(['messages':[]]); exit; }
+    if (!$currentUser) { echo json_encode(['messages' => []]); exit; }
     $msgs = getChatMessages($pdo, 30, $afterId);
     $result = array_map(fn($m) => [
         'id'           => (int)$m['id'],
