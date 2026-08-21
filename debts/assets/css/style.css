@@ -489,6 +489,12 @@ main.page.narrow{max-width:640px;}
 .pwa-banner small{ display:block; color:var(--ink-faint); font-size:12px; font-weight:400; margin-top:2px; }
 .pwa-banner-btns{ display:flex; gap:8px; flex-shrink:0; }
 
+/* ══ Feed (community redesign) ══ */
+/* styles are scoped inside community.php <style> block for isolation */
+
+/* ══ Profile Hero ══ */
+/* styles are scoped inside profile.php <style> block for isolation */
+
 /* ══ Footer ══ */
 .site-footer{
   border-top:1px solid var(--line); padding:30px 5vw;

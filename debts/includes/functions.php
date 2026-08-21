@@ -192,6 +192,34 @@ function requireSiteLogin(): void {
     }
 }
 
+/* ── مستخدمو الموقع (helpers) ── */
+function getSiteUserByUsername(PDO $pdo, string $username): ?array {
+    $stmt = $pdo->prepare("SELECT * FROM site_users WHERE username = ? AND is_banned = 0");
+    $stmt->execute([$username]);
+    return $stmt->fetch() ?: null;
+}
+
+function getUserMessageCount(PDO $pdo, int $userId): int {
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM chat_messages WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        return (int)$stmt->fetchColumn();
+    } catch (PDOException $e) { return 0; }
+}
+
+function getUserMessages(PDO $pdo, int $userId, int $limit = 30): array {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT m.*, u.display_name, u.username, u.avatar_url
+             FROM chat_messages m JOIN site_users u ON u.id = m.user_id
+             WHERE m.user_id = ? AND u.is_banned = 0
+             ORDER BY m.created_at DESC LIMIT ?"
+        );
+        $stmt->execute([$userId, $limit]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) { return []; }
+}
+
 /* ── دردشة ── */
 function getChatMessages(PDO $pdo, int $limit = 50, int $afterId = 0): array {
     $sql = "SELECT m.*, u.display_name, u.username, u.avatar_url
