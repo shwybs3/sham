@@ -5,27 +5,30 @@ ini_set('display_errors', '0');
 
 /* ══════════════════════════════════════════════════════════
    config.php — دفتر الدكان
-   ✏️  عدّل القسمين (1) و(2) ببيانات استضافتك فقط
+   ✏️  لا تعدّل هذا الملف — عدّل config.local.php بدلاً منه
    ══════════════════════════════════════════════════════════ */
 
 /* ──────────────────────────────────────────────────────────
-   1. بيانات قاعدة البيانات ← عدّلها
+   1. تحميل الإعدادات المحلية (محمية من التحديثات)
    ──────────────────────────────────────────────────────── */
-$DB_HOST    = 'localhost';
-$DB_NAME    = 'shop_debts';       // اسم قاعدة البيانات
-$DB_USER    = 'shop_debts_user';  // اسم المستخدم
-$DB_PASS    = 'CHANGE_ME';        // كلمة المرور
-$DB_PORT    = 3306;
-$DB_CHARSET = 'utf8mb4';
+$_localConfig = __DIR__ . '/config.local.php';
+if (file_exists($_localConfig)) {
+    require_once $_localConfig;
+} else {
+    // قيم افتراضية — يُفضَّل استخدام config.local.php
+    $DB_HOST    = 'localhost';
+    $DB_NAME    = 'shop_debts';
+    $DB_USER    = 'shop_debts_user';
+    $DB_PASS    = 'CHANGE_ME';
+    $DB_PORT    = 3306;
+    $DB_CHARSET = 'utf8mb4';
+    if (!defined('SITE_URL'))  define('SITE_URL',  'https://dark.yassota.com');
+    if (!defined('SITE_LANG')) define('SITE_LANG', 'ar');
+}
+unset($_localConfig);
 
 /* ──────────────────────────────────────────────────────────
-   2. إعدادات الموقع ← عدّلها
-   ──────────────────────────────────────────────────────── */
-define('SITE_URL',  'https://dark.yassota.com'); // بدون / في النهاية
-define('SITE_LANG', 'ar');
-
-/* ──────────────────────────────────────────────────────────
-   3. الاتصال بقاعدة البيانات — لا تعدّل هذا القسم
+   2. الاتصال بقاعدة البيانات
    ──────────────────────────────────────────────────────── */
 try {
     $pdo = new PDO(
@@ -41,21 +44,15 @@ try {
 } catch (PDOException $e) {
     http_response_code(503);
     error_log('[dukkan] DB error: ' . $e->getMessage());
-    // ── لتشخيص المشكلة مؤقتًا: غيّر السطر التالي إلى true ──
-    $showDbError = false;
-    if ($showDbError) {
-        die('<pre>DB Error: ' . htmlspecialchars($e->getMessage()) . '</pre>');
-    }
     die('تعذّر الاتصال بقاعدة البيانات. حاول لاحقًا.');
 }
-
-// تنظيف المتغيرات الحساسة من الذاكرة
 unset($DB_HOST, $DB_NAME, $DB_USER, $DB_PASS, $DB_PORT, $DB_CHARSET);
 
 /* ──────────────────────────────────────────────────────────
-   4. تحميل الدوال والأيقونات
+   3. تحميل الدوال والأيقونات والأمان
    ──────────────────────────────────────────────────────── */
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/icons.php';
+require_once __DIR__ . '/includes/security.php';
 
 $settings = getAllSettings($pdo);

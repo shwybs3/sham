@@ -29,7 +29,26 @@ $currentFile = basename($_SERVER['PHP_SELF'] ?? '');
 <link rel="stylesheet" href="assets/css/style.css?v=<?= cssVersion() ?>">
 <script>
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'})
+    .then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw.addEventListener('statechange', () => {
+          if(nw.state === 'installed' && navigator.serviceWorker.controller){
+            // إشعار التحديث
+            const bar = document.createElement('div');
+            bar.id = 'sw-update-bar';
+            bar.style.cssText = 'position:fixed;bottom:0;inset-inline:0;background:#22c58e;color:#04150e;text-align:center;padding:12px 16px;font-weight:700;z-index:9999;display:flex;justify-content:center;align-items:center;gap:12px;';
+            bar.innerHTML = '🔄 يوجد تحديث جديد للموقع <button onclick="nw.postMessage(\'SKIP_WAITING\');location.reload()" style="background:#04150e;color:#22c58e;border:none;padding:6px 14px;border-radius:50px;font-weight:700;cursor:pointer;">تحديث الآن</button>';
+            document.body.appendChild(bar);
+          }
+        });
+      });
+    }).catch(()=>{});
+  // استقبال رسالة التحديث
+  navigator.serviceWorker.addEventListener('message', e => {
+    if(e.data?.type === 'SW_UPDATED') location.reload();
+  });
 }
 </script>
 </head>

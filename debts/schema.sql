@@ -94,6 +94,33 @@ INSERT INTO settings (setting_key, setting_value) VALUES
 ('site_url',                '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
+-- جدول رموز تذكّر مدير الموقع
+CREATE TABLE IF NOT EXISTS admin_remember_tokens (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    admin_id   INT NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- جدول أسعار السوق المستخرجة من تيليجرام
+CREATE TABLE IF NOT EXISTS market_prices_raw (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    product_name VARCHAR(200) NOT NULL,
+    price        DECIMAL(12,2) NOT NULL DEFAULT 0,
+    currency     VARCHAR(10) NOT NULL DEFAULT 'SYP',
+    unit         VARCHAR(50) DEFAULT 'قطعة',
+    source       VARCHAR(20) DEFAULT 'telegram',
+    source_group VARCHAR(200) DEFAULT NULL,
+    raw_text     TEXT,
+    status       ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    reviewed_at  DATETIME DEFAULT NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- جدول أسعار الصرف
 CREATE TABLE IF NOT EXISTS exchange_rates (
     id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -131,7 +158,9 @@ INSERT INTO settings (setting_key, setting_value) VALUES
 ('rate_alert_threshold',    '3'),
 ('rate_alert_enabled',      '0'),
 ('syp_manual_rate',         '0'),
-('backup_key',              '')
+('backup_key',              ''),
+('tg_market_webhook_secret',''),
+('tg_market_groups',        '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 -- بيانات تجريبية (احذفها في الإنتاج)

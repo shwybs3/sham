@@ -25,9 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setSetting($pdo, 'google_client_secret', trim($_POST['google_client_secret'] ?? ''));
             $ok = 'تم حفظ إعدادات Google.';
         } elseif ($tab === 'telegram') {
-            setSetting($pdo, 'telegram_bot_token', trim($_POST['telegram_bot_token'] ?? ''));
-            setSetting($pdo, 'telegram_chat_id',   trim($_POST['telegram_chat_id']   ?? ''));
-            setSetting($pdo, 'backup_key',         trim($_POST['backup_key']         ?? ''));
+            setSetting($pdo, 'telegram_bot_token',        trim($_POST['telegram_bot_token']        ?? ''));
+            setSetting($pdo, 'telegram_chat_id',          trim($_POST['telegram_chat_id']          ?? ''));
+            setSetting($pdo, 'backup_key',                trim($_POST['backup_key']                ?? ''));
+            setSetting($pdo, 'tg_market_webhook_secret',  trim($_POST['tg_market_webhook_secret']  ?? ''));
             $ok = 'تم حفظ إعدادات تيليجرام.';
         } elseif ($tab === 'seo') {
             setSetting($pdo, 'robots_allow_public',       isset($_POST['robots_allow_public'])       ? '1' : '0');
@@ -212,6 +213,15 @@ input[type=checkbox]{ width:20px; height:20px; cursor:pointer; }
         <small class="security-note">
           استخدم هذا المفتاح في Cron Job:<br>
           <code style="direction:ltr; display:block; margin-top:4px;">curl "https://yoursite.com/api/backup.php?key=YOUR_KEY"</code>
+        </small>
+      </div>
+      <div class="field">
+        <label><?= icon('zap',14) ?> سر Webhook أسعار السوق (tg_market_webhook_secret)</label>
+        <input type="text" name="tg_market_webhook_secret" value="<?= h($settings['tg_market_webhook_secret'] ?? '') ?>"
+               placeholder="كلمة سر عشوائية مثلاً: abc123xyz" dir="ltr">
+        <small class="security-note">
+          يُستخدم للتحقق من مصدر رسائل تيليجرام في Webhook أسعار السوق.<br>
+          <a href="market-prices.php" style="color:var(--brand);">إدارة أسعار السوق ←</a>
         </small>
       </div>
       <button class="btn btn-primary" type="submit"><?= icon('check', 16) ?> حفظ</button>

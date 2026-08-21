@@ -131,10 +131,16 @@ function findOrCreateCustomer(PDO $pdo, string $name): array {
 /* ── الإدارة ── */
 function requireAdminLogin(): void {
     if (session_status() === PHP_SESSION_NONE) session_start();
-    if (empty($_SESSION['admin_id'])) {
-        header('Location: login.php');
-        exit;
+    if (!empty($_SESSION['admin_id'])) return;
+
+    // تحقق من كوكي "تذكرني"
+    global $pdo;
+    if (isset($pdo) && function_exists('checkAdminRememberToken') && checkAdminRememberToken($pdo)) {
+        return;
     }
+
+    header('Location: login.php');
+    exit;
 }
 function csrfToken(): string {
     if (session_status() === PHP_SESSION_NONE) session_start();
