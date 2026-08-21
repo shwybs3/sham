@@ -42,9 +42,9 @@ function getProductTypes(): array {
 }
 
 /* ── الإعدادات ── */
-function getAllSettings(PDO $pdo): array {
+function getAllSettings(PDO $pdo, bool $fresh = false): array {
     static $cache = null;
-    if ($cache !== null) return $cache;
+    if ($cache !== null && !$fresh) return $cache;
     $cache = [];
     try {
         foreach ($pdo->query("SELECT setting_key, setting_value FROM settings") as $row) {
@@ -56,11 +56,10 @@ function getAllSettings(PDO $pdo): array {
     return $cache;
 }
 function setSetting(PDO $pdo, string $key, string $value): void {
-    $stmt = $pdo->prepare(
+    $pdo->prepare(
         "INSERT INTO settings (setting_key, setting_value) VALUES (:k, :v)
-         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
-    );
-    $stmt->execute(['k' => $key, 'v' => $value]);
+         ON DUPLICATE KEY UPDATE setting_value = :v2"
+    )->execute(['k' => $key, 'v' => $value, 'v2' => $value]);
 }
 
 /* ── العملاء والديون ── */

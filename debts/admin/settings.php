@@ -10,52 +10,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'انتهت صلاحية الجلسة، أعد المحاولة.';
     } else {
         $tab = $_POST['tab'] ?? 'general';
-
-        if ($tab === 'general') {
-            setSetting($pdo, 'shop_name',      trim($_POST['shop_name']  ?? 'دفتر الدكان'));
-            setSetting($pdo, 'currency',       trim($_POST['currency']   ?? 'SYP'));
-            setSetting($pdo, 'banner_text',    trim($_POST['banner_text'] ?? ''));
-            setSetting($pdo, 'banner_enabled', isset($_POST['banner_enabled']) ? '1' : '0');
-            setSetting($pdo, 'support_enabled',isset($_POST['support_enabled']) ? '1' : '0');
-            setSetting($pdo, 'chat_enabled',   isset($_POST['chat_enabled']) ? '1' : '0');
-            setSetting($pdo, 'pwa_enabled',    isset($_POST['pwa_enabled']) ? '1' : '0');
-            $ok = 'تم حفظ الإعدادات العامة.';
-        } elseif ($tab === 'google') {
-            setSetting($pdo, 'google_client_id',     trim($_POST['google_client_id']     ?? ''));
-            setSetting($pdo, 'google_client_secret', trim($_POST['google_client_secret'] ?? ''));
-            $ok = 'تم حفظ إعدادات Google.';
-        } elseif ($tab === 'telegram') {
-            setSetting($pdo, 'telegram_bot_token',        trim($_POST['telegram_bot_token']        ?? ''));
-            setSetting($pdo, 'telegram_chat_id',          trim($_POST['telegram_chat_id']          ?? ''));
-            setSetting($pdo, 'backup_key',                trim($_POST['backup_key']                ?? ''));
-            setSetting($pdo, 'tg_market_webhook_secret',  trim($_POST['tg_market_webhook_secret']  ?? ''));
-            $ok = 'تم حفظ إعدادات تيليجرام.';
-        } elseif ($tab === 'seo') {
-            setSetting($pdo, 'robots_allow_public',       isset($_POST['robots_allow_public'])       ? '1' : '0');
-            setSetting($pdo, 'sitemap_include_customers', isset($_POST['sitemap_include_customers']) ? '1' : '0');
-            setSetting($pdo, 'rss_secret',                trim($_POST['rss_secret'] ?? ''));
-            $ok = 'تم حفظ إعدادات SEO.';
-        } elseif ($tab === 'security') {
-            setSetting($pdo, 'recaptcha_site_key',      trim($_POST['recaptcha_site_key']      ?? ''));
-            setSetting($pdo, 'recaptcha_secret_key',    trim($_POST['recaptcha_secret_key']    ?? ''));
-            setSetting($pdo, 'recaptcha_version',       in_array($_POST['recaptcha_version'] ?? 'v2', ['v2','v3']) ? $_POST['recaptcha_version'] : 'v2');
-            setSetting($pdo, 'recaptcha_enabled',       isset($_POST['recaptcha_enabled']) ? '1' : '0');
-            setSetting($pdo, 'cf_turnstile_site_key',   trim($_POST['cf_turnstile_site_key']   ?? ''));
-            setSetting($pdo, 'cf_turnstile_secret_key', trim($_POST['cf_turnstile_secret_key'] ?? ''));
-            setSetting($pdo, 'cf_turnstile_enabled',    isset($_POST['cf_turnstile_enabled'])   ? '1' : '0');
-            $ok = 'تم حفظ إعدادات الأمان.';
-        } elseif ($tab === 'rates') {
-            setSetting($pdo, 'syp_manual_rate',      (string)(float)($_POST['syp_manual_rate'] ?? 0));
-            setSetting($pdo, 'rate_alert_threshold', (string)(float)($_POST['rate_alert_threshold'] ?? 3));
-            setSetting($pdo, 'rate_alert_enabled',   isset($_POST['rate_alert_enabled']) ? '1' : '0');
-            $ok = 'تم حفظ إعدادات أسعار الصرف.';
+        try {
+            if ($tab === 'general') {
+                setSetting($pdo, 'shop_name',      trim($_POST['shop_name']  ?? 'دفتر الدكان'));
+                setSetting($pdo, 'currency',       trim($_POST['currency']   ?? 'SYP'));
+                setSetting($pdo, 'banner_text',    trim($_POST['banner_text'] ?? ''));
+                setSetting($pdo, 'banner_enabled', isset($_POST['banner_enabled']) ? '1' : '0');
+                setSetting($pdo, 'support_enabled',isset($_POST['support_enabled']) ? '1' : '0');
+                setSetting($pdo, 'chat_enabled',   isset($_POST['chat_enabled']) ? '1' : '0');
+                setSetting($pdo, 'pwa_enabled',    isset($_POST['pwa_enabled']) ? '1' : '0');
+            } elseif ($tab === 'google') {
+                setSetting($pdo, 'google_client_id',     trim($_POST['google_client_id']     ?? ''));
+                setSetting($pdo, 'google_client_secret', trim($_POST['google_client_secret'] ?? ''));
+            } elseif ($tab === 'telegram') {
+                setSetting($pdo, 'telegram_bot_token',        trim($_POST['telegram_bot_token']        ?? ''));
+                setSetting($pdo, 'telegram_chat_id',          trim($_POST['telegram_chat_id']          ?? ''));
+                setSetting($pdo, 'backup_key',                trim($_POST['backup_key']                ?? ''));
+                setSetting($pdo, 'tg_market_webhook_secret',  trim($_POST['tg_market_webhook_secret']  ?? ''));
+            } elseif ($tab === 'seo') {
+                setSetting($pdo, 'robots_allow_public',       isset($_POST['robots_allow_public'])       ? '1' : '0');
+                setSetting($pdo, 'sitemap_include_customers', isset($_POST['sitemap_include_customers']) ? '1' : '0');
+                setSetting($pdo, 'rss_secret',                trim($_POST['rss_secret'] ?? ''));
+            } elseif ($tab === 'security') {
+                setSetting($pdo, 'recaptcha_site_key',      trim($_POST['recaptcha_site_key']      ?? ''));
+                setSetting($pdo, 'recaptcha_secret_key',    trim($_POST['recaptcha_secret_key']    ?? ''));
+                setSetting($pdo, 'recaptcha_version',       in_array($_POST['recaptcha_version'] ?? 'v2', ['v2','v3']) ? $_POST['recaptcha_version'] : 'v2');
+                setSetting($pdo, 'recaptcha_enabled',       isset($_POST['recaptcha_enabled']) ? '1' : '0');
+                setSetting($pdo, 'cf_turnstile_site_key',   trim($_POST['cf_turnstile_site_key']   ?? ''));
+                setSetting($pdo, 'cf_turnstile_secret_key', trim($_POST['cf_turnstile_secret_key'] ?? ''));
+                setSetting($pdo, 'cf_turnstile_enabled',    isset($_POST['cf_turnstile_enabled'])   ? '1' : '0');
+            } elseif ($tab === 'rates') {
+                setSetting($pdo, 'syp_manual_rate',      (string)(float)($_POST['syp_manual_rate'] ?? 0));
+                setSetting($pdo, 'rate_alert_threshold', (string)(float)($_POST['rate_alert_threshold'] ?? 3));
+                setSetting($pdo, 'rate_alert_enabled',   isset($_POST['rate_alert_enabled']) ? '1' : '0');
+            }
+            // PRG: redirect after save to avoid resubmit and stale cache
+            header('Location: settings.php?tab=' . urlencode($tab) . '&saved=1');
+            exit;
+        } catch (Exception $e) {
+            error_log('[settings] save error: ' . $e->getMessage());
+            $error = 'خطأ أثناء الحفظ: ' . htmlspecialchars($e->getMessage());
         }
-
-        $settings = getAllSettings($pdo);
     }
 }
 
 $activeTab  = $_GET['tab'] ?? 'general';
+if (isset($_GET['saved'])) $ok = 'تم الحفظ بنجاح.';
 $currencies = getCurrencies();
 $pageTitle  = 'الإعدادات';
 $activeNav  = 'settings';

@@ -1,13 +1,17 @@
 <?php
 require_once __DIR__ . '/../config.php';
 requireAdminLogin();
-require __DIR__ . '/includes/admin-header.php';
 
+$pageTitle = 'قائمة الأسعار';
+$activeNav = 'prices';
 $msg = '';
+$dbReady = true;
 
 // حذف
 if (isset($_GET['delete']) && csrfCheck()) {
-    $pdo->prepare("DELETE FROM price_list WHERE id=?")->execute([(int)$_GET['delete']]);
+    try {
+        $pdo->prepare("DELETE FROM price_list WHERE id=?")->execute([(int)$_GET['delete']]);
+    } catch (PDOException $e) { /* ignore */ }
     header('Location: prices.php?ok=deleted'); exit;
 }
 
@@ -21,28 +25,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrfCheck()) {
     $unit     = trim($_POST['unit'] ?? 'قطعة');
 
     if ($name && $price >= 0) {
-        if ($id) {
-            $pdo->prepare("UPDATE price_list SET name=?,category=?,price=?,currency=?,unit=?,updated_at=NOW() WHERE id=?")
-                ->execute([$name, $category, $price, $currency, $unit, $id]);
-        } else {
-            $pdo->prepare("INSERT INTO price_list (name,category,price,currency,unit) VALUES (?,?,?,?,?)")
-                ->execute([$name, $category, $price, $currency, $unit]);
+        try {
+            if ($id) {
+                $pdo->prepare("UPDATE price_list SET name=?,category=?,price=?,currency=?,unit=?,updated_at=NOW() WHERE id=?")
+                    ->execute([$name, $category, $price, $currency, $unit, $id]);
+            } else {
+                $pdo->prepare("INSERT INTO price_list (name,category,price,currency,unit) VALUES (?,?,?,?,?)")
+                    ->execute([$name, $category, $price, $currency, $unit]);
+            }
+            header('Location: prices.php?ok=saved'); exit;
+        } catch (PDOException $e) {
+            $msg = 'خطأ في قاعدة البيانات — تأكد من تشغيل schema.sql أولاً.';
+            $dbReady = false;
         }
-        header('Location: prices.php?ok=saved'); exit;
+    } else {
+        $msg = 'يرجى إدخال الاسم والسعر.';
     }
-    $msg = 'يرجى إدخال الاسم والسعر.';
 }
 
-$items = $pdo->query("SELECT * FROM price_list ORDER BY category, name")->fetchAll();
-$editItem = null;
-if (isset($_GET['edit'])) {
-    $stmt = $pdo->prepare("SELECT * FROM price_list WHERE id=?");
-    $stmt->execute([(int)$_GET['edit']]);
-    $editItem = $stmt->fetch() ?: null;
+try {
+    $items = $pdo->query("SELECT * FROM price_list ORDER BY category, name")->fetchAll();
+    $editItem = null;
+    if (isset($_GET['edit'])) {
+        $stmt = $pdo->prepare("SELECT * FROM price_list WHERE id=?");
+        $stmt->execute([(int)$_GET['edit']]);
+        $editItem = $stmt->fetch() ?: null;
+    }
+} catch (PDOException $e) {
+    $items = [];
+    $editItem = null;
+    $dbReady = false;
+    $msg = 'جدول قائمة الأسعار غير موجود — يرجى تشغيل schema.sql على قاعدة البيانات.';
 }
 
 $currencies = getCurrencies();
 $shopCat    = array_keys(getProductTypes());
+
+require __DIR__ . '/includes/admin-header.php';
 ?>
 
 <div class="admin-content">

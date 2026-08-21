@@ -4,32 +4,35 @@ requireAdminLogin();
 
 $pageTitle = 'أسعار السوق المحلي';
 $activeNav = 'market';
-require __DIR__ . '/includes/admin-header.php';
+$dbReady   = true;
 
 // إجراءات الموافقة / الرفض / الحذف
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrfCheck()) {
     $action = $_POST['action'] ?? '';
     $ids    = array_map('intval', (array)($_POST['ids'] ?? []));
 
-    if ($action === 'approve' && $ids) {
-        // نقل السعر الموافق عليه إلى price_list
-        $rows = $pdo->query("SELECT * FROM market_prices_raw WHERE id IN (" . implode(',', $ids) . ")")->fetchAll();
-        $ins  = $pdo->prepare("INSERT INTO price_list (name, category, price, currency, unit) VALUES (?,?,?,?,?)
-                                ON DUPLICATE KEY UPDATE price=VALUES(price), updated_at=NOW()");
-        $upd  = $pdo->prepare("UPDATE market_prices_raw SET status='approved', reviewed_at=NOW() WHERE id=?");
-        foreach ($rows as $r) {
-            $ins->execute([$r['product_name'], 'سوق محلي', $r['price'], $r['currency'], $r['unit']]);
-            $upd->execute([$r['id']]);
+    try {
+        if ($action === 'approve' && $ids) {
+            $rows = $pdo->query("SELECT * FROM market_prices_raw WHERE id IN (" . implode(',', $ids) . ")")->fetchAll();
+            $ins  = $pdo->prepare("INSERT INTO price_list (name, category, price, currency, unit) VALUES (?,?,?,?,?)
+                                    ON DUPLICATE KEY UPDATE price=VALUES(price), updated_at=NOW()");
+            $upd  = $pdo->prepare("UPDATE market_prices_raw SET status='approved', reviewed_at=NOW() WHERE id=?");
+            foreach ($rows as $r) {
+                $ins->execute([$r['product_name'], 'سوق محلي', $r['price'], $r['currency'], $r['unit']]);
+                $upd->execute([$r['id']]);
+            }
+            header('Location: market-prices.php?ok=approved'); exit;
         }
-        header('Location: market-prices.php?ok=approved'); exit;
-    }
-    if ($action === 'reject' && $ids) {
-        $pdo->query("UPDATE market_prices_raw SET status='rejected', reviewed_at=NOW() WHERE id IN (" . implode(',', $ids) . ")");
-        header('Location: market-prices.php?ok=rejected'); exit;
-    }
-    if ($action === 'delete_all') {
-        $pdo->query("DELETE FROM market_prices_raw WHERE status IN ('approved','rejected')");
-        header('Location: market-prices.php?ok=cleaned'); exit;
+        if ($action === 'reject' && $ids) {
+            $pdo->query("UPDATE market_prices_raw SET status='rejected', reviewed_at=NOW() WHERE id IN (" . implode(',', $ids) . ")");
+            header('Location: market-prices.php?ok=rejected'); exit;
+        }
+        if ($action === 'delete_all') {
+            $pdo->query("DELETE FROM market_prices_raw WHERE status IN ('approved','rejected')");
+            header('Location: market-prices.php?ok=cleaned'); exit;
+        }
+    } catch (PDOException $e) {
+        error_log('[market-prices] ' . $e->getMessage());
     }
 }
 
@@ -37,10 +40,18 @@ $filter  = $_GET['status'] ?? 'pending';
 $allowed = ['pending','approved','rejected'];
 $filter  = in_array($filter, $allowed) ? $filter : 'pending';
 
-$rows    = $pdo->prepare("SELECT * FROM market_prices_raw WHERE status=? ORDER BY created_at DESC LIMIT 200");
-$rows->execute([$filter]);
-$items   = $rows->fetchAll();
-$counts  = $pdo->query("SELECT status, COUNT(*) AS n FROM market_prices_raw GROUP BY status")->fetchAll(PDO::FETCH_KEY_PAIR);
+try {
+    $rows    = $pdo->prepare("SELECT * FROM market_prices_raw WHERE status=? ORDER BY created_at DESC LIMIT 200");
+    $rows->execute([$filter]);
+    $items   = $rows->fetchAll();
+    $counts  = $pdo->query("SELECT status, COUNT(*) AS n FROM market_prices_raw GROUP BY status")->fetchAll(PDO::FETCH_KEY_PAIR);
+} catch (PDOException $e) {
+    $items  = [];
+    $counts = [];
+    $dbReady = false;
+}
+
+require __DIR__ . '/includes/admin-header.php';
 ?>
 
 <div class="admin-content">
