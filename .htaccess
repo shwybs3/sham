@@ -4,6 +4,12 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Some hosts (CGI/FastCGI PHP) strip the Authorization header before PHP
+  # ever sees it — this forwards it through so $_SERVER['HTTP_AUTHORIZATION']
+  # works, needed for the Bearer-token auth on claude-agent.php (MCP).
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   # Force HTTPS — required for AdSense and for the cookie-consent /
   # localStorage behavior to be trustworthy. IMPORTANT: only keep this
   # enabled once your hosting actually has a valid SSL certificate active

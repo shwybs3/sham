@@ -558,62 +558,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()) {
     header('Content-Type: application/json');
     $type = trim($_GET['type'] ?? 'article');
-    if (!isset(BLOG_TYPES[$type])) $type = 'article';
     $topic = trim($_GET['topic'] ?? '');
-
-    $typeGuides = [
-        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
-        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
-        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
-        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
-        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
-        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
-    ];
-    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
-
-    $prompt = <<<P
-أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
-{$typeGuides[$type]}
-{$topicLine}
-
-المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
-اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
-
-اتبع معايير SEO:
-- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
-- meta_description: 140-160 حرفاً يلخص المقال.
-- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
-- excerpt: سطر أو سطران يظهران في بطاقة المقال.
-
-أعد JSON صالح فقط بدون أي نص خارج JSON:
-{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
-P;
-    $r = ai_text($pdo, $prompt);
-    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
-    $data = ai_extract_json($r['content']);
-    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
-    $data = clean_utf8_deep($data);
-
-    $title = trim($data['title'] ?? '');
-    $body  = trim($data['body'] ?? '');
-    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي ناقص']); exit; }
-    $slug = unique_blog_slug($pdo, $title);
-
-    // Best-effort cover image — never blocks the post from being created.
-    $coverImage = null;
-    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
-    if ($ir['ok']) {
-        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
-        file_put_contents($tmp, $ir['bin']);
-        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
-        @unlink($tmp);
-    }
-
-    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
-        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
-            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
-    $newId = (int)$pdo->lastInsertId();
-    echo json_encode(['success'=>true,'id'=>$newId,'title'=>$title], JSON_UNESCAPED_UNICODE);
+    echo json_encode(ai_generate_blog_post($pdo, $type, $topic), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -961,7 +907,7 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 
     foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
               'google_site_verification','bing_site_verification','virustotal_api_key',
-              'ai_provider',
+              'ai_provider','claude_agent_token',
               'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
@@ -2855,6 +2801,19 @@ elseif ($page === 'settings'): ?>
     <div class="form-group">
       <label class="form-label">VirusTotal API Key</label>
       <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>وصول Claude Agent عبر MCP <span style="color:var(--muted);font-weight:400">(توليد مقالات تلقائي من خارج اللوحة)</span></h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      يسمح لأداة Claude بتوليد مقالات مدونة (بنفس خط الأنابيب المستخدم في زر "توليد بالذكاء الاصطناعي" أعلاه) عبر نقطة اتصال MCP في <code>claude-agent.php</code>، بإضافتها في Claude كالتالي:<br>
+      <code style="display:inline-block;margin-top:6px;direction:ltr;word-break:break-all">claude mcp add --transport http szad-ai <?= h(SITE_URL) ?>/claude-agent.php?action=generate_post --header "Authorization: Bearer التوكن"</code><br>
+      كل مقال يُنشأ عبر هذا الوصول يُحفظ كمسودة فقط، لن يُنشر تلقائياً. التوكن سرّي جداً — لا تضعه في أي كود أو مستودع، فقط هنا وفي إعداد MCP لديك. اتركه فارغاً لتعطيل هذا الوصول بالكامل (الوضع الافتراضي).
+    </p>
+    <div class="form-group">
+      <label class="form-label">Claude Agent Token</label>
+      <input class="form-input" type="text" name="claude_agent_token" value="<?= h(get_cfg($pdo,'claude_agent_token')) ?>" placeholder="اتركه فارغاً لتعطيل، أو الصق توكن سرّي عشوائي طويل">
     </div>
   </div>
 
