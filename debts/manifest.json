@@ -1,0 +1,34 @@
+{
+  "name": "دفتر الدكان",
+  "short_name": "دفتر الدين",
+  "description": "تتبع ديون الزبائن وتسجيل المشتريات بسهولة",
+  "start_url": "./index.php",
+  "display": "standalone",
+  "background_color": "#0b0e13",
+  "theme_color": "#22c58e",
+  "orientation": "any",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%2322c58e'/><text y='130' x='96' text-anchor='middle' font-size='110' fill='%23043b29'>📒</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "تسجيل سريع",
+      "url": "./admin/quick-entry.php",
+      "description": "تسجيل دين أو دفعة"
+    },
+    {
+      "name": "المجموعة العامة",
+      "url": "./community.php",
+      "description": "الدردشة العامة"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "screenshots": []
+}

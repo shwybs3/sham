@@ -1,0 +1,83 @@
+# ═══════════════════════════════════════════════════════════
+#  .htaccess — دفتر الدكان
+#  Apache mod_rewrite + حماية + أداء + أمان
+# ═══════════════════════════════════════════════════════════
+
+Options -Indexes
+ServerSignature Off
+
+# ── حماية: منع وصول الأدوات الاختراقية ──
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # حظر User Agents الخطيرة
+  RewriteCond %{HTTP_USER_AGENT} (sqlmap|nikto|nmap|masscan|dirbuster|gobuster|hydra|zgrab|havij|acunetix|openvas) [NC]
+  RewriteRule .* - [F,L]
+
+  # حماية config.local.php من الوصول المباشر
+  RewriteRule ^config\.local\.php$ - [F,L]
+
+  # ── توجيه robots.txt → robots.php ──
+  RewriteRule ^robots\.txt$ robots.php [L,QSA,NC]
+
+  # ── توجيه sitemap.xml → sitemap.php ──
+  RewriteRule ^sitemap\.xml$ sitemap.php [L,QSA,NC]
+
+  # ── توجيه /feed أو /rss → rss.php ──
+  RewriteRule ^(feed|rss)/?$ rss.php [L,QSA,NC]
+
+  # ── حماية الملفات الحساسة ──
+  RewriteRule ^\.env$         - [F,L]
+  RewriteRule ^config\.php$   - [F,L]
+  RewriteRule ^schema\.sql$   - [F,L]
+  RewriteRule ^db-test\.php$  - [F,L]
+</IfModule>
+
+# ── منع الوصول المباشر للملفات الحساسة ──
+<FilesMatch "\.(sql|env|log|ini|sh|bak|example)$">
+  Order Allow,Deny
+  Deny from all
+</FilesMatch>
+<FilesMatch "^(config\.local\.php|setup\.php)$">
+  Order Allow,Deny
+  Deny from all
+</FilesMatch>
+
+# ── ضغط Gzip للأداء ──
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain application/xml application/json application/javascript
+</IfModule>
+
+# ── Cache Control: بدون تخزين لـ PHP + بدون cache لـ sw.js ──
+<IfModule mod_headers.c>
+  # Service Worker: لا تخزينه أبداً في الكاش
+  <FilesMatch "sw\.js$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+  </FilesMatch>
+
+  # صفحات PHP: لا تخزين
+  <FilesMatch "\.php$">
+    Header set Cache-Control "no-store, private"
+  </FilesMatch>
+
+  # الأصول الثابتة: تخزين طويل (تُشير إليها بـ ?v= للتحديث)
+  <FilesMatch "\.(css|js|png|jpg|jpeg|gif|svg|woff2|ico)$">
+    Header set Cache-Control "public, max-age=604800, immutable"
+  </FilesMatch>
+
+  # رؤوس الأمان
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+</IfModule>
+
+# ── Expires للأصول الثابتة ──
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css              "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/*               "access plus 30 days"
+</IfModule>

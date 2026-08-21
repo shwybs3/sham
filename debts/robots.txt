@@ -1,0 +1,18 @@
+# robots.txt — دفتر الدكان
+# ════════════════════════════════════════════════════
+# هذا الملف الثابت هو احتياطي فقط.
+# النسخة الديناميكية (مع SITE_URL صحيح) تأتي من:
+#   robots.php  ←  يُوجَّه إليها عبر .htaccess تلقائيًا
+# ════════════════════════════════════════════════════
+
+User-agent: *
+Allow: /assets/
+Allow: /$
+Disallow: /admin/
+Disallow: /api/
+Disallow: /includes/
+Disallow: /customer.php
+Disallow: /setup.php
+Disallow: /.env
+
+Sitemap: /sitemap.php
