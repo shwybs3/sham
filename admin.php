@@ -1252,7 +1252,7 @@ if ($page === 'login'): ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#0a0d0c"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1304,7 +1304,7 @@ $navLinks = [
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#0a0d0c"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1404,8 +1404,8 @@ if ($page === 'dashboard'): ?>
 </div>
 
 <?php if ($needsUpdateApps): ?>
-<div class="panel" style="border-color:rgba(251,191,36,.3);margin-top:20px">
-  <h2 style="color:#fbbf24">⚠️ تطبيقات تحتاج تحديث (<?= count($needsUpdateApps) ?>)</h2>
+<div class="panel" style="border-color:rgba(224,147,42,.3);margin-top:20px">
+  <h2 style="color:#e0932a">⚠️ تطبيقات تحتاج تحديث (<?= count($needsUpdateApps) ?>)</h2>
   <table class="admin-table responsive-cards">
     <thead><tr><th>التطبيق</th><th>الإصدار الحالي</th><th>آخر تحديث</th><th>إجراء</th></tr></thead>
     <tbody>
@@ -1489,7 +1489,7 @@ elseif ($page === 'apps'):
     <td data-label="تحميلات" style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
     <td data-label="الحالة">
       <span class="status-badge status-<?= $a['status'] ?>"><?= $a['status']==='published'?'منشور':'مسودة' ?></span>
-      <?php if (!empty($a['needs_update'])): ?><span class="status-badge status-draft" style="border-color:rgba(251,191,36,.3);color:#fbbf24;background:rgba(251,191,36,.1)">يحتاج تحديث</span><?php endif; ?>
+      <?php if (!empty($a['needs_update'])): ?><span class="status-badge status-draft" style="border-color:rgba(224,147,42,.3);color:#e0932a;background:rgba(224,147,42,.12)">يحتاج تحديث</span><?php endif; ?>
     </td>
     <td data-label="إجراءات" class="td-actions">
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1533,7 +1533,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 </div>
 
 <!-- Import from Google Play -->
-<div class="ai-box" style="--border-p: rgba(37,99,235,.25)">
+<div class="ai-box" style="--border-p: rgba(34,224,168,.25)">
   <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--cyan)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:4px"><path d="M4 3.5v17l14-8.5-14-8.5z"/></svg>
     استيراد بيانات أولية من رابط Google Play
@@ -1829,7 +1829,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     </div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <input type="checkbox" name="needs_update" value="1" <?= !empty($app['needs_update'])?'checked':'' ?>>
-      <span style="color:#fbbf24">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
+      <span style="color:#e0932a">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
     </label>
     <?php if ($isEdit): ?>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
@@ -1868,7 +1868,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       تحقق الفريق — الرابط آمن
     </button>
     <?php else: ?>
-    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(220,38,38,.1);color:var(--danger)">
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(240,101,101,.1);color:var(--danger)">
       إلغاء التحقق
     </button>
     <?php endif; ?>
@@ -1933,7 +1933,7 @@ elseif ($page === 'bulk-generate'): ?>
 <div class="panel" style="margin-bottom:16px">
   <p style="color:var(--muted);font-size:13px;line-height:1.8">
     يقترح الذكاء الاصطناعي عدداً اخترته من أكثر التطبيقات/الألعاب بحثاً (معدّلة أو رسمية)، ثم يولّد لكل اسم محتوى كاملاً ويحاول تلقائياً
-    العثور على صفحته في Google Play لاستيراد الأيقونة ورابط الصفحة. أي تطبيق يتعذّر جلب رابط تحميل مباشر له يُحفظ <strong style="color:#fbbf24">كمسودة</strong> جاهزة
+    العثور على صفحته في Google Play لاستيراد الأيقونة ورابط الصفحة. أي تطبيق يتعذّر جلب رابط تحميل مباشر له يُحفظ <strong style="color:#f0b429">كمسودة</strong> جاهزة
     — أضف رابط التحميل من صفحة التعديل ثم انشرها.
   </p>
 </div>
@@ -2096,7 +2096,7 @@ elseif ($page === 'comments'):
   <tr>
     <td data-label="التطبيق" style="font-weight:700"><?= h($c['app_name'] ?? '—') ?></td>
     <td data-label="الاسم"><?= h($c['name']) ?></td>
-    <td data-label="التقييم" style="color:#fbbf24;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
+    <td data-label="التقييم" style="color:#f0b429;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
     <td data-label="التعليق" style="max-width:280px;color:var(--muted);font-size:13px"><?= h(mb_strimwidth($c['body'], 0, 100, '...')) ?></td>
     <td data-label="الحالة"><span class="status-badge <?= $c['status']==='approved'?'status-published':'status-draft' ?>"><?= $c['status']==='approved'?'منشور':'قيد المراجعة' ?></span></td>
     <td data-label="إجراءات" class="td-actions">
@@ -2174,7 +2174,7 @@ elseif ($page === 'blog'):
     <td data-label="القسم" style="color:var(--muted);font-size:12px">
       <?= h(blog_type_label($bp['type'])) ?>
       <?php if ($bp['type'] === 'code-page'): $cpCount = count(decode_code_page($bp['body'] ?? '')); ?>
-        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
+        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(240,180,41,.15);color:#f5cf6b;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
       <?php endif; ?>
     </td>
     <td data-label="الحالة"><span class="status-badge <?= $bp['status']==='published'?'status-published':'status-draft' ?>"><?= $bp['status']==='published'?'منشور':'مسودة' ?></span></td>
@@ -2433,7 +2433,7 @@ elseif ($page === 'stats'):
 ?>
 <div class="admin-header"><h1>إحصائيات الموقع</h1></div>
 
-<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--navy-900);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
+<div style="background:rgba(34,224,168,.08);border:1px solid rgba(34,224,168,.25);color:var(--white);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
   ℹ️ هذه إحصائيات <strong>حقيقية</strong> يجمعها الموقع نفسه (مشاهدات وتحميلات وعمليات بحث فعلية من الزوار) — وليست بيانات Google Search Console.
   للحصول على بيانات جوجل الفعلية (الظهور في نتائج البحث، الكلمات المفتاحية، معدل النقر) يجب ربط حساب Google Search Console الخاص بك مباشرة عبر
   <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a> — وهذا يتطلب حسابك الشخصي ولا يمكن أتمتته من هنا.

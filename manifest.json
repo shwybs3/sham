@@ -4,8 +4,8 @@
   "description": "منصة عربية لتحميل أفضل تطبيقات وألعاب أندرويد مجاناً",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#2563eb",
+  "background_color": "#0a0d0c",
+  "theme_color": "#0a0d0c",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

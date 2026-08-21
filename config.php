@@ -38,12 +38,12 @@ try {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>فشل الاتصال بقاعدة البيانات</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9}
-    .box{max-width:680px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
-    h1{color:#dc2626;font-size:20px;margin:0 0 6px} p.sub{color:#64748b;font-size:13px;margin:0 0 20px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0a0d0c;color:#f3f6f4;padding:40px 16px;line-height:1.9}
+    .box{max-width:680px;margin:0 auto;background:#131a16;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+    h1{color:#f06565;font-size:20px;margin:0 0 6px} p.sub{color:#93a29c;font-size:13px;margin:0 0 20px}
     ol{padding-inline-start:20px;font-size:14px} li{margin-bottom:10px}
-    code{background:#f1f4f9;color:#2563eb;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
-    .err{margin-top:22px;background:#f1f4f9;border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#b91c1c;direction:ltr;text-align:left;word-break:break-all}
+    code{background:#19221d;color:#22e0a8;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
+    .err{margin-top:22px;background:#19221d;border:1px solid rgba(240,101,101,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#f06565;direction:ltr;text-align:left;word-break:break-all}
     </style></head><body><div class="box">
     <h1>تعذر الاتصال بقاعدة البيانات</h1>
     <p class="sub">اتبع الخطوات التالية للحل:</p>
@@ -1297,10 +1297,10 @@ function admin_ip_check(PDO $pdo): void {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>الوصول مرفوض</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9;text-align:center}
-    .box{max-width:480px;margin:60px auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
-    h1{color:#dc2626;font-size:20px;margin:0 0 14px}
-    code{background:#f1f4f9;color:#2563eb;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0a0d0c;color:#f3f6f4;padding:40px 16px;line-height:1.9;text-align:center}
+    .box{max-width:480px;margin:60px auto;background:#131a16;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+    h1{color:#f06565;font-size:20px;margin:0 0 14px}
+    code{background:#19221d;color:#22e0a8;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
     </style></head><body><div class="box">
     <h1>الوصول مرفوض</h1>
     <p>عنوان IP الخاص بك غير مدرج ضمن قائمة الوصول المسموح بها للوحة التحكم.</p>
@@ -1459,7 +1459,7 @@ function head_extras(PDO $pdo): string {
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
         . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
-        . '<meta name="theme-color" content="#2563eb">' . "\n  "
+        . '<meta name="theme-color" content="#0a0d0c">' . "\n  "
         . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
         . '<meta name="language" content="ar">' . "\n  "
         . '<meta property="og:locale" content="ar_AR">' . "\n  "
