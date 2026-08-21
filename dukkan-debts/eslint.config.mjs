@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Plain CommonJS scripts that run outside the Next.js build pipeline
+    // (production custom server for hosts like cPanel's Node.js Selector).
+    "server.js",
+    "scripts/**",
   ]),
 ]);
 
