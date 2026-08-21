@@ -170,8 +170,9 @@ svg.icon{overflow:visible; min-width:unset; min-height:unset;}
 /* ══ Inputs ══ */
 .field{margin-bottom:16px;}
 .field label{display:block; font-size:13px; margin-bottom:6px; color:var(--ink); font-weight:600;}
+input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):not([type=reset]):not([type=range]),
 input[type=text], input[type=tel], input[type=number], input[type=password], input[type=search],
-input[type=email], textarea, select{
+input[type=email], textarea, select, .input{
   width:100%; padding:12px 14px; border:1.5px solid var(--line); border-radius:var(--radius-sm);
   background:var(--panel-2); color:var(--ink); font-family:var(--body); font-size:16px;
   transition:border-color .15s, box-shadow .15s; -webkit-appearance:none; appearance:none;

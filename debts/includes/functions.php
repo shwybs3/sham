@@ -42,23 +42,48 @@ function getProductTypes(): array {
 }
 
 /* ── الإعدادات ── */
+
+// يكتشف تلقائياً أسماء الأعمدة (تدعم schema القديم key/value والجديد setting_key/setting_value)
+function getSettingsColMap(PDO $pdo): array {
+    static $map = null;
+    if ($map !== null) return $map;
+    try {
+        $fields = array_column(
+            $pdo->query("SHOW COLUMNS FROM settings")->fetchAll(PDO::FETCH_ASSOC),
+            'Field'
+        );
+        if (in_array('setting_key', $fields)) {
+            $map = ['k' => 'setting_key', 'v' => 'setting_value'];
+        } else {
+            $k = $fields[0] ?? 'setting_key';
+            $v = $fields[1] ?? 'setting_value';
+            $map = ['k' => "`$k`", 'v' => "`$v`"];
+        }
+    } catch (PDOException $e) {
+        $map = ['k' => 'setting_key', 'v' => 'setting_value'];
+    }
+    return $map;
+}
+
 function getAllSettings(PDO $pdo, bool $fresh = false): array {
     static $cache = null;
     if ($cache !== null && !$fresh) return $cache;
     $cache = [];
     try {
-        foreach ($pdo->query("SELECT setting_key, setting_value FROM settings") as $row) {
-            $cache[$row['setting_key']] = $row['setting_value'];
-        }
+        $m = getSettingsColMap($pdo);
+        $rows = $pdo->query("SELECT {$m['k']}, {$m['v']} FROM settings")->fetchAll(PDO::FETCH_NUM);
+        foreach ($rows as [$k, $v]) { $cache[$k] = $v; }
     } catch (PDOException $e) {
         error_log('getAllSettings: ' . $e->getMessage());
     }
     return $cache;
 }
+
 function setSetting(PDO $pdo, string $key, string $value): void {
+    $m = getSettingsColMap($pdo);
     $pdo->prepare(
-        "INSERT INTO settings (setting_key, setting_value) VALUES (:k, :v)
-         ON DUPLICATE KEY UPDATE setting_value = :v2"
+        "INSERT INTO settings ({$m['k']}, {$m['v']}) VALUES (:k, :v)
+         ON DUPLICATE KEY UPDATE {$m['v']} = :v2"
     )->execute(['k' => $key, 'v' => $value, 'v2' => $value]);
 }
 

@@ -97,6 +97,7 @@ $shopName = $settings['shop_name'] ?? 'دفتر الدكان';
       <a href="market-prices.php" class="<?= ($activeNav ?? '') === 'market' ? 'active' : '' ?>"><?= icon('trending-up', 18) ?> أسعار السوق</a>
       <a href="settings.php" class="<?= ($activeNav ?? '') === 'settings' ? 'active' : '' ?>"><?= icon('settings', 18) ?> الإعدادات</a>
       <div class="sep"></div>
+      <a href="migrate.php" class="<?= ($activeNav ?? '') === 'migrate' ? 'active' : '' ?>"><?= icon('database', 18) ?> ترقية DB</a>
       <a href="../index.php" target="_blank"><?= icon('external', 18) ?> عرض الموقع</a>
       <a href="logout.php"><?= icon('logout', 18) ?> تسجيل الخروج</a>
     </nav>

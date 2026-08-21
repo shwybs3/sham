@@ -9,6 +9,13 @@ $customerCount = count($customers);
 $currencyCode  = $settings['currency'] ?? 'SYP';
 $currency      = currencySymbol($currencyCode);
 
+// قائمة الأسعار (للرئيسية)
+try {
+    $priceItems = getPriceList($pdo);
+} catch (Throwable $e) {
+    $priceItems = [];
+}
+
 $pageTitle = $settings['shop_name'] ?? 'دفتر الدكان';
 require __DIR__ . '/includes/page-header.php';
 ?>
@@ -101,6 +108,41 @@ require __DIR__ . '/includes/page-header.php';
     </a>
     <?php endforeach; ?>
   </div>
+
+  <?php if ($priceItems): ?>
+  <!-- قائمة الأسعار -->
+  <section style="margin-top:36px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <h2 style="font-family:var(--disp); font-size:17px; margin:0; display:flex; align-items:center; gap:8px;">
+        <?= icon('tag', 18) ?> قائمة الأسعار
+      </h2>
+      <a href="prices.php" class="btn btn-ghost btn-sm">عرض الكل</a>
+    </div>
+    <?php
+    $grouped = [];
+    foreach ($priceItems as $item) {
+        $grouped[$item['category']][] = $item;
+    }
+    foreach ($grouped as $cat => $catItems):
+    ?>
+    <div style="margin-bottom:18px;">
+      <div style="font-size:12px; font-weight:700; color:var(--ink-faint); letter-spacing:.5px; margin-bottom:8px; text-transform:uppercase;"><?= h($cat) ?></div>
+      <div style="background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;">
+        <?php foreach ($catItems as $idx => $item): ?>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:11px 16px; <?= $idx > 0 ? 'border-top:1px solid var(--line);' : '' ?>">
+          <span style="font-size:14px;"><?= h($item['name']) ?></span>
+          <span style="font-family:var(--mono); font-size:14px; font-weight:700; color:var(--brand);">
+            <?= number_format((float)$item['price'], 0) ?> <?= h(currencySymbol($item['currency'])) ?>
+            <span style="font-size:11px; color:var(--ink-faint); font-weight:400;">/ <?= h($item['unit']) ?></span>
+          </span>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </section>
+  <?php endif; ?>
+
 </main>
 
 <?php require __DIR__ . '/includes/page-footer.php'; ?>
