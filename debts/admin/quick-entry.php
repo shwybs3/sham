@@ -136,7 +136,7 @@ require __DIR__ . '/includes/admin-header.php';
           <div class="tx-desc">
             <?= h($t['customer_name']) ?>
             <span style="color:var(--ink-faint); font-weight:400;">— <?= h($t['description'] ?: ($isP?'مشتريات':'دفعة')) ?></span>
-            <?php if ($t['product_type']): ?>
+            <?php if (!empty($t['product_type'])): ?>
             <span class="tx-product-badge"><?= h($t['product_type']) ?></span>
             <?php endif; ?>
           </div>

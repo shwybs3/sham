@@ -28,9 +28,9 @@
 }
 
 *{box-sizing:border-box;}
-html{scroll-behavior:smooth; -webkit-text-size-adjust:100%; text-size-adjust:100%; overflow-x:clip;}
+html{scroll-behavior:smooth; -webkit-text-size-adjust:100%; text-size-adjust:100%;}
 body{
-  margin:0; max-width:100%; overflow-x:clip;
+  margin:0; max-width:100%;
   background:
     radial-gradient(900px 500px at 15% -10%, rgba(34,197,142,.07), transparent 60%),
     radial-gradient(800px 420px at 100% 0%, rgba(240,180,41,.05), transparent 55%),
@@ -196,7 +196,7 @@ select{ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .product-category-label{ width:100%; font-size:11px; color:var(--ink-faint); font-weight:700; letter-spacing:.5px; margin-top:8px 0 4px; }
 
 /* ══ Layout ══ */
-main.page{max-width:1180px; margin:0 auto; padding:36px 5vw 80px;}
+main.page{max-width:1180px; margin:0 auto; padding:36px 5vw 80px; overflow-x:clip;}
 main.page.narrow{max-width:640px;}
 
 /* ══ Hero + بحث ══ */

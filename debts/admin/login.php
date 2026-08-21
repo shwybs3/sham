@@ -8,7 +8,7 @@ if (!empty($_SESSION['admin_id'])) {
 }
 
 // تحقق من كوكي "تذكرني" أولاً
-if (checkAdminRememberToken($pdo)) {
+if (function_exists('checkAdminRememberToken') && checkAdminRememberToken($pdo)) {
     header('Location: index.php');
     exit;
 }
