@@ -18,6 +18,11 @@ if (!$post) {
     <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
+// Track the view for the trending widget on blog.yassota.com. Fires on every
+// request (the DB lookup above always runs, cache hit or not), so it's a
+// reliable counter without needing a client-side beacon.
+try { $pdo->prepare("INSERT INTO page_events (event_type, meta) VALUES ('view', ?)")->execute(['blog:' . $post['id']]); } catch (Throwable $e) {}
+
 $_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
 if (page_cache_start($pdo, $_cacheKey)) exit;
 

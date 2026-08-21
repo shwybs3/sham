@@ -73,7 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'tool_sub') {
         $slug = $_POST['slug'] ?? '';
         $tpl  = __DIR__ . '/subdomains/' . basename($slug);
-        $sub  = strtolower(preg_replace('/[^a-z0-9\-]/', '-', $slug));
+        $host = $_POST['host'] ?? $slug;
+        $sub  = strtolower(preg_replace('/[^a-z0-9\-]/', '-', $host));
         $dir  = "public_html/{$sub}.yassota.com";
         $dest = $DOC_BASE ? $DOC_BASE . "/{$dir}" : '';
 
@@ -219,15 +220,17 @@ code{background:var(--bg);padding:2px 7px;border-radius:6px;font-family:'JetBrai
   <div class="card-title">أدوات الذكاء الاصطناعي — دومينات فرعية</div>
   <div class="tool-grid">
     <?php foreach ([
-      ['yasmin', '🌸 ياسمين AI Chat',  'subdomains/yasmin'],
-      ['szad',   '🤖 صزاد AI',          'subdomains/szad'],
-    ] as [$slug, $label, $tpl]): ?>
+      ['yasmin',   '🌸 ياسمين AI Chat',  'subdomains/yasmin',   'yasmin'],
+      ['szad',     '🤖 صزاد AI',          'subdomains/szad',     'szad'],
+      ['blog-hub', '📝 مدونة يسوتا',      'subdomains/blog-hub', 'blog'],
+    ] as [$slug, $label, $tpl, $host]): ?>
     <div class="tool-item">
       <div class="tool-item-title"><?= $label ?></div>
-      <code><?= $slug ?>.yassota.com</code>
+      <code><?= $host ?>.yassota.com</code>
       <form method="post" style="margin-top:4px">
         <input type="hidden" name="action" value="tool_sub">
         <input type="hidden" name="slug" value="<?= $slug ?>">
+        <input type="hidden" name="host" value="<?= $host ?>">
         <button type="submit" class="btn btn-primary btn-sm">إنشاء / تحديث</button>
       </form>
     </div>

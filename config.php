@@ -4206,6 +4206,67 @@ function render_blog_body(string $body): string {
 
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
 function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
+
+/**
+ * Most-viewed published posts in the last $days days, from page_events.
+ * Blog views are logged as event_type='view' with meta='blog:{post_id}' (see
+ * blog-post.php and the per-post subdomain template) — app views use the
+ * same event_type but always carry app_id and no meta, so the 'blog:' prefix
+ * keeps the two counters from mixing without needing a schema change.
+ * Falls back to the newest posts when there isn't enough traffic yet, so the
+ * "trending" section is never empty on a fresh install.
+ */
+function blog_trending_posts(PDO $pdo, int $limit = 8, int $days = 14): array {
+    try {
+        $rows = $pdo->prepare(
+            "SELECT p.*, COUNT(*) AS view_count
+             FROM page_events e
+             JOIN blog_posts p ON p.id = CAST(SUBSTRING(e.meta, 6) AS UNSIGNED)
+             WHERE e.event_type='view' AND e.meta LIKE 'blog:%'
+               AND e.created_at > (NOW() - INTERVAL ? DAY)
+               AND p.status='published'
+             GROUP BY p.id
+             ORDER BY view_count DESC
+             LIMIT " . (int)$limit
+        );
+        $rows->execute([$days]);
+        $trending = $rows->fetchAll();
+    } catch (Throwable $e) { $trending = []; }
+
+    if (count($trending) < $limit) {
+        $have = array_column($trending, 'id');
+        $need = $limit - count($trending);
+        $ph   = $have ? implode(',', array_fill(0, count($have), '?')) : '';
+        $sql  = "SELECT *, 0 AS view_count FROM blog_posts WHERE status='published'"
+              . ($have ? " AND id NOT IN ($ph)" : '')
+              . " ORDER BY created_at DESC LIMIT " . (int)$need;
+        $fill = $pdo->prepare($sql);
+        $fill->execute($have);
+        $trending = array_merge($trending, $fill->fetchAll());
+    }
+    return $trending;
+}
+
+/**
+ * Most-searched terms recently, from page_events (event_type='search',
+ * logged by search-suggest.php on every query typed on the main site).
+ * This is the "سجل البحث عالمياً" (global search trends) widget.
+ */
+function trending_searches(PDO $pdo, int $limit = 10, int $days = 7): array {
+    try {
+        $rows = $pdo->prepare(
+            "SELECT meta AS term, COUNT(*) AS cnt
+             FROM page_events
+             WHERE event_type='search' AND meta IS NOT NULL AND meta != ''
+               AND created_at > (NOW() - INTERVAL ? DAY)
+             GROUP BY meta
+             ORDER BY cnt DESC
+             LIMIT " . (int)$limit
+        );
+        $rows->execute([$days]);
+        return $rows->fetchAll();
+    } catch (Throwable $e) { return []; }
+}
 function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
 
 function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {

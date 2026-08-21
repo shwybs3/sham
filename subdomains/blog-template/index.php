@@ -26,20 +26,26 @@ if (file_exists($config_path)) {
             DB_USER, DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
         );
         $stmt = $pdo2->prepare(
-            "SELECT p.*, c.name AS cat_name, c.slug AS cat_slug
-             FROM blog_posts p LEFT JOIN categories c ON c.id=p.category_id
-             WHERE p.slug=? AND p.status='published' LIMIT 1"
+            "SELECT * FROM blog_posts WHERE slug=? AND status='published' LIMIT 1"
         );
         $stmt->execute([$slug]);
         $post = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($post && !empty($post['category_id'])) {
+        // Track this subdomain view for the trending widget on blog.yassota.com.
+        // Reuses the existing 'view' event_type (its ENUM has no 'blog_view'
+        // member) and tags the row via meta so it never mixes with app views,
+        // which always carry app_id and no meta.
+        if ($post) {
+            try { $pdo2->prepare("INSERT INTO page_events (event_type, meta) VALUES ('view', ?)")->execute(['blog:' . $post['id']]); } catch (Throwable $e) {}
+        }
+
+        if ($post && !empty($post['type'])) {
             $rs = $pdo2->prepare(
-                "SELECT title, slug, featured_image, excerpt, created_at
-                 FROM blog_posts WHERE category_id=? AND status='published'
+                "SELECT title, slug, cover_image, excerpt, created_at
+                 FROM blog_posts WHERE type=? AND status='published'
                  AND slug != ? ORDER BY created_at DESC LIMIT 3"
             );
-            $rs->execute([$post['category_id'], $slug]);
+            $rs->execute([$post['type'], $slug]);
             $related_posts = $rs->fetchAll(PDO::FETCH_ASSOC);
         }
     } catch (Exception $e) {}
@@ -50,12 +56,12 @@ $site_url   = 'https://' . $host;
 $main_url   = 'https://yassota.com/blog/' . rawurlencode($slug);
 $title      = $post['title']       ?? ucwords(str_replace('-', ' ', $slug));
 $excerpt    = $post['excerpt']     ?? ($post['meta_description'] ?? '');
-$body       = $post['content']     ?? ($post['body'] ?? '');
-$cat        = $post['cat_name']    ?? 'مقال';
-$cat_slug   = $post['cat_slug']    ?? '';
-$cover      = !empty($post['featured_image']) ? 'https://yassota.com/'.ltrim($post['featured_image'],'/') : '';
-$author     = $post['author_name'] ?? 'فريق يسوتا';
-$published  = !empty($post['published_at']) ? $post['published_at'] : ($post['created_at'] ?? date('Y-m-d'));
+$body       = $post['body']        ?? '';
+$cat        = function_exists('blog_type_label') ? blog_type_label($post['type'] ?? 'article') : 'مقال';
+$cat_slug   = $post['type']        ?? '';
+$cover      = !empty($post['cover_image']) ? 'https://yassota.com/'.ltrim($post['cover_image'],'/') : '';
+$author     = 'فريق يسوتا';
+$published  = $post['created_at']  ?? date('Y-m-d');
 $updated    = $post['updated_at']  ?? $published;
 $date_fmt   = date('d/m/Y', strtotime($published));
 $read_time  = max(1, (int)ceil(mb_strlen(strip_tags($body ?: $excerpt)) / 1000));
@@ -97,7 +103,7 @@ $schema_breadcrumb = [
 if ($cat_slug) {
     array_splice($schema_breadcrumb['itemListElement'], 2, 0, [[
         '@type' => 'ListItem', 'position' => 3,
-        'name'  => $cat, 'item' => 'https://yassota.com/blog?cat=' . rawurlencode($cat_slug),
+        'name'  => $cat, 'item' => 'https://yassota.com/blog?type=' . rawurlencode($cat_slug),
     ]]);
     $schema_breadcrumb['itemListElement'][3]['position'] = 4;
 }
@@ -236,7 +242,7 @@ footer a:hover{color:var(--cyan)}
     <a href="https://yassota.com/blog">المدونة</a>
     <?php if ($cat_slug): ?>
     <span>›</span>
-    <a href="https://yassota.com/blog?cat=<?= rawurlencode($cat_slug) ?>"><?= htmlspecialchars($cat) ?></a>
+    <a href="https://yassota.com/blog?type=<?= rawurlencode($cat_slug) ?>"><?= htmlspecialchars($cat) ?></a>
     <?php endif; ?>
     <span>›</span>
     <span><?= htmlspecialchars(mb_substr($title, 0, 40)) ?>…</span>
@@ -279,8 +285,8 @@ footer a:hover{color:var(--cyan)}
     <div class="rel-grid">
       <?php foreach ($related_posts as $rp): ?>
       <a href="https://<?= htmlspecialchars($rp['slug']) ?>.yassota.com/" class="rel-card">
-        <?php if (!empty($rp['featured_image'])): ?>
-        <img src="https://yassota.com/<?= htmlspecialchars(ltrim($rp['featured_image'],'/')) ?>"
+        <?php if (!empty($rp['cover_image'])): ?>
+        <img src="https://yassota.com/<?= htmlspecialchars(ltrim($rp['cover_image'],'/')) ?>"
              alt="<?= htmlspecialchars($rp['title']) ?>" class="rel-cover" loading="lazy">
         <?php else: ?>
         <div class="rel-cover-ph">📝</div>
