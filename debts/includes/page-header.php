@@ -79,6 +79,9 @@ if('serviceWorker' in navigator){
     <a class="sidebar-link <?= $currentFile === 'prices.php' ? 'active' : '' ?>" href="prices.php">
       <?= icon('tag', 18) ?> قائمة الأسعار
     </a>
+    <a class="sidebar-link <?= in_array($currentFile, ['blog.php','article.php']) ? 'active' : '' ?>" href="blog.php">
+      <?= icon('receipt', 18) ?> المدونة
+    </a>
 
     <div class="sidebar-divider"></div>
     <div class="sidebar-section">قانوني</div>

@@ -95,6 +95,7 @@ $shopName = $settings['shop_name'] ?? 'دفتر الدكان';
       <div class="sep"></div>
       <a href="prices.php" class="<?= ($activeNav ?? '') === 'prices' ? 'active' : '' ?>"><?= icon('tag', 18) ?> قائمة الأسعار</a>
       <a href="market-prices.php" class="<?= ($activeNav ?? '') === 'market' ? 'active' : '' ?>"><?= icon('trending-up', 18) ?> أسعار السوق</a>
+      <a href="articles.php" class="<?= ($activeNav ?? '') === 'articles' ? 'active' : '' ?>"><?= icon('receipt', 18) ?> المدونة</a>
       <a href="settings.php" class="<?= ($activeNav ?? '') === 'settings' ? 'active' : '' ?>"><?= icon('settings', 18) ?> الإعدادات</a>
       <div class="sep"></div>
       <a href="migrate.php" class="<?= ($activeNav ?? '') === 'migrate' ? 'active' : '' ?>"><?= icon('database', 18) ?> ترقية DB</a>

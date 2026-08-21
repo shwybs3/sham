@@ -132,6 +132,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrfCheck()) {
             INDEX idx_category (category),
             INDEX idx_active   (is_active)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        'articles' => "CREATE TABLE IF NOT EXISTS articles (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            title       VARCHAR(300) NOT NULL,
+            slug        VARCHAR(300) NOT NULL UNIQUE,
+            description VARCHAR(500) DEFAULT NULL,
+            tags        VARCHAR(500) DEFAULT NULL,
+            content     LONGTEXT NOT NULL,
+            status      ENUM('draft','published') NOT NULL DEFAULT 'draft',
+            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_slug   (slug),
+            INDEX idx_status (status),
+            INDEX idx_date   (created_at DESC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
 
     foreach ($tables as $name => $sql) {

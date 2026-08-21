@@ -16,10 +16,24 @@ $siteUrl = rtrim($settings['site_url'] ?? (
 
 $pages = [
     ['loc' => $siteUrl . '/index.php',          'priority' => '1.0',  'changefreq' => 'daily'],
+    ['loc' => $siteUrl . '/blog.php',            'priority' => '0.9',  'changefreq' => 'daily'],
     ['loc' => $siteUrl . '/community.php',       'priority' => '0.8',  'changefreq' => 'hourly'],
     ['loc' => $siteUrl . '/privacy-policy.php',  'priority' => '0.3',  'changefreq' => 'monthly'],
     ['loc' => $siteUrl . '/terms.php',           'priority' => '0.3',  'changefreq' => 'monthly'],
 ];
+
+// المقالات المنشورة
+try {
+    $artRows = $pdo->query("SELECT slug, updated_at FROM articles WHERE status='published' ORDER BY created_at DESC")->fetchAll();
+    foreach ($artRows as $a) {
+        $pages[] = [
+            'loc'        => $siteUrl . '/article.php?slug=' . rawurlencode($a['slug']),
+            'priority'   => '0.8',
+            'changefreq' => 'monthly',
+            'lastmod'    => date('Y-m-d', strtotime($a['updated_at'])),
+        ];
+    }
+} catch (PDOException $e) { /* جدول articles غير موجود بعد */ }
 
 if ($inclCustomers) {
     $customers = $pdo->query("SELECT id, name, created_at FROM customers ORDER BY id")->fetchAll();
