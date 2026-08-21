@@ -1,0 +1,109 @@
+// دفتر ديون الدكان — Prisma schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+/// جدول إعدادات مرن (مفتاح/قيمة) — يخزن اسم الدكان، البانر النصي، مفاتيح Google/Turnstile وغيرها
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  phone        String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([name])
+}
+
+enum TransactionType {
+  DEBT
+  PAYMENT
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type        TransactionType
+  amount      Float
+  description String?
+  createdAt   DateTime        @default(now())
+
+  @@index([customerId])
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  imageUrl  String?
+  linkUrl   String?
+  text      String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model BreadCustomer {
+  id        String       @id @default(cuid())
+  googleId  String       @unique
+  email     String
+  name      String
+  avatarUrl String?
+  createdAt DateTime     @default(now())
+  entries   BreadEntry[]
+}
+
+model BreadEntry {
+  id         String        @id @default(cuid())
+  customerId String
+  customer   BreadCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  entryDate  DateTime
+  quantity   Int
+  note       String?
+  createdAt  DateTime      @default(now())
+
+  @@index([customerId])
+}
+
+model ChatConversation {
+  id        String        @id @default(cuid())
+  guestId   String        @unique
+  guestName String?
+  status    String        @default("open")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String
+  kind           String           @default("text")
+  content        String
+  readByAdmin    Boolean          @default(false)
+  readByGuest    Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId])
+}
