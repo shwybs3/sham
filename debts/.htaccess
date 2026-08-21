@@ -1,0 +1,51 @@
+# ═══════════════════════════════════════════════════════════
+#  .htaccess — دفتر الدكان
+#  Apache mod_rewrite + أمان + robots/sitemap/rss
+# ═══════════════════════════════════════════════════════════
+
+Options -Indexes
+ServerSignature Off
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # ── توجيه robots.txt إلى robots.php (للحصول على SITE_URL صحيح) ──
+  RewriteRule ^robots\.txt$ robots.php [L,QSA,NC]
+
+  # ── توجيه sitemap.xml إلى sitemap.php ──
+  RewriteRule ^sitemap\.xml$ sitemap.php [L,QSA,NC]
+
+  # ── توجيه /feed أو /rss إلى rss.php ──
+  RewriteRule ^(feed|rss)/?$ rss.php [L,QSA,NC]
+
+  # ── حماية الملفات الحساسة ──
+  RewriteRule ^\.env$         - [F,L]
+  RewriteRule ^config\.php$   - [F,L]
+  RewriteRule ^schema\.sql$   - [F,L]
+</IfModule>
+
+# ── منع الوصول المباشر للمجلدات الحساسة ──
+<FilesMatch "\.(sql|env|log|ini|sh|bak)$">
+  Order Allow,Deny
+  Deny from all
+</FilesMatch>
+
+# ── ضغط Gzip للأداء ──
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain application/xml application/json
+</IfModule>
+
+# ── Cache للأصول الثابتة ──
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css         "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/*          "access plus 30 days"
+</IfModule>
+
+# ── رؤوس أمان HTTP ──
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
