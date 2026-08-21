@@ -117,7 +117,7 @@
 .screenshot-thumb:hover { border-color: var(--cyan); box-shadow: var(--glow-c); }
 .screenshot-thumb:hover img { transform: scale(1.04); }
 .screenshot-overlay {
-  position: absolute; inset: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: rgba(37,99,235,.06);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: var(--transition);
@@ -126,8 +126,8 @@
 
 /* Lightbox */
 .lightbox {
-  display: none; position: fixed; inset: 0; z-index: 500;
-  background: rgba(15,23,42,.92); backdrop-filter: blur(8px);
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 500;
+  background: rgba(15,23,42,.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   align-items: center; justify-content: center;
 }
 .lightbox.open { display: flex; }
@@ -265,8 +265,22 @@
 
 /* Responsive detail */
 @media (max-width: 700px) {
-  .app-hero-inner { flex-direction: column; }
+  .app-hero { padding: 16px; }
+  .app-hero-inner { flex-direction: column; gap: 16px; }
+  .app-hero-icon { width: 88px; height: 88px; }
+  .app-hero-name { font-size: clamp(18px,5vw,26px); }
+  .app-badges { gap: 6px; }
+  .app-hero-actions { gap: 8px; }
+  .btn-download-hero { font-size: 14px; padding: 12px 20px; gap: 8px; width: 100%; justify-content: center; }
+  .btn-mirror { font-size: 12px; padding: 10px 16px; }
+  .app-meta-grid { grid-template-columns: repeat(auto-fill, minmax(110px,1fr)); gap: 8px; }
   .pros-cons-grid { grid-template-columns: 1fr; }
-  .app-hero { padding: 22px; }
-  .btn-download-hero { font-size: 15px; padding: 13px 24px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .section-box { padding: 16px; }
+}
+
+@media (max-width: 420px) {
+  .app-hero { padding: 12px; }
+  .app-meta-grid { grid-template-columns: 1fr 1fr; }
+  .btn-download-hero { font-size: 13px; padding: 11px 16px; }
 }

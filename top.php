@@ -3,7 +3,9 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
 $by = ($_GET['by'] ?? 'downloads') === 'views' ? 'views' : 'downloads';
-if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+public_cache_headers(60);
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if (page_cache_start($pdo, $_cacheKey)) exit;
 
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -30,7 +32,7 @@ $breadcrumbSchema = json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -47,15 +49,12 @@ $breadcrumbSchema = json_encode([
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 
@@ -85,4 +84,4 @@ $breadcrumbSchema = json_encode([
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
-<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php page_cache_end($pdo, $_cacheKey); ?>

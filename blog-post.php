@@ -11,14 +11,20 @@ $post = $stmt->fetch();
 
 if (!$post) {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>404</title>
+    echo '<!DOCTYPE html><html lang="' . (defined('UI_LANG') ? UI_LANG : 'ar') . '" dir="' . (defined('UI_DIR') ? UI_DIR : 'rtl') . '"><head><meta charset="UTF-8"><title>404</title>
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">المقال غير موجود</p>
     <a href="/" style="color:var(--cyan)">العودة للرئيسية</a></body></html>';
     exit;
 }
-if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+// Track the view for the trending widget on blog.yassota.com. Fires on every
+// request (the DB lookup above always runs, cache hit or not), so it's a
+// reliable counter without needing a client-side beacon.
+try { $pdo->prepare("INSERT INTO page_events (event_type, meta) VALUES ('view', ?)")->execute(['blog:' . $post['id']]); } catch (Throwable $e) {}
+
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if (page_cache_start($pdo, $_cacheKey)) exit;
 
 // Detect code-page type — body is JSON with language sections
 $isCodePage  = $post['type'] === 'code-page';
@@ -65,7 +71,7 @@ $articleSchema = json_encode(array_filter([
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -83,15 +89,12 @@ $articleSchema = json_encode(array_filter([
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <script type="application/ld+json"><?= $articleSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 
@@ -179,6 +182,32 @@ $articleSchema = json_encode(array_filter([
   <div class="section-box" style="margin-bottom:20px">
     <div class="blog-body"><?= render_blog_body($body) ?></div>
   </div>
+
+  <?php
+    // Body images gallery — up to 10 photos added by admin per post
+    $bodyImages = [];
+    if (!empty($post['body_images'])) {
+        $decoded = json_decode($post['body_images'], true);
+        if (is_array($decoded)) $bodyImages = array_filter($decoded);
+    }
+  ?>
+  <?php if (!empty($bodyImages)): ?>
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">صور المقال</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+      <?php foreach ($bodyImages as $idx => $imgPath): ?>
+      <a href="<?= h(url($imgPath)) ?>" target="_blank" rel="noopener"
+         style="display:block;border-radius:10px;overflow:hidden;aspect-ratio:4/3;border:1px solid var(--border-c);transition:transform .2s,box-shadow .2s"
+         onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.18)'"
+         onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <img src="<?= h(url($imgPath)) ?>" alt="<?= h($post['title']) ?> — صورة <?= $idx + 1 ?>"
+             loading="lazy" style="width:100%;height:100%;object-fit:cover">
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <?php endif; ?>
 
   <?php if ($relatedApps): ?>
@@ -313,4 +342,4 @@ function cpDownloadAll() {
 <?php endif; ?>
 </body>
 </html>
-<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php page_cache_end($pdo, $_cacheKey); ?>

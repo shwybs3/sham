@@ -15,5 +15,5 @@ $rows = $stmt->fetchAll();
 echo json_encode(array_map(fn($r) => [
     'name' => $r['name'],
     'url'  => app_url($r['slug']),
-    'icon' => $r['icon_path'] ? url($r['icon_path']) : null,
+    'icon' => $r['icon_path'] ? media_url($r['icon_path']) : null,
 ], $rows), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

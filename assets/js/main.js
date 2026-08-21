@@ -14,15 +14,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ── Comment form: fetched fresh per visitor instead of being baked into
-     app.php's shared page cache, so the CSRF token always matches the
-     actual visitor's own session. ── */
-  const commentSlot = document.getElementById('comment-form-slot');
+  /* ── Comment form: fetched fresh per visitor (CSRF token must be per-session) ── */
+  var commentSlot = document.getElementById('comment-form-slot');
   if (commentSlot) {
-    fetch('comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug))
-      .then(r => r.ok ? r.text() : Promise.reject())
-      .then(html => { commentSlot.innerHTML = html; })
-      .catch(() => { commentSlot.innerHTML = '<p style="color:var(--danger);font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
+    if (typeof fetch !== 'undefined') {
+      fetch('/comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''))
+        .then(function(r){ return r.ok ? r.text() : Promise.reject(); })
+        .then(function(html){ commentSlot.innerHTML = html; })
+        .catch(function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم، أعد تحميل الصفحة.</p>'; });
+    } else {
+      // Fallback for very old browsers without fetch
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/comment-form.php?slug=' + encodeURIComponent(commentSlot.dataset.appSlug || ''));
+      xhr.onload = function(){ if (xhr.status === 200) commentSlot.innerHTML = xhr.responseText; };
+      xhr.onerror = function(){ commentSlot.innerHTML = '<p style="color:#ef4444;font-size:13px">تعذر تحميل نموذج التقييم.</p>'; };
+      xhr.send();
+    }
   }
 
   /* ── Ad zones: stay hidden (zero space) until AdSense actually fills the
@@ -45,87 +52,141 @@ document.addEventListener('DOMContentLoaded', () => {
     const io = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-    reveals.forEach(el => io.observe(el));
+    reveals.forEach(el => {
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        /* Already in viewport on load — show immediately, no blank flash */
+        el.style.transition = 'none';
+        el.classList.add('visible');
+        el.getBoundingClientRect(); /* force reflow so transition suppression applies */
+        el.style.transition = '';
+      } else {
+        io.observe(el);
+      }
+    });
   } else {
     reveals.forEach(el => el.classList.add('visible'));
   }
 
-  /* ── Sidebar Toggle (mobile) ── */
-  const navToggle = document.querySelector('.nav-toggle');
-  const sidebar = document.querySelector('.sidebar');
-  if (navToggle && sidebar) {
+  /* ── Mobile nav drawer — right-side RTL panel ── */
+  const navToggle   = document.querySelector('#nav-toggle');
+  const mobileNavDrawer = document.querySelector('#mobile-nav-drawer');
+  const mobileNavOverlay = document.querySelector('#mobile-nav-overlay');
+  const mobileNavClose   = document.querySelector('#mobile-nav-close');
+
+  function openDrawer() {
+    mobileNavDrawer.classList.add('open');
+    mobileNavOverlay && mobileNavOverlay.classList.add('open');
+    navToggle && navToggle.setAttribute('aria-expanded', 'true');
+    mobileNavDrawer.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeDrawer() {
+    mobileNavDrawer.classList.remove('open');
+    mobileNavOverlay && mobileNavOverlay.classList.remove('open');
+    navToggle && navToggle.setAttribute('aria-expanded', 'false');
+    mobileNavDrawer.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  if (navToggle && mobileNavDrawer) {
     navToggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      sidebar.classList.toggle('open');
+      mobileNavDrawer.classList.contains('open') ? closeDrawer() : openDrawer();
     });
-    document.addEventListener('click', (e) => {
-      // .closest() (not strict e.target !== navToggle) — a click on the
-      // icon SVG/path inside the button has e.target set to that child
-      // element, not the button, which made this immediately re-close the
-      // sidebar the instant it opened.
-      if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('.nav-toggle'))
-        sidebar.classList.remove('open');
+    mobileNavClose && mobileNavClose.addEventListener('click', closeDrawer);
+    mobileNavOverlay && mobileNavOverlay.addEventListener('click', closeDrawer);
+    mobileNavDrawer.querySelectorAll('a').forEach(a => a.addEventListener('click', closeDrawer));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && mobileNavDrawer.classList.contains('open')) closeDrawer();
     });
   }
 
-  /* ── Mobile search toggle (header-search is hidden by default on small screens) ── */
-  const searchToggle = document.querySelector('.mobile-search-toggle');
-  const searchForm = document.querySelector('.header-search');
-  if (searchToggle && searchForm) {
-    searchToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = searchForm.classList.toggle('mobile-open');
-      if (isOpen) searchForm.querySelector('input')?.focus();
-    });
-    document.addEventListener('click', (e) => {
-      if (searchForm.classList.contains('mobile-open') && !searchForm.contains(e.target) && !e.target.closest('.mobile-search-toggle'))
-        searchForm.classList.remove('mobile-open');
-    });
+  /* ── Full-screen search modal ── */
+  const searchModal      = document.getElementById('search-modal');
+  const searchModalInput = document.getElementById('search-modal-input');
+  const searchModalClose = document.getElementById('search-modal-close');
+  const searchModalRes   = document.getElementById('search-modal-results');
+  const searchToggle     = document.querySelector('.mobile-search-toggle');
+  const desktopSearchInput = document.getElementById('search-input');
+
+  function openSearchModal() {
+    if (!searchModal) return;
+    searchModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => searchModalInput?.focus());
+  }
+  function closeSearchModal() {
+    if (!searchModal) return;
+    searchModal.classList.remove('open');
+    document.body.style.overflow = '';
+    if (searchModalRes) { searchModalRes.hidden = true; searchModalRes.innerHTML = ''; }
   }
 
-  /* ── Search autocomplete ── */
-  const searchInput = document.getElementById('search-input');
-  const suggestBox = document.getElementById('search-suggestions');
-  if (searchInput && suggestBox) {
-    let debounceTimer = null;
-    let activeIndex = -1;
-    let items = [];
+  searchToggle?.addEventListener('click', (e) => { e.stopPropagation(); openSearchModal(); });
+  searchModalClose?.addEventListener('click', closeSearchModal);
+  searchModal?.addEventListener('click', (e) => { if (e.target === searchModal) closeSearchModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && searchModal?.classList.contains('open')) closeSearchModal(); });
 
-    function renderSuggestions(results) {
-      items = results;
-      activeIndex = -1;
-      if (!results.length) { suggestBox.hidden = true; suggestBox.innerHTML = ''; return; }
-      suggestBox.innerHTML = results.map(r =>
-        `<a href="${r.url}" data-hardnav="1">${r.icon ? `<img src="${r.icon}" alt="">` : ''}<span>${r.name}</span></a>`
-      ).join('');
-      suggestBox.hidden = false;
-    }
-
-    searchInput.addEventListener('input', () => {
-      clearTimeout(debounceTimer);
-      const q = searchInput.value.trim();
-      if (q.length < 2) { suggestBox.hidden = true; return; }
-      debounceTimer = setTimeout(() => {
-        fetch('search-suggest.php?q=' + encodeURIComponent(q))
+  /* ── Search autocomplete (works in modal + desktop) ── */
+  function setupAutocomplete(inputEl, resultsEl) {
+    if (!inputEl || !resultsEl) return;
+    let timer = null;
+    inputEl.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = inputEl.value.trim();
+      if (q.length < 2) { resultsEl.hidden = true; resultsEl.innerHTML = ''; return; }
+      timer = setTimeout(() => {
+        fetch('/search-suggest.php?q=' + encodeURIComponent(q))
           .then(r => r.ok ? r.json() : [])
-          .then(renderSuggestions)
+          .then(data => {
+            if (!data.length) { resultsEl.hidden = true; return; }
+            resultsEl.innerHTML = data.map(r =>
+              `<a href="${r.url}" data-hardnav="1">${r.icon ? `<img src="${r.icon}" alt="" loading="lazy">` : ''}<span>${r.name}</span></a>`
+            ).join('');
+            resultsEl.hidden = false;
+          })
           .catch(() => {});
-      }, 200);
+      }, 220);
     });
-
-    searchInput.addEventListener('keydown', (e) => {
-      const links = [...suggestBox.querySelectorAll('a')];
-      if (!links.length || suggestBox.hidden) return;
-      if (e.key === 'ArrowDown') { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, links.length - 1); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); }
-      else if (e.key === 'Enter' && activeIndex >= 0) { e.preventDefault(); links[activeIndex].click(); return; }
-      else if (e.key === 'Escape') { suggestBox.hidden = true; return; }
-      else return;
-      links.forEach((a, i) => a.classList.toggle('active', i === activeIndex));
-    });
-
     document.addEventListener('click', (e) => {
-      if (!suggestBox.contains(e.target) && e.target !== searchInput) suggestBox.hidden = true;
+      if (!resultsEl.contains(e.target) && e.target !== inputEl) resultsEl.hidden = true;
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { resultsEl.hidden = true; }
+    });
+  }
+  setupAutocomplete(searchModalInput, searchModalRes);
+  setupAutocomplete(desktopSearchInput, document.getElementById('search-suggestions'));
+
+  /* ── Text clamp — "show more" for any .text-clamp element ── */
+  document.querySelectorAll('.text-clamp').forEach(el => {
+    // Only add button if content is actually clamped
+    if (el.scrollHeight <= el.clientHeight + 4) return;
+    const btn = document.createElement('button');
+    btn.className = 'show-more-btn';
+    const isRtl = document.documentElement.dir === 'rtl';
+    btn.textContent = isRtl ? 'عرض المزيد ▾' : 'Show more ▾';
+    btn.addEventListener('click', () => {
+      const expanded = el.classList.toggle('expanded');
+      btn.textContent = expanded
+        ? (isRtl ? 'عرض أقل ▴' : 'Show less ▴')
+        : (isRtl ? 'عرض المزيد ▾' : 'Show more ▾');
+    });
+    el.insertAdjacentElement('afterend', btn);
+  });
+
+  /* ── Language switcher dropdown ── */
+  const langBtn  = document.getElementById('lang-btn');
+  const langDrop = document.getElementById('lang-dropdown');
+  if (langBtn && langDrop) {
+    langBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = langDrop.hidden;
+      langDrop.hidden = !isOpen;
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#lang-switcher')) langDrop.hidden = true;
     });
   }
 
@@ -174,28 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 /* ── Smooth card hover ripple ── */
-  document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(el => {
+  document.querySelectorAll('.app-card, .btn-download-hero, .btn-primary').forEach(function(el) {
     el.addEventListener('click', function (e) {
-      const ripple = document.createElement('span');
-      const rect = this.getBoundingClientRect();
-      ripple.style.cssText = `
-        position:absolute;border-radius:50%;
-        width:100px;height:100px;
-        top:${e.clientY - rect.top - 50}px;
-        left:${e.clientX - rect.left - 50}px;
-        background:rgba(37,99,235,.12);
-        transform:scale(0);
-        animation:ripple .5s ease forwards;
-        pointer-events:none;
-      `;
+      var ripple = document.createElement('span');
+      var rect = this.getBoundingClientRect();
+      ripple.style.cssText = 'position:absolute;border-radius:50%;width:100px;height:100px;top:' + (e.clientY - rect.top - 50) + 'px;left:' + (e.clientX - rect.left - 50) + 'px;background:rgba(37,99,235,.12);transform:scale(0);animation:ripple .5s ease forwards;pointer-events:none';
       if (getComputedStyle(this).position === 'static') this.style.position = 'relative';
       this.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 500);
+      setTimeout(function(){ if (ripple.parentNode) ripple.parentNode.removeChild(ripple); }, 500);
     });
   });
-});
 
-/* Global ripple keyframe */
-const style = document.createElement('style');
-style.textContent = '@keyframes ripple{to{transform:scale(4);opacity:0}}';
-document.head.appendChild(style);
+  /* Ripple keyframe */
+  var rippleStyle = document.createElement('style');
+  rippleStyle.textContent = '@keyframes ripple{to{transform:scale(4);opacity:0}}';
+  if (document.head) document.head.appendChild(rippleStyle);
+});

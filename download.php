@@ -2,6 +2,20 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+// Block banned IPs before any work (admin IP is auto-exempt inside evil_check_ban)
+evil_check_ban($pdo);
+waf_check($pdo);
+
+// ── CAPTCHA verify AJAX ─────────────────────────────────────────────────────
+if (!empty($_GET['ajax']) && $_GET['ajax'] === 'verify_captcha') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = trim($_POST['token'] ?? '');
+    $ok = captcha_verify_turnstile($pdo, $token);
+    if ($ok) captcha_mark_solved($pdo);
+    echo json_encode(['ok' => $ok]);
+    exit;
+}
+
 $slug   = trim($_GET['slug'] ?? '');
 $id     = (int)($_GET['id'] ?? 0);
 $mirror = (int)($_GET['m'] ?? 1);
@@ -17,12 +31,14 @@ $app = $stmt->fetch();
 
 if (!$app) {
     http_response_code(404);
-    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#f5f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
+    require __DIR__ . '/404.php';
     exit;
 }
 
-$pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
-$pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
+if (!evil_is_admin_ip()) {
+    $pdo->prepare("UPDATE apps SET downloads=downloads+1 WHERE id=?")->execute([$app['id']]);
+    $pdo->prepare("INSERT INTO page_events (event_type, app_id) VALUES ('download', ?)")->execute([$app['id']]);
+}
 
 $archivedVersion = null;
 if (!empty($_GET['ver'])) {
@@ -31,257 +47,663 @@ if (!empty($_GET['ver'])) {
     $archivedVersion = $verStmt->fetch();
 }
 
+$downloadSource = $app['download_source'] ?? 'playstore';
+$hasLocalApk    = !empty($app['apk_path']) && in_array($downloadSource, ['apk','both'], true);
+
 if ($archivedVersion && !empty($archivedVersion['download_url'])) {
     $url            = $archivedVersion['download_url'];
     $displayVersion = $archivedVersion['version'];
+    $hasLocalApk    = false;
 } else {
-    $url = $app['download_url'];
-    if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
-    if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
     $displayVersion = $app['version'];
+    if ($hasLocalApk && $downloadSource === 'apk') {
+        $url = url('download.php?slug=' . urlencode($app['slug']) . '&apk=1');
+    } else {
+        $url = $app['download_url'];
+        if ($mirror === 2 && $app['mirror2_url']) $url = $app['mirror2_url'];
+        if ($mirror === 3 && $app['mirror3_url']) $url = $app['mirror3_url'];
+    }
 }
-$hasLink = !empty($url);
-if (!$hasLink) $url = '#';
 
-$features    = json_decode($app['features']     ?? '[]', true) ?: [];
-$screenshots = json_decode($app['screenshots']  ?? '[]', true) ?: [];
+// Direct APK stream
+if (!empty($_GET['apk']) && $hasLocalApk) {
+    serve_apk_file($app['apk_path'], $app['name'], $app['version'] ?: '1.0');
+}
+
+$hasLink = !empty($url) || $hasLocalApk;
+if (!$hasLink) $url = '#';
+if ($hasLocalApk && empty($url)) {
+    $url = url('download.php?slug=' . urlencode($app['slug']) . '&apk=1');
+}
+
+$screenshots = json_decode($app['screenshots'] ?? '[]', true) ?: [];
 $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
+$customAdCode  = get_cfg($pdo, 'download_custom_ad_code', '');
+
+// Fetch previous version history for the accordion
+$versionHistory = [];
+try {
+    $vhStmt = $pdo->prepare("SELECT id, version, changelog, download_url, created_at FROM app_versions WHERE app_id=? ORDER BY created_at DESC LIMIT 10");
+    $vhStmt->execute([$app['id']]);
+    $versionHistory = $vhStmt->fetchAll();
+} catch (Throwable $e) {}
+
+// Related apps (same category)
+$relatedApps = [];
+if (!empty($app['category_id'])) {
+    $relStmt = $pdo->prepare("SELECT id,name,slug,icon_path,short_description FROM apps WHERE category_id=? AND id!=? AND status='published' ORDER BY downloads DESC LIMIT 6");
+    $relStmt->execute([$app['category_id'], $app['id']]);
+    $relatedApps = $relStmt->fetchAll();
+}
+
+$catName = '';
+if (!empty($app['category_id'])) {
+    $r = $pdo->prepare("SELECT name FROM categories WHERE id=?");
+    $r->execute([$app['category_id']]);
+    $catName = $r->fetchColumn() ?: '';
+}
+
+// Use Cloudflare Turnstile only (remove Google reCAPTCHA)
+$turnstileSiteKey = trim(get_cfg($pdo, 'turnstile_site_key'));
+
+// Detect if CAPTCHA is needed for suspicious visitors
+$captchaType = $turnstileSiteKey ? 'turnstile' : 'none';
+$dlCaptchaType = $turnstileSiteKey ? 'turnstile' : 'none';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
   <?= head_extras($pdo) ?>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>تحميل <?= h($app['name']) ?> — yassota</title>
+  <title><?= __('download') ?> <?= h($app['name']) ?><?= $displayVersion ? ' v'.h($displayVersion) : '' ?> <?= __('android') ?> — yassota</title>
   <meta name="robots" content="noindex,follow">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/download.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
+  <?php if ($customAdCode): ?>
+  <script><?= $customAdCode ?></script>
+  <?php endif; ?>
+  <?php if ($captchaType === 'turnstile'): ?>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <?php endif; ?>
 </head>
 <body>
 
-<header class="site-header">
-  <a href="<?= h(url('')) ?>" class="logo">yass<span>ota</span></a>
-  <nav class="header-nav">
-    <a href="<?= h(url('')) ?>">الرئيسية</a>
-    <a href="<?= h(app_url($app['slug'])) ?>">← صفحة التطبيق</a>
-  </nav>
-</header>
+<?php render_site_header('', ''); ?>
 
-<div class="dl-page">
-  <div class="dl-box">
+<div class="dlp-wrap">
 
-    <!-- Top Ad -->
-    <div class="ad-zone" style="margin-bottom:24px;min-height:60px">
-      <?= ad_slot() ?>
-    </div>
-
-    <!-- App icon + name -->
-    <?php if ($app['icon_path']): ?>
-      <img src="<?= h(url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dl-app-icon">
-    <?php else: ?>
-      <div class="dl-icon-placeholder">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5">
-          <rect x="5" y="2" width="14" height="20" rx="3"/>
-          <path d="M9 7h6M9 11h6M9 15h4"/>
-        </svg>
-      </div>
-    <?php endif; ?>
-
-    <div class="dl-app-name"><?= h($app['name']) ?></div>
-    <div class="dl-app-version">
-      <?php if ($displayVersion): ?>
-        <span style="font-family:var(--f-mono)">v<?= h($displayVersion) ?></span>
-      <?php endif; ?>
-      <?php if ($app['size_mb']): ?>
-        · <span style="font-family:var(--f-mono)"><?= h($app['size_mb']) ?> MB</span>
-      <?php endif; ?>
-    </div>
-
-    <?php if ($app['link_verified']): ?>
-    <div class="verified-badge" style="justify-content:center;margin:10px auto">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-      رابط تم التحقق من سلامته بواسطة فريق yassota
-    </div>
-    <?php endif; ?>
-
-    <!-- Short description -->
-    <?php if (!empty($app['short_description'])): ?>
-    <p class="dl-short-desc"><?= h($app['short_description']) ?></p>
-    <?php endif; ?>
-
-    <!-- Features list -->
-    <?php if ($features): ?>
-    <div class="dl-features">
-      <div class="dl-features-title">✨ مميزات التطبيق</div>
-      <ul class="dl-features-list">
-        <?php foreach (array_slice($features, 0, 8) as $feat): ?>
-        <li><?= h($feat) ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </div>
-    <?php endif; ?>
-
-    <!-- Screenshots gallery -->
-    <?php if ($screenshots): ?>
-    <div class="dl-screenshots">
-      <div class="dl-features-title" style="margin-bottom:10px">📱 صور من التطبيق</div>
-      <div class="dl-screenshots-track">
-        <?php foreach (array_slice($screenshots, 0, 6) as $shot): ?>
-        <img src="<?= h(url($shot)) ?>" alt="<?= h($app['name']) ?> screenshot" class="dl-screenshot-img" loading="lazy">
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Early scroll-to-download button -->
-    <?php if ($hasLink): ?>
-    <button type="button" class="btn-scroll-early" onclick="document.getElementById('dl-timer-section').scrollIntoView({behavior:'smooth'})">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
-      انتقل لزر التحميل ↓
-    </button>
-    <?php endif; ?>
-
-    <!-- Mid Ad -->
-    <div class="ad-zone" style="margin:20px 0;min-height:60px">
-      <?= ad_slot() ?>
-    </div>
-
-    <!-- ══ Download section ══ -->
-    <div id="dl-timer-section">
-
-      <?php if ($hasLink): ?>
-      <!-- Circular Timer -->
-      <div class="dl-timer-wrap">
-        <svg width="110" height="110" class="dl-ring" viewBox="0 0 110 110">
-          <circle class="dl-ring-bg" cx="55" cy="55" r="48" fill="none" stroke-width="4"/>
-          <circle class="dl-ring-prog" id="ring-prog" cx="55" cy="55" r="48" fill="none" stroke-width="4"
-            stroke-dasharray="301.59" stroke-dashoffset="0" stroke-linecap="round"/>
-        </svg>
-        <div class="dl-count" id="dl-count">10</div>
-      </div>
-
-      <div class="dl-status" id="dl-status">
-        <strong style="color:var(--cyan)">جاري تجهيز التحميل...</strong><br>
-        سيبدأ التحميل تلقائياً خلال <span id="sec-text">10</span> ثوانٍ
-      </div>
-
-      <!-- Progress bar -->
-      <div class="dl-progress-bar">
-        <div class="dl-progress-fill" id="dl-progress"></div>
-      </div>
-
-      <!-- Manual download button (shown after countdown) -->
-      <a id="btn-manual" href="<?= h($url) ?>" class="btn-manual hidden" download data-hardnav="1">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 3v12m0 0l-4-4m4 4l4-4"/>
-          <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/>
-        </svg>
-        ابدأ التحميل الآن
-      </a>
-      <div class="dl-manual-label" id="manual-label" style="display:none">
-        لم يبدأ التحميل تلقائياً؟ اضغط الزر أعلاه
-      </div>
-
+  <!-- ── Hero band ── -->
+  <div class="dlp-hero">
+    <div class="dlp-hero-icon">
+      <?php if ($app['icon_path']): ?>
+        <img src="<?= h(media_url($app['icon_path'])) ?>" alt="<?= h($app['name']) ?>" class="dlp-icon-img">
       <?php else: ?>
-      <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
-        <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
-        لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق.
+        <div class="dlp-icon-placeholder">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.5">
+            <rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 7h6M9 11h6M9 15h4"/>
+          </svg>
+        </div>
+      <?php endif; ?>
+    </div>
+    <div class="dlp-hero-info">
+      <h1 class="dlp-app-name"><?= h($app['name']) ?></h1>
+      <div class="dlp-app-meta">
+        <?php if ($displayVersion): ?><span class="dlp-meta-chip">v<?= h($displayVersion) ?></span><?php endif; ?>
+        <?php if ($app['size_mb']): ?><span class="dlp-meta-chip"><?= h($app['size_mb']) ?> MB</span><?php endif; ?>
+        <?php if ($catName): ?><span class="dlp-meta-chip"><?= h($catName) ?></span><?php endif; ?>
+        <span class="dlp-meta-chip">Android</span>
+      </div>
+      <?php if ($app['link_verified']): ?>
+      <div class="dlp-verified">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        <?= __('verified_by_team') ?>
+      </div>
+      <?php endif; ?>
+      <?php if ($app['downloads'] > 0 || (!empty($app['rating']) && $app['rating'] > 0) || $app['developer']): ?>
+      <div class="dlp-hero-stats">
+        <?php if ($app['downloads'] > 0): ?>
+        <div class="dlp-hero-stat">
+          <strong><?= number_format($app['downloads']) ?>+</strong>
+          <span><?= __('download') ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($app['rating']) && $app['rating'] > 0): ?>
+        <div class="dlp-hero-stat">
+          <strong>⭐ <?= number_format($app['rating'], 1) ?></strong>
+          <span><?= !empty($app['rating_count']) ? number_format($app['rating_count']).' '.__('rating') : __('rating') ?></span>
+        </div>
+        <?php endif; ?>
+        <?php if ($app['developer']): ?>
+        <div class="dlp-hero-stat">
+          <strong><?= h($app['developer']) ?></strong>
+          <span><?= __('developer') ?></span>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+    </div>
+  </div>
+
+  <!-- ── Top ad ── -->
+  <div class="ad-zone"><?= ad_slot() ?></div>
+
+  <!-- ── Main 2-column grid ── -->
+  <div class="dlp-main-grid">
+
+    <!-- LEFT: Download column -->
+    <div class="dlp-download-col">
+
+      <!-- ══ VERSION ACCORDION (liteapks style) ══ -->
+      <?php
+      // Build a list of "release slots": current first, then archived versions
+      $dlSlots = [];
+
+      if ($hasLink) {
+          // Main/current slot
+          $mirrors = [];
+          $_appVer = $displayVersion ? ' v' . $displayVersion : '';
+          $_appLbl = $app['name'] . $_appVer;
+          foreach ([2 => $app['mirror2_url'] ?? '', 3 => $app['mirror3_url'] ?? ''] as $n => $mu) {
+              if ($mu) $mirrors[] = ['label' => $_appLbl . ' — ' . __('mirror') . ' ' . $n, 'url' => download_url($app['slug'], $n), 'ext' => false];
+          }
+          $primaryLabel = $hasLocalApk ? $_appLbl : (str_contains($url, 'play.google.com') ? 'Google Play' : $_appLbl);
+          $primaryUrl   = $hasLocalApk ? url('download.php?slug='.urlencode($app['slug']).'&apk=1') : $url;
+          $dlSlots[] = [
+              'version'  => $displayVersion ?: __('version'),
+              'notes'    => $app['whats_new'] ?? '',
+              'buttons'  => array_merge(
+                  [['label' => $primaryLabel, 'url' => $primaryUrl, 'primary' => true, 'local' => $hasLocalApk]],
+                  array_map(fn($m) => ['label' => $m['label'], 'url' => $m['url'], 'primary' => false, 'local' => false], $mirrors)
+              ),
+              'date'     => $app['updated_at'] ?? '',
+              'open'     => true,
+          ];
+      }
+
+      foreach ($versionHistory as $vh) {
+          if (empty($vh['download_url'])) continue;
+          $_vhLbl = $app['name'] . ($vh['version'] ? ' v' . $vh['version'] : '');
+          $dlSlots[] = [
+              'version' => $vh['version'] ?: '—',
+              'notes'   => $vh['changelog'] ?? '',
+              'buttons' => [['label' => $_vhLbl, 'url' => download_url($app['slug']).'&ver='.$vh['id'], 'primary' => true, 'local' => false]],
+              'date'    => $vh['created_at'] ?? '',
+              'open'    => false,
+          ];
+      }
+      ?>
+
+      <?php if ($dlSlots): ?>
+      <div id="dl-buttons-wrap">
+      <div class="dlp-accordion" id="dl-accordion">
+        <?php foreach ($dlSlots as $si => $slot): ?>
+        <div class="dlp-acc-item<?= $slot['open'] ? ' open' : '' ?>" id="dlacc-<?= $si ?>">
+          <button class="dlp-acc-head" type="button" onclick="dlAccToggle(<?= $si ?>)">
+            <div class="dlp-acc-vtag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <?= h($slot['version']) ?>
+            </div>
+            <?php if ($slot['date']): ?>
+            <span class="dlp-acc-date"><?= date('j M Y', strtotime($slot['date'])) ?></span>
+            <?php endif; ?>
+            <svg class="dlp-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <div class="dlp-acc-body">
+            <?php if ($slot['notes']): ?>
+            <div class="dlp-acc-notes"><?= nl2br(h(mb_substr(strip_tags($slot['notes']), 0, 300))) ?></div>
+            <?php endif; ?>
+            <div class="dlp-acc-btns">
+              <?php foreach ($slot['buttons'] as $btn): ?>
+              <?php
+              $needsCaptcha = false;
+              $captchaForThisBtn = 'none';
+              if ($slot['open'] && $dlCaptchaType === 'turnstile') {
+                  $needsCaptcha = true;
+                  $captchaForThisBtn = 'turnstile';
+              }
+              ?>
+              <?php if ($needsCaptcha): ?>
+              <!-- Captcha-gated: unlock via JS -->
+              <button type="button" class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>" data-btn-captcha="<?= h($captchaForThisBtn) ?>"
+                      onclick="dlStartDownload('<?= h($btn['url']) ?>', <?= $btn['local'] ? 'true' : 'false' ?>)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+                <span><?= h($btn['label']) ?></span>
+                <?php if ($app['size_mb']): ?><span class="dlp-dl-size"><?= h($app['size_mb']) ?> MB</span><?php endif; ?>
+              </button>
+              <?php else: ?>
+              <a class="dlp-dl-btn<?= $btn['primary'] ? ' primary' : '' ?>"
+                 href="<?= h($btn['url']) ?>"
+                 <?= $btn['local'] ? 'download' : 'target="_blank" rel="noopener nofollow"' ?>
+                 data-hardnav="1"
+                 onclick="<?= ($slot['open'] && !$btn['local']) ? 'dlFireDownload(this);return false;' : '' ?>">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+                <span><?= h($btn['label']) ?></span>
+                <?php if ($app['size_mb'] && $btn['primary']): ?><span class="dlp-dl-size"><?= h($app['size_mb']) ?> MB</span><?php endif; ?>
+              </a>
+              <?php endif; ?>
+              <?php endforeach; ?>
+            </div>
+            <?php if ($slot['open'] && $dlCaptchaType !== 'none'): ?>
+            <div id="dl-captcha-wrap-<?= $si ?>" class="dl-cap-hidden" style="margin-top:12px;text-align:center" aria-hidden="true">
+              <p style="font-size:12px;color:var(--muted);margin:0 0 10px"><?= __('continue_to_verify') ?></p>
+              <?php if ($dlCaptchaType === 'turnstile' && $turnstileSiteKey): ?>
+              <div style="display:flex;justify-content:center"><div class="cf-turnstile" data-sitekey="<?= h($turnstileSiteKey) ?>" data-callback="onDlCaptchaSolved" data-theme="light" data-size="normal"></div></div>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      </div><!-- /dl-buttons-wrap -->
+      <?php else: ?>
+      <div class="dlp-no-link">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <strong><?= __('download_link_unavailable') ?></strong>
+        <p><?= __('download_link_unavailable_desc') ?></p>
       </div>
       <?php endif; ?>
 
-    </div><!-- /dl-timer-section -->
+      <!-- Trust badges -->
+      <div class="dlp-trust">
+        <div class="dlp-trust-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div class="dlp-trust-text"><strong><?= __('safe_link') ?></strong><small><?= __('https_encrypted') ?></small></div>
+        </div>
+        <div class="dlp-trust-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+          <div class="dlp-trust-text"><strong><?= __('virus_free') ?></strong><small><?= __('file_scanned') ?></small></div>
+        </div>
+        <div class="dlp-trust-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7z"/><path d="M13 2v7h7"/></svg>
+          <div class="dlp-trust-text"><strong><?= __('original_apk') ?></strong><small><?= __('not_modified') ?></small></div>
+        </div>
+        <div class="dlp-trust-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <div class="dlp-trust-text"><strong><?= __('fast_download') ?></strong><small><?= __('high_speed_servers') ?></small></div>
+        </div>
+      </div>
 
-    <!-- Telegram subscribe button -->
-    <?php if ($tgUrl): ?>
-    <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="btn-telegram-sub">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
-      اشترك في قناة تيليجرام yassota
-    </a>
-    <?php endif; ?>
+      <!-- Mirror links -->
+      <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
+      <div class="dlp-mirrors">
+        <span class="dlp-mirrors-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          <?= __('alternative_links') ?>
+        </span>
+        <?php $__mv = $displayVersion ? ' v' . $displayVersion : ''; ?>
+        <?php if ($app['mirror2_url']): ?>
+          <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dlp-mirror-btn" data-hardnav="1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+            <?= h($app['name']) ?><?= h($__mv) ?> — <?= __('mirror') ?> 2
+          </a>
+        <?php endif; ?>
+        <?php if ($app['mirror3_url']): ?>
+          <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dlp-mirror-btn" data-hardnav="1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>
+            <?= h($app['name']) ?><?= h($__mv) ?> — <?= __('mirror') ?> 3
+          </a>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
 
-    <!-- Mirror links -->
-    <?php if ($app['mirror2_url'] || $app['mirror3_url']): ?>
-    <div class="dl-mirrors" style="margin-top:16px">
-      <span style="font-size:12px;color:var(--muted)">روابط بديلة:</span>
-      <?php if ($app['mirror2_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 2)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 2</a>
+      <!-- Hash details -->
+      <?php if ($hasLocalApk && $app['apk_hash_sha256']): ?>
+      <details class="dlp-hash-details">
+        <summary>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          <?= __('verify_file_integrity') ?>
+        </summary>
+        <div class="dlp-hash-body">
+          <?php if ($app['apk_size_bytes']): ?>
+          <div style="margin-bottom:6px"><span style="color:var(--muted)"><?= __('actual_size') ?></span> <strong><?= h(format_apk_size((int)$app['apk_size_bytes'])) ?></strong></div>
+          <?php endif; ?>
+          <div>
+            <div style="color:var(--muted);margin-bottom:4px;font-size:11px">SHA-256:</div>
+            <code class="dlp-hash-code" onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.dataset.copied='1';setTimeout(()=>delete this.dataset.copied,1500)})"><?= h($app['apk_hash_sha256']) ?></code>
+          </div>
+          <?php if ($app['apk_hash_md5']): ?>
+          <div style="margin-top:8px">
+            <div style="color:var(--muted);margin-bottom:4px;font-size:11px">MD5:</div>
+            <code class="dlp-hash-code" onclick="navigator.clipboard.writeText(this.textContent).then(()=>{this.dataset.copied='1';setTimeout(()=>delete this.dataset.copied,1500)})"><?= h($app['apk_hash_md5']) ?></code>
+          </div>
+          <?php endif; ?>
+        </div>
+      </details>
       <?php endif; ?>
-      <?php if ($app['mirror3_url']): ?>
-        <a href="<?= h(download_url($app['slug'], 3)) ?>" class="dl-mirror-btn" data-hardnav="1">مرآة 3</a>
+
+      <!-- Google Play link -->
+      <?php if ($hasLocalApk && $downloadSource === 'both' && $app['download_url']): ?>
+      <div class="dlp-gplay"><?= __('or_text') ?>
+        <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.37.2.8.2 1.17-.01l13.64-7.84-2.86-2.86-11.95 10.71zm-1.01-21.3A2 2 0 002 3.52v16.96a2 2 0 00.17.95l.09.1 9.5-9.5v-.23l-9.59-9.34zm16.53 9.13l-2.72-1.57-3.13 3.14 3.13 3.13 2.74-1.58a2 2 0 000-3.12zM4.35.25L17.99 8.1l-2.87 2.86L4.08.37.9.25z"/></svg>
+          <?= __('download_from_playstore') ?>
+        </a>
+      </div>
+      <?php elseif (!$hasLocalApk && !empty($app['download_url']) && str_contains($app['download_url'], 'play.google.com')): ?>
+      <div class="dlp-gplay">
+        <a href="<?= h($app['download_url']) ?>" target="_blank" rel="nofollow noopener">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.37.2.8.2 1.17-.01l13.64-7.84-2.86-2.86-11.95 10.71zm-1.01-21.3A2 2 0 002 3.52v16.96a2 2 0 00.17.95l.09.1 9.5-9.5v-.23l-9.59-9.34zm16.53 9.13l-2.72-1.57-3.13 3.14 3.13 3.13 2.74-1.58a2 2 0 000-3.12zM4.35.25L17.99 8.1l-2.87 2.86L4.08.37.9.25z"/></svg>
+          <?= __('download_from_playstore') ?> ↗
+        </a>
+      </div>
       <?php endif; ?>
+
+    </div><!-- /download-col -->
+
+    <!-- RIGHT: Info sidebar -->
+    <div class="dlp-info-col">
+
+      <!-- App details panel -->
+      <div class="dlp-panel">
+        <div class="dlp-panel-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+          <?= __('app_info') ?>
+        </div>
+        <?php
+          // Build info cells as array to control even/odd layout
+          $apkSizeBytes  = $app['apk_size_bytes'] ?? null;
+          $fileSizeMb    = $apkSizeBytes ? round($apkSizeBytes / 1048576, 2) : ($app['size_mb'] ?: null);
+          // Strip accidental "Android" prefix already in android_version field
+          $androidVer    = trim(preg_replace('/^android\s*/i', '', $app['android_version'] ?? ''));
+          $arabicMonths  = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+          $isArDate = (defined('UI_LANG') ? UI_LANG : 'ar') === 'ar';
+          $fmtDate = function(?string $d) use ($arabicMonths, $isArDate): string {
+              if (!$d) return '';
+              $ts = strtotime($d);
+              if (!$ts) return '';
+              return $isArDate
+                  ? (date('j', $ts) . ' ' . $arabicMonths[(int)date('n', $ts) - 1] . ' ' . date('Y', $ts))
+                  : date('M j, Y', $ts);
+          };
+          $infoCells = [];
+          if ($displayVersion)         $infoCells[] = [__('version'),      '<span dir="ltr">' . h($displayVersion) . '</span>'];
+          if ($fileSizeMb)             $infoCells[] = [__('size'),        '<span dir="ltr">' . h($fileSizeMb) . ' MB</span>'];
+          if ($catName)                $infoCells[] = [__('category'),      h($catName)];
+          if ($app['developer'])       $infoCells[] = [__('developer'),      h($app['developer'])];
+          $infoCells[]                              = [__('android'),       'Android'];
+          $infoCells[]                              = [__('license'),      h($app['license'] ?? __('free'))];
+          if ($androidVer)             $infoCells[] = [__('min_android'),   'Android ' . h($androidVer) . '+'];
+          $fileType = !empty($app['apk_path']) ? 'APK' : 'APK/XAPK';
+          $infoCells[]                              = [__('file_type'),    $fileType];
+          if ($app['downloads'] > 0)   $infoCells[] = [__('downloads'),    '<span dir="ltr">+' . number_format($app['downloads']) . '</span>'];
+          if (!empty($app['updated_at']))  $infoCells[] = [__('last_update'),  $fmtDate($app['updated_at'])];
+          if (!empty($app['release_date'])) $infoCells[] = [__('release_date'), $fmtDate($app['release_date'])];
+          $cellCount = count($infoCells);
+        ?>
+        <div class="dlp-meta-grid">
+          <?php foreach ($infoCells as [$key, $val]): ?>
+          <div class="dlp-meta-cell"><div class="dlp-meta-key"><?= $key ?></div><div class="dlp-meta-val"><?= $val ?></div></div>
+          <?php endforeach; ?>
+          <?php if ($cellCount % 2 !== 0): ?>
+          <div class="dlp-meta-cell" aria-hidden="true"></div>
+          <?php endif; ?>
+          <?php if (!empty($app['package_name'])): ?>
+          <div class="dlp-meta-cell" style="grid-column:1/-1">
+            <div class="dlp-meta-key"><?= __('package_name') ?></div>
+            <div class="dlp-meta-val" style="font-family:var(--f-mono);font-size:11px;word-break:break-all;direction:ltr;text-align:left"><?= h($app['package_name']) ?></div>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <!-- Security panel -->
+      <?php if (!empty($app['apk_hash_sha256']) || !empty($app['apk_hash_md5']) || !empty($app['virustotal_report_url'])): ?>
+      <div class="dlp-panel">
+        <div class="dlp-panel-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <?= __('security_check') ?>
+        </div>
+        <div class="dlp-panel-body" style="font-size:12px;display:flex;flex-direction:column;gap:10px">
+          <?php if (!empty($app['apk_hash_sha256'])): ?>
+          <div>
+            <div style="color:var(--muted);margin-bottom:3px;font-size:10px">SHA-256:</div>
+            <code style="display:block;background:var(--surface-2);padding:5px 8px;border-radius:6px;font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--text);font-family:var(--f-mono)"
+                  onclick="navigator.clipboard.writeText(this.textContent);this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)"><?= h($app['apk_hash_sha256']) ?></code>
+          </div>
+          <?php endif; ?>
+          <?php if (!empty($app['apk_hash_md5'])): ?>
+          <div>
+            <div style="color:var(--muted);margin-bottom:3px;font-size:10px">MD5:</div>
+            <code style="display:block;background:var(--surface-2);padding:5px 8px;border-radius:6px;font-size:9.5px;word-break:break-all;cursor:pointer;color:var(--text);font-family:var(--f-mono)"
+                  onclick="navigator.clipboard.writeText(this.textContent);this.style.color='var(--success)';setTimeout(()=>this.style.color='',2000)"><?= h($app['apk_hash_md5']) ?></code>
+          </div>
+          <?php endif; ?>
+          <?php if (!empty($app['virustotal_report_url'])): ?>
+          <a href="<?= h($app['virustotal_report_url']) ?>" target="_blank" rel="nofollow noopener"
+             style="color:var(--cyan);font-size:11px;display:inline-flex;align-items:center;gap:5px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+            🛡️ <?= __('virustotal_report') ?>
+          </a>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Screenshots panel -->
+      <?php if ($screenshots): ?>
+      <div class="dlp-panel">
+        <div class="dlp-panel-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <?= __('app_screenshots') ?>
+        </div>
+        <div style="padding:12px">
+          <div class="dlp-screenshots-track">
+            <?php foreach (array_slice($screenshots, 0, 6) as $shot): ?>
+            <img src="<?= h(url($shot)) ?>" alt="<?= h($app['name']) ?> screenshot" class="dlp-screenshot" loading="lazy">
+            <?php endforeach; ?>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
+
+    </div><!-- /info-col -->
+
+  </div><!-- /main-grid -->
+
+  <!-- ── Installation guide ── -->
+  <div class="dlp-install-guide">
+    <h2 class="dlp-install-title"><?= __('how_to_install') ?></h2>
+    <div class="dlp-install-steps">
+      <div class="dlp-install-step">
+        <div class="dlp-install-num">1</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
+        <h3><?= __('download_step1_title') ?></h3>
+        <p><?= __('download_step1_desc') ?></p>
+      </div>
+      <div class="dlp-install-step">
+        <div class="dlp-install-num">2</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <h3><?= __('allow_install_title') ?></h3>
+        <p><?= __('allow_install_desc') ?></p>
+      </div>
+      <div class="dlp-install-step">
+        <div class="dlp-install-num">3</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="3"/>
+            <path d="M9 10h6M9 14h4"/>
+            <circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <h3><?= __('open_apk_title') ?></h3>
+        <p><?= __('open_apk_desc') ?></p>
+      </div>
+      <div class="dlp-install-step">
+        <div class="dlp-install-num">4</div>
+        <div class="dlp-install-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="16 8 11 14 8 11"/>
+          </svg>
+        </div>
+        <h3><?= __('enjoy_app_title') ?></h3>
+        <p><?= __('enjoy_app_desc') ?></p>
+      </div>
     </div>
-    <?php endif; ?>
-
-    <!-- Back link -->
-    <a href="<?= h(app_url($app['slug'])) ?>"
-       style="display:block;margin-top:18px;font-size:12px;color:var(--muted);text-align:center">
-      ← العودة لصفحة <?= h($app['name']) ?>
-    </a>
-
-    <nav style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:20px;font-size:11px">
-      <a href="<?= h(url('privacy-policy')) ?>" style="color:var(--muted)">سياسة الخصوصية</a>
-      <a href="<?= h(url('terms')) ?>" style="color:var(--muted)">شروط الاستخدام</a>
-      <a href="<?= h(url('contact')) ?>" style="color:var(--muted)">اتصل بنا</a>
-      <a href="<?= h(url('dmca')) ?>" style="color:var(--muted)">DMCA</a>
-    </nav>
   </div>
-</div>
+
+  <!-- ── Mid AdSense ── -->
+  <div class="ad-zone"><?= ad_slot() ?></div>
+
+  <!-- ── Telegram subscribe ── -->
+  <?php if ($tgUrl): ?>
+  <a href="<?= h($tgUrl) ?>" target="_blank" rel="nofollow noopener" class="dlp-tg-btn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.869 4.326-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.829.941z"/></svg>
+    <?= __('telegram_follow') ?>
+  </a>
+  <?php endif; ?>
+
+  <!-- ── Related apps ── -->
+  <?php if ($relatedApps): ?>
+  <div class="dlp-related">
+    <div class="dlp-related-title"><?= __('similar_apps_you_like') ?></div>
+    <div class="dlp-related-grid">
+      <?php foreach ($relatedApps as $r): ?>
+      <a href="<?= h(app_url($r['slug'])) ?>" class="dlp-related-card">
+        <?php if ($r['icon_path']): ?>
+          <img src="<?= h(media_url($r['icon_path'])) ?>" alt="<?= h($r['name']) ?>" class="dlp-related-icon" loading="lazy">
+        <?php else: ?>
+          <div class="dlp-related-icon-ph">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          </div>
+        <?php endif; ?>
+        <div class="dlp-related-name"><?= h($r['name']) ?></div>
+        <?php if (!empty($r['short_description'])): ?>
+        <div class="dlp-related-desc"><?= h(mb_substr($r['short_description'], 0, 40)) ?>...</div>
+        <?php endif; ?>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- ── Footer nav ── -->
+  <nav class="dlp-footer-nav">
+    <a href="<?= h(app_url($app['slug'])) ?>">← <?= __('app_page') ?> <?= h($app['name']) ?></a>
+    <a href="<?= h(url('privacy-policy')) ?>"><?= __('privacy_policy') ?></a>
+    <a href="<?= h(url('terms')) ?>"><?= __('terms') ?></a>
+    <a href="<?= h(url('contact')) ?>"><?= __('contact_us') ?></a>
+    <a href="<?= h(url('dmca')) ?>">DMCA</a>
+  </nav>
+
+</div><!-- /dlp-wrap -->
 
 <?php render_cookie_banner(); ?>
 
 <script>
-const DOWNLOAD_URL = <?= json_encode($url) ?>;
-const HAS_LINK = <?= $hasLink ? 'true' : 'false' ?>;
-const TOTAL = 10;
-let remaining = TOTAL;
+/* ── Cloudflare Turnstile unlock ── */
+window.onDlTurnstileSolved = function(token) {
+  fetch(location.pathname + '?ajax=verify_captcha', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'token=' + encodeURIComponent(token) + '&type=turnstile'
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var gate = document.getElementById('cf-dl-gate');
+    var wrap = document.getElementById('dl-buttons-wrap');
+    if (d.ok) {
+      if (gate) { gate.style.transition = 'opacity .3s'; gate.style.opacity = '0'; setTimeout(function(){ gate.style.display = 'none'; }, 320); }
+      if (wrap) { wrap.style.pointerEvents = 'auto'; wrap.style.opacity = '1'; }
+      dlCaptchaSolved = true;
+    } else {
+      if (typeof turnstile !== 'undefined') turnstile.reset();
+    }
+  })
+  .catch(function(){
+    // Network error — unlock optimistically (CF already verified client-side)
+    var gate = document.getElementById('cf-dl-gate');
+    var wrap = document.getElementById('dl-buttons-wrap');
+    if (gate) gate.style.display = 'none';
+    if (wrap) { wrap.style.pointerEvents = 'auto'; wrap.style.opacity = '1'; }
+    dlCaptchaSolved = true;
+  });
+};
 
-const countEl   = document.getElementById('dl-count');
-const statusEl  = document.getElementById('dl-status');
-const secText   = document.getElementById('sec-text');
-const progressEl= document.getElementById('dl-progress');
-const ringProg  = document.getElementById('ring-prog');
-const btnManual = document.getElementById('btn-manual');
-const manualLbl = document.getElementById('manual-label');
+/* ── Download page JS: immediate download, accordion, captcha ── */
+const DL_CAPTCHA_TYPE = <?= json_encode($dlCaptchaType) ?>;
 
-const CIRC = 301.59;
+var dlCaptchaSolved  = (DL_CAPTCHA_TYPE === 'none');
+var dlPendingUrl     = null;
+var dlPendingLocal   = false;
+var dlPendingCaptchaType = null;
+const dlVerifyUrl    = location.pathname + '?ajax=verify_captcha';
+const captchaWrap    = document.getElementById('dl-captcha-wrap');
 
-function tick() {
-  remaining--;
-  const pct = (TOTAL - remaining) / TOTAL;
-  countEl.textContent = remaining;
-  if (secText) secText.textContent = remaining;
-  progressEl.style.width = (pct * 100) + '%';
-  ringProg.style.strokeDashoffset = CIRC * (1 - pct);
-
-  if (remaining <= 0) {
-    statusEl.innerHTML = '<strong style="color:var(--success)">✓ يبدأ التحميل الآن...</strong>';
-    countEl.textContent = '✓';
-    countEl.style.fontSize = '22px';
-
-    const a = document.createElement('a');
-    a.href = DOWNLOAD_URL; a.download = '';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-
-    setTimeout(() => {
-      if (btnManual) btnManual.classList.remove('hidden');
-      if (manualLbl) manualLbl.style.display = 'block';
-    }, 2000);
+/* Fire an anchor-based download (direct, no auto-fire on page load) */
+function dlFireDownload(el) {
+  var href = el.href;
+  var local = !!el.download;
+  var btnCaptcha = el.getAttribute('data-btn-captcha') || 'none';
+  if (btnCaptcha !== 'none' && !dlCaptchaSolved) {
+    dlPendingUrl   = href;
+    dlPendingLocal = local;
+    dlPendingCaptchaType = btnCaptcha;
+    var wrap = document.getElementById('dl-captcha-wrap-0') || captchaWrap;
+    if (wrap) { wrap.classList.remove('dl-cap-hidden'); wrap.removeAttribute('aria-hidden'); }
+    return;
   }
+  doDownload(href, local);
 }
 
-if (HAS_LINK && countEl) {
-  const timer = setInterval(() => {
-    if (remaining <= 0) { clearInterval(timer); return; }
-    tick();
-  }, 1000);
-  if (ringProg) ringProg.style.strokeDashoffset = '0';
+/* Captcha-gated button (no href) */
+function dlStartDownload(url, local) {
+  var btnEl = event.target.closest('button[type="button"]');
+  var btnCaptcha = btnEl ? btnEl.getAttribute('data-btn-captcha') : DL_CAPTCHA_TYPE;
+
+  if (btnCaptcha !== 'none' && !dlCaptchaSolved) {
+    dlPendingUrl   = url;
+    dlPendingLocal = local;
+    dlPendingCaptchaType = btnCaptcha;
+    // Find the captcha wrap for this slot
+    var slotIdx = btnEl ? (btnEl.closest('.dlp-acc-item') ? Array.from(document.querySelectorAll('.dlp-acc-item')).indexOf(btnEl.closest('.dlp-acc-item')) : 0) : 0;
+    var wrap = document.getElementById('dl-captcha-wrap-' + slotIdx) || captchaWrap;
+    if (wrap) { wrap.classList.remove('dl-cap-hidden'); wrap.removeAttribute('aria-hidden'); }
+    return;
+  }
+  doDownload(url, local);
+}
+
+function doDownload(url, local) {
+  var a = document.createElement('a');
+  a.href = url;
+  if (local) { a.download = ''; } else { a.target = '_blank'; a.rel = 'noopener nofollow'; }
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function dlCaptchaUnlock(token, type) {
+  dlCaptchaSolved = true;
+  if (captchaWrap) captchaWrap.classList.add('dl-cap-hidden');
+  fetch(dlVerifyUrl, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'token='+encodeURIComponent(token)+'&type='+encodeURIComponent(type) }).catch(function(){});
+  if (dlPendingUrl) { doDownload(dlPendingUrl, dlPendingLocal); dlPendingUrl = null; }
+}
+
+// Cloudflare Turnstile callback
+window.onDlCaptchaSolved = function(t){ dlCaptchaUnlock(t, 'turnstile'); };
+
+/* Accordion toggle */
+function dlAccToggle(i) {
+  var item  = document.getElementById('dlacc-' + i);
+  var isOpen = item.classList.contains('open');
+  document.querySelectorAll('.dlp-acc-item').forEach(function(el){ el.classList.remove('open'); });
+  if (!isOpen) item.classList.add('open');
 }
 </script>
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
-
 </body>
 </html>

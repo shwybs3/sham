@@ -7,7 +7,7 @@ $seoTitle = 'سياسة ملفات تعريف الارتباط — yassota';
 $metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الارتباط (الكوكيز) وكيفية التحكم بها.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -17,15 +17,12 @@ $metaDesc = 'كيف يستخدم موقع yassota ملفات تعريف الار
   <meta name="description" content="<?= h($metaDesc) ?>">
   <link rel="canonical" href="<?= h(url('cookie-policy.php')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">

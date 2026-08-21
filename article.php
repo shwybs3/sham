@@ -1,8 +1,13 @@
 <?php
+require_once __DIR__ . '/static-cache-check.php';
+$_scSlug = trim($_GET['slug'] ?? '');
+static_cache_try_serve('article', $_scSlug);
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
-$slug = trim($_GET['slug'] ?? '');
+$slug = $_scSlug;
+static_cache_capture_start('article', $slug);
 if ($slug === '') { header('Location: ' . url('')); exit; }
 
 $stmt = $pdo->prepare("SELECT ar.*, a.name AS app_name, a.slug AS app_slug, a.icon_path, a.short_description, a.rating
@@ -13,7 +18,7 @@ $article = $stmt->fetch();
 
 if (!$article) {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>404</title>
+    echo '<!DOCTYPE html><html lang="' . (defined('UI_LANG') ? UI_LANG : 'ar') . '" dir="' . (defined('UI_DIR') ? UI_DIR : 'rtl') . '"><head><meta charset="UTF-8"><title>404</title>
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">المقال غير موجود</p>
@@ -50,7 +55,7 @@ $articleSchema = json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -62,20 +67,17 @@ $articleSchema = json_encode([
   <meta property="og:type" content="article">
   <meta property="og:title" content="<?= h($seoTitle) ?>">
   <meta property="og:description" content="<?= h($metaDesc) ?>">
-  <?php if ($article['icon_path']): ?><meta property="og:image" content="<?= h(url($article['icon_path'])) ?>"><?php endif; ?>
+  <?php if ($article['icon_path']): ?><meta property="og:image" content="<?= h(media_url($article['icon_path'])) ?>"><?php endif; ?>
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <script type="application/ld+json"><?= $articleSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 

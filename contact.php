@@ -12,6 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sent = true; // pretend success, don't store, don't tip off the bot
     } elseif (!csrf_check()) {
         $error = 'جلسة غير صالحة، أعد تحميل الصفحة وحاول مجدداً.';
+    } elseif (cf_turnstile_enabled($pdo) && !cf_turnstile_verify($pdo, $_POST['cf-turnstile-response'] ?? '')) {
+        $error = 'فشل التحقق من الهوية (Turnstile). يرجى إعادة المحاولة.';
     } else {
         $name    = trim($_POST['name'] ?? '');
         $email   = trim($_POST['email'] ?? '');
@@ -32,7 +34,7 @@ $seoTitle = 'اتصل بنا — yassota';
 $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقتراح أو بلاغ.';
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -40,17 +42,14 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($seoTitle) ?></title>
   <meta name="description" content="<?= h($metaDesc) ?>">
-  <link rel="canonical" href="<?= h(url('contact.php')) ?>">
+  <link rel="canonical" href="<?= h(url('contact')) ?>">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
   <nav style="font-size:12px;color:var(--muted);margin-bottom:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -58,6 +57,14 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
   </nav>
 
   <div class="section-head reveal"><span class="section-title">اتصل بنا</span></div>
+
+  <a href="<?= h(url('tools/chat/')) ?>" class="section-box reveal" style="max-width:640px;display:flex;align-items:center;gap:16px;margin-bottom:18px;text-decoration:none;transition:transform .18s,box-shadow .18s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div style="width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:26px;background:radial-gradient(circle at 35% 30%,#fff,#f0e6ff 50%,#cfbcff)">🌸</div>
+    <div>
+      <div style="font-weight:700;font-size:15px;color:var(--white,var(--text))">تحتاج جواب سريع؟ جرّب ياسمين</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:3px;line-height:1.7">مساعدة ذكاء اصطناعي متاحة على مدار الساعة — تجاوب فوراً على أسئلتك الشائعة بدون انتظار رد عبر البريد.</div>
+    </div>
+  </a>
 
   <div class="section-box reveal" style="max-width:640px">
     <p style="color:var(--muted);font-size:14px;line-height:1.8;margin-bottom:20px">
@@ -93,6 +100,7 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
           <label style="font-size:12px;color:var(--muted)">الرسالة</label>
           <textarea name="message" rows="6" required style="background:var(--navy-600);border:1px solid var(--border-c);border-radius:10px;padding:11px 14px;color:var(--white);font-size:14px;resize:vertical"></textarea>
         </div>
+        <?= cf_turnstile_widget($pdo) ?>
         <button type="submit" class="btn-primary" style="align-self:flex-start">إرسال</button>
       </form>
     <?php endif; ?>

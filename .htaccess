@@ -1,20 +1,37 @@
 Options -Indexes
-DirectoryIndex index.php
+DirectoryIndex index.php index.html
+ErrorDocument 404 /404.php
+
+# Allow large APK uploads (up to 500MB) — only applied if PHP runs under Apache mod_php
+<IfModule mod_php.c>
+  php_value upload_max_filesize 500M
+  php_value post_max_size 512M
+  php_value max_execution_time 300
+  php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 500M
+  php_value post_max_size 512M
+  php_value max_execution_time 300
+  php_value memory_limit 256M
+</IfModule>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Force HTTPS — required for AdSense and for the cookie-consent /
-  # localStorage behavior to be trustworthy. IMPORTANT: only keep this
-  # enabled once your hosting actually has a valid SSL certificate active
-  # (most cPanel hosts auto-provision one via AutoSSL/Let's Encrypt) — if
-  # SSL isn't active yet, this causes a redirect loop. Comment out the two
-  # lines below if that happens, until SSL is confirmed working.
+  # Force HTTPS — required for AdSense. Handles both direct SSL and
+  # reverse-proxy setups (X-Forwarded-Proto). If you see a redirect loop,
+  # your host has not yet activated an SSL certificate — comment these
+  # two lines out until AutoSSL/Let's Encrypt is confirmed active.
   RewriteCond %{HTTPS} off
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+  # ads.txt must always be reachable by Google (never block it)
+  RewriteRule ^ads\.txt$ - [L]
+
   RewriteRule ^robots\.txt$ robots.php [L]
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
 
   # Canonical homepage: redirect old /index.php links/bookmarks to the root
   RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]
@@ -38,8 +55,20 @@ DirectoryIndex index.php
   RewriteCond %{THE_REQUEST} \s/article\.php\?slug=([^&\s]+) [NC]
   RewriteRule ^ /article/%1 [R=301,L]
 
-  # Admin: hide admin.php
-  RewriteRule ^admin/?$ admin.php [L,QSA]
+  # Admin: hide admin.php — pass through without any extra rewrite conditions
+  # so LiteSpeed/Apache serve it directly without triggering anti-bot rules
+  RewriteRule ^admin/?$ admin.php [L,QSA,NS]
+
+  # Press Pro: plugin management system
+  RewriteRule ^press/?$ press.php [L,QSA,NS]
+
+  # Subdomains admin tool
+  RewriteRule ^admin-subdomains/?$ admin-subdomains.php [L,QSA,NS]
+
+  # Products: /products → products.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^products/?$ products.php [L,QSA]
 
   # Blog post: /blog/{slug} → blog-post.php
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -82,19 +111,52 @@ DirectoryIndex index.php
   # Static pages — clean URLs (no .php extension)
   RewriteRule ^about/?$ about.php [L]
   RewriteRule ^contact/?$ contact.php [L]
+  RewriteRule ^faq/?$ faq.php [L]
   RewriteRule ^privacy-policy/?$ privacy-policy.php [L]
   RewriteRule ^terms/?$ terms.php [L]
   RewriteRule ^cookie-policy/?$ cookie-policy.php [L]
   RewriteRule ^dmca/?$ dmca.php [L]
+  RewriteRule ^disclosure/?$ disclosure.php [L]
 
   # 301 redirects for old .php links to static pages
-  RewriteCond %{THE_REQUEST} \s/(about|contact|privacy-policy|terms|cookie-policy|dmca)\.php[\s?] [NC]
+  RewriteCond %{THE_REQUEST} \s/(about|contact|faq|privacy-policy|terms|cookie-policy|dmca|disclosure|exchange|gold|calculators|solar)\.php[\s?] [NC]
   RewriteRule ^(.+)\.php$ /$1 [R=301,L]
 
   # Pretty URLs: /{app-slug}/download -> download.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
+
+  # Pretty URLs: /{app-slug}/apk -> app.php?slug={app-slug}
+  # Supports URLs like yassota.com/capcut/apk (better for "download apk" search queries)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^([^/]+)/apk/?$ app.php?slug=$1 [L,QSA]
+
+  # Landing pages: /landing/{lang}/{slug}/ -> landing/{lang}/{slug}/index.html
+  # Note: no !-d condition — fire even when directory exists (DirectoryIndex handles index.html)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^landing/([a-z]{2})/([^/]+)/?$ landing/$1/$2/index.html [L]
+
+  # Upgrade/payment page
+  RewriteRule ^upgrade/?$ upgrade.php [L,QSA]
+
+  # Price, calculator, and tools pages — must come BEFORE the app-slug catch-all
+  RewriteRule ^exchange/?$ exchange.php [L,QSA]
+  RewriteRule ^gold/?$ gold.php [L,QSA]
+  RewriteRule ^calculators/?$ calculators.php [L,QSA]
+  RewriteRule ^solar/?$ solar.php [L,QSA]
+  RewriteRule ^tools/?$ tools/index.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^tools/([^/]+)/?$ tools/$1/index.php [L,QSA]
+  # DB-only web tools with no physical tools/{slug}/ folder (e.g. AI-generated
+  # tools managed from admin) — fall back to the legacy single-file renderer
+  # so the pretty /tools/{slug}/ URL used in the sitemap still resolves
+  # instead of 404ing.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^tools/([^/]+)/?$ tools.php?slug=$1 [L,QSA]
 
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -132,7 +194,8 @@ DirectoryIndex index.php
 <IfModule mod_headers.c>
   # Security
   Header set X-Content-Type-Options  "nosniff"
-  Header set X-Frame-Options         "SAMEORIGIN"
+  # Allow *.yassota.com subdomains to embed this site in iframes (for AI tool subdomains)
+  Header always set Content-Security-Policy "frame-ancestors 'self' https://*.yassota.com"
   Header set Referrer-Policy         "strict-origin-when-cross-origin"
   Header set X-XSS-Protection        "1; mode=block"
   # Keep-alive
@@ -151,6 +214,17 @@ DirectoryIndex index.php
 
 # ── ETag optimization ─────────────────────────────
 FileETag MTime Size
+
+# Disable ModSecurity for admin panel — it blocks legitimate HTML/script in form fields (ad code, etc.)
+<Files "admin.php">
+  <IfModule mod_security2.c>
+    SecRuleEngine Off
+  </IfModule>
+  <IfModule mod_security.c>
+    SecFilterEngine Off
+    SecFilterScanPOST Off
+  </IfModule>
+</Files>
 
 <FilesMatch "\.(sql|log|env|json)$">
   Require all denied

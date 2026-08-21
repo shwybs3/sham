@@ -2,6 +2,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+public_cache_headers(60);
 $slug = trim($_GET['slug'] ?? '');
 $stmt = $pdo->prepare("SELECT * FROM categories WHERE slug=?");
 $stmt->execute([$slug]);
@@ -9,7 +10,7 @@ $category = $stmt->fetch();
 
 if (!$category) {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>404</title>
+    echo '<!DOCTYPE html><html lang="' . (defined('UI_LANG') ? UI_LANG : 'ar') . '" dir="' . (defined('UI_DIR') ? UI_DIR : 'rtl') . '"><head><meta charset="UTF-8"><title>404</title>
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">التصنيف غير موجود</p>
@@ -17,7 +18,8 @@ if (!$category) {
     exit;
 }
 
-if (page_cache_start($pdo, $_SERVER['REQUEST_URI'])) exit;
+$_cacheKey = $_SERVER['REQUEST_URI'] . ':lang:' . (defined('UI_LANG') ? UI_LANG : 'ar');
+if (page_cache_start($pdo, $_cacheKey)) exit;
 
 $page    = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
@@ -49,7 +51,7 @@ $breadcrumbSchema = json_encode([
 $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'apps' ? 'apps' : 'home');
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -67,15 +69,12 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header('', $activeNav); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo, $category['slug']); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 
@@ -96,7 +95,7 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
   </div>
   <?php endif; ?>
 
-  <?php render_app_grid($apps, "لا توجد تطبيقات في تصنيف \"{$category['name']}\" بعد"); ?>
+  <?php render_app_grid($apps, __('no_apps_in_category')); ?>
   <?php render_pagination($page, $totalPages); ?>
 
 </main>
@@ -106,4 +105,4 @@ $activeNav = $category['slug'] === 'games' ? 'games' : ($category['slug'] === 'a
 <script src="<?= h(asset_url('assets/js/main.js')) ?>"></script>
 </body>
 </html>
-<?php page_cache_end($pdo, $_SERVER['REQUEST_URI']); ?>
+<?php page_cache_end($pdo, $_cacheKey); ?>

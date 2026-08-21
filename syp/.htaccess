@@ -1,0 +1,20 @@
+RewriteEngine On
+
+# Force HTTPS
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Remove .php extension
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L]
+
+# Route /pair-slug/ → pair.php?pair=pair-slug
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-z]{2,4}-[a-z]{2,4})/?$ pair.php?pair=$1 [L,QSA]
+
+# Index
+DirectoryIndex index.php index.html
+
+Options -Indexes

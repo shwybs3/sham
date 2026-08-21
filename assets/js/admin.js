@@ -174,47 +174,191 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiStatus = document.getElementById('ai-status');
 
   if (aiBtn) {
-    aiBtn.addEventListener('click', async () => {
-      const name = aiNameInput?.value.trim();
-      if (!name) { aiStatus.textContent = 'اكتب اسم التطبيق أولاً'; return; }
-      aiStatus.textContent = '⏳ جاري التوليد...';
-      aiBtn.disabled = true;
+    // Ensure log panel exists
+    let aiLogPanel = document.getElementById('ai-gen-log');
+    if (!aiLogPanel) {
+      aiLogPanel = document.createElement('div');
+      aiLogPanel.id = 'ai-gen-log';
+      aiLogPanel.style.cssText = 'display:none;margin-top:12px;background:#0d1117;border:1px solid rgba(99,130,190,.2);border-radius:10px;padding:12px 14px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:12px;color:#8b949e';
+      aiStatus.parentNode?.insertBefore(aiLogPanel, aiStatus.nextSibling);
+    }
+    function addLog(msg, type) {
+      const colors = {info:'#8b949e', trying:'#79c0ff', success:'#56d364', fail:'#f85149', warn:'#e3b341', done:'#56d364', error:'#f85149'};
+      const line = document.createElement('div');
+      line.style.cssText = 'padding:2px 0;border-bottom:1px solid rgba(99,130,190,.1);color:' + (colors[type] || '#8b949e');
+      line.textContent = msg;
+      aiLogPanel.appendChild(line);
+      aiLogPanel.scrollTop = aiLogPanel.scrollHeight;
+    }
 
-      try {
-        const res = await fetch('admin.php?ajax=generate', {
+    function fillAiData(data) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+      set('f-name', data.name); set('f-seo-title', data.seo_title);
+      set('f-meta-desc', data.meta_description); set('f-keywords', data.keywords);
+      set('f-short-desc', data.short_description); set('f-long-desc', data.long_description);
+      set('f-developer', data.developer); set('f-version', data.version);
+      set('f-android', data.android_version); set('f-size', data.size_mb);
+      set('f-license', data.license); set('f-pkg', data.package_name);
+      set('f-rating', data.rating); set('f-whats-new', data.whats_new);
+      ['feat-list','pros-list','cons-list','steps-list','faq-list'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.innerHTML = '';
+      });
+      const fill = (id, nm, items, second) => {
+        const add = window.initDynamicList(id, nm, '', second);
+        if (add && items) items.forEach(v => second ? add(v.q, v.a) : add(v));
+      };
+      fill('feat-list', 'features', data.features);
+      fill('pros-list', 'pros', data.pros);
+      fill('cons-list', 'cons', data.cons);
+      fill('steps-list', 'install_steps', data.install_steps);
+      fill('faq-list', 'faq', data.faq, true);
+    }
+
+    /* ── Fill All Fields with AI (one-click) ── */
+    const fillAllBtn = document.getElementById('btn-fill-all-ai');
+    const fillAllStatus = document.getElementById('fill-all-status');
+    if (fillAllBtn) {
+      fillAllBtn.addEventListener('click', () => {
+        const name = (document.getElementById('f-name')?.value || document.getElementById('ai-name')?.value || '').trim();
+        if (!name) { alert('اكتب اسم التطبيق في حقل "اسم التطبيق" أولاً'); return; }
+        if (aiNameInput) aiNameInput.value = name;
+        fillAllBtn.disabled = true;
+        fillAllBtn.style.opacity = '.6';
+        if (fillAllStatus) { fillAllStatus.style.display = 'block'; fillAllStatus.textContent = '⏳ جارٍ توليد جميع البيانات…'; }
+        if (aiStatus) { aiStatus.textContent = '⏳ جارٍ التوليد…'; aiStatus.style.color = ''; }
+        if (aiLogPanel) { aiLogPanel.innerHTML = ''; aiLogPanel.style.display = 'block'; }
+
+        fetch('admin.php?ajax=generate_sse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+        }).then(res => {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          function read() {
+            reader.read().then(({ done, value }) => {
+              if (done) { fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1'; return; }
+              buf += decoder.decode(value, { stream: true });
+              const parts = buf.split('\n\n');
+              buf = parts.pop();
+              parts.forEach(block => {
+                let eventType = 'message', dataStr = '';
+                block.split('\n').forEach(l => {
+                  if (l.startsWith('event: ')) eventType = l.slice(7).trim();
+                  if (l.startsWith('data: ')) dataStr = l.slice(6).trim();
+                });
+                if (!dataStr) return;
+                let d; try { d = JSON.parse(dataStr); } catch(e) { return; }
+                if (eventType === 'log') {
+                  if (aiLogPanel) addLog(d.msg, d.type);
+                  if (fillAllStatus) fillAllStatus.textContent = '⏳ ' + d.msg;
+                } else if (eventType === 'done') {
+                  fillAiData(d);
+                  const msg = '✅ اكتملت — موديل: ' + (d.used_model || '?');
+                  if (fillAllStatus) fillAllStatus.textContent = msg;
+                  if (aiStatus) { aiStatus.textContent = msg; aiStatus.style.color = 'var(--success)'; }
+                  fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
+                } else if (eventType === 'error') {
+                  const msg = '❌ ' + (d.msg || 'فشل التوليد');
+                  if (fillAllStatus) fillAllStatus.textContent = msg;
+                  if (aiStatus) { aiStatus.textContent = msg; aiStatus.style.color = 'var(--danger)'; }
+                  fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
+                }
+              });
+              read();
+            });
+          }
+          read();
+        }).catch(() => {
+          if (fillAllStatus) fillAllStatus.textContent = '❌ خطأ في الاتصال';
+          fillAllBtn.disabled = false; fillAllBtn.style.opacity = '1';
         });
-        const data = await res.json();
-        if (!data.success) { aiStatus.textContent = '❌ ' + data.error; return; }
+      });
+    }
 
-        const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-        set('f-name', data.name); set('f-seo-title', data.seo_title);
-        set('f-meta-desc', data.meta_description); set('f-keywords', data.keywords);
-        set('f-short-desc', data.short_description); set('f-long-desc', data.long_description);
-        set('f-developer', data.developer); set('f-version', data.version);
-        set('f-android', data.android_version); set('f-size', data.size_mb);
-        set('f-license', data.license); set('f-pkg', data.package_name);
-        set('f-rating', data.rating); set('f-whats-new', data.whats_new);
+    /* ── Per-field AI generate buttons ── */
+    document.querySelectorAll('.btn-field-ai').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.field;
+        const name = (document.getElementById('f-name')?.value || document.getElementById('ai-name')?.value || '').trim();
+        if (!name) { alert('اكتب اسم التطبيق أولاً'); return; }
+        btn.disabled = true; btn.textContent = '⏳';
+        fetch('admin.php?ajax=generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+        }).then(r => r.json()).then(d => {
+          const fieldMap = {
+            'seo_title': 'f-seo-title', 'meta_description': 'f-meta-desc',
+            'keywords': 'f-keywords', 'short_description': 'f-short-desc',
+            'long_description': 'f-long-desc'
+          };
+          const elId = fieldMap[field];
+          if (elId) {
+            const el = document.getElementById(elId);
+            if (el && d[field] != null) { el.value = d[field]; el.dispatchEvent(new Event('input')); }
+          }
+          btn.disabled = false; btn.textContent = '✨';
+        }).catch(() => { btn.disabled = false; btn.textContent = '✨'; });
+      });
+    });
 
-        // Refill dynamic lists
-        ['feat-list', 'pros-list', 'cons-list', 'steps-list', 'faq-list'].forEach(id => {
-          const el = document.getElementById(id); if (el) el.innerHTML = '';
-        });
-        const fill = (id, name, items, second) => {
-          const add = window.initDynamicList(id, name, '', second);
-          if (add && items) items.forEach(v => second ? add(v.q, v.a) : add(v));
-        };
-        fill('feat-list', 'features', data.features);
-        fill('pros-list', 'pros', data.pros);
-        fill('cons-list', 'cons', data.cons);
-        fill('steps-list', 'install_steps', data.install_steps);
-        fill('faq-list', 'faq', data.faq, true);
+    aiBtn.addEventListener('click', () => {
+      const name = aiNameInput?.value.trim();
+      if (!name) { aiStatus.textContent = 'اكتب اسم التطبيق أولاً'; return; }
+      aiStatus.textContent = '⏳ جارٍ التوليد…';
+      aiStatus.style.color = '';
+      aiBtn.disabled = true;
+      aiLogPanel.innerHTML = '';
+      aiLogPanel.style.display = 'block';
 
-        aiStatus.textContent = '✅ تم التوليد بنجاح — راجع وعدّل ثم احفظ';
-      } catch { aiStatus.textContent = '❌ خطأ في الاتصال'; }
-      aiBtn.disabled = false;
+      fetch('admin.php?ajax=generate_sse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, csrf: document.querySelector('[name=_csrf]')?.value })
+      }).then(res => {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        function read() {
+          reader.read().then(({ done, value }) => {
+            if (done) { aiBtn.disabled = false; return; }
+            buf += decoder.decode(value, { stream: true });
+            const parts = buf.split('\n\n');
+            buf = parts.pop();
+            parts.forEach(block => {
+              let eventType = 'message', dataStr = '';
+              block.split('\n').forEach(l => {
+                if (l.startsWith('event: ')) eventType = l.slice(7).trim();
+                if (l.startsWith('data: ')) dataStr = l.slice(6).trim();
+              });
+              if (!dataStr) return;
+              let d; try { d = JSON.parse(dataStr); } catch(e) { return; }
+              if (eventType === 'log') {
+                addLog(d.msg, d.type);
+              } else if (eventType === 'done') {
+                addLog(d.msg || '🎉 اكتمل', 'done');
+                fillAiData(d);
+                aiStatus.textContent = '✅ تم التوليد بنجاح — موديل: ' + (d.used_model || '?');
+                aiStatus.style.color = 'var(--success)';
+                aiBtn.disabled = false;
+              } else if (eventType === 'error') {
+                addLog('⛔ ' + (d.msg || 'خطأ'), 'error');
+                aiStatus.textContent = '❌ ' + (d.msg || 'فشل التوليد');
+                aiStatus.style.color = 'var(--danger)';
+                aiBtn.disabled = false;
+              }
+            });
+            read();
+          });
+        }
+        read();
+      }).catch(() => {
+        aiStatus.textContent = '❌ خطأ في الاتصال';
+        aiStatus.style.color = 'var(--danger)';
+        aiBtn.disabled = false;
+      });
     });
   }
 
@@ -361,34 +505,115 @@ document.addEventListener('DOMContentLoaded', () => {
       const status = document.getElementById('playstore-import-status');
       const url = urlInput?.value.trim();
       if (!url) { status.textContent = 'الصق رابط صفحة التطبيق من Google Play أولاً'; return; }
-      status.textContent = '⏳ جاري الاستيراد...';
+      status.textContent = '⏳ جاري الاستيراد الكامل (أيقونة + صور + محتوى AI) — قد يستغرق دقيقة...';
       btnImportPS.disabled = true;
       try {
-        const res = await fetch('admin.php?ajax=fetch_playstore', {
+        const res = await fetch('admin.php?ajax=fetch_playstore_full', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
         });
         const data = await res.json();
         if (!data.success) { status.textContent = '❌ ' + data.error; btnImportPS.disabled = false; return; }
         const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
-        set('f-name', data.name); set('ai-name', data.name);
+        // App name — only fill if empty so user-typed name isn't overwritten
+        const nameField = document.getElementById('f-name');
+        if (data.name && nameField && !nameField.value.trim()) nameField.value = data.name;
         set('f-short-desc', data.short_description);
         set('f-long-desc', data.long_description);
         set('f-pkg', data.package_name);
+        if (data.developer) set('f-developer', data.developer);
+        const vField = document.querySelector('[name="version"]');
+        if (data.version && vField && !vField.value) vField.value = data.version;
+        const avField = document.querySelector('[name="android_version"]');
+        if (data.android_version && avField && !avField.value) avField.value = data.android_version;
         const playstoreField = document.querySelector('[name=playstore_url]');
         if (playstoreField) playstoreField.value = data.playstore_url || url;
-        if (data.icon_url) {
+        set('f-whats-new', data.whats_new);
+        // SEO fields — fill from AI-generated or fallback values
+        set('f-seo-title', data.seo_title);
+        set('f-meta-desc', data.meta_description);
+        // Keywords: fill if empty, combine name + developer
+        const kwField = document.getElementById('f-keywords');
+        if (kwField && !kwField.value.trim() && data.name) {
+          const parts = [data.name];
+          if (data.developer) parts.push(data.developer);
+          parts.push('تحميل', 'أندرويد', 'APK');
+          kwField.value = parts.join(', ');
+        }
+        // Tags: fill if empty using package category hint
+        const tagsField = document.getElementById('f-tags');
+        if (tagsField && !tagsField.value.trim() && data.name) {
+          tagsField.value = data.name + (data.developer ? ', ' + data.developer : '');
+        }
+        // Trigger SEO counter updates
+        ['f-seo-title','f-meta-desc'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.dispatchEvent(new Event('input'));
+        });
+
+        // Fill AI-generated lists (pros/cons/features/install_steps)
+        ['feat-list','pros-list','cons-list','steps-list'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        const fillFromPs = (id, nm, items) => {
+          const add = window.initDynamicList(id, nm, '');
+          if (add && items) items.forEach(v => add(v));
+        };
+        fillFromPs('feat-list', 'features', data.features);
+        fillFromPs('pros-list', 'pros', data.pros);
+        fillFromPs('cons-list', 'cons', data.cons);
+        fillFromPs('steps-list', 'install_steps', data.install_steps);
+
+        // Icon — prefer locally saved path (served from our host), fall back to remote Play Store URL
+        if (data.icon_path) {
+          const preview = document.getElementById('icon-preview');
+          // icon_path is a relative server path like "uploads/icons/app-abc123.webp"
+          // Prefix with site root so the preview src is absolute
+          const iconSrc = data.icon_path.startsWith('http') ? data.icon_path : '/' + data.icon_path;
+          if (preview) { preview.src = iconSrc; preview.style.display = 'block'; }
+          let hidden = document.querySelector('[name=icon_saved_import]');
+          if (!hidden) { hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='icon_saved_import'; document.querySelector('form').appendChild(hidden); }
+          hidden.value = data.icon_path;
+        } else if (data.icon_url) {
           const preview = document.getElementById('icon-preview');
           if (preview) { preview.src = data.icon_url; preview.style.display = 'block'; }
-          const hidden = document.querySelector('[name=icon_url_import]');
-          if (!hidden) {
-            const inp = document.createElement('input');
-            inp.type = 'hidden'; inp.name = 'icon_url_import'; inp.value = data.icon_url;
-            document.querySelector('form').appendChild(inp);
-          } else { hidden.value = data.icon_url; }
+          let hidden = document.querySelector('[name=icon_url_import]');
+          if (!hidden) { hidden = document.createElement('input'); hidden.type='hidden'; hidden.name='icon_url_import'; document.querySelector('form').appendChild(hidden); }
+          hidden.value = data.icon_url;
         }
-        status.textContent = '✅ ' + (data.note || 'تم الاستيراد — راجع الحقول ثم أكمل الباقي بالذكاء الاصطناعي');
-      } catch { status.textContent = '❌ خطأ في الاتصال'; }
+
+        // Screenshots — prefer locally saved paths, fall back to remote URLs
+        const psInputsBox = document.getElementById('ps-screenshot-inputs');
+        const psPreviewBox = document.getElementById('ps-screenshot-preview');
+        if (psInputsBox) {
+          psInputsBox.innerHTML = '';
+          if (psPreviewBox) psPreviewBox.innerHTML = '';
+          const savedShots = data.screenshots || [];
+          const remoteUrls = data.screenshot_urls || [];
+          const useLocal = savedShots.length > 0;
+          const shots = useLocal ? savedShots : remoteUrls;
+          const fieldName = useLocal ? 'screenshot_paths_import[]' : 'screenshot_urls_import[]';
+          shots.forEach(su => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = fieldName; inp.value = su;
+            psInputsBox.appendChild(inp);
+            if (psPreviewBox) {
+              const img = document.createElement('img');
+              img.src = su; img.style.cssText = 'width:60px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--border-c)';
+              psPreviewBox.appendChild(img);
+            }
+          });
+          if (shots.length > 0) {
+            const note = document.createElement('p');
+            note.style.cssText = 'font-size:11px;color:var(--muted);margin:4px 0 0;width:100%';
+            note.textContent = `تم استيراد ${shots.length} لقطة شاشة ${useLocal?'وحفظها محلياً':'من Play Store'} — ستُحفظ عند الضغط على حفظ`;
+            psPreviewBox && psPreviewBox.appendChild(note);
+          }
+        }
+
+        const totalFields = [data.pros?.length,data.cons?.length,data.features?.length,data.install_steps?.length].filter(n=>n>0).length;
+        status.textContent = `✅ ${data.note || 'تم الاستيراد الكامل'} — تم ملء ${totalFields} قسم AI (مميزات/إيجابيات/سلبيات/خطوات)`;
+      } catch(e) { status.textContent = '❌ خطأ في الاتصال: ' + (e.message||''); }
       btnImportPS.disabled = false;
     });
   }
@@ -679,6 +904,48 @@ document.addEventListener('DOMContentLoaded', () => {
       btnBgCreate.disabled = false;
     });
   }
+
+  /* ── XHR form submit with progress overlay ── */
+  const appForm = document.getElementById('app-form');
+  if (appForm) {
+    const overlay  = document.getElementById('app-save-overlay');
+    const bar      = document.getElementById('app-save-bar');
+    const statTxt  = document.getElementById('app-save-status');
+    appForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (overlay) { overlay.style.display = 'flex'; }
+      if (bar)     { bar.style.width = '0%'; }
+      if (statTxt) { statTxt.textContent = 'رفع البيانات...'; }
+      const fd = new FormData(appForm);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', appForm.action || window.location.href);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.upload.onprogress = function(ev) {
+        if (ev.lengthComputable && bar) {
+          bar.style.width = Math.min(90, Math.round(ev.loaded / ev.total * 90)) + '%';
+          if (statTxt) statTxt.textContent = 'رفع البيانات... ' + Math.round(ev.loaded / ev.total * 90) + '%';
+        }
+      };
+      xhr.onload = function() {
+        if (bar) bar.style.width = '100%';
+        let data;
+        try { data = JSON.parse(xhr.responseText); } catch(err) { data = null; }
+        if (data && data.ok) {
+          if (statTxt) statTxt.textContent = '✅ تم الحفظ — جاري التحويل...';
+          setTimeout(() => { window.location.href = data.redirect; }, 400);
+        } else {
+          if (overlay) overlay.style.display = 'none';
+          const msg = (data && data.error) ? data.error : 'حدث خطأ، حاول مجدداً';
+          alert(msg);
+        }
+      };
+      xhr.onerror = function() {
+        if (overlay) overlay.style.display = 'none';
+        alert('فشل الاتصال، حاول مجدداً');
+      };
+      xhr.send(fd);
+    });
+  }
 });
 
 function escHtml(s) {
@@ -783,13 +1050,192 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Image by URL
+  // Image — upload modal with HTML copy-paste
   const imgBtn = document.getElementById('ws-image');
   if (imgBtn) {
     imgBtn.addEventListener('click', () => {
-      const url = prompt('رابط الصورة (URL):', 'https://');
-      if (url) document.execCommand('insertImage', false, url);
-      editor.focus();
+      // Save caret position before modal steals focus
+      const sel = window.getSelection();
+      let savedRange = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+      wsOpenImageModal(editor, savedRange);
+    });
+  }
+
+  function wsOpenImageModal(editorEl, savedRange) {
+    // Remove any existing modal
+    const old = document.getElementById('ws-img-modal');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ws-img-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+    overlay.innerHTML = `
+<div style="background:var(--panel-bg,#1a2035);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:14px;padding:24px;width:min(520px,100%);max-height:90vh;overflow-y:auto;direction:rtl;position:relative">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <h3 style="font-size:15px;font-weight:700;color:var(--text,#e2e8f0);margin:0">🖼️ رفع صورة في المقال</h3>
+    <button id="wsimg-close" type="button" style="background:none;border:none;color:var(--muted,#94a3b8);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
+  </div>
+
+  <div id="wsimg-drop" style="border:2px dashed var(--border,rgba(255,255,255,.15));border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:16px">
+    <div style="font-size:32px;margin-bottom:8px;pointer-events:none">📤</div>
+    <div style="font-size:14px;color:var(--text,#e2e8f0);margin-bottom:6px;pointer-events:none">اسحب وأفلت صورة هنا</div>
+    <div style="font-size:12px;color:var(--muted,#94a3b8);margin-bottom:14px;pointer-events:none">أو</div>
+    <label style="display:inline-block;background:var(--accent,#2563eb);color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+      📂 اختر صورة
+      <input type="file" id="wsimg-file" accept="image/*" style="display:none">
+    </label>
+    <div style="font-size:11px;color:var(--muted,#94a3b8);margin-top:10px;pointer-events:none">jpg · png · webp · gif — حتى 10 MB</div>
+  </div>
+
+  <div id="wsimg-uploading" style="display:none;text-align:center;padding:20px 0;color:var(--muted,#94a3b8);font-size:13px">
+    <div style="width:32px;height:32px;border:3px solid rgba(37,99,235,.2);border-top-color:var(--accent,#2563eb);border-radius:50%;animation:wsimg-spin 1s linear infinite;margin:0 auto 12px"></div>
+    جارٍ الرفع...
+  </div>
+
+  <div id="wsimg-result" style="display:none">
+    <div style="border-radius:10px;overflow:hidden;background:rgba(0,0,0,.25);margin-bottom:14px;text-align:center;max-height:220px">
+      <img id="wsimg-preview-img" style="max-width:100%;max-height:220px;object-fit:contain;display:block;margin:0 auto" alt="">
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted,#94a3b8);text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px">HTML جاهز — انسخ والصق في أي مكان</div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <textarea id="wsimg-html-code" readonly style="flex:1;background:rgba(0,0,0,.35);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:8px;padding:10px 12px;font-family:monospace;font-size:11.5px;color:#a5f3fc;direction:ltr;resize:none;height:50px;line-height:1.5;white-space:nowrap;overflow-x:auto"></textarea>
+        <button id="wsimg-copy-btn" type="button" style="flex-shrink:0;background:rgba(14,165,233,.12);border:1px solid rgba(14,165,233,.25);color:#38bdf8;border-radius:8px;padding:0 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap">📋 نسخ</button>
+      </div>
+    </div>
+
+    <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#4ade80;margin-bottom:16px">✓ تم الرفع — يمكنك إدراج الصورة في المقال أو نسخ الرابط HTML</div>
+  </div>
+
+  <div id="wsimg-error" style="display:none;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#f87171;margin-bottom:16px"></div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button id="wsimg-url-btn" type="button" style="background:none;border:1px solid var(--border,rgba(255,255,255,.1));color:var(--muted,#94a3b8);padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer">🔗 رابط URL</button>
+    <button id="wsimg-cancel" type="button" style="background:rgba(255,255,255,.06);border:1px solid var(--border,rgba(255,255,255,.1));color:var(--text,#e2e8f0);padding:8px 18px;border-radius:8px;font-size:13px;cursor:pointer">إلغاء</button>
+    <button id="wsimg-insert" type="button" disabled style="background:var(--accent,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.4;transition:opacity .2s">إدراج في المقال ←</button>
+  </div>
+
+  <style>
+    @keyframes wsimg-spin{to{transform:rotate(360deg)}}
+    #ws-img-modal *:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+  </style>
+</div>`;
+
+    document.body.appendChild(overlay);
+
+    let uploadedUrl = '';
+
+    function closeModal() { overlay.remove(); }
+
+    overlay.querySelector('#wsimg-close').onclick = closeModal;
+    overlay.querySelector('#wsimg-cancel').onclick = closeModal;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+    function showUploading() {
+      overlay.querySelector('#wsimg-drop').style.display = 'none';
+      overlay.querySelector('#wsimg-uploading').style.display = 'block';
+      overlay.querySelector('#wsimg-result').style.display = 'none';
+      overlay.querySelector('#wsimg-error').style.display = 'none';
+    }
+
+    function showResult(url) {
+      uploadedUrl = url;
+      overlay.querySelector('#wsimg-uploading').style.display = 'none';
+      overlay.querySelector('#wsimg-result').style.display = 'block';
+      overlay.querySelector('#wsimg-preview-img').src = url;
+      overlay.querySelector('#wsimg-html-code').value = `<img src="${url}" alt="" style="max-width:100%;height:auto">`;
+      const ins = overlay.querySelector('#wsimg-insert');
+      ins.disabled = false;
+      ins.style.opacity = '1';
+    }
+
+    function showError(msg) {
+      overlay.querySelector('#wsimg-uploading').style.display = 'none';
+      overlay.querySelector('#wsimg-drop').style.display = 'block';
+      const err = overlay.querySelector('#wsimg-error');
+      err.style.display = 'block';
+      err.textContent = '⚠ ' + msg;
+    }
+
+    function doUpload(file) {
+      if (!file) return;
+      const allowed = ['image/jpeg','image/png','image/webp','image/gif'];
+      if (!allowed.includes(file.type)) { showError('الصيغة غير مدعومة — jpg/png/webp/gif فقط'); return; }
+      if (file.size > 10 * 1024 * 1024) { showError('الحجم يتجاوز 10 ميغابايت'); return; }
+      showUploading();
+      const fd = new FormData();
+      fd.append('img', file);
+      fetch('admin.php?ajax=upload_blog_img&slot=99', {method:'POST', body:fd})
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) showResult(d.url);
+          else showError(d.error || 'فشل الرفع');
+        })
+        .catch(e => showError('خطأ في الشبكة: ' + e.message));
+    }
+
+    // File input
+    overlay.querySelector('#wsimg-file').addEventListener('change', e => {
+      if (e.target.files[0]) doUpload(e.target.files[0]);
+    });
+
+    // Drag & drop
+    const dz = overlay.querySelector('#wsimg-drop');
+    dz.addEventListener('click', () => overlay.querySelector('#wsimg-file').click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='var(--accent,#2563eb)'; dz.style.background='rgba(37,99,235,.06)'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor=''; dz.style.background=''; });
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.style.borderColor=''; dz.style.background='';
+      if (e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]);
+    });
+
+    // Copy HTML
+    overlay.querySelector('#wsimg-copy-btn').addEventListener('click', () => {
+      const ta = overlay.querySelector('#wsimg-html-code');
+      ta.select();
+      try { document.execCommand('copy'); } catch(e) { navigator.clipboard && navigator.clipboard.writeText(ta.value); }
+      const btn = overlay.querySelector('#wsimg-copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✓ تم النسخ!';
+      btn.style.background = 'rgba(34,197,94,.15)';
+      btn.style.borderColor = 'rgba(34,197,94,.3)';
+      btn.style.color = '#4ade80';
+      setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.borderColor=''; btn.style.color=''; }, 1800);
+    });
+
+    // URL fallback button
+    overlay.querySelector('#wsimg-url-btn').addEventListener('click', () => {
+      const url = prompt('أدخل رابط الصورة (URL):', 'https://');
+      if (url && url.startsWith('http')) {
+        showResult(url);
+      }
+    });
+
+    // Insert into editor
+    overlay.querySelector('#wsimg-insert').addEventListener('click', () => {
+      if (!uploadedUrl) return;
+      editorEl.focus();
+      if (savedRange) {
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(savedRange);
+      }
+      document.execCommand('insertHTML', false, `<img src="${uploadedUrl}" alt="" style="max-width:100%;height:auto"><p><br></p>`);
+      closeModal();
+      editorEl.focus();
+    });
+
+    // Paste image from clipboard
+    overlay.addEventListener('paste', e => {
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          doUpload(item.getAsFile());
+          break;
+        }
+      }
     });
   }
 
@@ -1048,13 +1494,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // On form submit: merge multi-key inputs into the hidden field
+  // On form submit: merge multi-key inputs + base64-encode ad code to bypass mod_security
   const settingsForm = document.querySelector('form[action*="page=settings"]');
   if (settingsForm) {
     settingsForm.addEventListener('submit', () => {
       const inputs = settingsForm.querySelectorAll('.or-key-input');
       const hidden = document.getElementById('openrouter-key-hidden');
       if (hidden) hidden.value = [...inputs].map(i => i.value.trim()).filter(Boolean).join('\n');
+
+      // Base64-encode the ad code textarea so mod_security doesn't block <script> tags
+      const adTa = settingsForm.querySelector('[name="download_custom_ad_code"]');
+      if (adTa && adTa.value.trim()) {
+        try {
+          const encoded = btoa(unescape(encodeURIComponent(adTa.value)));
+          let b64inp = settingsForm.querySelector('[name="download_custom_ad_code_b64"]');
+          if (!b64inp) {
+            b64inp = document.createElement('input');
+            b64inp.type = 'hidden';
+            b64inp.name = 'download_custom_ad_code_b64';
+            settingsForm.appendChild(b64inp);
+          }
+          b64inp.value = encoded;
+          adTa.name = '_download_custom_ad_code_raw'; // disable raw submission
+        } catch(e) { /* btoa failed — let raw value through */ }
+      }
     });
   }
 
@@ -1325,4 +1788,63 @@ function cpCopy(lang) {
 function cpExpand(lang) {
   const ta = document.getElementById('cp-textarea-' + lang);
   if (ta) ta.classList.toggle('cp-expanded');
+}
+
+/* ── Find APK Download Sources ────────────────────── */
+async function findDlSources() {
+  const pkg = (document.querySelector('[name="package_name"]')?.value || '').trim();
+  if (!pkg) { alert('أدخل اسم الحزمة (package_name) أولاً'); return; }
+
+  const panel = document.getElementById('dl-sources-panel');
+  const status = document.getElementById('dl-sources-status');
+  const list = document.getElementById('dl-sources-list');
+  const btn = document.getElementById('btn-find-dl-sources');
+
+  panel.style.display = 'block';
+  list.innerHTML = '';
+  status.textContent = '⏳ جارٍ فحص 10 مصادر للتحميل…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('admin.php?ajax=find_dl_sources&pkg=' + encodeURIComponent(pkg));
+    const d = await r.json();
+    if (!d.ok) { status.textContent = '❌ ' + (d.error || 'خطأ'); btn.disabled = false; return; }
+
+    const working = d.sources.filter(s => s.ok);
+    status.textContent = `✅ ${working.length} مصدر يعمل من أصل ${d.sources.length}`;
+
+    // Auto-fill mirror fields with first 3 working sources
+    const fDl  = document.getElementById('f-download-url');
+    const fM2  = document.getElementById('f-mirror2-url');
+    const fM3  = document.getElementById('f-mirror3-url');
+    if (working[0] && fDl && !fDl.value) fDl.value = working[0].url;
+    if (working[1] && fM2 && !fM2.value) fM2.value = working[1].url;
+    if (working[2] && fM3 && !fM3.value) fM3.value = working[2].url;
+
+    list.innerHTML = d.sources.map(s => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:${s.ok?'#f0fdf4':'#fff8f8'};border:1px solid ${s.ok?'#86efac':'#fca5a5'}">
+        <span style="font-size:14px">${s.ok ? '✅' : '❌'}</span>
+        <span style="flex:1;font-size:12px;color:#0f172a;font-weight:${s.direct?700:400}">${s.label}${s.direct?' (APK مباشر)':''}</span>
+        <span style="font-size:10px;color:#94a3b8">HTTP ${s.http}</span>
+        ${s.ok ? `<button type="button" onclick="useDlSource('${s.url.replace(/'/g,"\\'")}',this)" style="background:#2563eb;color:#fff;border:none;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer">استخدم</button>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    status.textContent = '❌ خطأ في الاتصال';
+  }
+  btn.disabled = false;
+}
+
+function useDlSource(url, btn) {
+  const targets = [
+    document.getElementById('f-download-url'),
+    document.getElementById('f-mirror2-url'),
+    document.getElementById('f-mirror3-url'),
+  ];
+  const target = targets.find(t => t && !t.value) || targets[0];
+  if (target) {
+    target.value = url;
+    btn.textContent = '✓';
+    btn.style.background = '#16a34a';
+    setTimeout(() => { btn.textContent = 'استخدم'; btn.style.background = '#2563eb'; }, 1500);
+  }
 }

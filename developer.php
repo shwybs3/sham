@@ -2,6 +2,7 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+public_cache_headers(60);
 $dev = trim($_GET['name'] ?? '');
 if ($dev === '') { header('Location: ' . url('')); exit; }
 
@@ -15,7 +16,7 @@ $totalApps = (int)$countStmt->fetchColumn();
 
 if ($totalApps === 0) {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>404</title>
+    echo '<!DOCTYPE html><html lang="' . (defined('UI_LANG') ? UI_LANG : 'ar') . '" dir="' . (defined('UI_DIR') ? UI_DIR : 'rtl') . '"><head><meta charset="UTF-8"><title>404</title>
     <link rel="stylesheet" href="assets/css/main.css"></head><body style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
     <p style="font-size:64px;font-family:var(--f-mono);color:var(--cyan)">404</p>
     <p style="color:var(--muted)">لا توجد تطبيقات منشورة لهذا المطور</p>
@@ -41,7 +42,7 @@ $breadcrumbSchema = json_encode([
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?= defined('UI_LANG') ? UI_LANG : 'ar' ?>" dir="<?= defined('UI_DIR') ? UI_DIR : 'rtl' ?>">
 <head>
   <?= nav_guard_script() ?>
   <meta charset="UTF-8">
@@ -58,15 +59,12 @@ $breadcrumbSchema = json_encode([
   <meta name="twitter:description" content="<?= h($metaDesc) ?>">
   <script type="application/ld+json"><?= $breadcrumbSchema ?></script>
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/main.css')) ?>">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5506877998492189"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
 <?php render_site_header(); ?>
 
-<div class="page-wrap">
-<?php render_site_sidebar($pdo); ?>
+<div class="page-wrap fw">
 
 <main class="main-content">
 
