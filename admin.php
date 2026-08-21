@@ -563,6 +563,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()
     exit;
 }
 
+// AJAX: upload an image from the WYSIWYG editor's "رفع صورة" button — lets
+// an admin insert a photo straight from their phone's camera/gallery
+// instead of needing an already-hosted image URL.
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_blog_image' && is_admin()) {
+    header('Content-Type: application/json');
+    if (!csrf_check()) { echo json_encode(['success' => false, 'error' => 'جلسة غير صالحة']); exit; }
+    $path = !empty($_FILES['file']) ? process_blog_image($_FILES['file']) : null;
+    echo json_encode($path ? ['success' => true, 'url' => url($path)] : ['success' => false, 'error' => 'تعذّر رفع الصورة — تأكد أنها JPG/PNG/WebP بحجم معقول'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* ══════════════════════════════════════════════════════
    AJAX: AI admin assistant — a safe, whitelisted-actions
    console. The admin types a request in plain language;
@@ -978,7 +989,7 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             $bodyVal = json_encode(['sections' => $sections, 'description' => trim($_POST['cp_description'] ?? '')],
                 JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         } else {
-            $bodyVal = trim($_POST['body'] ?? '');
+            $bodyVal = sanitize_blog_html($_POST['body'] ?? '');
         }
         $d = [
             'type' => $type,
@@ -2314,7 +2325,11 @@ elseif ($page === 'blog-edit'):
           <button class="ws-btn" type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1≡</button>
           <span class="ws-sep"></span>
           <button class="ws-btn" type="button" id="ws-link" title="رابط">🔗</button>
-          <button class="ws-btn" type="button" id="ws-image" title="صورة">🖼</button>
+          <button class="ws-btn" type="button" id="ws-button" title="زر (رابط بشكل زر)">🔘</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" id="ws-upload-image" title="رفع صورة من الجهاز">📤🖼</button>
+          <input type="file" id="ws-upload-image-input" accept="image/png,image/jpeg,image/webp" style="display:none">
+          <button class="ws-btn" type="button" id="ws-image" title="صورة برابط خارجي">🖼</button>
           <span class="ws-sep"></span>
           <button class="ws-btn" type="button" id="ws-code" title="كتلة كود">⌨</button>
           <button class="ws-btn" type="button" data-cmd="insertHorizontalRule" title="خط فاصل">─</button>
@@ -2639,7 +2654,7 @@ elseif ($page === 'settings'): ?>
         foreach ($existingKeys as $ki => $kv): ?>
         <div class="key-row" style="display:flex;gap:8px;margin-bottom:8px">
           <input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="<?= h($kv) ?>" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
-          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
+          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(240,101,101,.15);border:1px solid rgba(240,101,101,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
         </div>
         <?php endforeach; ?>
       </div>

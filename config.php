@@ -1053,7 +1053,10 @@ function decode_code_page(string $body): array {
 function render_blog_body(string $body): string {
     if (trim($body) === '') return '';
     if (preg_match('/<[a-zA-Z][a-zA-Z0-9]*[\s\/>]/u', $body)) {
-        return $body; // real HTML — output raw
+        // Re-balance on every render (not just on save) so articles saved
+        // before this existed — already broken by a stray closing tag —
+        // self-heal the moment they're viewed again, with no DB migration.
+        return sanitize_blog_html($body);
     }
     // Plain text fallback: split on blank lines → paragraphs
     $paras = preg_split('/\n{2,}/', trim($body));
@@ -1069,6 +1072,38 @@ function render_blog_body(string $body): string {
         }
     }
     return $html;
+}
+
+// Balances/repairs WYSIWYG-authored article HTML before it's stored. The
+// admin editor's "HTML source" toggle and contenteditable both allow
+// arbitrary markup through with no validation — a single stray closing tag
+// (e.g. pasted from another page's view-source) closes a real ancestor
+// <div> on the public article page (article body sits inside
+// .blog-body > .section-box > .main-content > .page-wrap), truncating the
+// visible article and corrupting the layout of everything after it.
+// Round-tripping through DOMDocument auto-closes/discards unmatched tags,
+// so the stored body can never break out of its container. Also strips
+// tags that have no place in article content and could otherwise execute.
+function sanitize_blog_html(string $html): string {
+    $html = trim($html);
+    if ($html === '') return '';
+
+    $doc = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $doc->loadHTML('<?xml encoding="utf-8"?><body>' . $html . '</body>', LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+
+    $body = $doc->getElementsByTagName('body')->item(0);
+    if (!$body) return '';
+
+    foreach (['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta'] as $tag) {
+        $nodes = $doc->getElementsByTagName($tag);
+        while ($nodes->length > 0) $nodes->item(0)->parentNode->removeChild($nodes->item(0));
+    }
+
+    $out = '';
+    foreach ($body->childNodes as $child) $out .= $doc->saveHTML($child);
+    return trim($out);
 }
 
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
@@ -1375,6 +1410,20 @@ function process_screenshots(array $files, string $slug): array {
         }
     }
     return $result;
+}
+
+// Inline article image (WYSIWYG "رفع صورة" button) — aspect-preserving,
+// unlike process_icon() which force-crops to a square app icon.
+function process_blog_image(array $file): ?string {
+    if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > MAX_ICON_MB * 4 * 1048576) return null;
+    $info = @getimagesize($file['tmp_name']);
+    if (!$info) return null;
+    $dir = UPLOAD_PATH . '/blog';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $name = 'img-' . substr(md5(uniqid()), 0, 10) . '.webp';
+    $dest = "$dir/$name";
+    if (!compress_image_to($file['tmp_name'], $info['mime'], $dest, 1600, 1600, 85)) return null;
+    return "uploads/blog/$name";
 }
 
 function time_ago(string $dt): string {

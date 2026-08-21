@@ -187,7 +187,7 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
       </div>
 
       <?php else: ?>
-      <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
+      <div class="dl-status" style="background:rgba(240,101,101,.08);border:1px solid rgba(240,101,101,.25);border-radius:12px;padding:16px">
         <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
         لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق.
       </div>

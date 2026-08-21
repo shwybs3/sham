@@ -551,7 +551,7 @@ function wave(): string {
       </div>
     <?php else: ?>
       <?php if ($commentError): ?>
-        <div style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:14px"><?= h($commentError) ?></div>
+        <div style="background:rgba(240,101,101,.1);border:1px solid rgba(240,101,101,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:14px"><?= h($commentError) ?></div>
       <?php endif; ?>
       <div id="comment-form-slot" data-app-slug="<?= h($app['slug']) ?>">
         <p style="color:var(--muted);font-size:13px">⏳ جاري تحميل نموذج التقييم...</p>

@@ -72,7 +72,7 @@ $metaDesc = 'تواصل مع فريق yassota لأي استفسار أو اقت�
       </div>
     <?php else: ?>
       <?php if ($error): ?>
-        <div class="alert alert-error" style="background:rgba(255,68,102,.1);border:1px solid rgba(255,68,102,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:16px"><?= h($error) ?></div>
+        <div class="alert alert-error" style="background:rgba(240,101,101,.1);border:1px solid rgba(240,101,101,.25);color:var(--danger);padding:14px 18px;border-radius:10px;margin-bottom:16px"><?= h($error) ?></div>
       <?php endif; ?>
       <form method="post" action="contact.php" style="display:flex;flex-direction:column;gap:14px">
         <?= csrf_field() ?>

@@ -793,6 +793,65 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Upload an image file straight from the device (phone camera/gallery)
+  // instead of needing an already-hosted URL — inserted at the cursor once
+  // the server finishes processing it.
+  const uploadBtn   = document.getElementById('ws-upload-image');
+  const uploadInput = document.getElementById('ws-upload-image-input');
+  if (uploadBtn && uploadInput) {
+    let savedRange = null;
+    uploadBtn.addEventListener('click', () => {
+      const sel = window.getSelection();
+      savedRange = sel.rangeCount ? sel.getRangeAt(0) : null;
+      uploadInput.click();
+    });
+    uploadInput.addEventListener('change', () => {
+      const file = uploadInput.files[0];
+      uploadInput.value = '';
+      if (!file) return;
+      editor.focus();
+      if (savedRange) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); }
+      const placeholder = 'رفع-الصورة-جارٍ-' + Date.now();
+      document.execCommand('insertHTML', false, `<span id="${placeholder}">⏳ جارٍ رفع الصورة...</span>`);
+
+      const fd = new FormData();
+      fd.append('file', file);
+      const csrfField = form.querySelector('input[name="_csrf"]');
+      if (csrfField) fd.append('_csrf', csrfField.value);
+      fetch('admin.php?ajax=upload_blog_image', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+          const span = document.getElementById(placeholder);
+          if (!span) return;
+          if (d.success) {
+            span.outerHTML = `<img src="${d.url}" alt="">`;
+          } else {
+            span.outerHTML = '';
+            alert(d.error || 'تعذّر رفع الصورة');
+          }
+        })
+        .catch(() => {
+          const span = document.getElementById(placeholder);
+          if (span) span.outerHTML = '';
+          alert('تعذّر رفع الصورة — تحقق من الاتصال');
+        });
+    });
+  }
+
+  // Button (a styled call-to-action link, reusing the site's own .btn-primary look)
+  const btnBtn = document.getElementById('ws-button');
+  if (btnBtn) {
+    btnBtn.addEventListener('click', () => {
+      const text = prompt('نص الزر:', 'اضغط هنا');
+      if (!text) return;
+      const url = prompt('رابط الزر (URL):', 'https://');
+      if (!url) return;
+      document.execCommand('insertHTML', false,
+        `<a href="${url}" class="btn-primary" style="text-decoration:none;margin:8px 0">${text}</a>&nbsp;`);
+      editor.focus();
+    });
+  }
+
   // Code block
   const codeBtn = document.getElementById('ws-code');
   if (codeBtn) {

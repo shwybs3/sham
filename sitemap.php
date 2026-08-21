@@ -40,7 +40,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
     <changefreq>monthly</changefreq><priority>0.5</priority>
   </url>
   <?php endforeach; ?>
-  <url><loc><?= SITE_URL ?>/blog.php</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/blog</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
   <?php foreach ($blogPosts as $bp): ?>
   <url>
     <loc><?= h(blog_post_url($bp['slug'])) ?></loc>
