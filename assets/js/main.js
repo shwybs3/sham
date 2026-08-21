@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         width:100px;height:100px;
         top:${e.clientY - rect.top - 50}px;
         left:${e.clientX - rect.left - 50}px;
-        background:rgba(37,99,235,.12);
+        background:rgba(34,224,168,.12);
         transform:scale(0);
         animation:ripple .5s ease forwards;
         pointer-events:none;

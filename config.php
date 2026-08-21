@@ -38,12 +38,12 @@ try {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>فشل الاتصال بقاعدة البيانات</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9}
-    .box{max-width:680px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
-    h1{color:#dc2626;font-size:20px;margin:0 0 6px} p.sub{color:#64748b;font-size:13px;margin:0 0 20px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0a0d0c;color:#f3f6f4;padding:40px 16px;line-height:1.9}
+    .box{max-width:680px;margin:0 auto;background:#131a16;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+    h1{color:#f06565;font-size:20px;margin:0 0 6px} p.sub{color:#93a29c;font-size:13px;margin:0 0 20px}
     ol{padding-inline-start:20px;font-size:14px} li{margin-bottom:10px}
-    code{background:#f1f4f9;color:#2563eb;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
-    .err{margin-top:22px;background:#f1f4f9;border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#b91c1c;direction:ltr;text-align:left;word-break:break-all}
+    code{background:#19221d;color:#22e0a8;padding:2px 8px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block}
+    .err{margin-top:22px;background:#19221d;border:1px solid rgba(240,101,101,.25);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#f06565;direction:ltr;text-align:left;word-break:break-all}
     </style></head><body><div class="box">
     <h1>تعذر الاتصال بقاعدة البيانات</h1>
     <p class="sub">اتبع الخطوات التالية للحل:</p>
@@ -1053,7 +1053,10 @@ function decode_code_page(string $body): array {
 function render_blog_body(string $body): string {
     if (trim($body) === '') return '';
     if (preg_match('/<[a-zA-Z][a-zA-Z0-9]*[\s\/>]/u', $body)) {
-        return $body; // real HTML — output raw
+        // Re-balance on every render (not just on save) so articles saved
+        // before this existed — already broken by a stray closing tag —
+        // self-heal the moment they're viewed again, with no DB migration.
+        return sanitize_blog_html($body);
     }
     // Plain text fallback: split on blank lines → paragraphs
     $paras = preg_split('/\n{2,}/', trim($body));
@@ -1071,6 +1074,38 @@ function render_blog_body(string $body): string {
     return $html;
 }
 
+// Balances/repairs WYSIWYG-authored article HTML before it's stored. The
+// admin editor's "HTML source" toggle and contenteditable both allow
+// arbitrary markup through with no validation — a single stray closing tag
+// (e.g. pasted from another page's view-source) closes a real ancestor
+// <div> on the public article page (article body sits inside
+// .blog-body > .section-box > .main-content > .page-wrap), truncating the
+// visible article and corrupting the layout of everything after it.
+// Round-tripping through DOMDocument auto-closes/discards unmatched tags,
+// so the stored body can never break out of its container. Also strips
+// tags that have no place in article content and could otherwise execute.
+function sanitize_blog_html(string $html): string {
+    $html = trim($html);
+    if ($html === '') return '';
+
+    $doc = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $doc->loadHTML('<?xml encoding="utf-8"?><body>' . $html . '</body>', LIBXML_NOERROR | LIBXML_NOWARNING);
+    libxml_clear_errors();
+
+    $body = $doc->getElementsByTagName('body')->item(0);
+    if (!$body) return '';
+
+    foreach (['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta'] as $tag) {
+        $nodes = $doc->getElementsByTagName($tag);
+        while ($nodes->length > 0) $nodes->item(0)->parentNode->removeChild($nodes->item(0));
+    }
+
+    $out = '';
+    foreach ($body->childNodes as $child) $out .= $doc->saveHTML($child);
+    return trim($out);
+}
+
 function blog_type_label(string $type): string { return BLOG_TYPES[$type] ?? 'مقالات'; }
 function blog_post_url(string $slug): string { return url('blog/' . rawurlencode($slug)); }
 function blog_type_url(string $type): string { return url('blog?type=' . rawurlencode($type)); }
@@ -1086,6 +1121,69 @@ function unique_blog_slug(PDO $pdo, string $base, int $excludeId = 0): string {
         $stmt->execute([$slug, $excludeId]);
     }
     return $slug;
+}
+
+// Full AI blog-post generation pipeline — writes the article + SEO fields
+// + a best-effort cover image, and inserts it as a draft. Shared by the
+// admin "توليد بالذكاء الاصطناعي" button (admin.php ajax=generate_blog_post)
+// and the external Claude Agent MCP endpoint (claude-agent.php) so both
+// stay in sync with a single prompt/pipeline.
+function ai_generate_blog_post(PDO $pdo, string $type, string $topic): array {
+    if (!isset(BLOG_TYPES[$type])) $type = 'article';
+
+    $typeGuides = [
+        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
+        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
+        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
+        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
+        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
+        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
+    ];
+    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
+
+    $prompt = <<<P
+أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
+{$typeGuides[$type]}
+{$topicLine}
+
+المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
+اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
+
+اتبع معايير SEO:
+- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
+- meta_description: 140-160 حرفاً يلخص المقال.
+- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
+- excerpt: سطر أو سطران يظهران في بطاقة المقال.
+
+أعد JSON صالح فقط بدون أي نص خارج JSON:
+{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
+P;
+    $r = ai_text($pdo, $prompt);
+    if (!$r['ok']) return ['success' => false, 'error' => $r['error']];
+    $data = ai_extract_json($r['content']);
+    if (!$data) return ['success' => false, 'error' => 'رد الذكاء الاصطناعي لم يكن JSON صالحاً'];
+    $data = clean_utf8_deep($data);
+
+    $title = trim($data['title'] ?? '');
+    $body  = trim($data['body'] ?? '');
+    if (!$title || !$body) return ['success' => false, 'error' => 'رد الذكاء الاصطناعي ناقص'];
+    $slug = unique_blog_slug($pdo, $title);
+
+    // Best-effort cover image — never blocks the post from being created.
+    $coverImage = null;
+    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
+    if ($ir['ok']) {
+        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
+        file_put_contents($tmp, $ir['bin']);
+        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
+        @unlink($tmp);
+    }
+
+    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
+        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
+            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
+    $newId = (int)$pdo->lastInsertId();
+    return ['success' => true, 'id' => $newId, 'title' => $title, 'slug' => $slug];
 }
 
 // CSS/JS URL with a cache-busting ?v= based on the file's own mtime — required
@@ -1234,10 +1332,10 @@ function admin_ip_check(PDO $pdo): void {
     die('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>الوصول مرفوض</title>
-    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#0f172a;padding:40px 16px;line-height:1.9;text-align:center}
-    .box{max-width:480px;margin:60px auto;background:#fff;border:1px solid rgba(15,23,42,.09);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(15,23,42,.06)}
-    h1{color:#dc2626;font-size:20px;margin:0 0 14px}
-    code{background:#f1f4f9;color:#2563eb;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
+    <style>body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0a0d0c;color:#f3f6f4;padding:40px 16px;line-height:1.9;text-align:center}
+    .box{max-width:480px;margin:60px auto;background:#131a16;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+    h1{color:#f06565;font-size:20px;margin:0 0 14px}
+    code{background:#19221d;color:#22e0a8;padding:4px 10px;border-radius:6px;font-family:monospace;direction:ltr;display:inline-block;margin-top:6px}
     </style></head><body><div class="box">
     <h1>الوصول مرفوض</h1>
     <p>عنوان IP الخاص بك غير مدرج ضمن قائمة الوصول المسموح بها للوحة التحكم.</p>
@@ -1312,6 +1410,20 @@ function process_screenshots(array $files, string $slug): array {
         }
     }
     return $result;
+}
+
+// Inline article image (WYSIWYG "رفع صورة" button) — aspect-preserving,
+// unlike process_icon() which force-crops to a square app icon.
+function process_blog_image(array $file): ?string {
+    if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > MAX_ICON_MB * 4 * 1048576) return null;
+    $info = @getimagesize($file['tmp_name']);
+    if (!$info) return null;
+    $dir = UPLOAD_PATH . '/blog';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $name = 'img-' . substr(md5(uniqid()), 0, 10) . '.webp';
+    $dest = "$dir/$name";
+    if (!compress_image_to($file['tmp_name'], $info['mime'], $dest, 1600, 1600, 85)) return null;
+    return "uploads/blog/$name";
 }
 
 function time_ago(string $dt): string {
@@ -1396,7 +1508,7 @@ function head_extras(PDO $pdo): string {
         . '<link rel="icon" type="image/svg+xml" href="' . h(url('favicon.svg')) . '">' . "\n  "
         . '<link rel="manifest" href="' . h(url('manifest.json')) . '">' . "\n  "
         . '<link rel="alternate" type="application/rss+xml" title="yassota — آخر التحديثات" href="' . h(url('rss')) . '">' . "\n  "
-        . '<meta name="theme-color" content="#2563eb">' . "\n  "
+        . '<meta name="theme-color" content="#0a0d0c">' . "\n  "
         . '<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">' . "\n  "
         . '<meta name="language" content="ar">' . "\n  "
         . '<meta property="og:locale" content="ar_AR">' . "\n  "

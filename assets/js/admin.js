@@ -239,8 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
     checks.forEach(c => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:10px;background:' +
-        (c.ok ? 'rgba(0,230,118,.08)' : 'rgba(255,68,102,.08)') + ';border:1px solid ' +
-        (c.ok ? 'rgba(0,230,118,.25)' : 'rgba(255,68,102,.25)');
+        (c.ok ? 'rgba(47,206,119,.08)' : 'rgba(240,101,101,.08)') + ';border:1px solid ' +
+        (c.ok ? 'rgba(47,206,119,.25)' : 'rgba(240,101,101,.25)');
       row.innerHTML = `
         <span style="font-size:16px;line-height:1;flex-shrink:0">${c.ok ? '✅' : '❌'}</span>
         <div style="flex:1">
@@ -548,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bubble = document.createElement('div');
     const isUser = role === 'user';
     bubble.style.cssText = `align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;` +
-      (isUser ? 'background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.22);color:var(--white)'
+      (isUser ? 'background:rgba(34,224,168,.08);border:1px solid rgba(34,224,168,.22);color:var(--white)'
               : 'background:var(--navy-600);border:1px solid var(--border-c);color:var(--white)');
     bubble.textContent = text;
     assistantLog.appendChild(bubble);
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await res.json();
           const row = document.createElement('div');
           row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:13px;' +
-            (data.success ? 'background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2)' : 'background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.2)');
+            (data.success ? 'background:rgba(47,206,119,.08);border:1px solid rgba(47,206,119,.2)' : 'background:rgba(240,101,101,.08);border:1px solid rgba(240,101,101,.2)');
           if (data.success) {
             done++;
             row.innerHTML = `<span>✅ ${escHtml(data.name)} — ${data.has_playstore ? 'تم ربطها بـ Play Store' : 'بدون رابط Play Store'}${data.has_icon ? '' : '، بدون أيقونة'}</span>
@@ -789,6 +789,65 @@ document.addEventListener('DOMContentLoaded', () => {
     imgBtn.addEventListener('click', () => {
       const url = prompt('رابط الصورة (URL):', 'https://');
       if (url) document.execCommand('insertImage', false, url);
+      editor.focus();
+    });
+  }
+
+  // Upload an image file straight from the device (phone camera/gallery)
+  // instead of needing an already-hosted URL — inserted at the cursor once
+  // the server finishes processing it.
+  const uploadBtn   = document.getElementById('ws-upload-image');
+  const uploadInput = document.getElementById('ws-upload-image-input');
+  if (uploadBtn && uploadInput) {
+    let savedRange = null;
+    uploadBtn.addEventListener('click', () => {
+      const sel = window.getSelection();
+      savedRange = sel.rangeCount ? sel.getRangeAt(0) : null;
+      uploadInput.click();
+    });
+    uploadInput.addEventListener('change', () => {
+      const file = uploadInput.files[0];
+      uploadInput.value = '';
+      if (!file) return;
+      editor.focus();
+      if (savedRange) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); }
+      const placeholder = 'رفع-الصورة-جارٍ-' + Date.now();
+      document.execCommand('insertHTML', false, `<span id="${placeholder}">⏳ جارٍ رفع الصورة...</span>`);
+
+      const fd = new FormData();
+      fd.append('file', file);
+      const csrfField = form.querySelector('input[name="_csrf"]');
+      if (csrfField) fd.append('_csrf', csrfField.value);
+      fetch('admin.php?ajax=upload_blog_image', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+          const span = document.getElementById(placeholder);
+          if (!span) return;
+          if (d.success) {
+            span.outerHTML = `<img src="${d.url}" alt="">`;
+          } else {
+            span.outerHTML = '';
+            alert(d.error || 'تعذّر رفع الصورة');
+          }
+        })
+        .catch(() => {
+          const span = document.getElementById(placeholder);
+          if (span) span.outerHTML = '';
+          alert('تعذّر رفع الصورة — تحقق من الاتصال');
+        });
+    });
+  }
+
+  // Button (a styled call-to-action link, reusing the site's own .btn-primary look)
+  const btnBtn = document.getElementById('ws-button');
+  if (btnBtn) {
+    btnBtn.addEventListener('click', () => {
+      const text = prompt('نص الزر:', 'اضغط هنا');
+      if (!text) return;
+      const url = prompt('رابط الزر (URL):', 'https://');
+      if (!url) return;
+      document.execCommand('insertHTML', false,
+        `<a href="${url}" class="btn-primary" style="text-decoration:none;margin:8px 0">${text}</a>&nbsp;`);
       editor.focus();
     });
   }
@@ -956,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         btn.dataset.action = d.verified ? 'unverify' : 'verify';
         btn.textContent = d.verified ? 'إلغاء التحقق' : '✓ تحقق الفريق — الرابط آمن';
-        btn.style.background = d.verified ? 'rgba(220,38,38,.1)' : '';
+        btn.style.background = d.verified ? 'rgba(240,101,101,.1)' : '';
         btn.style.color      = d.verified ? 'var(--danger)' : '';
         if (resultEl) resultEl.innerHTML = d.verified
           ? '<span style="color:var(--success);font-size:13px">✓ تمت إضافة شارة التحقق على صفحة التطبيق وصفحة التحميل</span>'
@@ -1024,7 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
       row.className = 'key-row';
       row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
       row.innerHTML = `<input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
-        <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>`;
+        <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(240,101,101,.15);border:1px solid rgba(240,101,101,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>`;
       wrap.appendChild(row);
       row.querySelector('input').focus();
     });
@@ -1042,7 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         primarySel.appendChild(opt);
       }
       primarySel.value = model;
-      btn.style.background = 'rgba(6,182,212,.25)';
+      btn.style.background = 'rgba(34,224,168,.25)';
       btn.style.borderColor = 'var(--cyan)';
       document.querySelectorAll('.preset-model-btn').forEach(b => { if (b !== btn) { b.style.background = ''; b.style.borderColor = ''; } });
     });
@@ -1261,13 +1320,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!res) return;
     if (!filled.length) {
-      res.style.display=''; res.innerHTML='<span style="color:#f87171">⚠️ لم يتم الكشف عن أي لغة</span>';
+      res.style.display=''; res.innerHTML='<span style="color:#f06565">⚠️ لم يتم الكشف عن أي لغة</span>';
       return;
     }
     res.style.display='';
     res.innerHTML = '<span class="cp-smart-ok">✓ تمت المزامنة:</span> '
       + filled.map(lang => {
-          const d = CP_DEFS[lang]||{label:lang,icon:'',color:'#64748b'};
+          const d = CP_DEFS[lang]||{label:lang,icon:'',color:'#93a29c'};
           return `<span class="cp-smart-chip" style="--lc:${d.color}">${d.icon} ${d.label}</span>`;
         }).join('');
 

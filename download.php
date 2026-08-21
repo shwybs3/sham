@@ -17,7 +17,7 @@ $app = $stmt->fetch();
 
 if (!$app) {
     http_response_code(404);
-    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#f5f7fb;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
+    echo '<html dir="rtl"><body style="font-family:sans-serif;background:#0a0d0c;color:#f3f6f4;display:flex;align-items:center;justify-content:center;height:100vh"><p>التطبيق غير موجود</p></body></html>';
     exit;
 }
 
@@ -187,7 +187,7 @@ $tgUrl       = get_cfg($pdo, 'telegram_channel_url', '');
       </div>
 
       <?php else: ?>
-      <div class="dl-status" style="background:rgba(255,68,102,.08);border:1px solid rgba(255,68,102,.25);border-radius:12px;padding:16px">
+      <div class="dl-status" style="background:rgba(240,101,101,.08);border:1px solid rgba(240,101,101,.25);border-radius:12px;padding:16px">
         <strong style="color:var(--danger)">رابط التحميل غير متوفر حالياً لهذا التطبيق</strong><br>
         لم يقم فريق yassota بإضافة رابط تحميل بعد لهذا التطبيق.
       </div>

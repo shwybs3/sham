@@ -4,6 +4,12 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Some hosts (CGI/FastCGI PHP) strip the Authorization header before PHP
+  # ever sees it — this forwards it through so $_SERVER['HTTP_AUTHORIZATION']
+  # works, needed for the Bearer-token auth on claude-agent.php (MCP).
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   # Force HTTPS — required for AdSense and for the cookie-consent /
   # localStorage behavior to be trustworthy. IMPORTANT: only keep this
   # enabled once your hosting actually has a valid SSL certificate active
@@ -15,6 +21,7 @@ DirectoryIndex index.php
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
   RewriteRule ^robots\.txt$ robots.php [L]
+  RewriteRule ^sitemap\.xml$ sitemap.php [L]
 
   # Canonical homepage: redirect old /index.php links/bookmarks to the root
   RewriteCond %{THE_REQUEST} \s/index\.php[\s?] [NC]
@@ -146,6 +153,11 @@ DirectoryIndex index.php
   # HTML — 1 hour, must-revalidate
   <FilesMatch "\.php$">
     Header set Cache-Control "public, max-age=3600, must-revalidate"
+  </FilesMatch>
+  # Overrides the block above — API responses are per-request and must
+  # never be cached (each tools/call reply differs from the last).
+  <FilesMatch "claude-agent\.php$">
+    Header set Cache-Control "no-store"
   </FilesMatch>
 </IfModule>
 

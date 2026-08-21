@@ -558,62 +558,19 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'telegram_test' && is_admin()) {
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'generate_blog_post' && is_admin()) {
     header('Content-Type: application/json');
     $type = trim($_GET['type'] ?? 'article');
-    if (!isset(BLOG_TYPES[$type])) $type = 'article';
     $topic = trim($_GET['topic'] ?? '');
+    echo json_encode(ai_generate_blog_post($pdo, $type, $topic), JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
-    $typeGuides = [
-        'tutorial'   => 'شرح تعليمي خطوة بخطوة يساعد القارئ على إنجاز مهمة محددة داخل تطبيق أو لعبة أندرويد شهيرة.',
-        'news'       => 'خبر تقني قصير عن تحديث أو ميزة جديدة أو اتجاه في عالم تطبيقات وألعاب أندرويد (بأسلوب إخباري محايد، دون تأكيد تواريخ أو أرقام غير مؤكدة).',
-        'comparison' => 'مقارنة موضوعية ومتوازنة بين تطبيقين أو أكثر في نفس الفئة، توضح الفروقات الفعلية ولمن يناسب كل خيار.',
-        'best-apps'  => 'قائمة "أفضل التطبيقات" في فئة معينة (5-8 عناصر)، كل عنصر بفقرة تشرح لماذا يستحق مكانه.',
-        'best-games' => 'قائمة "أفضل الألعاب" في فئة أو نمط لعب معين (5-8 عناصر)، كل عنصر بفقرة تشرح ما يميزه.',
-        'article'    => 'مقال عام مفيد وأصلي متعلق بتطبيقات أو ألعاب أندرويد.',
-    ];
-    $topicLine = $topic !== '' ? "الموضوع المطلوب تحديداً: \"{$topic}\"." : "اختر موضوعاً شائعاً ومفيداً يناسب هذا القسم.";
-
-    $prompt = <<<P
-أنت كاتب محتوى عربي محترف متخصص في تطبيقات وألعاب أندرويد. اكتب مقالاً أصلياً بالكامل من نوع:
-{$typeGuides[$type]}
-{$topicLine}
-
-المقال بطول 700-1200 كلمة، منظم بعناوين فرعية واضحة.
-اكتب body كـ HTML كامل قابل للعرض مباشرة: استخدم <h2> و<h3> للعناوين الفرعية، <p> للفقرات، <ul><li> للقوائم، <strong> للتمييز. لا تضع HTML خارج body. لا تستخدم Markdown.
-
-اتبع معايير SEO:
-- seo_title: عنوان جذاب 50-65 حرفاً يتضمن الكلمة المفتاحية.
-- meta_description: 140-160 حرفاً يلخص المقال.
-- keywords: 10-15 كلمة/عبارة مفتاحية عربية مفصولة بفاصلة.
-- excerpt: سطر أو سطران يظهران في بطاقة المقال.
-
-أعد JSON صالح فقط بدون أي نص خارج JSON:
-{"title":"","seo_title":"","meta_description":"","keywords":"","excerpt":"","body":""}
-P;
-    $r = ai_text($pdo, $prompt);
-    if (!$r['ok']) { echo json_encode(['success'=>false,'error'=>$r['error']]); exit; }
-    $data = ai_extract_json($r['content']);
-    if (!$data) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي لم يكن JSON صالحاً']); exit; }
-    $data = clean_utf8_deep($data);
-
-    $title = trim($data['title'] ?? '');
-    $body  = trim($data['body'] ?? '');
-    if (!$title || !$body) { echo json_encode(['success'=>false,'error'=>'رد الذكاء الاصطناعي ناقص']); exit; }
-    $slug = unique_blog_slug($pdo, $title);
-
-    // Best-effort cover image — never blocks the post from being created.
-    $coverImage = null;
-    $ir = ai_generate_image($pdo, "Generate a professional, modern, minimalist blog cover illustration (no text, no watermark, flat/gradient style, 16:9, wide) representing the topic: \"{$title}\".");
-    if ($ir['ok']) {
-        $tmp = tempnam(sys_get_temp_dir(), 'blogcv');
-        file_put_contents($tmp, $ir['bin']);
-        $coverImage = process_icon(['tmp_name' => $tmp, 'error' => UPLOAD_ERR_OK, 'size' => strlen($ir['bin'])], $slug . '-cover');
-        @unlink($tmp);
-    }
-
-    $pdo->prepare("INSERT INTO blog_posts (type,title,slug,seo_title,meta_description,keywords,excerpt,body,cover_image,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')")
-        ->execute([$type, $title, $slug, trim($data['seo_title'] ?? ''), trim($data['meta_description'] ?? ''),
-            trim($data['keywords'] ?? ''), trim($data['excerpt'] ?? ''), $body, $coverImage]);
-    $newId = (int)$pdo->lastInsertId();
-    echo json_encode(['success'=>true,'id'=>$newId,'title'=>$title], JSON_UNESCAPED_UNICODE);
+// AJAX: upload an image from the WYSIWYG editor's "رفع صورة" button — lets
+// an admin insert a photo straight from their phone's camera/gallery
+// instead of needing an already-hosted image URL.
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'upload_blog_image' && is_admin()) {
+    header('Content-Type: application/json');
+    if (!csrf_check()) { echo json_encode(['success' => false, 'error' => 'جلسة غير صالحة']); exit; }
+    $path = !empty($_FILES['file']) ? process_blog_image($_FILES['file']) : null;
+    echo json_encode($path ? ['success' => true, 'url' => url($path)] : ['success' => false, 'error' => 'تعذّر رفع الصورة — تأكد أنها JPG/PNG/WebP بحجم معقول'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -961,7 +918,7 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
 
     foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
               'google_site_verification','bing_site_verification','virustotal_api_key',
-              'ai_provider',
+              'ai_provider','claude_agent_token',
               'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
@@ -1032,7 +989,7 @@ if ($page === 'blog-edit' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check
             $bodyVal = json_encode(['sections' => $sections, 'description' => trim($_POST['cp_description'] ?? '')],
                 JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         } else {
-            $bodyVal = trim($_POST['body'] ?? '');
+            $bodyVal = sanitize_blog_html($_POST['body'] ?? '');
         }
         $d = [
             'type' => $type,
@@ -1306,7 +1263,7 @@ if ($page === 'login'): ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#0a0d0c"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>تسجيل الدخول — yassota admin</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1358,7 +1315,7 @@ $navLinks = [
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#2563eb"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8"><link rel="icon" type="image/svg+xml" href="<?= h(url("favicon.svg")) ?>"><meta name="theme-color" content="#0a0d0c"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title><?= h($navLinks[$page]['label'] ?? 'Admin') ?> — yassota</title>
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="<?= h(asset_url('assets/css/admin.css')) ?>">
@@ -1458,8 +1415,8 @@ if ($page === 'dashboard'): ?>
 </div>
 
 <?php if ($needsUpdateApps): ?>
-<div class="panel" style="border-color:rgba(251,191,36,.3);margin-top:20px">
-  <h2 style="color:#fbbf24">⚠️ تطبيقات تحتاج تحديث (<?= count($needsUpdateApps) ?>)</h2>
+<div class="panel" style="border-color:rgba(224,147,42,.3);margin-top:20px">
+  <h2 style="color:#e0932a">⚠️ تطبيقات تحتاج تحديث (<?= count($needsUpdateApps) ?>)</h2>
   <table class="admin-table responsive-cards">
     <thead><tr><th>التطبيق</th><th>الإصدار الحالي</th><th>آخر تحديث</th><th>إجراء</th></tr></thead>
     <tbody>
@@ -1543,7 +1500,7 @@ elseif ($page === 'apps'):
     <td data-label="تحميلات" style="font-family:var(--f-mono)"><?= number_format($a['downloads']) ?></td>
     <td data-label="الحالة">
       <span class="status-badge status-<?= $a['status'] ?>"><?= $a['status']==='published'?'منشور':'مسودة' ?></span>
-      <?php if (!empty($a['needs_update'])): ?><span class="status-badge status-draft" style="border-color:rgba(251,191,36,.3);color:#fbbf24;background:rgba(251,191,36,.1)">يحتاج تحديث</span><?php endif; ?>
+      <?php if (!empty($a['needs_update'])): ?><span class="status-badge status-draft" style="border-color:rgba(224,147,42,.3);color:#e0932a;background:rgba(224,147,42,.12)">يحتاج تحديث</span><?php endif; ?>
     </td>
     <td data-label="إجراءات" class="td-actions">
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1587,7 +1544,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
 </div>
 
 <!-- Import from Google Play -->
-<div class="ai-box" style="--border-p: rgba(37,99,235,.25)">
+<div class="ai-box" style="--border-p: rgba(34,224,168,.25)">
   <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--cyan)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:4px"><path d="M4 3.5v17l14-8.5-14-8.5z"/></svg>
     استيراد بيانات أولية من رابط Google Play
@@ -1883,7 +1840,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
     </div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
       <input type="checkbox" name="needs_update" value="1" <?= !empty($app['needs_update'])?'checked':'' ?>>
-      <span style="color:#fbbf24">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
+      <span style="color:#e0932a">وضع علامة "يحتاج تحديث" — سيظهر في قسم خاص بالداشبورد لمتابعة تحديثه لاحقاً (الإصدار الحالي يبقى منشوراً)</span>
     </label>
     <?php if ($isEdit): ?>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-c)">
@@ -1922,7 +1879,7 @@ elseif ($page === 'add-app' || $page === 'edit-app'):
       تحقق الفريق — الرابط آمن
     </button>
     <?php else: ?>
-    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(220,38,38,.1);color:var(--danger)">
+    <button type="button" id="btn-verify-link" class="btn-ai" data-app-id="<?= (int)$app['id'] ?>" data-action="unverify" style="background:rgba(240,101,101,.1);color:var(--danger)">
       إلغاء التحقق
     </button>
     <?php endif; ?>
@@ -1987,7 +1944,7 @@ elseif ($page === 'bulk-generate'): ?>
 <div class="panel" style="margin-bottom:16px">
   <p style="color:var(--muted);font-size:13px;line-height:1.8">
     يقترح الذكاء الاصطناعي عدداً اخترته من أكثر التطبيقات/الألعاب بحثاً (معدّلة أو رسمية)، ثم يولّد لكل اسم محتوى كاملاً ويحاول تلقائياً
-    العثور على صفحته في Google Play لاستيراد الأيقونة ورابط الصفحة. أي تطبيق يتعذّر جلب رابط تحميل مباشر له يُحفظ <strong style="color:#fbbf24">كمسودة</strong> جاهزة
+    العثور على صفحته في Google Play لاستيراد الأيقونة ورابط الصفحة. أي تطبيق يتعذّر جلب رابط تحميل مباشر له يُحفظ <strong style="color:#f0b429">كمسودة</strong> جاهزة
     — أضف رابط التحميل من صفحة التعديل ثم انشرها.
   </p>
 </div>
@@ -2150,7 +2107,7 @@ elseif ($page === 'comments'):
   <tr>
     <td data-label="التطبيق" style="font-weight:700"><?= h($c['app_name'] ?? '—') ?></td>
     <td data-label="الاسم"><?= h($c['name']) ?></td>
-    <td data-label="التقييم" style="color:#fbbf24;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
+    <td data-label="التقييم" style="color:#f0b429;font-family:var(--f-mono)"><?= str_repeat('★', (int)$c['rating']) ?></td>
     <td data-label="التعليق" style="max-width:280px;color:var(--muted);font-size:13px"><?= h(mb_strimwidth($c['body'], 0, 100, '...')) ?></td>
     <td data-label="الحالة"><span class="status-badge <?= $c['status']==='approved'?'status-published':'status-draft' ?>"><?= $c['status']==='approved'?'منشور':'قيد المراجعة' ?></span></td>
     <td data-label="إجراءات" class="td-actions">
@@ -2228,7 +2185,7 @@ elseif ($page === 'blog'):
     <td data-label="القسم" style="color:var(--muted);font-size:12px">
       <?= h(blog_type_label($bp['type'])) ?>
       <?php if ($bp['type'] === 'code-page'): $cpCount = count(decode_code_page($bp['body'] ?? '')); ?>
-        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(124,58,237,.15);color:#a78bfa;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
+        <span style="display:inline-block;margin-inline-start:4px;padding:1px 6px;border-radius:4px;background:rgba(240,180,41,.15);color:#f5cf6b;font-size:10px;font-weight:700"><?= $cpCount ?> أقسام</span>
       <?php endif; ?>
     </td>
     <td data-label="الحالة"><span class="status-badge <?= $bp['status']==='published'?'status-published':'status-draft' ?>"><?= $bp['status']==='published'?'منشور':'مسودة' ?></span></td>
@@ -2368,7 +2325,11 @@ elseif ($page === 'blog-edit'):
           <button class="ws-btn" type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1≡</button>
           <span class="ws-sep"></span>
           <button class="ws-btn" type="button" id="ws-link" title="رابط">🔗</button>
-          <button class="ws-btn" type="button" id="ws-image" title="صورة">🖼</button>
+          <button class="ws-btn" type="button" id="ws-button" title="زر (رابط بشكل زر)">🔘</button>
+          <span class="ws-sep"></span>
+          <button class="ws-btn" type="button" id="ws-upload-image" title="رفع صورة من الجهاز">📤🖼</button>
+          <input type="file" id="ws-upload-image-input" accept="image/png,image/jpeg,image/webp" style="display:none">
+          <button class="ws-btn" type="button" id="ws-image" title="صورة برابط خارجي">🖼</button>
           <span class="ws-sep"></span>
           <button class="ws-btn" type="button" id="ws-code" title="كتلة كود">⌨</button>
           <button class="ws-btn" type="button" data-cmd="insertHorizontalRule" title="خط فاصل">─</button>
@@ -2487,7 +2448,7 @@ elseif ($page === 'stats'):
 ?>
 <div class="admin-header"><h1>إحصائيات الموقع</h1></div>
 
-<div style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--navy-900);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
+<div style="background:rgba(34,224,168,.08);border:1px solid rgba(34,224,168,.25);color:var(--white);padding:14px 18px;border-radius:var(--radius);margin-bottom:20px;font-size:13px;line-height:1.8">
   ℹ️ هذه إحصائيات <strong>حقيقية</strong> يجمعها الموقع نفسه (مشاهدات وتحميلات وعمليات بحث فعلية من الزوار) — وليست بيانات Google Search Console.
   للحصول على بيانات جوجل الفعلية (الظهور في نتائج البحث، الكلمات المفتاحية، معدل النقر) يجب ربط حساب Google Search Console الخاص بك مباشرة عبر
   <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a> — وهذا يتطلب حسابك الشخصي ولا يمكن أتمتته من هنا.
@@ -2693,7 +2654,7 @@ elseif ($page === 'settings'): ?>
         foreach ($existingKeys as $ki => $kv): ?>
         <div class="key-row" style="display:flex;gap:8px;margin-bottom:8px">
           <input class="form-input or-key-input" type="text" name="openrouter_key_multi[]" value="<?= h($kv) ?>" placeholder="sk-or-v1-..." dir="ltr" style="flex:1;font-family:var(--f-mono);font-size:12px">
-          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(255,68,102,.15);border:1px solid rgba(255,68,102,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
+          <button type="button" class="btn-remove-key" style="padding:8px 12px;background:rgba(240,101,101,.15);border:1px solid rgba(240,101,101,.3);border-radius:8px;color:var(--danger);font-size:18px;line-height:1;cursor:pointer" title="حذف" onclick="this.closest('.key-row').remove()">×</button>
         </div>
         <?php endforeach; ?>
       </div>
@@ -2855,6 +2816,19 @@ elseif ($page === 'settings'): ?>
     <div class="form-group">
       <label class="form-label">VirusTotal API Key</label>
       <input class="form-input" type="text" name="virustotal_api_key" value="<?= h(get_cfg($pdo,'virustotal_api_key')) ?>" placeholder="الصق المفتاح هنا">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>وصول Claude Agent عبر MCP <span style="color:var(--muted);font-weight:400">(توليد مقالات تلقائي من خارج اللوحة)</span></h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      يسمح لأداة Claude بتوليد مقالات مدونة (بنفس خط الأنابيب المستخدم في زر "توليد بالذكاء الاصطناعي" أعلاه) عبر نقطة اتصال MCP في <code>api/claude-agent.php</code>، بإضافتها في Claude كالتالي:<br>
+      <code style="display:inline-block;margin-top:6px;direction:ltr;word-break:break-all">claude mcp add --transport http szad-ai <?= h(SITE_URL) ?>/api/claude-agent.php?action=generate_post --header "Authorization: Bearer التوكن"</code><br>
+      كل مقال يُنشأ عبر هذا الوصول يُحفظ كمسودة فقط، لن يُنشر تلقائياً. التوكن سرّي جداً — لا تضعه في أي كود أو مستودع، فقط هنا وفي إعداد MCP لديك. اتركه فارغاً لتعطيل هذا الوصول بالكامل (الوضع الافتراضي).
+    </p>
+    <div class="form-group">
+      <label class="form-label">Claude Agent Token</label>
+      <input class="form-input" type="text" name="claude_agent_token" value="<?= h(get_cfg($pdo,'claude_agent_token')) ?>" placeholder="اتركه فارغاً لتعطيل، أو الصق توكن سرّي عشوائي طويل">
     </div>
   </div>
 
