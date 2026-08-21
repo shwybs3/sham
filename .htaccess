@@ -153,6 +153,11 @@ DirectoryIndex index.php
   <FilesMatch "\.php$">
     Header set Cache-Control "public, max-age=3600, must-revalidate"
   </FilesMatch>
+  # Overrides the block above — API responses are per-request and must
+  # never be cached (each tools/call reply differs from the last).
+  <FilesMatch "claude-agent\.php$">
+    Header set Cache-Control "no-store"
+  </FilesMatch>
 </IfModule>
 
 # ── ETag optimization ─────────────────────────────

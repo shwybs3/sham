@@ -2807,8 +2807,8 @@ elseif ($page === 'settings'): ?>
   <div class="panel">
     <h2>وصول Claude Agent عبر MCP <span style="color:var(--muted);font-weight:400">(توليد مقالات تلقائي من خارج اللوحة)</span></h2>
     <p class="form-hint" style="margin-bottom:14px">
-      يسمح لأداة Claude بتوليد مقالات مدونة (بنفس خط الأنابيب المستخدم في زر "توليد بالذكاء الاصطناعي" أعلاه) عبر نقطة اتصال MCP في <code>claude-agent.php</code>، بإضافتها في Claude كالتالي:<br>
-      <code style="display:inline-block;margin-top:6px;direction:ltr;word-break:break-all">claude mcp add --transport http szad-ai <?= h(SITE_URL) ?>/claude-agent.php?action=generate_post --header "Authorization: Bearer التوكن"</code><br>
+      يسمح لأداة Claude بتوليد مقالات مدونة (بنفس خط الأنابيب المستخدم في زر "توليد بالذكاء الاصطناعي" أعلاه) عبر نقطة اتصال MCP في <code>api/claude-agent.php</code>، بإضافتها في Claude كالتالي:<br>
+      <code style="display:inline-block;margin-top:6px;direction:ltr;word-break:break-all">claude mcp add --transport http szad-ai <?= h(SITE_URL) ?>/api/claude-agent.php?action=generate_post --header "Authorization: Bearer التوكن"</code><br>
       كل مقال يُنشأ عبر هذا الوصول يُحفظ كمسودة فقط، لن يُنشر تلقائياً. التوكن سرّي جداً — لا تضعه في أي كود أو مستودع، فقط هنا وفي إعداد MCP لديك. اتركه فارغاً لتعطيل هذا الوصول بالكامل (الوضع الافتراضي).
     </p>
     <div class="form-group">

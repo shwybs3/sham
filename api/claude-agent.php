@@ -3,7 +3,7 @@
  * Claude Agent — MCP Streamable HTTP endpoint.
  *
  * Register with the Claude CLI:
- *   claude mcp add --transport http szad-ai https://yourdomain.com/claude-agent.php?action=generate_post \
+ *   claude mcp add --transport http szad-ai https://yourdomain.com/api/claude-agent.php?action=generate_post \
  *     --header "Authorization: Bearer <token>"
  *
  * The token is NOT stored in this file or in git — set it once from
@@ -15,7 +15,7 @@
  * the result as a draft, never publishes automatically.
  */
 
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../config.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
