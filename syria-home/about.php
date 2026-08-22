@@ -10,6 +10,28 @@ $siteName = setting('site_name', 'Syria Home');
   <span class="eyebrow"><i class="fa-solid fa-circle-info"></i> About</span>
   <h1>About <?= e($siteName) ?></h1>
 </div>
+
+<!-- Founder profile: an abstract avatar by design, not a stock/AI-generated photo
+     passed off as real. Swap the svg_initials_avatar() call below for a real
+     <img> tag once an actual photo of Saad is available. -->
+<div class="container">
+  <div class="founder-card">
+    <div class="founder-avatar-wrap">
+      <?= svg_initials_avatar('S') ?>
+      <span class="founder-verified"><i class="fa-solid fa-check"></i></span>
+    </div>
+    <div class="founder-name">Saad <i class="fa-solid fa-circle-check founder-check" title="Verified founder"></i></div>
+    <div class="founder-role">Founder &amp; Editor</div>
+    <p class="founder-bio">Hi, I'm Saad — I built <?= e($siteName) ?> because I was tired of tech sites padded with fluff before you reach the actual answer. Everything here is written to be useful first: practical guides, honest comparisons, and free tools that just work without an account or a subscription. When I'm not writing, I'm usually improving the tools themselves based on what readers ask for.</p>
+    <div class="founder-socials">
+      <?php foreach (['social_twitter'=>'fa-x-twitter','social_facebook'=>'fa-facebook-f','social_linkedin'=>'fa-linkedin-in'] as $key=>$icon): $url = trim(setting($key)); if ($url === '') continue; ?>
+        <a href="<?= e($url) ?>" target="_blank" rel="noopener"><i class="fa-brands <?= $icon ?>"></i></a>
+      <?php endforeach; ?>
+      <a href="mailto:<?= e(setting('contact_email', 'contact@yassota.com')) ?>"><i class="fa-solid fa-envelope"></i></a>
+    </div>
+  </div>
+</div>
+
 <div class="container article-body" style="padding-bottom:60px">
   <p><?= e($siteName) ?> is an independent publication covering technology news, hands-on comparisons, practical tutorials and reviews — plus a growing collection of free, browser-based web tools that need no sign-up and no installation.</p>
   <h2>What we cover</h2>

@@ -1,6 +1,6 @@
 <?php
 $tab = $_GET['tab'] ?? 'general';
-$tabs = ['general' => 'General', 'api' => 'API Keys', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
+$tabs = ['general' => 'General', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
 $msg = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
@@ -10,6 +10,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         set_setting('site_name', trim($_POST['site_name'] ?? 'Syria Home'));
         set_setting('site_tagline', trim($_POST['site_tagline'] ?? ''));
         set_setting('site_description', trim($_POST['site_description'] ?? ''));
+        set_setting('contact_email', trim($_POST['contact_email'] ?? ''));
+        set_setting('maintenance_mode', isset($_POST['maintenance_mode']) ? '1' : '0');
+        set_setting('parent_site_url', trim($_POST['parent_site_url'] ?? ''));
         $msg = ['ok', 'General settings saved.'];
     }
 
@@ -18,6 +21,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
             set_setting($k, trim($_POST[$k] ?? ''));
         }
         $msg = ['ok', 'API keys saved.'];
+    }
+
+    if ($formTab === 'payments') {
+        set_setting('nowpayments_api_key', trim($_POST['nowpayments_api_key'] ?? ''));
+        set_setting('nowpayments_ipn_secret', trim($_POST['nowpayments_ipn_secret'] ?? ''));
+        $presets = array_filter(array_map('trim', explode(',', $_POST['tip_presets'] ?? '')), 'is_numeric');
+        set_setting('tip_presets', $presets ? implode(',', $presets) : '3,5,10');
+        $msg = ['ok', 'Payment settings saved.'];
+    }
+
+    if ($formTab === 'subdomains') {
+        foreach (['cpanel_host','cpanel_username','cpanel_api_token','cpanel_root_domain','cpanel_home_dir'] as $k) {
+            set_setting($k, trim($_POST[$k] ?? ''));
+        }
+        $msg = ['ok', 'cPanel settings saved.'];
     }
 
     if ($formTab === 'ads') {
@@ -76,6 +94,14 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <label>Website name</label><input type="text" name="site_name" value="<?= e(setting('site_name')) ?>">
     <label>Tagline</label><input type="text" name="site_tagline" value="<?= e(setting('site_tagline')) ?>">
     <label>Description (SEO default)</label><textarea name="site_description"><?= e(setting('site_description')) ?></textarea>
+    <label>Contact email (shown on the Contact page)</label><input type="text" name="contact_email" value="<?= e(setting('contact_email', 'contact@yassota.com')) ?>">
+
+    <h3>Maintenance mode</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="maintenance_mode" style="width:auto" <?= (int)setting('maintenance_mode', 0) ? 'checked' : '' ?>> Show a "Coming soon" page to visitors instead of the live site</label>
+    <p class="hint">You (logged in as admin) can still browse the live site normally. Sitemap, robots.txt and the payment webhook stay reachable regardless.</p>
+    <label>Link back to (optional — shown as a "visit our other site" button)</label>
+    <input type="text" name="parent_site_url" value="<?= e(setting('parent_site_url')) ?>" placeholder="https://syria-home.yassota.com">
+
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
   </form>
 
@@ -128,6 +154,57 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <input type="password" name="openrouter_api_key" value="<?= e(setting('openrouter_api_key')) ?>" placeholder="sk-or-...">
     <button class="btn" style="margin-top:10px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save AI settings</button>
   </form>
+
+<?php elseif ($tab === 'payments'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-wallet"></i> NOWPayments (crypto)</h3>
+  <p class="hint">Create a free account at <a href="https://nowpayments.io" target="_blank" rel="noopener">nowpayments.io</a>, grab your API key from the dashboard, and paste this exact IPN callback URL into your NOWPayments account settings so payments get confirmed automatically:</p>
+  <p><code><?= e(NOWPayments::webhookUrl()) ?></code></p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="payments">
+    <div class="row2">
+      <div><label>NOWPayments API key</label><input type="password" name="nowpayments_api_key" value="<?= e(setting('nowpayments_api_key')) ?>"></div>
+      <div><label>NOWPayments IPN secret</label><input type="password" name="nowpayments_ipn_secret" value="<?= e(setting('nowpayments_ipn_secret')) ?>">
+        <p class="hint">Found under Settings &gt; IPN in your NOWPayments dashboard. Required — payments can't be confirmed without it.</p>
+      </div>
+    </div>
+    <label>Tip amount presets (USD, comma separated)</label>
+    <input type="text" name="tip_presets" value="<?= e(setting('tip_presets', '3,5,10')) ?>" style="max-width:220px">
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </form>
+
+  <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+    <?php if (NOWPayments::isConfigured()): ?>
+      <span class="badge ok"><i class="fa-solid fa-check"></i> Crypto payments active — Store products, tips and premium unlocks now show a real "Pay with crypto" button.</span>
+    <?php else: ?>
+      <span class="badge off">Add your API key above to enable real crypto checkout everywhere on the site.</span>
+    <?php endif; ?>
+  </div>
+
+<?php elseif ($tab === 'subdomains'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-sitemap"></i> cPanel account (for creating real subdomain sites)</h3>
+  <p class="hint">From your hosting cPanel: Security &gt; Manage API Tokens &gt; Create. This token can create subdomains and databases on your account — keep it secret, and consider a token restricted to those two categories if your host supports scoped tokens.</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="subdomains">
+    <div class="row2">
+      <div><label>cPanel host</label><input type="text" name="cpanel_host" value="<?= e(setting('cpanel_host')) ?>" placeholder="yourserver.hostingcompany.com"></div>
+      <div><label>cPanel username</label><input type="text" name="cpanel_username" value="<?= e(setting('cpanel_username')) ?>"></div>
+    </div>
+    <div class="row2">
+      <div><label>API token</label><input type="password" name="cpanel_api_token" value="<?= e(setting('cpanel_api_token')) ?>"></div>
+      <div><label>Root domain</label><input type="text" name="cpanel_root_domain" value="<?= e(setting('cpanel_root_domain')) ?>" placeholder="yassota.com"></div>
+    </div>
+    <label>Account home directory (absolute path)</label>
+    <input type="text" name="cpanel_home_dir" value="<?= e(setting('cpanel_home_dir')) ?>" placeholder="/home/yourusername">
+    <p class="hint">Find this in cPanel &gt; Files &gt; File Manager (the path shown when you open your home folder), or ask your host. Needed so this script can write the new site's files directly — subdomains under the same account share this server's filesystem.</p>
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </form>
+  <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+    <?php if (CPanelClient::isConfigured()): ?>
+      <span class="badge ok"><i class="fa-solid fa-check"></i> cPanel connected — go to <a href="?page=subsites">Subdomain Sites</a> to create real subdomain sites.</span>
+    <?php else: ?>
+      <span class="badge off">Add your cPanel host, username and API token above to enable subdomain provisioning.</span>
+    <?php endif; ?>
+  </div>
 
 <?php elseif ($tab === 'ads'): ?>
   <form method="post">

@@ -14,6 +14,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Please fill in your name, a valid email, and a message.';
         } else {
             $pdo->prepare("INSERT INTO contact_messages (name, email, message) VALUES (?,?,?)")->execute([$name, $email, $message]);
+
+            $contactEmail = trim(setting('contact_email', 'contact@yassota.com'));
+            if ($contactEmail !== '' && function_exists('mail')) {
+                $subject = 'New contact message on ' . setting('site_name');
+                $body = "Name: $name\nEmail: $email\n\nMessage:\n$message";
+                @mail($contactEmail, $subject, $body, 'From: no-reply@' . parse_url(SITE_URL, PHP_URL_HOST) . "\r\nReply-To: $email");
+            }
+
             $sent = true;
         }
     }
@@ -28,6 +36,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <p class="lead">Questions, feedback, corrections, or a tool idea — we'd love to hear it.</p>
 </div>
 <div class="container" style="max-width:560px;padding-bottom:60px">
+  <?php $contactEmail = trim(setting('contact_email', 'contact@yassota.com')); if ($contactEmail !== ''): ?>
+  <a href="mailto:<?= e($contactEmail) ?>" class="tool-shell" style="display:flex;align-items:center;gap:14px;margin-bottom:22px;text-decoration:none">
+    <span class="icon-badge" style="background:var(--grad-brand);width:46px;height:46px;font-size:19px"><i class="fa-solid fa-envelope"></i></span>
+    <div><div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Email us directly</div>
+    <div style="font-size:16px;font-weight:800;color:var(--ink)"><?= e($contactEmail) ?></div></div>
+  </a>
+  <?php endif; ?>
   <?php if ($sent): ?>
     <div class="empty-state" style="background:#fff;border:1px solid var(--line);border-radius:16px">
       <i class="fa-solid fa-circle-check" style="font-size:32px;color:var(--accent-green)"></i>

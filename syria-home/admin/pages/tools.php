@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'meta_description' => trim($_POST['meta_description'] ?? ''),
             'meta_keywords' => trim($_POST['meta_keywords'] ?? ''),
             'status' => isset($_POST['enabled']) ? 'published' : 'draft',
+            'is_premium' => isset($_POST['is_premium']) ? 1 : 0,
+            'premium_price' => (float)($_POST['premium_price'] ?? 3),
         ];
         if ($id) {
             $sql = "UPDATE tools SET " . implode(',', array_map(fn($k) => "$k = :$k", array_keys($fields))) . " WHERE id = :id";
@@ -116,6 +118,12 @@ $showForm = isset($_GET['new']) || $editing;
       <label>Meta keywords</label><input type="text" name="meta_keywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
 
       <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:16px"><input type="checkbox" name="enabled" style="width:auto" <?= (($editing['status'] ?? 'published') === 'published') ? 'checked' : '' ?>> Enable tool (visible on site)</label>
+
+      <h3>Premium tool (crypto paywall)</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="is_premium" style="width:auto" <?= !empty($editing['is_premium']) ? 'checked' : '' ?>> Require payment to use this tool</label>
+      <label>Unlock price (USD)</label>
+      <input type="text" name="premium_price" value="<?= e((string)($editing['premium_price'] ?? '3.00')) ?>" style="max-width:160px">
+      <p class="hint">Requires NOWPayments to be configured in Settings &gt; Payments.</p>
 
       <div style="margin-top:20px;display:flex;gap:10px">
         <button class="btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save tool</button>

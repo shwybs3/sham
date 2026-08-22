@@ -22,16 +22,24 @@ $connected = GoogleOAuth::isConnected();
   </div>
 
   <div class="card">
-    <h3 style="margin-top:0"><i class="fa-solid fa-magnifying-glass"></i> Search Console — top queries (28 days)</h3>
-    <?php $gsc = SearchConsoleClient::searchAnalytics(setting('gsc_site_url'));
+    <h3 style="margin-top:0"><i class="fa-solid fa-ranking-star"></i> Keyword Rank Tracker (28 days)</h3>
+    <p class="hint" style="margin-top:0">Real average position, clicks and impressions for every query Google Search actually showed this site for — straight from Search Console, not an estimate. There's no honest way to show rank for keywords you don't yet have any search visibility on; this is the real ceiling, and it grows as the site earns more visibility.</p>
+    <?php $gsc = SearchConsoleClient::searchAnalytics(setting('gsc_site_url'), 28, 250);
     if (!empty($gsc['rows'])): ?>
-      <table><tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th></tr>
-      <?php foreach ($gsc['rows'] as $r): ?>
-        <tr><td><?= e($r['keys'][0] ?? '') ?></td><td><?= (int)($r['clicks'] ?? 0) ?></td><td><?= (int)($r['impressions'] ?? 0) ?></td><td><?= round(($r['ctr'] ?? 0) * 100, 1) ?>%</td><td><?= round($r['position'] ?? 0, 1) ?></td></tr>
+      <p class="hint"><b><?= count($gsc['rows']) ?></b> keywords tracked this period.</p>
+      <table><tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Avg. position</th></tr>
+      <?php foreach ($gsc['rows'] as $r): $pos = round($r['position'] ?? 0, 1); ?>
+        <tr>
+          <td><?= e($r['keys'][0] ?? '') ?></td>
+          <td><?= (int)($r['clicks'] ?? 0) ?></td>
+          <td><?= (int)($r['impressions'] ?? 0) ?></td>
+          <td><?= round(($r['ctr'] ?? 0) * 100, 1) ?>%</td>
+          <td><span class="badge <?= $pos <= 10 ? 'ok' : ($pos <= 30 ? 'warn' : 'off') ?>"><?= $pos ?></span></td>
+        </tr>
       <?php endforeach; ?>
       </table>
     <?php else: ?>
-      <p class="hint">No data yet — this fills in once Search Console has indexed &amp; reported on the property at <code><?= e(setting('gsc_site_url')) ?></code>.</p>
+      <p class="hint">No data yet — this fills in once Search Console has indexed &amp; reported on the property at <code><?= e(setting('gsc_site_url')) ?></code>. New sites typically take 1–4 weeks to show anything here.</p>
     <?php endif; ?>
   </div>
 

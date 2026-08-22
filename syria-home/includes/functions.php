@@ -20,12 +20,25 @@ function set_setting(string $key, $value): void {
     $stmt->execute([$key, $value]);
 }
 
-function slugify(string $text): string {
+/** Short, clean, SEO-friendly slugs — capped well under Google's ~60-char
+ *  display limit, cutting at a whole word rather than mid-word. */
+function slugify(string $text, int $maxLength = 60): string {
     $text = preg_replace('~[^\pL\d]+~u', '-', $text);
     $text = trim(@iconv('utf-8', 'us-ascii//TRANSLIT', $text) ?: $text, '-');
     $text = strtolower($text);
     $text = preg_replace('~[^-\w]+~', '', $text);
     $text = preg_replace('~-+~', '-', $text);
+    $text = trim($text, '-');
+
+    if (mb_strlen($text) > $maxLength) {
+        $truncated = mb_substr($text, 0, $maxLength);
+        $lastHyphen = mb_strrpos($truncated, '-');
+        if ($lastHyphen !== false && $lastHyphen >= (int)($maxLength * 0.4)) {
+            $truncated = mb_substr($truncated, 0, $lastHyphen);
+        }
+        $text = trim($truncated, '-');
+    }
+
     return $text !== '' ? $text : 'item-' . substr(md5((string)microtime(true)), 0, 6);
 }
 
@@ -104,6 +117,72 @@ function time_ago(string $datetime): string {
         }
     }
     return 'just now';
+}
+
+/** A persistent, unguessable per-browser identifier — used to remember
+ *  which premium content a visitor has paid to unlock. Not tied to any
+ *  personal information; just a random token in a long-lived cookie. */
+function visitor_identifier(): string {
+    if (!empty($_COOKIE['sh_vid']) && preg_match('/^[a-f0-9]{32}$/', $_COOKIE['sh_vid'])) {
+        return $_COOKIE['sh_vid'];
+    }
+    $id = bin2hex(random_bytes(16));
+    setcookie('sh_vid', $id, time() + 3600 * 24 * 365 * 2, '/', '', !empty($_SERVER['HTTPS']), true);
+    $_COOKIE['sh_vid'] = $id;
+    return $id;
+}
+
+function is_content_unlocked(string $contentType, int $contentId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT 1 FROM unlocks WHERE identifier = ? AND content_type = ? AND content_id = ? LIMIT 1");
+    $stmt->execute([visitor_identifier(), $contentType, $contentId]);
+    return (bool)$stmt->fetchColumn();
+}
+
+/**
+ * Auto-links the first mention of another published article's or tool's
+ * title inside $html to that page, skipping anything already inside an
+ * <a>...</a>. Best-effort HTML text scanning, not a full parser — safe
+ * because it only ever inserts <a> tags, never removes/rewrites markup.
+ */
+function auto_link_body(PDO $pdo, string $html, int $excludeArticleId, int $maxLinks = 6): string {
+    $candidates = [];
+    $a = $pdo->prepare("SELECT title AS label, slug, 'article.php?slug=' AS base FROM articles WHERE status='published' AND id != ? ORDER BY CHAR_LENGTH(title) DESC LIMIT 60");
+    $a->execute([$excludeArticleId]);
+    foreach ($a as $row) $candidates[] = $row;
+    $t = $pdo->query("SELECT name AS label, slug, 'tool.php?slug=' AS base FROM tools WHERE status='published' ORDER BY CHAR_LENGTH(name) DESC LIMIT 40");
+    foreach ($t as $row) $candidates[] = $row;
+    usort($candidates, fn($x, $y) => mb_strlen($y['label']) <=> mb_strlen($x['label']));
+
+    // Existing anchor spans — never insert a link inside or overlapping one.
+    // Recomputed fresh every iteration below since each insertion shifts offsets.
+    $anchorSpansOf = function (string $h): array {
+        preg_match_all('~<a\b[^>]*>.*?</a>~is', $h, $matches, PREG_OFFSET_CAPTURE);
+        $spans = [];
+        foreach ($matches[0] as $m) $spans[] = [$m[1], $m[1] + strlen($m[0])];
+        return $spans;
+    };
+    $insideAnySpan = function (int $pos, array $spans): bool {
+        foreach ($spans as [$start, $end]) if ($pos >= $start && $pos < $end) return true;
+        return false;
+    };
+
+    $linked = 0;
+    foreach ($candidates as $c) {
+        if ($linked >= $maxLinks) break;
+        $label = trim($c['label']);
+        if (mb_strlen($label) < 5) continue;
+        $pattern = '~(?<![\w>])(' . preg_quote($label, '~') . ')(?![\w<])~iu';
+        if (!preg_match($pattern, $html, $m, PREG_OFFSET_CAPTURE)) continue;
+        [$matchText, $pos] = $m[1];
+        if ($insideAnySpan($pos, $anchorSpansOf($html))) continue;
+
+        $url = site_url($c['base'] . urlencode($c['slug']));
+        $replacement = '<a href="' . e($url) . '">' . $matchText . '</a>';
+        $html = substr($html, 0, $pos) . $replacement . substr($html, $pos + strlen($matchText));
+        $linked++;
+    }
+    return $html;
 }
 
 function log_ai_activity(string $action, string $targetType, ?int $targetId, string $summary): void {

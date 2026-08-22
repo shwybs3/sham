@@ -119,6 +119,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
             require_once __DIR__ . '/../includes/schema.php';
+            // Wipe any tables left behind by an earlier failed/partial install attempt
+            // against this same database before creating a guaranteed-clean schema.
+            // Safe here specifically: install.lock doesn't exist yet, so there is no
+            // real site data this could ever destroy.
+            sh_reset_schema($pdo);
             sh_ensure_schema($pdo);
 
             $siteUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
@@ -153,6 +158,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'gemini_api_key' => '',
                 'gemini_model' => 'gemini-2.0-flash',
                 'openrouter_api_key' => '',
+                'nowpayments_api_key' => '',
+                'nowpayments_ipn_secret' => '',
+                'tip_presets' => '3,5,10',
+                'cpanel_host' => '',
+                'cpanel_username' => '',
+                'cpanel_api_token' => '',
+                'cpanel_root_domain' => '',
+                'cpanel_home_dir' => '',
+                'contact_email' => 'contact@yassota.com',
+                'maintenance_mode' => '0',
+                'parent_site_url' => '',
                 'social_twitter' => '', 'social_facebook' => '', 'social_linkedin' => '',
             ];
             $ins = $pdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
@@ -161,9 +177,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once __DIR__ . '/../seed/seed_categories.php';
             require_once __DIR__ . '/../seed/seed_articles.php';
             require_once __DIR__ . '/../seed/seed_tools.php';
+            require_once __DIR__ . '/../seed/seed_products.php';
             seed_categories($pdo);
             seed_articles($pdo);
             seed_tools($pdo);
+            seed_products($pdo);
 
             file_put_contents($lockFile, date('c'));
             unset($_SESSION['install']);
@@ -259,7 +277,7 @@ render_head('Step ' . $step);
 
 <?php elseif ($step === 5): ?>
   <h1>Ready to install</h1>
-  <p class="sub">This will create the database tables, your admin account, and seed 20 articles + 20 tools.</p>
+  <p class="sub">This will create the database tables, your admin account, and seed 21 articles, 20 tools and 10 store products.</p>
   <div class="spinner-list">
     <div>✓ Site: <b><?= e($data['site_name']) ?></b></div>
     <div>✓ Database: <b><?= e($data['db_name']) ?></b> on <?= e($data['db_host']) ?></div>
