@@ -4,6 +4,34 @@
    Included by both config.php (normal runtime) and
    the install wizard (before config.generated.php exists).
    ═══════════════════════════════════════════════ */
+/** Every table this script owns, for sh_reset_schema() below. */
+const SH_TABLES = [
+    'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
+    'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
+    'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results',
+];
+
+/**
+ * Drops every table this script owns, if present — used ONLY by the
+ * install wizard's final step, right before sh_ensure_schema().
+ *
+ * Root-cause fix: `CREATE TABLE IF NOT EXISTS` is a no-op on a table
+ * that already exists, even if that table's columns don't match what
+ * this script expects (e.g. a stale, partially-created `settings`
+ * table left behind by an earlier failed install attempt against the
+ * same database) — every install after that silently keeps using the
+ * broken table and fails with a confusing "Unknown column" error.
+ * Since this only runs before install.lock exists, no real site data
+ * can exist yet, so a clean wipe-and-recreate here is always safe.
+ */
+function sh_reset_schema(PDO $pdo): void {
+    $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+    foreach (SH_TABLES as $table) {
+        $pdo->exec("DROP TABLE IF EXISTS `$table`");
+    }
+    $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+}
+
 function sh_ensure_schema(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS admins (
       id INT AUTO_INCREMENT PRIMARY KEY,

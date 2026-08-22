@@ -119,6 +119,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
             require_once __DIR__ . '/../includes/schema.php';
+            // Wipe any tables left behind by an earlier failed/partial install attempt
+            // against this same database before creating a guaranteed-clean schema.
+            // Safe here specifically: install.lock doesn't exist yet, so there is no
+            // real site data this could ever destroy.
+            sh_reset_schema($pdo);
             sh_ensure_schema($pdo);
 
             $siteUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
