@@ -12,3 +12,9 @@ db-error.log
 
 !uploads/icons/.gitkeep
 !uploads/screenshots/.gitkeep
+
+# syria-home sub-app
+syria-home/config.generated.php
+syria-home/install/install.lock
+syria-home/uploads/*
+!syria-home/uploads/.gitkeep
