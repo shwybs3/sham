@@ -8,7 +8,7 @@
 const SH_TABLES = [
     'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
     'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
-    'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results',
+    'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results', 'pages',
 ];
 
 /**
@@ -262,6 +262,24 @@ function sh_ensure_schema(PDO $pdo): void {
       ok TINYINT(1) NOT NULL DEFAULT 0,
       checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Admin-managed static pages (About, Contact, Privacy, Terms + custom). */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS pages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(120) NOT NULL UNIQUE,
+      title VARCHAR(220) NOT NULL,
+      body LONGTEXT,
+      meta_title VARCHAR(220) DEFAULT '',
+      meta_description VARCHAR(400) DEFAULT '',
+      show_in_footer TINYINT(1) NOT NULL DEFAULT 1,
+      status ENUM('published','draft') NOT NULL DEFAULT 'published',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    sh_ensure_column($pdo, 'tools', 'affiliate_url', "VARCHAR(500) DEFAULT ''");
+    sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
+    sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
 }
 
 /**

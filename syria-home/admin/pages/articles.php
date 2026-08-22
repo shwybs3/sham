@@ -164,6 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             }
         }
         unset($_SESSION['ai_draft']);
+        if (($fields['status'] ?? '') === 'published') {
+            indexnow_ping(site_url('article/' . ($fields['slug'] ?? '')));
+        }
         $redirect = '?page=articles&saved=1';
         if (isset($msg) && $msg[0] === 'err') $redirect .= '&img_error=' . urlencode($msg[1]);
         header('Location: ' . $redirect); exit;
@@ -243,7 +246,11 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
 
     <table>
       <tr><th>Title</th><th>Type</th><th>Status</th><th>Trending</th><th>Views</th><th>Date</th><th></th></tr>
-      <?php foreach ($pdo->query("SELECT * FROM articles ORDER BY created_at DESC") as $a): ?>
+      <?php
+      try {
+          $allArticles = $pdo->query("SELECT id,title,slug,content_type,status,trending,views,published_at FROM articles ORDER BY created_at DESC")->fetchAll();
+      } catch (PDOException $e) { $allArticles = []; echo '<tr><td colspan="7" style="color:#dc2626">DB error: ' . e($e->getMessage()) . '</td></tr>'; }
+      foreach ($allArticles as $a): ?>
       <tr>
         <td><?= e($a['title']) ?></td>
         <td><?= e(ucfirst($a['content_type'])) ?></td>

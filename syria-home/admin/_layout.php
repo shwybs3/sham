@@ -91,6 +91,7 @@ const ADMIN_NAV = [
     'articles' => ['Articles', 'fa-newspaper'],
     'tools' => ['Web Tools', 'fa-wrench'],
     'categories' => ['Categories', 'fa-tags'],
+    'pages' => ['Static Pages', 'fa-file-lines'],
     'products' => ['Store Products', 'fa-store'],
     'orders' => ['Orders & Payments', 'fa-inbox'],
     'link-checker' => ['Broken Link Checker', 'fa-link-slash'],
@@ -105,7 +106,7 @@ function admin_sidebar(string $active): void {
     <aside class="sidebar" id="adminSidebar" onclick="if(event.target.closest('a')) shCloseSidebar()">
       <div class="brand"><span><i class="fa-solid fa-layer-group"></i></span> <?= e(setting('site_name', 'Syria Home')) ?></div>
       <div class="grp">Content</div>
-      <?php foreach (['dashboard','articles','tools','categories'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['dashboard','articles','tools','categories','pages'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Store</div>

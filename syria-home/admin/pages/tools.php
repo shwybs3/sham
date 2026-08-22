@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'status' => isset($_POST['enabled']) ? 'published' : 'draft',
             'is_premium' => isset($_POST['is_premium']) ? 1 : 0,
             'premium_price' => (float)($_POST['premium_price'] ?? 3),
+            'affiliate_url' => trim($_POST['affiliate_url'] ?? ''),
         ];
         if ($id) {
             $sql = "UPDATE tools SET " . implode(',', array_map(fn($k) => "$k = :$k", array_keys($fields))) . " WHERE id = :id";
@@ -38,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             try { $pdo->prepare($sql)->execute($fields); }
             catch (PDOException $e) { $fields['slug'] .= '-' . substr(md5((string)microtime(true)), 0, 5); $pdo->prepare($sql)->execute($fields); }
         }
+        if (($fields['status'] ?? '') === 'published') indexnow_ping(site_url('tool/' . $slug));
         header('Location: ?page=tools&saved=1'); exit;
     }
 }
@@ -118,6 +120,11 @@ $showForm = isset($_GET['new']) || $editing;
       <label>Meta keywords</label><input type="text" name="meta_keywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
 
       <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:16px"><input type="checkbox" name="enabled" style="width:auto" <?= (($editing['status'] ?? 'published') === 'published') ? 'checked' : '' ?>> Enable tool (visible on site)</label>
+
+      <h3>Affiliate</h3>
+      <label>Affiliate / external tool URL (optional)</label>
+      <input type="text" name="affiliate_url" value="<?= e($editing['affiliate_url'] ?? '') ?>" placeholder="https://external-tool.com/?ref=yourcode">
+      <p class="hint">If set, the "Visit Tool" button on the public page opens this URL instead of the built-in tool. Use for affiliate links or third-party embeds.</p>
 
       <h3>Premium tool (crypto paywall)</h3>
       <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="is_premium" style="width:auto" <?= !empty($editing['is_premium']) ? 'checked' : '' ?>> Require payment to use this tool</label>
