@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'is_premium' => isset($_POST['is_premium']) ? 1 : 0,
             'premium_price' => (float)($_POST['premium_price'] ?? 3),
             'affiliate_url' => trim($_POST['affiliate_url'] ?? ''),
+            'tool_code'     => $_POST['tool_code'] ?? '',
         ];
         if ($id) {
             $sql = "UPDATE tools SET " . implode(',', array_map(fn($k) => "$k = :$k", array_keys($fields))) . " WHERE id = :id";
@@ -120,6 +121,11 @@ $showForm = isset($_GET['new']) || $editing;
       <label>Meta keywords</label><input type="text" name="meta_keywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
 
       <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:16px"><input type="checkbox" name="enabled" style="width:auto" <?= (($editing['status'] ?? 'published') === 'published') ? 'checked' : '' ?>> Enable tool (visible on site)</label>
+
+      <h3>Source Code</h3>
+      <label>Tool source code (shown to visitors as "View Source" — JavaScript)</label>
+      <textarea name="tool_code" style="min-height:200px;font-family:'JetBrains Mono',monospace;font-size:12px"><?= e($editing['tool_code'] ?? '') ?></textarea>
+      <p class="hint">Paste the JavaScript function/class that powers this tool. Shown in a syntax-highlighted block on the public tool page with a Copy button. Purely informational — the actual running code comes from assets/js/tools.js.</p>
 
       <h3>Affiliate</h3>
       <label>Affiliate / external tool URL (optional)</label>

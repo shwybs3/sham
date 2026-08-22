@@ -13,6 +13,11 @@ if (!$tool) {
     exit;
 }
 
+/* Affiliate redirect — if set, this tool uses an external URL */
+if (!empty($tool['affiliate_url']) && isset($_GET['visit'])) {
+    header('Location: ' . $tool['affiliate_url']); exit;
+}
+
 $isLocked = !empty($tool['is_premium']) && !is_content_unlocked('tool', (int)$tool['id']);
 if (!$isLocked) {
     $pdo->prepare("UPDATE tools SET uses_count = uses_count + 1 WHERE id = ?")->execute([$tool['id']]);
@@ -79,6 +84,25 @@ $jsonld = [
 
   <?php if ($tool['full_description']): ?>
   <div class="article-body" style="margin-top:34px"><?= $tool['full_description'] ?></div>
+  <?php endif; ?>
+
+  <?php if (!empty($tool['tool_code'])): ?>
+  <div style="margin-top:40px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-code" style="color:var(--brand1)"></i> Source Code</h3>
+      <button id="copyCodeBtn" onclick="(function(){var t=document.getElementById('toolCodePre').innerText;navigator.clipboard.writeText(t).then(function(){var b=document.getElementById('copyCodeBtn');b.textContent='✓ Copied!';setTimeout(function(){b.textContent='Copy code'},1800);})})()" style="background:var(--grad-brand);color:#fff;border:0;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px"><i class="fa-regular fa-copy"></i> Copy code</button>
+    </div>
+    <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">The JavaScript implementation that powers this tool. Free to use and adapt under the MIT licence.</p>
+    <div style="background:#0f172a;border-radius:12px;overflow:hidden;border:1px solid #1e293b">
+      <div style="background:#1e293b;padding:10px 16px;display:flex;align-items:center;gap:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:#ef4444"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:#10b981"></span>
+        <span style="font-size:12px;color:#64748b;margin-left:4px;font-family:monospace"><?= e($tool['name']) ?>.js</span>
+      </div>
+      <pre id="toolCodePre" style="margin:0;padding:20px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.7;color:#e2e8f0;white-space:pre;tab-size:2"><?= e($tool['tool_code']) ?></pre>
+    </div>
+  </div>
   <?php endif; ?>
 
   <?php if (!$isLocked) tip_widget('Tool: ' . $tool['name']); ?>

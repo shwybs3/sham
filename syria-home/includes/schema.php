@@ -280,6 +280,7 @@ function sh_ensure_schema(PDO $pdo): void {
     sh_ensure_column($pdo, 'tools', 'affiliate_url', "VARCHAR(500) DEFAULT ''");
     sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
     sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
+    sh_ensure_column($pdo, 'tools', 'tool_code', "LONGTEXT");
 }
 
 /**
