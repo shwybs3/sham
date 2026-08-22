@@ -96,6 +96,10 @@ DirectoryIndex index.php
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^([^/]+)/download/?$ download.php?slug=$1 [L,QSA]
 
+  # Google Indexing API tool — clean URLs
+  RewriteRule ^google-indexing-api/callback/?$ google-indexing-api.php?gidx_action=callback [L,QSA]
+  RewriteRule ^google-indexing-api/?$ google-indexing-api.php [L,QSA]
+
   # Pretty URLs: /{app-slug} -> app.php?slug={app-slug}
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -160,5 +164,8 @@ FileETag MTime Size
 </Files>
 
 <FilesMatch "config\.php$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "gidx-functions\.php$">
   Require all denied
 </FilesMatch>

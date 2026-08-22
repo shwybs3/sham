@@ -962,7 +962,9 @@ if ($page === 'settings' && $_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check(
     foreach (['openrouter_model','openrouter_fallback','openrouter_image_model','contact_email',
               'google_site_verification','bing_site_verification','virustotal_api_key',
               'ai_provider',
-              'telegram_bot_token','telegram_channel_id','telegram_channel_url'] as $k) {
+              'telegram_bot_token','telegram_channel_id','telegram_channel_url',
+              'nowpayments_api_key','nowpayments_ipn_secret',
+              'google_oauth_client_id','google_oauth_client_secret'] as $k) {
         set_cfg($pdo, $k, trim($_POST[$k] ?? ''));
     }
     set_cfg($pdo, 'openrouter_auto_rotate',      isset($_POST['openrouter_auto_rotate'])      ? '1' : '0');
@@ -1353,6 +1355,7 @@ $navLinks = [
     'connection'=> ['label'=>'اختبار الاتصال', 'icon'=>'M13 10V3L4 14h7v7l9-11h-7z'],
     'database'  => ['label'=>'قاعدة البيانات', 'icon'=>'M4 6c0-1.1 3.6-2 8-2s8 .9 8 2-3.6 2-8 2-8-.9-8-2zm0 0v12c0 1.1 3.6 2 8 2s8-.9 8-2V6M4 12c0 1.1 3.6 2 8 2s8-.9 8-2'],
     'settings'  => ['label'=>'الإعدادات',     'icon'=>'M12 15a3 3 0 100-6 3 3 0 000 6zm0 0v3m0-12V3m9 9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121M18.364 18.364l-2.121-2.121M8.757 8.757L6.636 6.636'],
+    'gidx-subscribers' => ['label'=>'مشتركو أداة الفهرسة', 'icon'=>'M17 20h5v-1a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-1a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
 ];
 ?>
 <!DOCTYPE html>
@@ -2871,8 +2874,165 @@ elseif ($page === 'settings'): ?>
     </div>
   </div>
 
+  <div class="panel">
+    <h2>بوابة الدفع NOWPayments (أداة فهرسة Google)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      مفاتيح بوابة الدفع الخاصة بأداة الفهرسة. احصل على مفتاح API من
+      <a href="https://nowpayments.io" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">nowpayments.io</a>
+      وعيّن IPN Secret في إعدادات حسابك.
+    </p>
+    <div class="form-group">
+      <label class="form-label">NOWPayments API Key</label>
+      <input class="form-input" type="text" name="nowpayments_api_key" value="<?= h(get_cfg($pdo,'nowpayments_api_key')) ?>" placeholder="مثال: M9WQVSQ-YABMQQ8-...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">NOWPayments IPN Secret</label>
+      <input class="form-input" type="text" name="nowpayments_ipn_secret" value="<?= h(get_cfg($pdo,'nowpayments_ipn_secret')) ?>" placeholder="مفتاح التحقق من توقيع IPN">
+      <div class="form-hint">يُستخدم لتحقق HMAC-SHA512 من كل طلب IPN — لا تشاركه أحداً.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>تسجيل دخول Google OAuth (أداة فهرسة Google)</h2>
+    <p class="form-hint" style="margin-bottom:14px">
+      اختياري — يتيح للمستخدمين تسجيل الدخول بحسابهم على Google.
+      أنشئ OAuth Client ID من
+      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="nofollow noopener" style="color:var(--cyan)">Google Cloud Console</a>
+      مع نوع "Web application".
+    </p>
+    <div class="form-group">
+      <label class="form-label">Google OAuth Client ID</label>
+      <input class="form-input" type="text" name="google_oauth_client_id" value="<?= h(get_cfg($pdo,'google_oauth_client_id')) ?>" placeholder="xxxxx.apps.googleusercontent.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Google OAuth Client Secret</label>
+      <input class="form-input" type="text" name="google_oauth_client_secret" value="<?= h(get_cfg($pdo,'google_oauth_client_secret')) ?>" placeholder="GOCSPX-...">
+    </div>
+  </div>
+
   <button type="submit" class="btn-save">حفظ الإعدادات</button>
 </form>
+
+<?php
+/* ─────────────── GIDX SUBSCRIBERS ─────────────── */
+elseif ($page === 'gidx-subscribers'):
+
+// Handle grant/revoke actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
+    $action = $_POST['gidx_action'] ?? '';
+    $ident  = preg_replace('/[^a-f0-9]/', '', $_POST['identifier'] ?? '');
+    if ($ident !== '') {
+        if ($action === 'grant') {
+            $days = max(1, (int)($_POST['days'] ?? 30));
+            require_once __DIR__ . '/gidx-functions.php';
+            gidx_grant_premium($pdo, $ident, $days);
+            $msg = "تم منح Premium لـ $ident لمدة $days يوم";
+        } elseif ($action === 'revoke') {
+            $pdo->prepare("UPDATE gidx_quota SET premium_until = NULL WHERE identifier = ?")->execute([$ident]);
+            $msg = "تم إلغاء Premium لـ $ident";
+        }
+    }
+}
+
+$quotaRows    = $pdo->query("SELECT q.*, s.email, s.name FROM gidx_quota q LEFT JOIN subscribers s ON s.identifier=q.identifier ORDER BY q.created_at DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+$paymentRows  = $pdo->query("SELECT * FROM gidx_payments ORDER BY created_at DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);
+?>
+<div class="admin-header"><h1>مشتركو أداة الفهرسة</h1></div>
+
+<?php if (!empty($msg)): ?>
+<div class="alert alert-success" style="margin-bottom:16px;padding:10px 16px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);border-radius:8px;color:#10b981"><?= h($msg) ?></div>
+<?php endif; ?>
+
+<div class="panel" style="overflow-x:auto">
+  <h2 style="margin-bottom:16px">المستخدمون والحصص</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="text-align:right;color:var(--muted);border-bottom:1px solid var(--border)">
+        <th style="padding:8px">المعرّف</th>
+        <th style="padding:8px">البريد</th>
+        <th style="padding:8px">الاستخدام</th>
+        <th style="padding:8px">الحد</th>
+        <th style="padding:8px">Premium حتى</th>
+        <th style="padding:8px">الحالة</th>
+        <th style="padding:8px">إجراء</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($quotaRows as $r):
+        $isPremium = !empty($r['premium_until']) && strtotime($r['premium_until']) > time();
+    ?>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px;font-family:monospace;font-size:11px"><?= h(substr($r['identifier'],0,12)) ?>…</td>
+        <td style="padding:8px"><?= h($r['email'] ?? '—') ?></td>
+        <td style="padding:8px"><?= (int)$r['used_count'] ?></td>
+        <td style="padding:8px"><?= (int)$r['limit'] ?></td>
+        <td style="padding:8px"><?= $r['premium_until'] ? h($r['premium_until']) : '—' ?></td>
+        <td style="padding:8px">
+          <?php if ($isPremium): ?>
+            <span style="color:#10b981;font-weight:600">Premium</span>
+          <?php else: ?>
+            <span style="color:var(--muted)">مجاني</span>
+          <?php endif; ?>
+        </td>
+        <td style="padding:8px">
+          <form method="post" style="display:inline-flex;gap:6px;align-items:center">
+            <?= csrf_field() ?>
+            <input type="hidden" name="identifier" value="<?= h($r['identifier']) ?>">
+            <?php if ($isPremium): ?>
+              <button name="gidx_action" value="revoke" class="btn-sm" style="background:rgba(239,68,68,.2);color:#ef4444;border:1px solid rgba(239,68,68,.4);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">إلغاء Premium</button>
+            <?php else: ?>
+              <input type="number" name="days" value="30" min="1" max="3650" style="width:60px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px">
+              <button name="gidx_action" value="grant" class="btn-sm" style="background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.4);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">منح Premium</button>
+            <?php endif; ?>
+          </form>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (empty($quotaRows)): ?>
+      <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">لا يوجد مستخدمون بعد</td></tr>
+    <?php endif; ?>
+    </tbody>
+  </table>
+</div>
+
+<div class="panel" style="overflow-x:auto;margin-top:24px">
+  <h2 style="margin-bottom:16px">سجل المدفوعات</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="text-align:right;color:var(--muted);border-bottom:1px solid var(--border)">
+        <th style="padding:8px">رقم الطلب</th>
+        <th style="padding:8px">المعرّف</th>
+        <th style="padding:8px">العملة</th>
+        <th style="padding:8px">المبلغ المطلوب</th>
+        <th style="padding:8px">المبلغ المستلم</th>
+        <th style="padding:8px">الحالة</th>
+        <th style="padding:8px">التاريخ</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($paymentRows as $p): ?>
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px;font-family:monospace;font-size:11px"><?= h($p['order_id']) ?></td>
+        <td style="padding:8px;font-family:monospace;font-size:11px"><?= h(substr($p['identifier'],0,12)) ?>…</td>
+        <td style="padding:8px"><?= h(strtoupper($p['pay_currency'])) ?></td>
+        <td style="padding:8px">$<?= number_format((float)$p['price_usd'],2) ?></td>
+        <td style="padding:8px"><?= $p['actually_paid'] !== null ? h($p['actually_paid']) : '—' ?></td>
+        <td style="padding:8px">
+          <?php
+            $sc = ['finished'=>'#10b981','confirmed'=>'#10b981','waiting'=>'#f59e0b','pending'=>'#f59e0b','failed'=>'#ef4444','expired'=>'#ef4444'];
+            $color = $sc[$p['status']] ?? 'var(--muted)';
+          ?>
+          <span style="color:<?= $color ?>;font-weight:600"><?= h($p['status']) ?></span>
+        </td>
+        <td style="padding:8px;font-size:11px"><?= h($p['created_at']) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (empty($paymentRows)): ?>
+      <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">لا توجد مدفوعات بعد</td></tr>
+    <?php endif; ?>
+    </tbody>
+  </table>
+</div>
 
 <?php
 /* ─────────────── AI ASSISTANT ─────────────── */
