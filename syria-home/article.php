@@ -61,7 +61,14 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
 
 <div class="container article-hero">
   <div class="breadcrumb"><a href="<?= site_url('') ?>">Home</a> / <a href="<?= site_url('articles.php') ?>">Articles</a> <?php if ($article['category_name']): ?> / <a href="<?= site_url('category.php?slug=' . urlencode($article['category_slug'])) ?>"><?= e($article['category_name']) ?></a><?php endif; ?></div>
-  <div class="art-icon" style="<?= hero_style_css($article['hero_gradient']) ?>"><i class="fa-solid <?= e($article['hero_icon']) ?>"></i></div>
+  <?php if (!empty($article['hero_image_path'])): ?>
+    <div class="article-hero-photo">
+      <img src="<?= site_url($article['hero_image_path']) ?>" alt="<?= e($article['title']) ?>" loading="eager">
+      <span class="art-icon art-icon-overlay" style="<?= hero_style_css($article['hero_gradient']) ?>"><i class="fa-solid <?= e($article['hero_icon']) ?>"></i></span>
+    </div>
+  <?php else: ?>
+    <div class="art-icon" style="<?= hero_style_css($article['hero_gradient']) ?>"><i class="fa-solid <?= e($article['hero_icon']) ?>"></i></div>
+  <?php endif; ?>
   <span class="badge-trending" style="background:#eef1ff;color:var(--brand1)"><?= e(ucfirst($article['content_type'])) ?></span>
   <?php if ($article['trending']): ?> <span class="badge-trending"><i class="fa-solid fa-fire"></i> Trending</span><?php endif; ?>
   <h1><?= e($article['title']) ?></h1>

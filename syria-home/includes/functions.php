@@ -20,12 +20,25 @@ function set_setting(string $key, $value): void {
     $stmt->execute([$key, $value]);
 }
 
-function slugify(string $text): string {
+/** Short, clean, SEO-friendly slugs — capped well under Google's ~60-char
+ *  display limit, cutting at a whole word rather than mid-word. */
+function slugify(string $text, int $maxLength = 60): string {
     $text = preg_replace('~[^\pL\d]+~u', '-', $text);
     $text = trim(@iconv('utf-8', 'us-ascii//TRANSLIT', $text) ?: $text, '-');
     $text = strtolower($text);
     $text = preg_replace('~[^-\w]+~', '', $text);
     $text = preg_replace('~-+~', '-', $text);
+    $text = trim($text, '-');
+
+    if (mb_strlen($text) > $maxLength) {
+        $truncated = mb_substr($text, 0, $maxLength);
+        $lastHyphen = mb_strrpos($truncated, '-');
+        if ($lastHyphen !== false && $lastHyphen >= (int)($maxLength * 0.4)) {
+            $truncated = mb_substr($truncated, 0, $lastHyphen);
+        }
+        $text = trim($truncated, '-');
+    }
+
     return $text !== '' ? $text : 'item-' . substr(md5((string)microtime(true)), 0, 6);
 }
 

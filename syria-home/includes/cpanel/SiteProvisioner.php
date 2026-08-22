@@ -120,6 +120,12 @@ class SiteProvisioner
             'gsc_site_url' => $siteUrl . '/',
             'gemini_model' => 'gemini-2.0-flash',
             'tip_presets' => '3,5,10',
+            'contact_email' => trim(setting('contact_email', 'contact@yassota.com')),
+            // New subsites start in maintenance mode with a link back to this
+            // (the parent) site, until their owner has real content ready and
+            // turns it off in Settings > General.
+            'maintenance_mode' => '1',
+            'parent_site_url' => rtrim(SITE_URL, '/'),
         ];
         $ins = $newPdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
         foreach ($newSettings as $k => $v) $ins->execute([$k, $v]);

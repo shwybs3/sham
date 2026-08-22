@@ -107,6 +107,31 @@ function svg_product_art(string $key, string $iconClass = ''): string {
 SVG;
 }
 
+/**
+ * Abstract initials avatar for a team/profile card — intentionally not
+ * a photo. We won't pass off a stock photo of an unrelated person, or a
+ * synthetic AI-generated face, as someone's real likeness; swap this
+ * for a real photo in about.php whenever one is available.
+ */
+function svg_initials_avatar(string $initial): string {
+    $initial = e(mb_substr($initial, 0, 1));
+    return <<<SVG
+<svg viewBox="0 0 200 200" class="avatar-art" role="img" aria-label="Profile avatar" focusable="false">
+  <defs>
+    <linearGradient id="avg1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/><stop offset="0.55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="96" fill="url(#avg1)"/>
+  <circle cx="100" cy="100" r="96" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="2"/>
+  <circle cx="46" cy="40" r="10" fill="#fff" fill-opacity=".18"/>
+  <circle cx="162" cy="150" r="16" fill="#fff" fill-opacity=".12"/>
+  <circle cx="150" cy="46" r="7" fill="#fff" fill-opacity=".2"/>
+  <text x="100" y="128" font-family="Arial, sans-serif" font-size="84" font-weight="800" fill="#fff" text-anchor="middle">{$initial}</text>
+</svg>
+SVG;
+}
+
 /** Small decorative badge/seal used on guarantee blocks. */
 function svg_guarantee_seal(): string {
     return <<<'SVG'

@@ -166,6 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'cpanel_api_token' => '',
                 'cpanel_root_domain' => '',
                 'cpanel_home_dir' => '',
+                'contact_email' => 'contact@yassota.com',
+                'maintenance_mode' => '0',
+                'parent_site_url' => '',
                 'social_twitter' => '', 'social_facebook' => '', 'social_linkedin' => '',
             ];
             $ins = $pdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");

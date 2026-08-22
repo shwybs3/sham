@@ -217,6 +217,7 @@ function sh_ensure_schema(PDO $pdo): void {
     sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
     sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
     sh_ensure_column($pdo, 'articles', 'auto_link', "TINYINT(1) NOT NULL DEFAULT 1");
+    sh_ensure_column($pdo, 'articles', 'hero_image_path', "VARCHAR(300) DEFAULT ''");
 
     /* Independent subdomain sites provisioned via cPanel — each one is a
        full separate install of this same script, its own DB, its own

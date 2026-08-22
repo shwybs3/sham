@@ -14,6 +14,7 @@ $urls = [
     ['loc' => site_url('editorial-policy.php'), 'priority' => '0.2'],
     ['loc' => site_url('refund-policy.php'), 'priority' => '0.2'],
     ['loc' => site_url('license.php'), 'priority' => '0.2'],
+    ['loc' => site_url('cookie-policy.php'), 'priority' => '0.2'],
 ];
 
 foreach ($pdo->query("SELECT slug, updated_at FROM articles WHERE status='published'") as $a) {

@@ -8,6 +8,28 @@ if (isset($_GET['delete']) && csrf_check_get()) {
     header('Location: ?page=articles'); exit;
 }
 
+/* ── One-click migration: shorten any slug longer than 60 chars (e.g. from
+   an older version of the seed data) using the current, shorter slugify(). ── */
+if (isset($_GET['shorten_slugs']) && csrf_check_get()) {
+    $shortened = 0;
+    foreach ($pdo->query("SELECT id, title, slug FROM articles WHERE CHAR_LENGTH(slug) > 60") as $a) {
+        $newSlug = slugify($a['title']);
+        $check = $pdo->prepare("SELECT COUNT(*) FROM articles WHERE slug = ? AND id != ?");
+        $check->execute([$newSlug, $a['id']]);
+        if ((int)$check->fetchColumn() > 0) $newSlug .= '-' . $a['id'];
+        $pdo->prepare("UPDATE articles SET slug = ? WHERE id = ?")->execute([$newSlug, $a['id']]);
+        $shortened++;
+    }
+    header('Location: ?page=articles&shortened=' . $shortened); exit;
+}
+
+/* ── One-click: add the "Welcome to..." + script-marketing draft articles ── */
+if (isset($_GET['add_bonus']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_bonus_articles.php';
+    $added = seed_bonus_articles($pdo);
+    header('Location: ?page=articles&bonus_added=' . $added); exit;
+}
+
 /* ── Schema Generator: add/delete extra JSON-LD blocks on an article ── */
 if (isset($_GET['delete_schema']) && csrf_check_get()) {
     $pdo->prepare("DELETE FROM article_schema_blocks WHERE id = ?")->execute([(int)$_GET['delete_schema']]);
@@ -84,6 +106,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     $slug = trim($_POST['slug'] ?? '') ?: slugify($title);
     $body = $_POST['body'] ?? '';
     if (isset($_POST['auto_link'])) $body = auto_link_body($pdo, $body, $id);
+
+    if (isset($_POST['localize_images'])) {
+        $body = sh_localize_body_images($body, 'articles');
+    }
+
+    $heroImagePath = trim($_POST['hero_image_path'] ?? ''); // hidden field carrying over the already-stored path
+    $heroImageUrl = trim($_POST['hero_image_url'] ?? '');
+    if ($heroImageUrl !== '') {
+        $imgResult = sh_fetch_and_store_image($heroImageUrl, 'articles');
+        if ($imgResult['ok']) {
+            $heroImagePath = $imgResult['path'];
+        } else {
+            $msg = ['err', 'Hero image: ' . $imgResult['error']];
+        }
+    }
+
     $fields = [
         'title' => $title,
         'slug' => $slug,
@@ -93,6 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'body' => $body,
         'hero_icon' => trim($_POST['hero_icon'] ?? 'fa-newspaper'),
         'hero_gradient' => $_POST['hero_gradient'] ?? 'g1',
+        'hero_image_path' => $heroImagePath,
         'meta_title' => trim($_POST['meta_title'] ?? ''),
         'meta_description' => trim($_POST['meta_description'] ?? ''),
         'meta_keywords' => trim($_POST['meta_keywords'] ?? ''),
@@ -125,9 +164,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             }
         }
         unset($_SESSION['ai_draft']);
-        header('Location: ?page=articles&saved=1'); exit;
+        $redirect = '?page=articles&saved=1';
+        if (isset($msg) && $msg[0] === 'err') $redirect .= '&img_error=' . urlencode($msg[1]);
+        header('Location: ' . $redirect); exit;
     }
 }
+
+if (isset($_GET['img_error'])) $msg = ['err', $_GET['img_error']];
 
 $editing = null;
 if (isset($_GET['edit'])) {
@@ -157,13 +200,23 @@ if ($draft && !$editing) {
 ?>
 
 <?php if (isset($_GET['saved'])): flash('ok', 'Article saved.'); endif; ?>
+<?php if (isset($_GET['shortened'])): flash('ok', (int)$_GET['shortened'] . ' slug(s) shortened.'); endif; ?>
+<?php if (isset($_GET['bonus_added'])): flash('ok', (int)$_GET['bonus_added'] > 0 ? (int)$_GET['bonus_added'] . ' starter article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
 <?php if ($msg): flash($msg[0] === 'ok' ? 'ok' : 'err', $msg[1]); endif; ?>
+
+<?php
+$longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENGTH(slug) > 60")->fetchColumn();
+?>
+<?php if ($longSlugCount > 0 && !$showForm): ?>
+  <div class="flash warn" style="background:#fffbeb;border:1px solid #fde68a;color:#854d0e"><i class="fa-solid fa-link"></i> <?= $longSlugCount ?> article(s) have an overly long URL slug. <a href="?page=articles&shorten_slugs=1&csrf=<?= csrf_token() ?>" style="font-weight:800">Shorten them now →</a></div>
+<?php endif; ?>
 
 <?php if (!$showForm): ?>
   <div class="card">
     <div class="toolbar">
       <h3 style="margin:0">All articles</h3>
       <div style="display:flex;gap:8px">
+        <a class="btn gray sm" href="?page=articles&add_bonus=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-star"></i> Add starter marketing articles</a>
         <a class="btn gray sm" href="#ai-generate" onclick="document.getElementById('aiBox').style.display='block'"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate with AI</a>
         <a class="btn sm" href="?page=articles&new=1"><i class="fa-solid fa-plus"></i> New article</a>
       </div>
@@ -243,12 +296,26 @@ if ($draft && !$editing) {
 
       <div class="row2">
         <div><label>Hero icon (Font Awesome class, e.g. fa-microchip)</label><input type="text" name="hero_icon" value="<?= e($editing['hero_icon'] ?? 'fa-newspaper') ?>"></div>
-        <div><label>Hero color</label>
+        <div><label>Hero color (used until a real image is set below)</label>
           <select name="hero_gradient">
             <?php foreach (array_keys(HERO_GRADIENTS) as $g): ?><option value="<?= $g ?>" <?= ($editing['hero_gradient'] ?? 'g1') === $g ? 'selected' : '' ?>><?= strtoupper($g) ?></option><?php endforeach; ?>
           </select>
         </div>
       </div>
+
+      <h3>Images</h3>
+      <input type="hidden" name="hero_image_path" value="<?= e($editing['hero_image_path'] ?? '') ?>">
+      <?php if (!empty($editing['hero_image_path'])): ?>
+        <img src="<?= site_url($editing['hero_image_path']) ?>" style="max-width:260px;border-radius:12px;border:1px solid var(--line);margin-bottom:10px">
+        <p class="hint">Current stored hero image. Paste a new URL below to replace it.</p>
+      <?php endif; ?>
+      <label>Hero image URL (fetched, compressed &amp; stored on your server when you save — never hotlinked)</label>
+      <input type="text" name="hero_image_url" placeholder="https://example.com/image.jpg">
+
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:14px">
+        <input type="checkbox" name="localize_images" style="width:auto" checked>
+        Also fetch &amp; store any external images already inside the body (rewrites their &lt;img src&gt; to the local, compressed copy)
+      </label>
 
       <h3>SEO</h3>
       <label>Meta title</label><input type="text" name="meta_title" id="seoMetaTitle" value="<?= e($editing['meta_title'] ?? '') ?>">

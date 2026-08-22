@@ -52,7 +52,37 @@ function admin_head(string $title): void {
     .hint{font-size:12px;color:var(--muted);margin-top:4px}
     .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap}
     .toolbar input[type=search]{max-width:260px}
-    </style></head><body><div class="shell">
+
+    .menu-toggle{display:none;background:none;border:0;font-size:20px;color:var(--ink);cursor:pointer;margin-right:8px;padding:4px 6px;flex-shrink:0}
+    .sidebar-backdrop{display:none}
+    @media (max-width: 960px){
+      .shell{position:relative;overflow-x:hidden}
+      .sidebar{position:fixed;top:0;left:0;bottom:0;height:100dvh;width:260px;max-width:82vw;z-index:210;
+        transform:translateX(-100%);transition:transform .25s ease;box-shadow:0 0 40px rgba(0,0,0,.35)}
+      .sidebar.open{transform:translateX(0)}
+      .sidebar-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;
+        opacity:0;pointer-events:none;transition:opacity .2s ease}
+      .sidebar-backdrop.show{display:block;opacity:1;pointer-events:auto}
+      .menu-toggle{display:inline-flex;align-items:center}
+      .main{width:100%;min-width:0}
+      .topbar{padding:14px 16px;flex-wrap:wrap;gap:8px}
+      .topbar h1{font-size:17px}
+      .content{padding:16px 14px 50px}
+      .row2,.feature-grid{grid-template-columns:1fr !important}
+      .grid-stats{grid-template-columns:repeat(2,1fr)}
+      table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+      .toolbar{align-items:stretch}
+      .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}
+      .tabs a{flex-shrink:0}
+    }
+    </style></head>
+    <body>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="shCloseSidebar()"></div>
+    <script>
+    function shOpenSidebar(){document.getElementById('adminSidebar').classList.add('open');document.getElementById('sidebarBackdrop').classList.add('show');document.body.style.overflow='hidden';}
+    function shCloseSidebar(){document.getElementById('adminSidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('show');document.body.style.overflow='';}
+    </script>
+    <div class="shell">
     <?php
 }
 
@@ -72,7 +102,7 @@ const ADMIN_NAV = [
 
 function admin_sidebar(string $active): void {
     ?>
-    <aside class="sidebar">
+    <aside class="sidebar" id="adminSidebar" onclick="if(event.target.closest('a')) shCloseSidebar()">
       <div class="brand"><span><i class="fa-solid fa-layer-group"></i></span> <?= e(setting('site_name', 'Syria Home')) ?></div>
       <div class="grp">Content</div>
       <?php foreach (['dashboard','articles','tools','categories'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
@@ -102,7 +132,10 @@ function admin_sidebar(string $active): void {
 function admin_topbar(string $title): void {
     ?>
     <div class="topbar">
-      <h1><?= e($title) ?></h1>
+      <div style="display:flex;align-items:center">
+        <button class="menu-toggle" onclick="shOpenSidebar()" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+        <h1><?= e($title) ?></h1>
+      </div>
       <div class="who"><i class="fa-regular fa-circle-user"></i> <?= e($_SESSION['admin_user'] ?? '') ?></div>
     </div>
     <div class="content">

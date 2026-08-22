@@ -30,7 +30,7 @@ function seo_head(array $o): void {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=3">
+    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=6">
     <?php $gsv = trim(setting('google_site_verification')); if ($gsv): ?><meta name="google-site-verification" content="<?= e($gsv) ?>"><?php endif; ?>
     <?php $bsv = trim(setting('bing_site_verification')); if ($bsv): ?><meta name="msvalidate.01" content="<?= e($bsv) ?>"><?php endif; ?>
     <?php $pub = trim(setting('adsense_publisher_id')); if ($pub !== ''): ?>
@@ -89,8 +89,37 @@ function product_card(array $p): void {
     <?php
 }
 
+function cookie_consent_banner(): void {
+    ?>
+    <div id="cookieBanner" class="cookie-banner" role="dialog" aria-label="Cookie notice">
+      <p>We use cookies for core site functionality, analytics, and (once approved) ads. <a href="<?= site_url('cookie-policy.php') ?>">Learn more</a></p>
+      <div class="cookie-actions">
+        <button type="button" onclick="shAcceptCookies()">Got it</button>
+      </div>
+    </div>
+    <script>
+    (function () {
+      var shown = false;
+      try { shown = !!localStorage.getItem('sh_cookie_consent'); } catch (e) {}
+      if (!shown) {
+        document.addEventListener('DOMContentLoaded', function () {
+          var b = document.getElementById('cookieBanner');
+          if (b) b.classList.add('show');
+        });
+      }
+    })();
+    function shAcceptCookies() {
+      try { localStorage.setItem('sh_cookie_consent', '1'); } catch (e) {}
+      var b = document.getElementById('cookieBanner');
+      if (b) b.classList.remove('show');
+    }
+    </script>
+    <?php
+}
+
 function site_header(string $active = ''): void {
     $siteName = setting('site_name', 'Syria Home');
+    cookie_consent_banner();
     ?>
     <header class="site-header">
       <div class="bar">
@@ -104,9 +133,10 @@ function site_header(string $active = ''): void {
           <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text" name="q" placeholder="Search articles &amp; tools...">
         </form>
-        <button class="hamburger" onclick="document.getElementById('mainNav').classList.toggle('open')"><i class="fa-solid fa-bars"></i></button>
+        <button class="hamburger" id="navToggle" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
       </div>
     </header>
+    <div class="nav-backdrop" id="navBackdrop"></div>
     <?php
 }
 
@@ -118,6 +148,9 @@ function site_footer(): void {
         <div>
           <div class="brand"><span class="mark" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--brand1),var(--brand2));display:inline-flex;align-items:center;justify-content:center"><i class="fa-solid fa-layer-group" style="font-size:14px"></i></span><?= e($siteName) ?></div>
           <p style="max-width:320px;color:#94a3b8;font-size:13px"><?= e(setting('site_tagline')) ?></p>
+          <?php $footerEmail = trim(setting('contact_email', 'contact@yassota.com')); if ($footerEmail !== ''): ?>
+            <a href="mailto:<?= e($footerEmail) ?>" style="color:#94a3b8;font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px"><i class="fa-solid fa-envelope"></i> <?= e($footerEmail) ?></a>
+          <?php endif; ?>
           <div class="social-row">
             <?php foreach (['social_twitter'=>'fa-x-twitter','social_facebook'=>'fa-facebook-f','social_linkedin'=>'fa-linkedin-in'] as $key=>$icon): $url = trim(setting($key)); if ($url === '') continue; ?>
               <a href="<?= e($url) ?>" target="_blank" rel="noopener"><i class="fa-brands <?= $icon ?>"></i></a>
@@ -141,6 +174,7 @@ function site_footer(): void {
           <a href="<?= site_url('editorial-policy.php') ?>"><i class="fa-solid fa-feather fa-fw"></i> Editorial Policy</a>
           <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> Refund Policy</a>
           <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> License Terms</a>
+          <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> Cookie Policy</a>
         </div>
       </div>
       <div class="container bottom">
@@ -148,7 +182,7 @@ function site_footer(): void {
         <span>Built with a self-hosted CMS · Powered by curiosity</span>
       </div>
     </footer>
-    <script src="<?= site_url('assets/js/main.js') ?>?v=2"></script>
+    <script src="<?= site_url('assets/js/main.js') ?>?v=3"></script>
     <?php
 }
 

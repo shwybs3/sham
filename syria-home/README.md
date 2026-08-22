@@ -96,9 +96,18 @@ Setup, in **Settings → Subdomains**:
 2. Enter your cPanel host, username, that API token, and your root domain.
 3. Enter your account's **home directory** (visible in cPanel → File Manager, e.g. `/home/yourusername`) — subdomains created under the same cPanel account share this server's filesystem, so provisioning works by writing files directly rather than over FTP/SSH.
 
-Each subdomain site gets its own document root at `public_html/{subdomain}` and its own database — nothing is shared with the main site except, if you choose, your Gemini/OpenRouter/AdSense keys (copied over automatically so the new site's AI features and ads work immediately). Provisioning requires explicitly checking a confirmation box in the admin UI before it runs.
+Each subdomain site gets its own document root at `public_html/{subdomain}` and its own database — nothing is shared with the main site except, if you choose, your Gemini/OpenRouter/AdSense keys (copied over automatically so the new site's AI features and ads work immediately). Provisioning requires explicitly checking a confirmation box in the admin UI before it runs. New subsites start in **maintenance mode** (a "coming soon" page linking back to this site) until their owner turns it off in Settings → General once real content is ready.
 
-## 10. Security notes
+## 10. Content & compliance extras
+
+- **Real, compressed images** — paste an image URL into an article's "Hero image URL" field, or check "localize external images in body," and the server downloads, resizes (max 1600px wide) and re-compresses it, storing the local copy under `uploads/images/` — nothing is ever hotlinked at render time. Reusable via `sh_fetch_and_store_image()` / `sh_localize_body_images()` in `includes/image_fetcher.php`.
+- **Cookie consent banner** — a dismissible notice (remembered via `localStorage`) on every public page, with a full `cookie-policy.php` explaining what's used and how to opt out. Complements `privacy-policy.php`.
+- **Maintenance mode** — Settings → General → toggle a site-wide "coming soon" page for regular visitors while you finish setup; admins stay logged in and can preview the live site normally, and the sitemap/robots/payment-webhook endpoints stay reachable regardless.
+- **Short, clean slugs** — `slugify()` now caps URLs at 60 characters, cut at a word boundary. If you installed before this change, the Articles page shows a one-click "Shorten them now" migration for any slug still over the limit.
+- **Starter marketing content** — Articles → "Add starter marketing articles" inserts a published "Welcome to [Site]" piece and a **draft** article for selling this script itself, with placeholders clearly marked for you to fill in (screenshots, final price, your live NOWPayments/checkout link) before publishing.
+- **Founder profile card** (`about.php`) — an animated card with a verified badge, name and bio. The avatar is an abstract initials graphic by design, not a stock photo of an unrelated person or an AI-generated face passed off as real — swap in an actual photo yourself whenever you have one, by editing the `svg_initials_avatar()` call in `about.php`.
+
+## 11. Security notes
 
 - `config.generated.php` and `install/install.lock` are git-ignored — never commit real DB credentials.
 - Never paste API keys/secrets into chat, commits, or anywhere but the Settings form — they're stored server-side only.

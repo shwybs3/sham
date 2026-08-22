@@ -10,6 +10,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         set_setting('site_name', trim($_POST['site_name'] ?? 'Syria Home'));
         set_setting('site_tagline', trim($_POST['site_tagline'] ?? ''));
         set_setting('site_description', trim($_POST['site_description'] ?? ''));
+        set_setting('contact_email', trim($_POST['contact_email'] ?? ''));
+        set_setting('maintenance_mode', isset($_POST['maintenance_mode']) ? '1' : '0');
+        set_setting('parent_site_url', trim($_POST['parent_site_url'] ?? ''));
         $msg = ['ok', 'General settings saved.'];
     }
 
@@ -91,6 +94,14 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <label>Website name</label><input type="text" name="site_name" value="<?= e(setting('site_name')) ?>">
     <label>Tagline</label><input type="text" name="site_tagline" value="<?= e(setting('site_tagline')) ?>">
     <label>Description (SEO default)</label><textarea name="site_description"><?= e(setting('site_description')) ?></textarea>
+    <label>Contact email (shown on the Contact page)</label><input type="text" name="contact_email" value="<?= e(setting('contact_email', 'contact@yassota.com')) ?>">
+
+    <h3>Maintenance mode</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="maintenance_mode" style="width:auto" <?= (int)setting('maintenance_mode', 0) ? 'checked' : '' ?>> Show a "Coming soon" page to visitors instead of the live site</label>
+    <p class="hint">You (logged in as admin) can still browse the live site normally. Sitemap, robots.txt and the payment webhook stay reachable regardless.</p>
+    <label>Link back to (optional — shown as a "visit our other site" button)</label>
+    <input type="text" name="parent_site_url" value="<?= e(setting('parent_site_url')) ?>" placeholder="https://syria-home.yassota.com">
+
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
   </form>
 
