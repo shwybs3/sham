@@ -106,6 +106,26 @@ function time_ago(string $datetime): string {
     return 'just now';
 }
 
+/** A persistent, unguessable per-browser identifier — used to remember
+ *  which premium content a visitor has paid to unlock. Not tied to any
+ *  personal information; just a random token in a long-lived cookie. */
+function visitor_identifier(): string {
+    if (!empty($_COOKIE['sh_vid']) && preg_match('/^[a-f0-9]{32}$/', $_COOKIE['sh_vid'])) {
+        return $_COOKIE['sh_vid'];
+    }
+    $id = bin2hex(random_bytes(16));
+    setcookie('sh_vid', $id, time() + 3600 * 24 * 365 * 2, '/', '', !empty($_SERVER['HTTPS']), true);
+    $_COOKIE['sh_vid'] = $id;
+    return $id;
+}
+
+function is_content_unlocked(string $contentType, int $contentId): bool {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT 1 FROM unlocks WHERE identifier = ? AND content_type = ? AND content_id = ? LIMIT 1");
+    $stmt->execute([visitor_identifier(), $contentType, $contentId]);
+    return (bool)$stmt->fetchColumn();
+}
+
 function log_ai_activity(string $action, string $targetType, ?int $targetId, string $summary): void {
     global $pdo;
     $stmt = $pdo->prepare("INSERT INTO ai_activity_log (actor, action, target_type, target_id, summary) VALUES ('gemini', ?, ?, ?, ?)");

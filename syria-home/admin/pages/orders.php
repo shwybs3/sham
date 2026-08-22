@@ -6,6 +6,11 @@ if (isset($_GET['delete']) && csrf_check_get()) {
     header('Location: ?page=orders'); exit;
 }
 
+if (isset($_GET['delete_payment']) && csrf_check_get()) {
+    $pdo->prepare("DELETE FROM payments WHERE id = ?")->execute([(int)$_GET['delete_payment']]);
+    header('Location: ?page=orders'); exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_status' && csrf_check()) {
     $status = $_POST['status'] ?? 'new';
     if (in_array($status, $validStatuses, true)) {
@@ -17,7 +22,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_s
 $counts = [];
 foreach ($pdo->query("SELECT status, COUNT(*) c FROM orders GROUP BY status") as $r) $counts[$r['status']] = (int)$r['c'];
 $orders = $pdo->query("SELECT * FROM orders ORDER BY created_at DESC LIMIT 200")->fetchAll();
+$payments = $pdo->query("SELECT * FROM payments ORDER BY created_at DESC LIMIT 200")->fetchAll();
 $messages = $pdo->query("SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 50")->fetchAll();
+
+$refTypeLabels = ['product' => 'Product', 'tip' => 'Tip', 'unlock_article' => 'Article unlock', 'unlock_tool' => 'Tool unlock'];
+$payStatusBadge = function (string $s): string {
+    if (in_array($s, ['finished', 'confirmed'], true)) return '<span class="badge ok">' . ucfirst($s) . '</span>';
+    if (in_array($s, ['failed', 'expired', 'refunded'], true)) return '<span class="badge off">' . ucfirst($s) . '</span>';
+    return '<span class="badge warn">' . ucfirst($s ?: 'pending') . '</span>';
+};
 ?>
 <?php if (isset($_GET['saved'])): flash('ok', 'Order updated.'); endif; ?>
 
@@ -26,6 +39,7 @@ $messages = $pdo->query("SELECT * FROM contact_messages ORDER BY created_at DESC
   <div class="stat"><i class="fa-solid fa-comments"></i><div class="n"><?= $counts['contacted'] ?? 0 ?></div><div class="l">Contacted</div></div>
   <div class="stat"><i class="fa-solid fa-credit-card"></i><div class="n"><?= $counts['paid'] ?? 0 ?></div><div class="l">Paid</div></div>
   <div class="stat"><i class="fa-solid fa-box-open"></i><div class="n"><?= $counts['delivered'] ?? 0 ?></div><div class="l">Delivered</div></div>
+  <div class="stat"><i class="fa-solid fa-wallet"></i><div class="n"><?= count(array_filter($payments, fn($p) => in_array($p['status'], ['finished','confirmed'], true))) ?></div><div class="l">Crypto payments confirmed</div></div>
 </div>
 
 <div class="card">
@@ -58,6 +72,30 @@ $messages = $pdo->query("SELECT * FROM contact_messages ORDER BY created_at DESC
         </form>
       </td>
       <td><a class="btn red sm" href="?page=orders&delete=<?= (int)$o['id'] ?>&csrf=<?= csrf_token() ?>" onclick="return confirm('Delete this order record?')">Delete</a></td>
+    </tr>
+    <?php endforeach; ?>
+  </table>
+  <?php endif; ?>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">Crypto payments (NOWPayments)</h3>
+  <?php if (!NOWPayments::isConfigured()): ?>
+    <p class="hint">Not set up yet — add an API key in <a href="?page=settings&tab=payments">Settings &gt; Payments</a> to accept real crypto checkout.</p>
+  <?php elseif (!$payments): ?>
+    <p class="hint">No crypto payments yet. They'll appear here as soon as someone starts a checkout.</p>
+  <?php else: ?>
+  <table>
+    <tr><th>Date</th><th>Type</th><th>For</th><th>Amount</th><th>Currency</th><th>Status</th><th></th></tr>
+    <?php foreach ($payments as $p): ?>
+    <tr>
+      <td style="white-space:nowrap"><?= date('M j, Y H:i', strtotime($p['created_at'])) ?></td>
+      <td><?= e($refTypeLabels[$p['reference_type']] ?? $p['reference_type']) ?></td>
+      <td><?= e($p['reference_label']) ?><?php if ($p['customer_email']): ?><br><a href="mailto:<?= e($p['customer_email']) ?>" style="font-size:12px;color:var(--brand1)"><?= e($p['customer_email']) ?></a><?php endif; ?></td>
+      <td style="white-space:nowrap">$<?= number_format((float)$p['price_usd'], 2) ?></td>
+      <td style="white-space:nowrap"><?= e(strtoupper($p['pay_currency'])) ?></td>
+      <td><?= $payStatusBadge($p['status']) ?></td>
+      <td><a class="btn red sm" href="?page=orders&delete_payment=<?= (int)$p['id'] ?>&csrf=<?= csrf_token() ?>" onclick="return confirm('Delete this payment record?')">Delete</a></td>
     </tr>
     <?php endforeach; ?>
   </table>

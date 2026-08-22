@@ -1,6 +1,6 @@
 <?php
 $tab = $_GET['tab'] ?? 'general';
-$tabs = ['general' => 'General', 'api' => 'API Keys', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
+$tabs = ['general' => 'General', 'api' => 'API Keys', 'payments' => 'Payments', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
 $msg = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
@@ -18,6 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
             set_setting($k, trim($_POST[$k] ?? ''));
         }
         $msg = ['ok', 'API keys saved.'];
+    }
+
+    if ($formTab === 'payments') {
+        set_setting('nowpayments_api_key', trim($_POST['nowpayments_api_key'] ?? ''));
+        set_setting('nowpayments_ipn_secret', trim($_POST['nowpayments_ipn_secret'] ?? ''));
+        $presets = array_filter(array_map('trim', explode(',', $_POST['tip_presets'] ?? '')), 'is_numeric');
+        set_setting('tip_presets', $presets ? implode(',', $presets) : '3,5,10');
+        $msg = ['ok', 'Payment settings saved.'];
     }
 
     if ($formTab === 'ads') {
@@ -128,6 +136,31 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <input type="password" name="openrouter_api_key" value="<?= e(setting('openrouter_api_key')) ?>" placeholder="sk-or-...">
     <button class="btn" style="margin-top:10px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save AI settings</button>
   </form>
+
+<?php elseif ($tab === 'payments'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-wallet"></i> NOWPayments (crypto)</h3>
+  <p class="hint">Create a free account at <a href="https://nowpayments.io" target="_blank" rel="noopener">nowpayments.io</a>, grab your API key from the dashboard, and paste this exact IPN callback URL into your NOWPayments account settings so payments get confirmed automatically:</p>
+  <p><code><?= e(NOWPayments::webhookUrl()) ?></code></p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="payments">
+    <div class="row2">
+      <div><label>NOWPayments API key</label><input type="password" name="nowpayments_api_key" value="<?= e(setting('nowpayments_api_key')) ?>"></div>
+      <div><label>NOWPayments IPN secret</label><input type="password" name="nowpayments_ipn_secret" value="<?= e(setting('nowpayments_ipn_secret')) ?>">
+        <p class="hint">Found under Settings &gt; IPN in your NOWPayments dashboard. Required — payments can't be confirmed without it.</p>
+      </div>
+    </div>
+    <label>Tip amount presets (USD, comma separated)</label>
+    <input type="text" name="tip_presets" value="<?= e(setting('tip_presets', '3,5,10')) ?>" style="max-width:220px">
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </form>
+
+  <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+    <?php if (NOWPayments::isConfigured()): ?>
+      <span class="badge ok"><i class="fa-solid fa-check"></i> Crypto payments active — Store products, tips and premium unlocks now show a real "Pay with crypto" button.</span>
+    <?php else: ?>
+      <span class="badge off">Add your API key above to enable real crypto checkout everywhere on the site.</span>
+    <?php endif; ?>
+  </div>
 
 <?php elseif ($tab === 'ads'): ?>
   <form method="post">

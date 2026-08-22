@@ -187,6 +187,23 @@ function article_card(array $a): void {
     <?php
 }
 
+function tip_widget(string $label): void {
+    if (!NOWPayments::isConfigured()) return;
+    $presets = array_filter(array_map('trim', explode(',', setting('tip_presets', '3,5,10'))));
+    ?>
+    <div class="tool-shell" style="margin:30px 0;padding:20px 22px">
+      <h3 style="margin:0 0 4px;font-size:15px"><i class="fa-solid fa-mug-hot" style="color:var(--brand1)"></i> Enjoyed this? Support the site</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px">A small crypto tip helps keep this free and ad-light.</p>
+      <div class="row">
+        <?php foreach ($presets as $amt): if (!is_numeric($amt)) continue; ?>
+          <a class="btn-ghost" href="<?= site_url('checkout.php?type=tip&amount=' . urlencode($amt) . '&label=' . urlencode($label)) ?>">$<?= e($amt) ?></a>
+        <?php endforeach; ?>
+        <a class="btn-ghost" href="<?= site_url('checkout.php?type=tip&label=' . urlencode($label)) ?>">Custom amount</a>
+      </div>
+    </div>
+    <?php
+}
+
 function tool_card(array $t): void {
     ?>
     <a class="card tool-card" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">

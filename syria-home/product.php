@@ -134,10 +134,17 @@ $jsonld = [
       </div>
       <p style="font-size:12.5px;color:var(--muted);margin:0">One-time payment · lifetime license</p>
 
-      <?php if (trim((string)$product['payment_url']) !== ''): ?>
+      <?php if (NOWPayments::isConfigured()): ?>
+        <a class="btn-buy" href="<?= site_url('checkout.php?type=product&id=' . (int)$product['id']) ?>"><i class="fa-solid fa-wallet"></i> Pay with crypto</a>
+        <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0;text-align:center">BTC, ETH, USDT and more — via NOWPayments</p>
+      <?php elseif (trim((string)$product['payment_url']) !== ''): ?>
         <a class="btn-buy" href="<?= e($product['payment_url']) ?>" target="_blank" rel="noopener"><i class="fa-solid fa-cart-shopping"></i> Buy now</a>
       <?php else: ?>
         <a class="btn-buy" href="#order"><i class="fa-solid fa-cart-shopping"></i> Request to buy</a>
+      <?php endif; ?>
+
+      <?php if (NOWPayments::isConfigured() && trim((string)$product['payment_url']) !== ''): ?>
+        <a class="btn-demo" href="<?= e($product['payment_url']) ?>" target="_blank" rel="noopener"><i class="fa-solid fa-credit-card"></i> Other payment methods</a>
       <?php endif; ?>
 
       <?php if (trim((string)$product['demo_url']) !== ''): ?>

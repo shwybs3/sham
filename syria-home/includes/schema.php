@@ -146,4 +146,60 @@ function sh_ensure_schema(PDO $pdo): void {
       attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       success TINYINT(1) DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Real crypto payments (NOWPayments). One row per invoice, covering
+       three kinds of checkout: buying a store product, tipping/supporting
+       an article or tool, and unlocking a premium article or tool. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS payments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_id VARCHAR(120) NOT NULL UNIQUE,
+      identifier VARCHAR(32) NOT NULL,
+      reference_type ENUM('product','tip','unlock_article','unlock_tool') NOT NULL,
+      reference_id INT NULL,
+      reference_label VARCHAR(220) DEFAULT '',
+      customer_email VARCHAR(190) DEFAULT '',
+      price_usd DECIMAL(10,2) NOT NULL DEFAULT 0,
+      pay_currency VARCHAR(20) NOT NULL,
+      pay_address VARCHAR(255) DEFAULT '',
+      pay_amount DECIMAL(24,8) NOT NULL DEFAULT 0,
+      actually_paid DECIMAL(24,8) NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'pending',
+      raw_ipn_json MEDIUMTEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_identifier (identifier),
+      INDEX idx_status (status),
+      INDEX idx_reference (reference_type, reference_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Which visitor (by cookie identifier) has paid to unlock which
+       premium article/tool — checked on every view of premium content. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS unlocks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      identifier VARCHAR(32) NOT NULL,
+      content_type ENUM('article','tool') NOT NULL,
+      content_id INT NOT NULL,
+      order_id VARCHAR(120) DEFAULT '',
+      unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_unlock (identifier, content_type, content_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    sh_ensure_column($pdo, 'articles', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
+    sh_ensure_column($pdo, 'articles', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
+    sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
+    sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
+}
+
+/**
+ * Portable "add column if missing" — works on MySQL 5.7+ and MariaDB
+ * alike, unlike `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` which only
+ * MySQL 8.0.29+ supports.
+ */
+function sh_ensure_column(PDO $pdo, string $table, string $column, string $definition): void {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?");
+    $stmt->execute([$table, $column]);
+    if ((int)$stmt->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+    }
 }

@@ -58,15 +58,30 @@ If no Gemini key is set, the assistant automatically falls back to OpenRouter's 
 
 - **21 original English articles** (news/tutorials/comparisons/reviews) with per-page SEO (title/description/keywords, canonical, Open Graph, JSON-LD `Article`/`NewsArticle`), original CSS-graphic headers (no stock photos, no copyright risk).
 - **20 free client-side tools** (image converter, compressor, QR generator, password generator, JSON formatter, Base64, word counter, case converter, Lorem Ipsum, Markdown→HTML, CSV→JSON, hash generator, URL encoder, color converter, unit converter, BMI/age calculators, timestamp converter, CSS minifier, text-to-speech) — each with its own SEO'd page and JSON-LD `SoftwareApplication` schema.
-- **10-product digital store** (`products.php` / `product.php`) — scripts, templates and toolkits, each with its own SEO'd page, JSON-LD `Product` schema, original SVG artwork (no stock imagery), a features/what's-included breakdown, and either a "Request to buy" form (saved to the admin **Orders & Messages** inbox) or a direct link to your own checkout page (Gumroad/Paddle/Stripe Payment Link/etc. — set per product in **Admin → Store Products**).
-- Admin panel: Dashboard, Articles, Tools, Categories, Store Products, Orders & Messages, AI Assistant, Google Insights, Settings (General/API Keys/Advertisements/SEO/Security/Social).
+- **10-product digital store** (`products.php` / `product.php`) — scripts, templates and toolkits, each with its own SEO'd page, JSON-LD `Product` schema, original SVG artwork (no stock imagery), a features/what's-included breakdown, and either real crypto checkout (see below) or a "Request to buy" form (saved to the admin **Orders & Payments** inbox), or a direct link to your own checkout page (Gumroad/Paddle/Stripe Payment Link/etc. — set per product in **Admin → Store Products**).
+- Admin panel: Dashboard, Articles, Tools, Categories, Store Products, Orders & Payments, AI Assistant, Google Insights, Settings (General/API Keys/Payments/Advertisements/SEO/Security/Social).
 - Dynamic `sitemap.php`/`robots.php`/`ads.php`, pretty-URL rules in `.htaccess` (including `/product/{slug}`).
 - Store legal pages: `refund-policy.php` and `license.php`, linked from the footer.
 
 **A deliberate copywriting choice in the store:** no product claims to guarantee Google AdSense approval — that's a decision only Google makes, manually, based on the buyer's own domain and content. Products are described as "AdSense-ready" (built to meet the technical/policy prerequisites) with a guarantee we can actually keep: free updates, setup support, and a 14-day refund window. See `refund-policy.php` for exactly what that covers.
 
-## 7. Security notes
+## 7. Real crypto payments (NOWPayments)
+
+This is the one payment gateway actually wired in end-to-end — everything else (Gumroad/Stripe/etc. links) is just a URL field. Setup:
+
+1. Create a free account at [nowpayments.io](https://nowpayments.io) and grab your **API key** from the dashboard.
+2. In your NOWPayments account, set the **IPN callback URL** to `https://your-domain/payment-webhook.php` and note the **IPN secret** it gives you.
+3. In the admin panel, go to **Settings → Payments** and paste both the API key and the IPN secret. That single connection turns on real checkout in three places:
+   - **Store products** — the "Pay with crypto" button on every product page (`product.php`) replaces the plain request form once this is configured.
+   - **Tips** — a "Support the site" widget on every article and tool page, with configurable preset amounts.
+   - **Premium content** — mark any article or tool "premium" with a price in its admin edit form; visitors then see an excerpt/teaser and a real "Unlock for $X" button instead of the full content. Unlocks are remembered per-browser via a cookie, granted automatically the moment `payment-webhook.php` confirms the payment.
+4. `payment-webhook.php` is the **only** thing that ever marks a payment paid or grants an unlock — it verifies NOWPayments' HMAC-SHA512 signature on every call, so nothing else on the site (including a visitor manually hitting the checkout page) can fake a confirmed payment.
+
+`checkout.php` creates one invoice per order (address, amount, QR code) and polls `payment-status.php` for confirmation — refreshing the page never creates a duplicate invoice. Without an API key configured, all three flows above fall back gracefully (request forms, external payment links, or a "not configured yet" message) instead of breaking.
+
+## 8. Security notes
 
 - `config.generated.php` and `install/install.lock` are git-ignored — never commit real DB credentials.
 - Never paste API keys/secrets into chat, commits, or anywhere but the Settings form — they're stored server-side only.
 - The AI assistant's write access is scoped and validated server-side (see `admin/pages/ai-assistant.php`); it cannot execute code or touch files.
+- Your NOWPayments **IPN secret** is what makes `payment-webhook.php` trustworthy — without it set, incoming webhook calls are rejected outright rather than trusted blindly.

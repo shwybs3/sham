@@ -13,7 +13,10 @@ if (!$tool) {
     exit;
 }
 
-$pdo->prepare("UPDATE tools SET uses_count = uses_count + 1 WHERE id = ?")->execute([$tool['id']]);
+$isLocked = !empty($tool['is_premium']) && !is_content_unlocked('tool', (int)$tool['id']);
+if (!$isLocked) {
+    $pdo->prepare("UPDATE tools SET uses_count = uses_count + 1 WHERE id = ?")->execute([$tool['id']]);
+}
 
 $related = $pdo->query("SELECT * FROM tools WHERE status='published' AND id != " . (int)$tool['id'] . " ORDER BY RAND() LIMIT 4")->fetchAll();
 
@@ -53,15 +56,32 @@ $jsonld = [
 <div class="container">
   <?php ad_zone('tool_top'); ?>
 
+  <?php if ($isLocked): ?>
+  <div class="guarantee-box" style="background:#eef1ff;border-color:#c7d2fe">
+    <div class="icon-badge" style="background:var(--grad-brand)"><i class="fa-solid fa-lock"></i></div>
+    <div>
+      <h3 style="color:var(--brand1)">This tool is premium</h3>
+      <p style="color:var(--ink-soft)">Unlock it for <?= money((float)$tool['premium_price'], 'USD') ?> — a one-time crypto payment, no account needed. Once unlocked it stays unlocked on this browser.</p>
+      <?php if (NOWPayments::isConfigured()): ?>
+        <a class="btn-buy" style="display:inline-flex;width:auto;margin-top:10px" href="<?= site_url('checkout.php?type=unlock_tool&id=' . (int)$tool['id']) ?>"><i class="fa-solid fa-wallet"></i> Unlock for <?= money((float)$tool['premium_price'], 'USD') ?></a>
+      <?php else: ?>
+        <p class="hint">Payments aren't configured on this site yet.</p>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php else: ?>
   <div class="tool-shell">
     <div id="tool-app" data-tool="<?= e($tool['tool_key']) ?>"></div>
   </div>
+  <?php endif; ?>
 
   <?php ad_zone('tool_bottom'); ?>
 
   <?php if ($tool['full_description']): ?>
   <div class="article-body" style="margin-top:34px"><?= $tool['full_description'] ?></div>
   <?php endif; ?>
+
+  <?php if (!$isLocked) tip_widget('Tool: ' . $tool['name']); ?>
 
   <?php if ($related): ?>
   <div class="section-head"><h2><i class="fa-solid fa-wrench" style="color:var(--accent-green)"></i> More free tools</h2></div>

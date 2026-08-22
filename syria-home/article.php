@@ -22,6 +22,8 @@ $related = $pdo->prepare("SELECT a.*, c.name AS category_name FROM articles a LE
 $related->execute([$article['id'], $article['category_id'], $article['content_type']]);
 $related = $related->fetchAll();
 
+$isLocked = !empty($article['is_premium']) && !is_content_unlocked('article', (int)$article['id']);
+
 $tags = array_filter(array_map('trim', explode(',', $article['tags'])));
 $metaTitle = $article['meta_title'] ?: $article['title'];
 $metaDesc = $article['meta_description'] ?: $article['excerpt'];
@@ -67,13 +69,35 @@ $jsonld = [
 
 <div class="container">
   <?php ad_zone('article_top'); ?>
-  <div class="article-body"><?= $article['body'] ?></div>
+
+  <?php if ($isLocked): ?>
+    <div class="article-body">
+      <p><?= e($article['excerpt']) ?></p>
+      <p style="filter:blur(3px);user-select:none;pointer-events:none"><?= e(mb_substr(strip_tags($article['body']), 0, 400)) ?>…</p>
+    </div>
+    <div class="guarantee-box" style="background:#eef1ff;border-color:#c7d2fe">
+      <div class="icon-badge" style="background:var(--grad-brand)"><i class="fa-solid fa-lock"></i></div>
+      <div>
+        <h3 style="color:var(--brand1)">This article is premium</h3>
+        <p style="color:var(--ink-soft)">Unlock the full article for <?= money((float)$article['premium_price'], 'USD') ?> — a one-time crypto payment, no account needed.</p>
+        <?php if (NOWPayments::isConfigured()): ?>
+          <a class="btn-buy" style="display:inline-flex;width:auto;margin-top:10px" href="<?= site_url('checkout.php?type=unlock_article&id=' . (int)$article['id']) ?>"><i class="fa-solid fa-wallet"></i> Unlock for <?= money((float)$article['premium_price'], 'USD') ?></a>
+        <?php else: ?>
+          <p class="hint">Payments aren't configured on this site yet.</p>
+        <?php endif; ?>
+      </div>
+    </div>
+  <?php else: ?>
+    <div class="article-body"><?= $article['body'] ?></div>
+  <?php endif; ?>
 
   <?php if ($tags): ?>
   <div class="tag-row container" style="padding:0">
     <?php foreach ($tags as $tag): ?><span class="tag">#<?= e($tag) ?></span><?php endforeach; ?>
   </div>
   <?php endif; ?>
+
+  <?php if (!$isLocked) tip_widget('Article: ' . $article['title']); ?>
 
   <?php ad_zone('article_bottom'); ?>
 

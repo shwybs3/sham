@@ -53,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'author' => trim($_POST['author'] ?? '') ?: 'Editorial Team',
         'status' => $_POST['status'] ?? 'draft',
         'trending' => isset($_POST['trending']) ? 1 : 0,
+        'is_premium' => isset($_POST['is_premium']) ? 1 : 0,
+        'premium_price' => (float)($_POST['premium_price'] ?? 3),
         'reading_time' => reading_time_from_html($body),
     ];
     if ($title === '') {
@@ -210,6 +212,12 @@ if ($draft && !$editing) {
         </div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="trending" style="width:auto" <?= !empty($editing['trending']) ? 'checked' : '' ?>> Mark as trending</label>
+
+      <h3>Premium content (crypto paywall)</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="is_premium" style="width:auto" <?= !empty($editing['is_premium']) ? 'checked' : '' ?>> Require payment to read the full article</label>
+      <label>Unlock price (USD)</label>
+      <input type="text" name="premium_price" value="<?= e((string)($editing['premium_price'] ?? '3.00')) ?>" style="max-width:160px">
+      <p class="hint">When enabled, visitors see the excerpt and a "Pay with crypto" unlock button instead of the full body. Requires NOWPayments to be configured in Settings &gt; Payments.</p>
 
       <div style="margin-top:20px;display:flex;gap:10px">
         <button class="btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save article</button>

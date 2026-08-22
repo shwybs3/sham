@@ -153,6 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'gemini_api_key' => '',
                 'gemini_model' => 'gemini-2.0-flash',
                 'openrouter_api_key' => '',
+                'nowpayments_api_key' => '',
+                'nowpayments_ipn_secret' => '',
+                'tip_presets' => '3,5,10',
                 'social_twitter' => '', 'social_facebook' => '', 'social_linkedin' => '',
             ];
             $ins = $pdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");

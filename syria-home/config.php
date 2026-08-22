@@ -78,3 +78,4 @@ require_once __DIR__ . '/includes/ai/OpenRouterClient.php';
 require_once __DIR__ . '/includes/ai/AIRouter.php';
 require_once __DIR__ . '/includes/tool_registry.php';
 require_once __DIR__ . '/includes/svg_art.php';
+require_once __DIR__ . '/includes/payments/NOWPayments.php';
