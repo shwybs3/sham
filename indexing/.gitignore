@@ -1,0 +1,8 @@
+# User data — never commit to git
+/data/users/
+/data/logs/
+/data/payments/
+/data/sessions/
+/data/reports/
+/data/settings.json
+/data/keys/
