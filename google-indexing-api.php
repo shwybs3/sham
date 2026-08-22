@@ -234,8 +234,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'submit' && $_SERVER['REQUEST_METH
         }
         $r = gidx_submit_url($tokenRes['token'], $u);
         $results[] = ['url' => $u, 'ok' => $r['ok'], 'message' => $r['message']];
-        $pdo->prepare("INSERT INTO gidx_log (identifier, url, status, message) VALUES (?,?,?,?)")
-            ->execute([$identifier, $u, $r['ok'] ? 'success' : 'error', $r['message']]);
+        $pdo->prepare("INSERT INTO gidx_log (identifier, url, result, message) VALUES (?,?,?,?)")
+            ->execute([$identifier, $u, $r['ok'] ? 'ok' : 'fail', $r['message']]);
         if ($r['ok']) gidx_increment_usage($pdo, $identifier);
     }
     $quota = gidx_quota($pdo, $identifier);
