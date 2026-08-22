@@ -288,6 +288,78 @@ function ensure_schema(PDO $pdo): array {
         } catch (Throwable $e) { /* ignore, non-critical */ }
     }
 
+    // ── Google Indexing API tool tables ──────────────────────────────────
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gidx_quota (
+      identifier VARCHAR(32) NOT NULL PRIMARY KEY,
+      used_count INT NOT NULL DEFAULT 0,
+      \`limit\` INT NOT NULL DEFAULT 100,
+      premium_until DATETIME NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'gidx_quota';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gidx_keys (
+      identifier VARCHAR(32) NOT NULL PRIMARY KEY,
+      service_account_json MEDIUMTEXT NOT NULL,
+      client_email VARCHAR(255) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'gidx_keys';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gidx_payments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_id VARCHAR(120) NOT NULL UNIQUE,
+      identifier VARCHAR(32) NOT NULL,
+      price_usd DECIMAL(10,2) NOT NULL DEFAULT 15.00,
+      pay_currency VARCHAR(20) NOT NULL,
+      pay_address VARCHAR(255) NOT NULL,
+      pay_amount DECIMAL(24,8) NOT NULL DEFAULT 0,
+      actually_paid DECIMAL(24,8) NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'pending',
+      raw_ipn_json MEDIUMTEXT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_identifier (identifier),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'gidx_payments';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS gidx_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      identifier VARCHAR(32) NOT NULL,
+      url VARCHAR(2000) NOT NULL,
+      result ENUM('ok','fail') NOT NULL,
+      message VARCHAR(500) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_identifier (identifier),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'gidx_log';
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS subscribers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      identifier VARCHAR(32) NOT NULL,
+      google_sub VARCHAR(120) NULL,
+      email VARCHAR(255) NULL,
+      name VARCHAR(255) NULL,
+      picture VARCHAR(500) NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_identifier (identifier),
+      INDEX idx_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $log[] = 'subscribers';
+
+    // Seed gidx / payment / OAuth settings (INSERT IGNORE — never overwrite user values)
+    $pdo->exec("INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES
+        ('google_site_verification', 'TSJD6_N7XRQC1haHsZYd-RwDmYV3XkVXRzaGlgA6VAk'),
+        ('nowpayments_api_key',      'M9WQVSQ-YABMQQ8-MDHM5S6-152GTMV'),
+        ('nowpayments_ipn_secret',   'S6msX8/gGLnY/LLECqqzB7ld7yszvvcF'),
+        ('google_oauth_client_id',   ''),
+        ('google_oauth_client_secret','')");
+
     return $log;
 }
 ensure_schema($pdo);
