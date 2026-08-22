@@ -6,8 +6,14 @@ $urls = [
     ['loc' => site_url(''), 'priority' => '1.0'],
     ['loc' => site_url('articles.php'), 'priority' => '0.9'],
     ['loc' => site_url('tools.php'), 'priority' => '0.9'],
+    ['loc' => site_url('products.php'), 'priority' => '0.9'],
     ['loc' => site_url('about.php'), 'priority' => '0.4'],
     ['loc' => site_url('contact.php'), 'priority' => '0.3'],
+    ['loc' => site_url('privacy-policy.php'), 'priority' => '0.2'],
+    ['loc' => site_url('terms.php'), 'priority' => '0.2'],
+    ['loc' => site_url('editorial-policy.php'), 'priority' => '0.2'],
+    ['loc' => site_url('refund-policy.php'), 'priority' => '0.2'],
+    ['loc' => site_url('license.php'), 'priority' => '0.2'],
 ];
 
 foreach ($pdo->query("SELECT slug, updated_at FROM articles WHERE status='published'") as $a) {
@@ -15,6 +21,9 @@ foreach ($pdo->query("SELECT slug, updated_at FROM articles WHERE status='publis
 }
 foreach ($pdo->query("SELECT slug FROM tools WHERE status='published'") as $t) {
     $urls[] = ['loc' => site_url('tool.php?slug=' . $t['slug']), 'priority' => '0.7'];
+}
+foreach ($pdo->query("SELECT slug FROM products WHERE status='published'") as $p) {
+    $urls[] = ['loc' => site_url('product.php?slug=' . $p['slug']), 'priority' => '0.7'];
 }
 foreach ($pdo->query("SELECT slug FROM categories") as $c) {
     $urls[] = ['loc' => site_url('category.php?slug=' . $c['slug']), 'priority' => '0.5'];

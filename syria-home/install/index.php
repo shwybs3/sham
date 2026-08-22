@@ -161,9 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once __DIR__ . '/../seed/seed_categories.php';
             require_once __DIR__ . '/../seed/seed_articles.php';
             require_once __DIR__ . '/../seed/seed_tools.php';
+            require_once __DIR__ . '/../seed/seed_products.php';
             seed_categories($pdo);
             seed_articles($pdo);
             seed_tools($pdo);
+            seed_products($pdo);
 
             file_put_contents($lockFile, date('c'));
             unset($_SESSION['install']);
@@ -259,7 +261,7 @@ render_head('Step ' . $step);
 
 <?php elseif ($step === 5): ?>
   <h1>Ready to install</h1>
-  <p class="sub">This will create the database tables, your admin account, and seed 20 articles + 20 tools.</p>
+  <p class="sub">This will create the database tables, your admin account, and seed 21 articles, 20 tools and 10 store products.</p>
   <div class="spinner-list">
     <div>✓ Site: <b><?= e($data['site_name']) ?></b></div>
     <div>✓ Database: <b><?= e($data['db_name']) ?></b> on <?= e($data['db_host']) ?></div>

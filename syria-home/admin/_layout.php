@@ -61,6 +61,8 @@ const ADMIN_NAV = [
     'articles' => ['Articles', 'fa-newspaper'],
     'tools' => ['Web Tools', 'fa-wrench'],
     'categories' => ['Categories', 'fa-tags'],
+    'products' => ['Store Products', 'fa-store'],
+    'orders' => ['Orders & Messages', 'fa-inbox'],
     'ai-assistant' => ['AI Assistant', 'fa-robot'],
     'insights' => ['Google Insights', 'fa-chart-line'],
     'settings' => ['Settings', 'fa-gear'],
@@ -72,6 +74,10 @@ function admin_sidebar(string $active): void {
       <div class="brand"><span><i class="fa-solid fa-layer-group"></i></span> <?= e(setting('site_name', 'Syria Home')) ?></div>
       <div class="grp">Content</div>
       <?php foreach (['dashboard','articles','tools','categories'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+        <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
+      <?php endforeach; ?>
+      <div class="grp">Store</div>
+      <?php foreach (['products','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Intelligence</div>

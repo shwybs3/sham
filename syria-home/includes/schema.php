@@ -89,6 +89,49 @@ function sh_ensure_schema(PDO $pdo): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      slug VARCHAR(220) NOT NULL UNIQUE,
+      tagline VARCHAR(300) DEFAULT '',
+      product_type VARCHAR(60) DEFAULT 'script',
+      icon_class VARCHAR(60) DEFAULT 'fa-cube',
+      art_key VARCHAR(40) DEFAULT 'p1',
+      price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      compare_at_price DECIMAL(10,2) NULL,
+      currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+      badge VARCHAR(60) DEFAULT '',
+      short_description VARCHAR(400) DEFAULT '',
+      full_description LONGTEXT,
+      features TEXT,
+      includes_list TEXT,
+      demo_url VARCHAR(300) DEFAULT '',
+      payment_url VARCHAR(300) DEFAULT '',
+      meta_title VARCHAR(220) DEFAULT '',
+      meta_description VARCHAR(400) DEFAULT '',
+      meta_keywords VARCHAR(400) DEFAULT '',
+      status ENUM('published','draft') NOT NULL DEFAULT 'published',
+      featured TINYINT(1) NOT NULL DEFAULT 0,
+      sort_order INT NOT NULL DEFAULT 0,
+      views INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX (status), INDEX (featured)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS orders (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      product_id INT NULL,
+      product_name VARCHAR(200) DEFAULT '',
+      name VARCHAR(150) DEFAULT '',
+      email VARCHAR(190) DEFAULT '',
+      note TEXT,
+      amount DECIMAL(10,2) DEFAULT 0,
+      currency VARCHAR(8) DEFAULT 'USD',
+      status ENUM('new','contacted','paid','delivered','cancelled') NOT NULL DEFAULT 'new',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     $pdo->exec("CREATE TABLE IF NOT EXISTS contact_messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(150) DEFAULT '',

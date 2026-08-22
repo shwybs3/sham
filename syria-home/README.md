@@ -58,8 +58,12 @@ If no Gemini key is set, the assistant automatically falls back to OpenRouter's 
 
 - **21 original English articles** (news/tutorials/comparisons/reviews) with per-page SEO (title/description/keywords, canonical, Open Graph, JSON-LD `Article`/`NewsArticle`), original CSS-graphic headers (no stock photos, no copyright risk).
 - **20 free client-side tools** (image converter, compressor, QR generator, password generator, JSON formatter, Base64, word counter, case converter, Lorem Ipsum, Markdown→HTML, CSV→JSON, hash generator, URL encoder, color converter, unit converter, BMI/age calculators, timestamp converter, CSS minifier, text-to-speech) — each with its own SEO'd page and JSON-LD `SoftwareApplication` schema.
-- Admin panel: Dashboard, Articles, Tools, Categories, AI Assistant, Google Insights, Settings (General/API Keys/Advertisements/SEO/Security/Social).
-- Dynamic `sitemap.php`/`robots.php`/`ads.php`, pretty-URL rules in `.htaccess`.
+- **10-product digital store** (`products.php` / `product.php`) — scripts, templates and toolkits, each with its own SEO'd page, JSON-LD `Product` schema, original SVG artwork (no stock imagery), a features/what's-included breakdown, and either a "Request to buy" form (saved to the admin **Orders & Messages** inbox) or a direct link to your own checkout page (Gumroad/Paddle/Stripe Payment Link/etc. — set per product in **Admin → Store Products**).
+- Admin panel: Dashboard, Articles, Tools, Categories, Store Products, Orders & Messages, AI Assistant, Google Insights, Settings (General/API Keys/Advertisements/SEO/Security/Social).
+- Dynamic `sitemap.php`/`robots.php`/`ads.php`, pretty-URL rules in `.htaccess` (including `/product/{slug}`).
+- Store legal pages: `refund-policy.php` and `license.php`, linked from the footer.
+
+**A deliberate copywriting choice in the store:** no product claims to guarantee Google AdSense approval — that's a decision only Google makes, manually, based on the buyer's own domain and content. Products are described as "AdSense-ready" (built to meet the technical/policy prerequisites) with a guarantee we can actually keep: free updates, setup support, and a 14-day refund window. See `refund-policy.php` for exactly what that covers.
 
 ## 7. Security notes
 

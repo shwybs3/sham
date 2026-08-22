@@ -5,6 +5,8 @@ $stats = [
     'tools' => (int)$pdo->query("SELECT COUNT(*) FROM tools WHERE status='published'")->fetchColumn(),
     'views' => (int)$pdo->query("SELECT COALESCE(SUM(views),0) FROM articles")->fetchColumn(),
     'uses' => (int)$pdo->query("SELECT COALESCE(SUM(uses_count),0) FROM tools")->fetchColumn(),
+    'products' => (int)$pdo->query("SELECT COUNT(*) FROM products WHERE status='published'")->fetchColumn(),
+    'new_orders' => (int)$pdo->query("SELECT COUNT(*) FROM orders WHERE status='new'")->fetchColumn(),
 ];
 $recent = $pdo->query("SELECT id, title, slug, status, views, published_at FROM articles ORDER BY created_at DESC LIMIT 6")->fetchAll();
 $recentAi = $pdo->query("SELECT * FROM ai_activity_log ORDER BY created_at DESC LIMIT 6")->fetchAll();
@@ -15,6 +17,8 @@ $recentAi = $pdo->query("SELECT * FROM ai_activity_log ORDER BY created_at DESC 
   <div class="stat"><i class="fa-solid fa-wrench"></i><div class="n"><?= number_format($stats['tools']) ?></div><div class="l">Live tools</div></div>
   <div class="stat"><i class="fa-regular fa-eye"></i><div class="n"><?= number_format($stats['views']) ?></div><div class="l">Article views</div></div>
   <div class="stat"><i class="fa-solid fa-bolt"></i><div class="n"><?= number_format($stats['uses']) ?></div><div class="l">Tool uses</div></div>
+  <div class="stat"><i class="fa-solid fa-store"></i><div class="n"><?= number_format($stats['products']) ?></div><div class="l">Store products</div></div>
+  <div class="stat"><i class="fa-solid fa-inbox"></i><div class="n"><?= number_format($stats['new_orders']) ?></div><div class="l">New orders</div></div>
 </div>
 
 <div class="row2">

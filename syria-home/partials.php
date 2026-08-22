@@ -50,7 +50,43 @@ function nav_links(): array {
         'Comparisons' => site_url('articles.php?type=comparison'),
         'Tutorials' => site_url('articles.php?type=tutorial'),
         'Tools' => site_url('tools.php'),
+        'Store' => site_url('products.php'),
     ];
+}
+
+function money(float $amount, string $currency = 'USD'): string {
+    $symbols = ['USD' => '$', 'EUR' => '€', 'GBP' => '£'];
+    $sym = $symbols[$currency] ?? ($currency . ' ');
+    return $sym . number_format($amount, 2);
+}
+
+function product_card(array $p): void {
+    $off = null;
+    if (!empty($p['compare_at_price']) && (float)$p['compare_at_price'] > (float)$p['price']) {
+        $off = (int)round(100 - ((float)$p['price'] / (float)$p['compare_at_price'] * 100));
+    }
+    ?>
+    <a class="product-card" href="<?= site_url('product.php?slug=' . urlencode($p['slug'])) ?>">
+      <div class="art-wrap">
+        <?= svg_product_art($p['art_key']) ?>
+        <?php if (!empty($p['badge'])): ?><span class="badge-corner"><?= e($p['badge']) ?></span><?php endif; ?>
+        <span class="art-icon"><i class="fa-solid <?= e($p['icon_class']) ?>"></i></span>
+      </div>
+      <div class="pbody">
+        <span class="ptype"><i class="fa-solid fa-tag"></i> <?= e($p['product_type']) ?></span>
+        <h3><?= e($p['name']) ?></h3>
+        <p><?= e($p['tagline']) ?></p>
+        <div class="price-row">
+          <span class="price-now"><?= money((float)$p['price'], $p['currency']) ?></span>
+          <?php if ($off): ?>
+            <span class="price-was"><?= money((float)$p['compare_at_price'], $p['currency']) ?></span>
+            <span class="price-off">−<?= $off ?>%</span>
+          <?php endif; ?>
+        </div>
+        <span class="pcta">View details <i class="fa-solid fa-arrow-right"></i></span>
+      </div>
+    </a>
+    <?php
 }
 
 function site_header(string $active = ''): void {
@@ -89,19 +125,22 @@ function site_footer(): void {
           </div>
         </div>
         <div><h4>Explore</h4>
-          <a href="<?= site_url('articles.php') ?>">Articles</a>
-          <a href="<?= site_url('articles.php?type=news') ?>">News</a>
-          <a href="<?= site_url('tools.php') ?>">Web Tools</a>
+          <a href="<?= site_url('articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> Articles</a>
+          <a href="<?= site_url('articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> News</a>
+          <a href="<?= site_url('tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> Web Tools</a>
+          <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> Store</a>
         </div>
         <div><h4>Company</h4>
-          <a href="<?= site_url('about.php') ?>">About</a>
-          <a href="<?= site_url('contact.php') ?>">Contact</a>
-          <a href="<?= site_url('sitemap.php') ?>">Sitemap</a>
+          <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> About</a>
+          <a href="<?= site_url('contact.php') ?>"><i class="fa-solid fa-envelope fa-fw"></i> Contact</a>
+          <a href="<?= site_url('sitemap.php') ?>"><i class="fa-solid fa-sitemap fa-fw"></i> Sitemap</a>
         </div>
         <div><h4>Legal</h4>
-          <a href="<?= site_url('privacy-policy.php') ?>">Privacy Policy</a>
-          <a href="<?= site_url('terms.php') ?>">Terms of Use</a>
-          <a href="<?= site_url('editorial-policy.php') ?>">Editorial Policy</a>
+          <a href="<?= site_url('privacy-policy.php') ?>"><i class="fa-solid fa-user-shield fa-fw"></i> Privacy Policy</a>
+          <a href="<?= site_url('terms.php') ?>"><i class="fa-solid fa-gavel fa-fw"></i> Terms of Use</a>
+          <a href="<?= site_url('editorial-policy.php') ?>"><i class="fa-solid fa-feather fa-fw"></i> Editorial Policy</a>
+          <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> Refund Policy</a>
+          <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> License Terms</a>
         </div>
       </div>
       <div class="container bottom">

@@ -77,3 +77,4 @@ require_once __DIR__ . '/includes/ai/GeminiClient.php';
 require_once __DIR__ . '/includes/ai/OpenRouterClient.php';
 require_once __DIR__ . '/includes/ai/AIRouter.php';
 require_once __DIR__ . '/includes/tool_registry.php';
+require_once __DIR__ . '/includes/svg_art.php';
