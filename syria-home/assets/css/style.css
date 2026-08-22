@@ -262,3 +262,20 @@ nav.main-nav a:hover,nav.main-nav a.active{background:#eef1ff;color:var(--brand1
 .founder-socials a{width:38px;height:38px;border-radius:11px;background:#f1f3f9;color:var(--ink-soft);
   display:flex;align-items:center;justify-content:center;transition:.2s}
 .founder-socials a:hover{background:var(--grad-brand);color:#fff;transform:translateY(-2px)}
+
+/* ── Visitor ratings ── */
+.rating-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:34px 0}
+.rating-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.rating-title{font-weight:800;font-size:15px}
+.rating-avg{font-size:14px;color:var(--ink-soft)}
+.rating-avg b{font-size:19px;color:var(--ink)}
+.rating-box .stars{display:flex;gap:4px}
+.rating-box .star{background:none;border:0;cursor:pointer;font-size:26px;line-height:1;padding:2px;
+  color:#dde3ee;transition:color .12s,transform .12s}
+.rating-box .star:hover{transform:scale(1.14)}
+.rating-box .star.on{color:#f59e0b}
+.rating-box .star:focus-visible{outline:2px solid var(--brand1);outline-offset:3px;border-radius:4px}
+.rating-note{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.rating-inline{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--ink-soft);font-weight:700}
+.rating-inline i{color:#f59e0b}
+@media (prefers-reduced-motion:reduce){.rating-box .star{transition:none}.rating-box .star:hover{transform:none}}

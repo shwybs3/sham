@@ -36,8 +36,11 @@ $jsonld = [
     'operatingSystem' => 'Any (runs in-browser)',
     'description' => $metaDesc,
     'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'USD'],
-    'aggregateRating' => ['@type' => 'AggregateRating', 'ratingValue' => '4.8', 'ratingCount' => max(25, (int)$tool['uses_count'])],
 ];
+/* Star markup only when real visitors have actually rated this tool —
+   fabricated review data violates Google's structured-data policy. */
+$agg = rating_jsonld('tool', (int)$tool['id']);
+if ($agg) $jsonld['aggregateRating'] = $agg;
 ?><!doctype html><html lang="en"><head>
 <?php seo_head([
     'title' => $metaTitle . ' | ' . setting('site_name'),
@@ -104,6 +107,8 @@ $jsonld = [
     </div>
   </div>
   <?php endif; ?>
+
+  <?php if (!$isLocked) rating_widget('tool', (int)$tool['id']); ?>
 
   <?php if (!$isLocked) tip_widget('Tool: ' . $tool['name']); ?>
 

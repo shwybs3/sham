@@ -9,6 +9,7 @@ const SH_TABLES = [
     'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
     'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
     'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results', 'pages',
+    'index_log', 'ratings',
 ];
 
 /**
@@ -277,10 +278,37 @@ function sh_ensure_schema(PDO $pdo): void {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    /* Every URL submission to every search engine, for the Indexing page. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS index_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      url VARCHAR(600) NOT NULL,
+      engine VARCHAR(48) NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'ok',
+      http_code INT NOT NULL DEFAULT 0,
+      message VARCHAR(400) DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_created (created_at),
+      INDEX idx_engine (engine)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Real visitor ratings. The UNIQUE key is what keeps the aggregate
+       honest — one vote per entity per visitor fingerprint. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ratings (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      entity_type ENUM('article','tool','product') NOT NULL,
+      entity_id INT NOT NULL,
+      rating TINYINT NOT NULL,
+      ip_hash CHAR(64) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_vote (entity_type, entity_id, ip_hash),
+      INDEX idx_entity (entity_type, entity_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     sh_ensure_column($pdo, 'tools', 'affiliate_url', "VARCHAR(500) DEFAULT ''");
     sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
     sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
     sh_ensure_column($pdo, 'tools', 'tool_code', "LONGTEXT");
+    sh_ensure_column($pdo, 'tools', 'replaces', "VARCHAR(200) DEFAULT ''");
 }
 
 /**
