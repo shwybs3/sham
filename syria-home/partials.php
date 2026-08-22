@@ -37,7 +37,7 @@ function seo_head(array $o): void {
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= e($pub) ?>" crossorigin="anonymous"></script>
     <?php endif; ?>
     <?php if (!empty($o['jsonld'])): ?>
-    <script type="application/ld+json"><?= json_encode($o['jsonld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <script type="application/ld+json"><?= str_replace('</script', '<\/script', json_encode($o['jsonld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></script>
     <?php endif; ?>
     <?php
 }

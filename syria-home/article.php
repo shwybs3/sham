@@ -40,6 +40,10 @@ $jsonld = [
     'dateModified' => date('c', strtotime($article['updated_at'])),
     'mainEntityOfPage' => site_url('article.php?slug=' . $article['slug']),
 ];
+
+$extraSchema = $pdo->prepare("SELECT payload_json FROM article_schema_blocks WHERE article_id = ?");
+$extraSchema->execute([$article['id']]);
+$extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
 ?><!doctype html><html lang="en"><head>
 <?php seo_head([
     'title' => $metaTitle . ' | ' . setting('site_name'),
@@ -49,6 +53,9 @@ $jsonld = [
     'type' => 'article',
     'jsonld' => $jsonld,
 ]); ?>
+<?php foreach ($extraSchema as $blockJson): ?>
+<script type="application/ld+json"><?= str_replace('</script', '<\/script', $blockJson) ?></script>
+<?php endforeach; ?>
 </head><body>
 <?php site_header(); ?>
 

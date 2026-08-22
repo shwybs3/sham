@@ -6,7 +6,7 @@ Built as an independent app inside this repo (`syria-home/`) so it can be deploy
 
 ## 1. Deploy the files
 
-Point your subdomain's document root at the `syria-home/` folder (or upload its contents to that subdomain's `public_html`). Requirements: PHP 8.0+ with `PDO_MySQL`, `cURL`, and `GD`; MySQL 5.7+/MariaDB; a host that supports `.htaccess` (Apache/LiteSpeed with `mod_rewrite`).
+Point your subdomain's document root at the `syria-home/` folder (or upload its contents to that subdomain's `public_html`). Requirements: PHP 8.0+ with `PDO_MySQL`, `cURL`, `DOM`, and `GD`; MySQL 5.7+/MariaDB; a host that supports `.htaccess` (Apache/LiteSpeed with `mod_rewrite`).
 
 ## 2. Run the install wizard
 
@@ -79,9 +79,29 @@ This is the one payment gateway actually wired in end-to-end — everything else
 
 `checkout.php` creates one invoice per order (address, amount, QR code) and polls `payment-status.php` for confirmation — refreshing the page never creates a duplicate invoice. Without an API key configured, all three flows above fall back gracefully (request forms, external payment links, or a "not configured yet" message) instead of breaking.
 
-## 8. Security notes
+## 8. SEO toolkit
+
+- **SEO Score** — a live, in-browser checklist (title/meta length, keyword presence, subheadings, link count, word count) on every article's edit form. Nothing is sent anywhere; it's plain JavaScript reading the form fields.
+- **Schema Generator** — build extra FAQ, How-To, or Review JSON-LD blocks for any saved article (Admin → edit an article → Schema Generator section), rendered alongside the automatic Article schema on that page.
+- **Broken Link Checker** (Admin → Broken Link Checker) — on-demand scan of every link inside published article bodies, internal and external, with real HTTP status codes. No cron needed; click "Run scan."
+- **Automated keyword linking** — when saving an article with "Auto-link matching keywords" checked, the first mention of another published article's or tool's title gets automatically linked to that page (never touches existing links).
+- **Keyword Rank Tracker** (Admin → Google Insights) — real average position, clicks and impressions per query, pulled from your connected Search Console property. This intentionally does **not** claim to "track 50,000 keywords" — there's no honest, free way to report rank for keywords a site has no search visibility on yet. What's shown is exactly what Google Search itself reports, up to 250 rows per request.
+
+## 9. Independent subdomain sites (cPanel)
+
+**Admin → Subdomain Sites** provisions a real, fully independent copy of this entire script on a new subdomain of your choice — its own subdomain, its own MySQL database, its own admin account, seeded with the same 21 articles / 20 tools / 10 products, optionally topped up with a few AI-written articles for a niche you specify. This performs **real, live changes** on your hosting account; there is no simulation mode.
+
+Setup, in **Settings → Subdomains**:
+1. In cPanel: **Security → Manage API Tokens → Create**, and copy the token.
+2. Enter your cPanel host, username, that API token, and your root domain.
+3. Enter your account's **home directory** (visible in cPanel → File Manager, e.g. `/home/yourusername`) — subdomains created under the same cPanel account share this server's filesystem, so provisioning works by writing files directly rather than over FTP/SSH.
+
+Each subdomain site gets its own document root at `public_html/{subdomain}` and its own database — nothing is shared with the main site except, if you choose, your Gemini/OpenRouter/AdSense keys (copied over automatically so the new site's AI features and ads work immediately). Provisioning requires explicitly checking a confirmation box in the admin UI before it runs.
+
+## 10. Security notes
 
 - `config.generated.php` and `install/install.lock` are git-ignored — never commit real DB credentials.
 - Never paste API keys/secrets into chat, commits, or anywhere but the Settings form — they're stored server-side only.
 - The AI assistant's write access is scoped and validated server-side (see `admin/pages/ai-assistant.php`); it cannot execute code or touch files.
 - Your NOWPayments **IPN secret** is what makes `payment-webhook.php` trustworthy — without it set, incoming webhook calls are rejected outright rather than trusted blindly.
+- Your cPanel **API token** can create real subdomains and databases on your account — treat it like a password, and prefer a scoped token if your host offers one.

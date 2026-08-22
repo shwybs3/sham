@@ -126,6 +126,52 @@ function is_content_unlocked(string $contentType, int $contentId): bool {
     return (bool)$stmt->fetchColumn();
 }
 
+/**
+ * Auto-links the first mention of another published article's or tool's
+ * title inside $html to that page, skipping anything already inside an
+ * <a>...</a>. Best-effort HTML text scanning, not a full parser — safe
+ * because it only ever inserts <a> tags, never removes/rewrites markup.
+ */
+function auto_link_body(PDO $pdo, string $html, int $excludeArticleId, int $maxLinks = 6): string {
+    $candidates = [];
+    $a = $pdo->prepare("SELECT title AS label, slug, 'article.php?slug=' AS base FROM articles WHERE status='published' AND id != ? ORDER BY CHAR_LENGTH(title) DESC LIMIT 60");
+    $a->execute([$excludeArticleId]);
+    foreach ($a as $row) $candidates[] = $row;
+    $t = $pdo->query("SELECT name AS label, slug, 'tool.php?slug=' AS base FROM tools WHERE status='published' ORDER BY CHAR_LENGTH(name) DESC LIMIT 40");
+    foreach ($t as $row) $candidates[] = $row;
+    usort($candidates, fn($x, $y) => mb_strlen($y['label']) <=> mb_strlen($x['label']));
+
+    // Existing anchor spans — never insert a link inside or overlapping one.
+    // Recomputed fresh every iteration below since each insertion shifts offsets.
+    $anchorSpansOf = function (string $h): array {
+        preg_match_all('~<a\b[^>]*>.*?</a>~is', $h, $matches, PREG_OFFSET_CAPTURE);
+        $spans = [];
+        foreach ($matches[0] as $m) $spans[] = [$m[1], $m[1] + strlen($m[0])];
+        return $spans;
+    };
+    $insideAnySpan = function (int $pos, array $spans): bool {
+        foreach ($spans as [$start, $end]) if ($pos >= $start && $pos < $end) return true;
+        return false;
+    };
+
+    $linked = 0;
+    foreach ($candidates as $c) {
+        if ($linked >= $maxLinks) break;
+        $label = trim($c['label']);
+        if (mb_strlen($label) < 5) continue;
+        $pattern = '~(?<![\w>])(' . preg_quote($label, '~') . ')(?![\w<])~iu';
+        if (!preg_match($pattern, $html, $m, PREG_OFFSET_CAPTURE)) continue;
+        [$matchText, $pos] = $m[1];
+        if ($insideAnySpan($pos, $anchorSpansOf($html))) continue;
+
+        $url = site_url($c['base'] . urlencode($c['slug']));
+        $replacement = '<a href="' . e($url) . '">' . $matchText . '</a>';
+        $html = substr($html, 0, $pos) . $replacement . substr($html, $pos + strlen($matchText));
+        $linked++;
+    }
+    return $html;
+}
+
 function log_ai_activity(string $action, string $targetType, ?int $targetId, string $summary): void {
     global $pdo;
     $stmt = $pdo->prepare("INSERT INTO ai_activity_log (actor, action, target_type, target_id, summary) VALUES ('gemini', ?, ?, ?, ?)");

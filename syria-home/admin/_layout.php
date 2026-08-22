@@ -63,6 +63,8 @@ const ADMIN_NAV = [
     'categories' => ['Categories', 'fa-tags'],
     'products' => ['Store Products', 'fa-store'],
     'orders' => ['Orders & Payments', 'fa-inbox'],
+    'link-checker' => ['Broken Link Checker', 'fa-link-slash'],
+    'subsites' => ['Subdomain Sites', 'fa-sitemap'],
     'ai-assistant' => ['AI Assistant', 'fa-robot'],
     'insights' => ['Google Insights', 'fa-chart-line'],
     'settings' => ['Settings', 'fa-gear'],
@@ -78,6 +80,10 @@ function admin_sidebar(string $active): void {
       <?php endforeach; ?>
       <div class="grp">Store</div>
       <?php foreach (['products','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+        <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
+      <?php endforeach; ?>
+      <div class="grp">Growth</div>
+      <?php foreach (['link-checker','subsites'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Intelligence</div>

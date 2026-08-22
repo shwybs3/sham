@@ -188,6 +188,51 @@ function sh_ensure_schema(PDO $pdo): void {
     sh_ensure_column($pdo, 'articles', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
     sh_ensure_column($pdo, 'tools', 'is_premium', "TINYINT(1) NOT NULL DEFAULT 0");
     sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
+    sh_ensure_column($pdo, 'articles', 'auto_link', "TINYINT(1) NOT NULL DEFAULT 1");
+
+    /* Independent subdomain sites provisioned via cPanel — each one is a
+       full separate install of this same script, its own DB, its own
+       admin account. This table just tracks what's been created. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS subsites (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      subdomain VARCHAR(80) NOT NULL,
+      root_domain VARCHAR(190) NOT NULL,
+      full_domain VARCHAR(220) NOT NULL,
+      doc_root VARCHAR(400) DEFAULT '',
+      db_name VARCHAR(80) DEFAULT '',
+      db_user VARCHAR(80) DEFAULT '',
+      admin_user VARCHAR(80) DEFAULT '',
+      niche VARCHAR(220) DEFAULT '',
+      status ENUM('provisioning','ready','failed') NOT NULL DEFAULT 'provisioning',
+      error_log TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_domain (full_domain)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Extra JSON-LD blocks (FAQPage/HowTo/Review) an admin builds for a
+       specific article via the Schema Generator, layered on top of the
+       automatic Article/NewsArticle schema every article already gets. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS article_schema_blocks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      article_id INT NOT NULL,
+      schema_type ENUM('FAQPage','HowTo','Review') NOT NULL,
+      payload_json LONGTEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX (article_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Last broken-link scan results, so the admin page can show them
+       without re-crawling on every visit. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS link_check_results (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      article_id INT NULL,
+      article_title VARCHAR(220) DEFAULT '',
+      url VARCHAR(1000) NOT NULL,
+      is_internal TINYINT(1) NOT NULL DEFAULT 0,
+      http_status INT DEFAULT 0,
+      ok TINYINT(1) NOT NULL DEFAULT 0,
+      checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 
 /**

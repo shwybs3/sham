@@ -1,6 +1,6 @@
 <?php
 $tab = $_GET['tab'] ?? 'general';
-$tabs = ['general' => 'General', 'api' => 'API Keys', 'payments' => 'Payments', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
+$tabs = ['general' => 'General', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
 $msg = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
@@ -26,6 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $presets = array_filter(array_map('trim', explode(',', $_POST['tip_presets'] ?? '')), 'is_numeric');
         set_setting('tip_presets', $presets ? implode(',', $presets) : '3,5,10');
         $msg = ['ok', 'Payment settings saved.'];
+    }
+
+    if ($formTab === 'subdomains') {
+        foreach (['cpanel_host','cpanel_username','cpanel_api_token','cpanel_root_domain','cpanel_home_dir'] as $k) {
+            set_setting($k, trim($_POST[$k] ?? ''));
+        }
+        $msg = ['ok', 'cPanel settings saved.'];
     }
 
     if ($formTab === 'ads') {
@@ -159,6 +166,32 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
       <span class="badge ok"><i class="fa-solid fa-check"></i> Crypto payments active — Store products, tips and premium unlocks now show a real "Pay with crypto" button.</span>
     <?php else: ?>
       <span class="badge off">Add your API key above to enable real crypto checkout everywhere on the site.</span>
+    <?php endif; ?>
+  </div>
+
+<?php elseif ($tab === 'subdomains'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-sitemap"></i> cPanel account (for creating real subdomain sites)</h3>
+  <p class="hint">From your hosting cPanel: Security &gt; Manage API Tokens &gt; Create. This token can create subdomains and databases on your account — keep it secret, and consider a token restricted to those two categories if your host supports scoped tokens.</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="subdomains">
+    <div class="row2">
+      <div><label>cPanel host</label><input type="text" name="cpanel_host" value="<?= e(setting('cpanel_host')) ?>" placeholder="yourserver.hostingcompany.com"></div>
+      <div><label>cPanel username</label><input type="text" name="cpanel_username" value="<?= e(setting('cpanel_username')) ?>"></div>
+    </div>
+    <div class="row2">
+      <div><label>API token</label><input type="password" name="cpanel_api_token" value="<?= e(setting('cpanel_api_token')) ?>"></div>
+      <div><label>Root domain</label><input type="text" name="cpanel_root_domain" value="<?= e(setting('cpanel_root_domain')) ?>" placeholder="yassota.com"></div>
+    </div>
+    <label>Account home directory (absolute path)</label>
+    <input type="text" name="cpanel_home_dir" value="<?= e(setting('cpanel_home_dir')) ?>" placeholder="/home/yourusername">
+    <p class="hint">Find this in cPanel &gt; Files &gt; File Manager (the path shown when you open your home folder), or ask your host. Needed so this script can write the new site's files directly — subdomains under the same account share this server's filesystem.</p>
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </form>
+  <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+    <?php if (CPanelClient::isConfigured()): ?>
+      <span class="badge ok"><i class="fa-solid fa-check"></i> cPanel connected — go to <a href="?page=subsites">Subdomain Sites</a> to create real subdomain sites.</span>
+    <?php else: ?>
+      <span class="badge off">Add your cPanel host, username and API token above to enable subdomain provisioning.</span>
     <?php endif; ?>
   </div>
 

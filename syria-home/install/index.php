@@ -156,6 +156,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'nowpayments_api_key' => '',
                 'nowpayments_ipn_secret' => '',
                 'tip_presets' => '3,5,10',
+                'cpanel_host' => '',
+                'cpanel_username' => '',
+                'cpanel_api_token' => '',
+                'cpanel_root_domain' => '',
+                'cpanel_home_dir' => '',
                 'social_twitter' => '', 'social_facebook' => '', 'social_linkedin' => '',
             ];
             $ins = $pdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
