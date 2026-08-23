@@ -18,3 +18,4 @@ syria-home/config.generated.php
 syria-home/install/install.lock
 syria-home/uploads/*
 !syria-home/uploads/.gitkeep
+syria-home/agent_runs/

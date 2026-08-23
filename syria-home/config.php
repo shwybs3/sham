@@ -90,4 +90,5 @@ require_once __DIR__ . '/includes/coupons.php';
 require_once __DIR__ . '/includes/content_expansion.php';
 require_once __DIR__ . '/includes/arabic_content.php';
 require_once __DIR__ . '/includes/maintenance.php';
+require_once __DIR__ . '/includes/agent_console.php';
 sh_check_maintenance();

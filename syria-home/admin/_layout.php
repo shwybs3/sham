@@ -103,6 +103,7 @@ const ADMIN_NAV = [
     'link-checker' => ['Broken Link Checker', 'fa-link-slash'],
     'subsites' => ['Subdomain Sites', 'fa-sitemap'],
     'ai-assistant' => ['AI Assistant', 'fa-robot'],
+    'agent-console' => ['Agent Console', 'fa-terminal'],
     'insights' => ['Google Insights', 'fa-chart-line'],
     'settings' => ['Settings', 'fa-gear'],
 ];
@@ -124,7 +125,7 @@ function admin_sidebar(string $active): void {
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Intelligence</div>
-      <?php foreach (['ai-assistant','insights'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['ai-assistant','agent-console','insights'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">System</div>
