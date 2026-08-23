@@ -84,6 +84,30 @@ nav.main-nav a:hover,nav.main-nav a.active{background:#eef1ff;color:var(--brand1
 .tool-card .body{padding:14px 16px 16px}
 .tool-card h3{font-size:15px}
 
+/* ── Tool directory card (icon + name + rating + Visit Tool button) ── */
+.tcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;
+  display:flex;flex-direction:column;gap:12px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.tcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:transparent}
+.tcard-top{display:flex;align-items:flex-start;gap:12px}
+.tcard-icon{width:44px;height:44px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+.tcard-heading{min-width:0}
+.tcard-heading h3{font-size:15.5px;line-height:1.3;margin:0 0 4px}
+.tcard-rating{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.tcard-rating i{font-size:10px;color:#f59e0b}
+.tcard-rating i.off{color:#e2e8f0}
+.tcard-rating b{margin-left:4px;color:var(--ink-soft);font-weight:800}
+.tcard-rating.muted{font-size:11.5px;font-style:italic}
+.tcard-desc{font-size:13px;color:var(--muted);margin:0;flex:1;line-height:1.55;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tcard-foot{display:flex;flex-direction:column;gap:10px}
+.tcard-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pill{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:99px;letter-spacing:.03em}
+.pill-free{background:#ecfdf5;color:var(--accent-green)}
+.pill-views{background:#f1f3f9;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.tcard-cta{background:var(--grad-brand);color:#fff;font-size:13px;font-weight:800;text-align:center;
+  padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:7px;transition:opacity .15s}
+.tcard:hover .tcard-cta{opacity:.92}
+
 /* ── Article page ── */
 .article-hero{padding:8px 0 28px}
 .article-hero .art-icon{width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin-bottom:18px}

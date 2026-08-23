@@ -34,12 +34,26 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = $_POST['type'] ?? '';
         $currency = $_POST['currency'] ?? '';
         $priceUsd = 0; $label = ''; $refId = null;
+        $couponCode = ''; $discountUsd = 0;
 
         if ($type === 'product') {
             $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND status='published'");
             $stmt->execute([(int)($_POST['id'] ?? 0)]);
             $row = $stmt->fetch();
-            if ($row) { $priceUsd = (float)$row['price']; $label = $row['name']; $refId = (int)$row['id']; }
+            if ($row) {
+                $priceUsd = (float)$row['price']; $label = $row['name']; $refId = (int)$row['id'];
+                $rawCode = trim((string)($_POST['promo_code'] ?? ''));
+                if ($rawCode !== '') {
+                    $check = coupon_validate($rawCode, $refId, $priceUsd);
+                    if ($check['ok']) {
+                        $couponCode = strtoupper($rawCode);
+                        $discountUsd = $check['discount_usd'];
+                        $priceUsd = $check['final_usd'];
+                    } else {
+                        $error = $check['error'];
+                    }
+                }
+            }
         } elseif ($type === 'unlock_article') {
             $stmt = $pdo->prepare("SELECT * FROM articles WHERE id = ? AND status='published' AND is_premium=1");
             $stmt->execute([(int)($_POST['id'] ?? 0)]);
@@ -55,7 +69,9 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $label = 'Support: ' . trim((string)($_POST['label'] ?? setting('site_name')));
         }
 
-        if ($priceUsd <= 0) {
+        if ($error) {
+            // invalid promo code already set $error above — fall through to re-render
+        } elseif ($priceUsd <= 0) {
             $error = 'That item is not available for checkout right now.';
         } elseif (!array_key_exists($currency, NOWPayments::CURRENCIES)) {
             $error = 'Please choose a currency.';
@@ -65,9 +81,9 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($result['ok']) {
                 $email = trim((string)($_POST['email'] ?? ''));
                 $stmt = $pdo->prepare("INSERT INTO payments
-                    (order_id, identifier, reference_type, reference_id, reference_label, customer_email, price_usd, pay_currency, pay_address, pay_amount, status)
-                    VALUES (?,?,?,?,?,?,?,?,?,?, 'pending')");
-                $stmt->execute([$orderId, $identifier, $type, $refId, $label, $email, $priceUsd, $result['pay_currency'], $result['pay_address'], $result['pay_amount']]);
+                    (order_id, identifier, reference_type, reference_id, reference_label, customer_email, price_usd, pay_currency, pay_address, pay_amount, status, coupon_code, discount_usd)
+                    VALUES (?,?,?,?,?,?,?,?,?,?, 'pending', ?, ?)");
+                $stmt->execute([$orderId, $identifier, $type, $refId, $label, $email, $priceUsd, $result['pay_currency'], $result['pay_address'], $result['pay_amount'], $couponCode, $discountUsd]);
                 header('Location: ' . site_url('checkout.php?order=' . $orderId));
                 exit;
             }
@@ -122,7 +138,7 @@ else {
         <label>Address</label>
         <input type="text" id="payAddr" readonly value="<?= e($payment['pay_address']) ?>">
         <button class="btn-ghost" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('payAddr').value)">Copy address</button>
-        <p class="hint" style="margin-top:14px"><i class="fa-solid fa-hourglass-half"></i> Waiting for payment… (~<?= e(number_format((float)$payment['price_usd'], 2)) ?> USD)</p>
+        <p class="hint" style="margin-top:14px"><i class="fa-solid fa-hourglass-half"></i> Waiting for payment… (~<?= e(number_format((float)$payment['price_usd'], 2)) ?> USD<?php if (!empty($payment['coupon_code'])): ?> — code <b><?= e($payment['coupon_code']) ?></b> saved you $<?= number_format((float)$payment['discount_usd'], 2) ?><?php endif; ?>)</p>
       <?php endif; ?>
     </div>
   </div>
@@ -160,6 +176,9 @@ else {
         <?php if ($pendingType === 'product'): ?>
           <label>Email (for delivery)</label>
           <input type="text" name="email" placeholder="you@example.com" required>
+
+          <label>Promo code (optional)</label>
+          <input type="text" name="promo_code" value="<?= e($_POST['promo_code'] ?? '') ?>" placeholder="e.g. SAVE20" style="text-transform:uppercase">
         <?php endif; ?>
 
         <label>Pay with</label>
