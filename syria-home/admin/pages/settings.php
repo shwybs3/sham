@@ -203,6 +203,13 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
       <span class="badge ok"><i class="fa-solid fa-check"></i> Google account connected</span>
       <a class="btn red sm" style="margin-left:8px" href="?page=settings&tab=api&disconnect_google=1&csrf=<?= csrf_token() ?>">Disconnect</a>
     <?php elseif (GoogleOAuth::isConfigured()): ?>
+      <?php if (!preg_match('~^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$~i', GoogleOAuth::clientId())): ?>
+        <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:12px 14px;border-radius:10px;font-size:13.5px;margin-bottom:10px">
+          <i class="fa-solid fa-triangle-exclamation"></i> This doesn't look like a real Google OAuth Client ID — it should end in <code>.apps.googleusercontent.com</code>.
+          Clicking Connect with this value will fail on Google's side with <code>invalid_client</code>. Copy the Client ID again from
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console → Credentials</a> — make sure it's the <b>Client ID</b>, not the Secret, and that there's no extra whitespace.
+        </div>
+      <?php endif; ?>
       <a class="btn" href="<?= e(GoogleOAuth::authorizeUrl()) ?>"><i class="fa-brands fa-google"></i> Connect Google account</a>
     <?php else: ?>
       <span class="badge off">Add a Client ID + Secret above, then save, to enable the Connect button.</span>

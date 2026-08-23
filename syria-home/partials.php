@@ -150,6 +150,7 @@ function site_header(string $active = ''): void {
           <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text" name="q" placeholder="Search articles &amp; tools...">
         </form>
+        <a href="<?= site_url('tools.php') ?>" class="header-cta"><i class="fa-solid fa-bolt"></i> <span>Free Tools</span></a>
         <button class="hamburger" id="navToggle" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
       </div>
     </header>
