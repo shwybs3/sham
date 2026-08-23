@@ -105,6 +105,13 @@ function product_card(array $p): void {
         <span class="ptype"><i class="fa-solid fa-tag"></i> <?= e($p['product_type']) ?></span>
         <h3><?= e($p['name']) ?></h3>
         <p><?= e($p['tagline']) ?></p>
+        <?php $rating = rating_summary('product', (int)$p['id']); ?>
+        <?php if ($rating['count'] >= 3): ?>
+          <span class="tcard-rating">
+            <?php for ($i = 1; $i <= 5; $i++): ?><i class="fa-solid fa-star<?= $i > round($rating['avg']) ? ' off' : '' ?>"></i><?php endfor; ?>
+            <b><?= number_format($rating['avg'], 1) ?></b>
+          </span>
+        <?php endif; ?>
         <div class="price-row">
           <span class="price-now"><?= money((float)$p['price'], $p['currency']) ?></span>
           <?php if ($off): ?>

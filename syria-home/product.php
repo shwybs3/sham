@@ -40,6 +40,7 @@ if (!empty($product['compare_at_price']) && (float)$product['compare_at_price'] 
     $off = (int)round(100 - ((float)$product['price'] / (float)$product['compare_at_price'] * 100));
 }
 
+$selfUrl = site_url('product.php?slug=' . $product['slug']);
 $jsonld = [
     '@context' => 'https://schema.org',
     '@type' => 'Product',
@@ -52,17 +53,26 @@ $jsonld = [
         'price' => number_format((float)$product['price'], 2, '.', ''),
         'priceCurrency' => $product['currency'],
         'availability' => 'https://schema.org/InStock',
-        'url' => site_url('product.php?slug=' . $product['slug']),
+        'url' => $selfUrl,
     ],
+];
+/* Only real visitor votes produce star markup — see includes/ratings.php. */
+$agg = rating_jsonld('product', (int)$product['id']);
+if ($agg) $jsonld['aggregateRating'] = $agg;
+
+$crumbs = [
+    ['name' => 'Home', 'url' => site_url('')],
+    ['name' => 'Store', 'url' => site_url('products.php')],
+    ['name' => $product['name'], 'url' => $selfUrl],
 ];
 ?><!doctype html><html lang="en"><head>
 <?php seo_head([
     'title' => ($product['meta_title'] ?: $product['name']) . ' | ' . setting('site_name'),
     'description' => $product['meta_description'] ?: $product['short_description'],
     'keywords' => $product['meta_keywords'],
-    'canonical' => site_url('product.php?slug=' . $product['slug']),
+    'canonical' => $selfUrl,
     'type' => 'product',
-    'jsonld' => $jsonld,
+    'jsonld' => [$jsonld, breadcrumb_jsonld($crumbs)],
 ]); ?>
 </head><body>
 <?php site_header('Store'); ?>
@@ -102,6 +112,8 @@ $jsonld = [
     </div>
 
     <div class="article-body"><?= $product['full_description'] ?></div>
+
+    <?php rating_widget('product', (int)$product['id']); ?>
 
     <div class="order-form" id="order">
       <h2 style="margin-top:0;font-size:19px"><i class="fa-solid fa-paper-plane" style="color:var(--brand1)"></i> Request this product</h2>

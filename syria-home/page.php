@@ -12,11 +12,15 @@ if (!$page) { include __DIR__ . '/404.php'; exit; }
 
 $title = $page['meta_title'] ?: $page['title'];
 $desc  = $page['meta_description'] ?: setting('site_description', '');
+$crumbs = [
+    ['name' => 'Home', 'url' => site_url('')],
+    ['name' => $page['title'], 'url' => site_url('p/' . $slug)],
+];
 ?>
 <!doctype html>
 <html lang="en">
 <head>
-<?php seo_head(['title' => $title, 'description' => $desc, 'canonical' => site_url('p/' . $slug)]); ?>
+<?php seo_head(['title' => $title, 'description' => $desc, 'canonical' => site_url('p/' . $slug), 'jsonld' => breadcrumb_jsonld($crumbs)]); ?>
 </head>
 <body>
 <?php site_header(); ?>
