@@ -49,6 +49,15 @@ if (isset($_GET['add_wave3']) && csrf_check_get()) {
     header('Location: ?page=articles&wave3_added=' . $wave3Added); exit;
 }
 
+/* ── One-click: add the fourth wave of original long-form articles ── */
+if (isset($_GET['add_wave4']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_articles_batch4.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    seed_articles_batch4($pdo);
+    $wave4Added = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn() - $before;
+    header('Location: ?page=articles&wave4_added=' . $wave4Added); exit;
+}
+
 /* ── Schema Generator: add/delete extra JSON-LD blocks on an article ── */
 if (isset($_GET['delete_schema']) && csrf_check_get()) {
     $pdo->prepare("DELETE FROM article_schema_blocks WHERE id = ?")->execute([(int)$_GET['delete_schema']]);
@@ -229,6 +238,7 @@ if ($draft && !$editing) {
 <?php if (isset($_GET['bonus_added'])): flash('ok', (int)$_GET['bonus_added'] > 0 ? (int)$_GET['bonus_added'] . ' starter article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
 <?php if (isset($_GET['wave2_added'])): flash('ok', (int)$_GET['wave2_added'] > 0 ? (int)$_GET['wave2_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
 <?php if (isset($_GET['wave3_added'])): flash('ok', (int)$_GET['wave3_added'] > 0 ? (int)$_GET['wave3_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
+<?php if (isset($_GET['wave4_added'])): flash('ok', (int)$_GET['wave4_added'] > 0 ? (int)$_GET['wave4_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
 <?php if ($msg): flash($msg[0] === 'ok' ? 'ok' : 'err', $msg[1]); endif; ?>
 
 <?php
@@ -246,6 +256,7 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
         <a class="btn gray sm" href="?page=articles&add_bonus=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-star"></i> Add starter marketing articles</a>
         <a class="btn gray sm" href="?page=articles&add_wave2=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles</a>
         <a class="btn gray sm" href="?page=articles&add_wave3=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles 2</a>
+        <a class="btn gray sm" href="?page=articles&add_wave4=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles 3</a>
         <a class="btn gray sm" href="#ai-generate" onclick="document.getElementById('aiBox').style.display='block'"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate with AI</a>
         <a class="btn sm" href="?page=articles&new=1"><i class="fa-solid fa-plus"></i> New article</a>
       </div>
