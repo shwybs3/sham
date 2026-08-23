@@ -23,6 +23,12 @@ $aiCrawlers = [
     'CCBot',                                     // Common Crawl (feeds many LLMs)
     'meta-externalagent',                        // Meta AI
     'Amazonbot',
+    'cohere-ai',                                 // Cohere
+    'DuckAssistBot',                              // DuckDuckGo AI Assist
+    'YouBot',                                     // You.com
+    'Diffbot',                                    // Diffbot (feeds several downstream LLM products)
+    'omgili', 'omgilibot',                        // Webz.io (feeds several downstream LLM products)
+    'FacebookBot',                                // Meta's separate crawler for link previews/AI features
 ];
 foreach ($aiCrawlers as $ua) {
     echo "User-agent: $ua\n";

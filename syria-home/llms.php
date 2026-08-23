@@ -27,5 +27,18 @@ foreach ($tools as $t) {
     echo '- [' . $t['name'] . '](' . site_url('tool/' . $t['slug']) . '): ' . $t['short_description'] . "\n";
 }
 
+try {
+    $apps = $pdo->query("SELECT name, slug, short_description FROM apps WHERE status='published' ORDER BY id DESC LIMIT 60")->fetchAll();
+    if ($apps) {
+        echo "\n## Apps\n";
+        foreach ($apps as $a) {
+            echo '- [' . $a['name'] . '](' . site_url('app/' . $a['slug']) . '): ' . $a['short_description'] . "\n";
+        }
+    }
+} catch (Throwable $e) { /* apps table may not exist yet on an older install */ }
+
+echo "\n## Feed\n";
+echo '- ' . site_url('feed.php') . "\n";
+
 echo "\n## Sitemap\n";
 echo '- ' . site_url('sitemap.php') . "\n";
