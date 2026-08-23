@@ -298,6 +298,9 @@ function site_footer(string $lang = 'en'): void {
       <div class="container bottom">
         <span>© <?= date('Y') ?> <?= e($siteName) ?>. <?= e(t('All rights reserved.', 'جميع الحقوق محفوظة.', $lang)) ?></span>
         <span><?= e(t('Built with a self-hosted CMS · Powered by curiosity', 'مبني بنظام إدارة محتوى ذاتي الاستضافة · بدافع الفضول', $lang)) ?></span>
+        <?php $inKey = trim(setting('indexnow_key', '')); if ($inKey !== ''): ?>
+          <span style="opacity:.55"><a href="<?= e(rtrim(SITE_URL, '/') . '/' . $inKey . '.txt') ?>" rel="nofollow" style="color:inherit"><?= e($inKey) ?></a></span>
+        <?php endif; ?>
       </div>
     </footer>
     <script src="<?= site_url('assets/js/main.js') ?>?v=3"></script>
