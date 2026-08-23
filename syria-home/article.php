@@ -40,6 +40,9 @@ $jsonld = [
     'dateModified' => date('c', strtotime($article['updated_at'])),
     'mainEntityOfPage' => site_url('article.php?slug=' . $article['slug']),
 ];
+/* Only real visitor votes produce star markup — see includes/ratings.php. */
+$agg = rating_jsonld('article', (int)$article['id']);
+if ($agg) $jsonld['aggregateRating'] = $agg;
 
 $extraSchema = $pdo->prepare("SELECT payload_json FROM article_schema_blocks WHERE article_id = ?");
 $extraSchema->execute([$article['id']]);
@@ -110,6 +113,8 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
     <?php foreach ($tags as $tag): ?><span class="tag">#<?= e($tag) ?></span><?php endforeach; ?>
   </div>
   <?php endif; ?>
+
+  <?php if (!$isLocked) rating_widget('article', (int)$article['id']); ?>
 
   <?php if (!$isLocked) tip_widget('Article: ' . $article['title']); ?>
 

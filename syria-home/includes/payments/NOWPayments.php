@@ -75,6 +75,42 @@ class NOWPayments
         ];
     }
 
+    /**
+     * Validates the stored API key directly against NOWPayments, without
+     * going through a real invoice. Surfaces the true rejection reason
+     * ("Invalid api key" is NOWPayments' own message — it means the key
+     * stored in Settings doesn't match any key on their side, not a bug
+     * here) so it doesn't have to be discovered by a customer at checkout.
+     */
+    public static function testConnection(): array {
+        if (!self::isConfigured()) {
+            return ['ok' => false, 'error' => 'No API key saved yet.'];
+        }
+        $ch = curl_init('https://api.nowpayments.io/v1/balance');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['x-api-key: ' . self::apiKey()],
+            CURLOPT_TIMEOUT => 15,
+        ]);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($res === false) return ['ok' => false, 'error' => 'Could not reach NOWPayments: ' . $err];
+        $data = json_decode($res, true);
+
+        if ($code === 200) {
+            return ['ok' => true, 'message' => 'API key is valid and active.'];
+        }
+        if ($code === 403 || $code === 401) {
+            return ['ok' => false, 'error' => 'NOWPayments rejected this key (HTTP ' . $code . '): '
+                . ($data['message'] ?? 'Invalid api key')
+                . '. Regenerate the key on nowpayments.io → Store settings → API keys, copy it fresh (no quotes or extra spaces), and re-save it here. A brand-new NOWPayments account also needs its email verified before the key activates.'];
+        }
+        return ['ok' => false, 'error' => 'Unexpected response (HTTP ' . $code . '): ' . ($data['message'] ?? $res)];
+    }
+
     private static function ipnSort(array $arr): array {
         ksort($arr);
         foreach ($arr as $k => $v) if (is_array($v)) $arr[$k] = self::ipnSort($v);

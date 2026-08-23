@@ -31,6 +31,16 @@ function seo_head(array $o): void {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=6">
+    <?php
+    $themes = [
+        'default' => ['brand1' => '#6366f1', 'brand2' => '#22d3ee'],
+        'dark'    => ['brand1' => '#a78bfa', 'brand2' => '#34d399'],
+        'ocean'   => ['brand1' => '#0ea5e9', 'brand2' => '#38bdf8'],
+        'sunset'  => ['brand1' => '#f97316', 'brand2' => '#fbbf24'],
+    ];
+    $th = $themes[setting('site_theme', 'default')] ?? $themes['default'];
+    ?>
+    <style>:root{--brand1:<?= $th['brand1'] ?>;--brand2:<?= $th['brand2'] ?>}</style>
     <?php $gsv = trim(setting('google_site_verification')); if ($gsv): ?><meta name="google-site-verification" content="<?= e($gsv) ?>"><?php endif; ?>
     <?php $bsv = trim(setting('bing_site_verification')); if ($bsv): ?><meta name="msvalidate.01" content="<?= e($bsv) ?>"><?php endif; ?>
     <?php $pub = trim(setting('adsense_publisher_id')); if ($pub !== ''): ?>
@@ -123,7 +133,14 @@ function site_header(string $active = ''): void {
     ?>
     <header class="site-header">
       <div class="bar">
-        <a href="<?= site_url('') ?>" class="logo"><span class="mark"><i class="fa-solid fa-layer-group"></i></span><?= e($siteName) ?></a>
+        <?php $logoUrl = trim(setting('logo_url')); ?>
+        <a href="<?= site_url('') ?>" class="logo">
+          <?php if ($logoUrl !== ''): ?>
+            <img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" style="max-height:38px;width:auto">
+          <?php else: ?>
+            <span class="mark"><i class="fa-solid fa-layer-group"></i></span><?= e($siteName) ?>
+          <?php endif; ?>
+        </a>
         <nav class="main-nav" id="mainNav">
           <?php foreach (nav_links() as $label => $url): ?>
             <a href="<?= e($url) ?>" class="<?= $active === $label ? 'active' : '' ?>"><?= e($label) ?></a>
@@ -152,7 +169,7 @@ function site_footer(): void {
             <a href="mailto:<?= e($footerEmail) ?>" style="color:#94a3b8;font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px"><i class="fa-solid fa-envelope"></i> <?= e($footerEmail) ?></a>
           <?php endif; ?>
           <div class="social-row">
-            <?php foreach (['social_twitter'=>'fa-x-twitter','social_facebook'=>'fa-facebook-f','social_linkedin'=>'fa-linkedin-in'] as $key=>$icon): $url = trim(setting($key)); if ($url === '') continue; ?>
+            <?php foreach (['social_twitter'=>'fa-x-twitter','social_facebook'=>'fa-facebook-f','social_linkedin'=>'fa-linkedin-in','social_youtube'=>'fa-youtube','social_github'=>'fa-github','social_instagram'=>'fa-instagram'] as $key=>$icon): $url = trim(setting($key)); if ($url === '') continue; ?>
               <a href="<?= e($url) ?>" target="_blank" rel="noopener"><i class="fa-brands <?= $icon ?>"></i></a>
             <?php endforeach; ?>
           </div>
@@ -175,6 +192,14 @@ function site_footer(): void {
           <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> Refund Policy</a>
           <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> License Terms</a>
           <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> Cookie Policy</a>
+          <?php
+          try {
+              global $pdo;
+              $footerPages = $pdo->query("SELECT title, slug FROM pages WHERE show_in_footer=1 AND status='published' ORDER BY title ASC")->fetchAll();
+              foreach ($footerPages as $fp):
+          ?>
+            <a href="<?= e(site_url('p/' . $fp['slug'])) ?>"><i class="fa-solid fa-file-lines fa-fw"></i> <?= e($fp['title']) ?></a>
+          <?php endforeach; } catch (Throwable $e) {} ?>
         </div>
       </div>
       <div class="container bottom">

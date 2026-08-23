@@ -25,4 +25,30 @@ const TOOL_REGISTRY = [
     'timestamp_converter'=> ['name' => 'Unix Timestamp Converter', 'icon' => 'fa-clock'],
     'css_minifier'       => ['name' => 'CSS Minifier', 'icon' => 'fa-file-invoice'],
     'text_to_speech'     => ['name' => 'Text to Speech', 'icon' => 'fa-volume-high'],
+
+    /* ── "Pro" set (assets/js/tools-pro.js) ──
+       Each one delivers the core function of a product that is normally
+       sold by subscription or per-use. Every implementation is original
+       and runs locally; `replaces` is shown on the public page so visitors
+       know which paid workflow the free tool covers. */
+    'bg_remover'         => ['name' => 'Background Remover', 'icon' => 'fa-scissors', 'replaces' => 'Paid per-image background removal services'],
+    'image_resizer'      => ['name' => 'Bulk Image Resizer', 'icon' => 'fa-expand', 'replaces' => 'Paid bulk image resizing suites'],
+    'watermark'          => ['name' => 'Watermark Adder', 'icon' => 'fa-stamp', 'replaces' => 'Watermarking apps with paid tiers'],
+    'exif_viewer'        => ['name' => 'EXIF Viewer & Remover', 'icon' => 'fa-camera-retro', 'replaces' => 'Paid metadata scrubbing utilities'],
+    'favicon_generator'  => ['name' => 'Favicon Generator', 'icon' => 'fa-icons', 'replaces' => 'Favicon services with paid downloads'],
+    'regex_tester'       => ['name' => 'Regex Tester & Debugger', 'icon' => 'fa-asterisk', 'replaces' => 'Regex playgrounds with paid plans'],
+    'diff_checker'       => ['name' => 'Text Diff Checker', 'icon' => 'fa-code-compare', 'replaces' => 'Subscription diff tools'],
+    'jwt_decoder'        => ['name' => 'JWT Decoder', 'icon' => 'fa-user-lock', 'replaces' => 'Paid API debugging suites'],
+    'sql_formatter'      => ['name' => 'SQL Formatter', 'icon' => 'fa-database', 'replaces' => 'Paid SQL IDE formatting'],
+    'cron_builder'       => ['name' => 'Cron Expression Builder', 'icon' => 'fa-calendar-check', 'replaces' => 'Paid scheduling dashboards'],
+    'uuid_generator'     => ['name' => 'UUID & ID Generator', 'icon' => 'fa-hashtag', 'replaces' => 'Paid developer toolbelts'],
+    'serp_preview'       => ['name' => 'Google SERP Preview', 'icon' => 'fa-magnifying-glass-location', 'replaces' => 'SEO suites charging monthly for SERP preview'],
+    'readability'        => ['name' => 'Readability Analyzer', 'icon' => 'fa-book-open-reader', 'replaces' => 'Paid writing-clarity editors'],
+    'keyword_density'    => ['name' => 'Keyword Density Analyzer', 'icon' => 'fa-chart-pie', 'replaces' => 'SEO platforms gating content analysis'],
+    'gradient_generator' => ['name' => 'CSS Gradient Generator', 'icon' => 'fa-fill-drip', 'replaces' => 'Design tools with paid export'],
+    'palette_from_image' => ['name' => 'Colour Palette Extractor', 'icon' => 'fa-eye-dropper', 'replaces' => 'Palette apps with paid tiers'],
+    'image_to_pdf'       => ['name' => 'Images to PDF Converter', 'icon' => 'fa-file-pdf', 'replaces' => 'PDF suites sold by subscription'],
+    'speech_to_text'     => ['name' => 'Speech to Text', 'icon' => 'fa-microphone-lines', 'replaces' => 'Transcription services billed per minute'],
+    'robots_generator'   => ['name' => 'Robots.txt Generator', 'icon' => 'fa-robot', 'replaces' => 'SEO plugins gating robots editing'],
+    'meta_generator'     => ['name' => 'Meta Tag Generator', 'icon' => 'fa-tags', 'replaces' => 'Premium SEO plugin meta editors'],
 ];

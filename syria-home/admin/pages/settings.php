@@ -1,6 +1,6 @@
 <?php
 $tab = $_GET['tab'] ?? 'general';
-$tabs = ['general' => 'General', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'ads' => 'Advertisements', 'seo' => 'SEO', 'security' => 'Security', 'social' => 'Social Media'];
+$tabs = ['general' => 'General', 'themes' => 'Themes', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'ads' => 'Advertisements', 'seo' => 'SEO', 'sitemap' => 'Sitemap & Robots', 'security' => 'Security', 'social' => 'Social Media'];
 $msg = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
@@ -13,7 +13,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         set_setting('contact_email', trim($_POST['contact_email'] ?? ''));
         set_setting('maintenance_mode', isset($_POST['maintenance_mode']) ? '1' : '0');
         set_setting('parent_site_url', trim($_POST['parent_site_url'] ?? ''));
+        set_setting('logo_url', trim($_POST['logo_url'] ?? ''));
+        set_setting('logo_dark_url', trim($_POST['logo_dark_url'] ?? ''));
         $msg = ['ok', 'General settings saved.'];
+    }
+
+    if ($formTab === 'themes') {
+        set_setting('site_theme', trim($_POST['site_theme'] ?? 'default'));
+        $msg = ['ok', 'Theme saved.'];
     }
 
     if ($formTab === 'api') {
@@ -23,11 +30,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $msg = ['ok', 'API keys saved.'];
     }
 
+    if ($formTab === 'test_nowpayments') {
+        $test = NOWPayments::testConnection();
+        $msg = [$test['ok'] ? 'ok' : 'err', $test['ok'] ? $test['message'] : $test['error']];
+    }
+
     if ($formTab === 'payments') {
         set_setting('nowpayments_api_key', trim($_POST['nowpayments_api_key'] ?? ''));
         set_setting('nowpayments_ipn_secret', trim($_POST['nowpayments_ipn_secret'] ?? ''));
         $presets = array_filter(array_map('trim', explode(',', $_POST['tip_presets'] ?? '')), 'is_numeric');
         set_setting('tip_presets', $presets ? implode(',', $presets) : '3,5,10');
+        set_setting('paypal_email', trim($_POST['paypal_email'] ?? ''));
+        set_setting('paypal_client_id', trim($_POST['paypal_client_id'] ?? ''));
+        set_setting('paypal_mode', trim($_POST['paypal_mode'] ?? 'sandbox'));
+        set_setting('usdt_wallet', trim($_POST['usdt_wallet'] ?? ''));
+        set_setting('usdt_network', trim($_POST['usdt_network'] ?? 'TRC20'));
+        set_setting('promote_price', trim($_POST['promote_price'] ?? '49'));
+        set_setting('feature_price', trim($_POST['feature_price'] ?? '99'));
+        set_setting('store_currency', trim($_POST['store_currency'] ?? 'USD'));
         $msg = ['ok', 'Payment settings saved.'];
     }
 
@@ -50,11 +70,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         set_setting('seo_default_keywords', trim($_POST['seo_default_keywords'] ?? ''));
         set_setting('google_site_verification', trim($_POST['google_site_verification'] ?? ''));
         set_setting('bing_site_verification', trim($_POST['bing_site_verification'] ?? ''));
+        set_setting('indexnow_key', trim($_POST['indexnow_key'] ?? ''));
         $msg = ['ok', 'SEO settings saved.'];
     }
 
+    if ($formTab === 'sitemap') {
+        $sitemapAction = $_POST['sitemap_action'] ?? '';
+        if ($sitemapAction === 'generate_sitemap') {
+            ob_start();
+            include ROOT_PATH . '/sitemap.php';
+            $xml = ob_get_clean();
+            file_put_contents(ROOT_PATH . '/sitemap.xml', $xml);
+            $msg = ['ok', 'sitemap.xml generated (' . strlen($xml) . ' bytes).'];
+        } elseif ($sitemapAction === 'generate_robots') {
+            $robots = "User-agent: *\nAllow: /\nSitemap: " . rtrim(SITE_URL, '/') . "/sitemap.xml\n";
+            file_put_contents(ROOT_PATH . '/robots.txt', $robots);
+            $msg = ['ok', 'robots.txt generated.'];
+        }
+    }
+
     if ($formTab === 'social') {
-        foreach (['social_twitter','social_facebook','social_linkedin'] as $k) set_setting($k, trim($_POST[$k] ?? ''));
+        foreach (['social_twitter','social_facebook','social_linkedin','social_youtube','social_github','social_instagram'] as $k) set_setting($k, trim($_POST[$k] ?? ''));
         $msg = ['ok', 'Social links saved.'];
     }
 
@@ -96,6 +132,12 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <label>Description (SEO default)</label><textarea name="site_description"><?= e(setting('site_description')) ?></textarea>
     <label>Contact email (shown on the Contact page)</label><input type="text" name="contact_email" value="<?= e(setting('contact_email', 'contact@yassota.com')) ?>">
 
+    <h3>Logo</h3>
+    <div class="row2">
+      <div><label>Logo URL (light mode)</label><input type="text" name="logo_url" value="<?= e(setting('logo_url')) ?>" placeholder="https://... or /uploads/logo.png"><p class="hint">Leave blank to use the text logo. Shows as an &lt;img&gt; in the header.</p></div>
+      <div><label>Logo URL (dark mode / optional)</label><input type="text" name="logo_dark_url" value="<?= e(setting('logo_dark_url')) ?>" placeholder="https://... dark version"></div>
+    </div>
+
     <h3>Maintenance mode</h3>
     <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" name="maintenance_mode" style="width:auto" <?= (int)setting('maintenance_mode', 0) ? 'checked' : '' ?>> Show a "Coming soon" page to visitors instead of the live site</label>
     <p class="hint">You (logged in as admin) can still browse the live site normally. Sitemap, robots.txt and the payment webhook stay reachable regardless.</p>
@@ -103,6 +145,36 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <input type="text" name="parent_site_url" value="<?= e(setting('parent_site_url')) ?>" placeholder="https://syria-home.yassota.com">
 
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </form>
+
+<?php elseif ($tab === 'themes'): ?>
+  <?php
+  $themes = [
+    'default'  => ['label' => 'Default Purple',  'brand1' => '#6366f1', 'brand2' => '#22d3ee'],
+    'dark'     => ['label' => 'Dark Premium',     'brand1' => '#a78bfa', 'brand2' => '#34d399'],
+    'ocean'    => ['label' => 'Ocean Blue',       'brand1' => '#0ea5e9', 'brand2' => '#38bdf8'],
+    'sunset'   => ['label' => 'Sunset Orange',    'brand1' => '#f97316', 'brand2' => '#fbbf24'],
+  ];
+  $currentTheme = setting('site_theme', 'default');
+  ?>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="themes">
+    <h3 style="margin-top:0">Choose site color theme</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px">
+      <?php foreach ($themes as $key => $t): ?>
+      <label style="cursor:pointer;border:2px solid <?= $currentTheme === $key ? 'var(--brand1)' : 'var(--line)' ?>;border-radius:14px;padding:16px;display:flex;align-items:center;gap:12px">
+        <input type="radio" name="site_theme" value="<?= $key ?>" style="width:auto" <?= $currentTheme === $key ? 'checked' : '' ?>>
+        <div>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <span style="width:22px;height:22px;border-radius:50%;background:<?= $t['brand1'] ?>"></span>
+            <span style="width:22px;height:22px;border-radius:50%;background:<?= $t['brand2'] ?>"></span>
+          </div>
+          <strong style="font-size:13px"><?= $t['label'] ?></strong>
+        </div>
+      </label>
+      <?php endforeach; ?>
+    </div>
+    <button class="btn" type="submit"><i class="fa-solid fa-palette"></i> Apply theme</button>
   </form>
 
 <?php elseif ($tab === 'api'): ?>
@@ -178,7 +250,87 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <?php else: ?>
       <span class="badge off">Add your API key above to enable real crypto checkout everywhere on the site.</span>
     <?php endif; ?>
+    <?php if (NOWPayments::isConfigured()): ?>
+    <form method="post" style="display:inline;margin-left:10px">
+      <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="test_nowpayments">
+      <button class="btn gray sm" type="submit"><i class="fa-solid fa-plug-circle-check"></i> Test API key now</button>
+    </form>
+    <?php endif; ?>
   </div>
+
+  <h3 style="margin-top:28px"><i class="fa-brands fa-paypal"></i> PayPal</h3>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="payments">
+    <input type="hidden" name="nowpayments_api_key" value="<?= e(setting('nowpayments_api_key')) ?>">
+    <input type="hidden" name="nowpayments_ipn_secret" value="<?= e(setting('nowpayments_ipn_secret')) ?>">
+    <input type="hidden" name="tip_presets" value="<?= e(setting('tip_presets', '3,5,10')) ?>">
+    <input type="hidden" name="usdt_wallet" value="<?= e(setting('usdt_wallet')) ?>">
+    <input type="hidden" name="usdt_network" value="<?= e(setting('usdt_network', 'TRC20')) ?>">
+    <input type="hidden" name="promote_price" value="<?= e(setting('promote_price', '49')) ?>">
+    <input type="hidden" name="feature_price" value="<?= e(setting('feature_price', '99')) ?>">
+    <input type="hidden" name="store_currency" value="<?= e(setting('store_currency', 'USD')) ?>">
+    <div class="row2">
+      <div><label>PayPal email</label><input type="text" name="paypal_email" value="<?= e(setting('paypal_email')) ?>" placeholder="you@paypal.com"></div>
+      <div><label>Mode</label>
+        <select name="paypal_mode" style="width:auto">
+          <option value="sandbox" <?= setting('paypal_mode','sandbox') === 'sandbox' ? 'selected' : '' ?>>Sandbox (test)</option>
+          <option value="live" <?= setting('paypal_mode','sandbox') === 'live' ? 'selected' : '' ?>>Live</option>
+        </select>
+      </div>
+    </div>
+    <label>PayPal Client ID (for JS SDK)</label>
+    <input type="text" name="paypal_client_id" value="<?= e(setting('paypal_client_id')) ?>">
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save PayPal</button>
+  </form>
+
+  <h3 style="margin-top:28px"><i class="fa-solid fa-coins"></i> USDT Direct Transfer</h3>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="payments">
+    <input type="hidden" name="nowpayments_api_key" value="<?= e(setting('nowpayments_api_key')) ?>">
+    <input type="hidden" name="nowpayments_ipn_secret" value="<?= e(setting('nowpayments_ipn_secret')) ?>">
+    <input type="hidden" name="tip_presets" value="<?= e(setting('tip_presets', '3,5,10')) ?>">
+    <input type="hidden" name="paypal_email" value="<?= e(setting('paypal_email')) ?>">
+    <input type="hidden" name="paypal_client_id" value="<?= e(setting('paypal_client_id')) ?>">
+    <input type="hidden" name="paypal_mode" value="<?= e(setting('paypal_mode', 'sandbox')) ?>">
+    <input type="hidden" name="promote_price" value="<?= e(setting('promote_price', '49')) ?>">
+    <input type="hidden" name="feature_price" value="<?= e(setting('feature_price', '99')) ?>">
+    <input type="hidden" name="store_currency" value="<?= e(setting('store_currency', 'USD')) ?>">
+    <div class="row2">
+      <div><label>USDT Wallet Address</label><input type="text" name="usdt_wallet" value="<?= e(setting('usdt_wallet')) ?>" placeholder="T... (TRC20) or 0x... (ERC20)"></div>
+      <div><label>Network</label>
+        <select name="usdt_network" style="width:auto">
+          <?php foreach (['TRC20','ERC20','BEP20','Polygon'] as $net): ?>
+            <option <?= setting('usdt_network','TRC20') === $net ? 'selected' : '' ?>><?= $net ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+    </div>
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save USDT</button>
+  </form>
+
+  <h3 style="margin-top:28px"><i class="fa-solid fa-tag"></i> Advertising Pricing</h3>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="payments">
+    <input type="hidden" name="nowpayments_api_key" value="<?= e(setting('nowpayments_api_key')) ?>">
+    <input type="hidden" name="nowpayments_ipn_secret" value="<?= e(setting('nowpayments_ipn_secret')) ?>">
+    <input type="hidden" name="tip_presets" value="<?= e(setting('tip_presets', '3,5,10')) ?>">
+    <input type="hidden" name="paypal_email" value="<?= e(setting('paypal_email')) ?>">
+    <input type="hidden" name="paypal_client_id" value="<?= e(setting('paypal_client_id')) ?>">
+    <input type="hidden" name="paypal_mode" value="<?= e(setting('paypal_mode', 'sandbox')) ?>">
+    <input type="hidden" name="usdt_wallet" value="<?= e(setting('usdt_wallet')) ?>">
+    <input type="hidden" name="usdt_network" value="<?= e(setting('usdt_network', 'TRC20')) ?>">
+    <div class="row2">
+      <div><label>Promote Price (Sponsored label)</label><input type="number" name="promote_price" value="<?= e(setting('promote_price', '49')) ?>" min="0" step="1" style="max-width:140px"></div>
+      <div><label>Feature Price (Homepage spotlight)</label><input type="number" name="feature_price" value="<?= e(setting('feature_price', '99')) ?>" min="0" step="1" style="max-width:140px"></div>
+    </div>
+    <label>Store currency</label>
+    <select name="store_currency" style="width:auto">
+      <?php foreach (['USD','EUR','GBP','SAR','AED','TRY'] as $cur): ?>
+        <option <?= setting('store_currency','USD') === $cur ? 'selected' : '' ?>><?= $cur ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save pricing</button>
+  </form>
 
 <?php elseif ($tab === 'subdomains'): ?>
   <h3 style="margin-top:0"><i class="fa-solid fa-sitemap"></i> cPanel account (for creating real subdomain sites)</h3>
@@ -226,8 +378,48 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <label>Default keywords (used as a fallback)</label><input type="text" name="seo_default_keywords" value="<?= e(setting('seo_default_keywords')) ?>">
     <label>Google Search Console verification meta tag content</label><input type="text" name="google_site_verification" value="<?= e(setting('google_site_verification')) ?>">
     <label>Bing Webmaster verification meta tag content</label><input type="text" name="bing_site_verification" value="<?= e(setting('bing_site_verification')) ?>">
+    <h3>IndexNow</h3>
+    <label>IndexNow API Key</label>
+    <input type="text" name="indexnow_key" value="<?= e(setting('indexnow_key')) ?>" placeholder="your-indexnow-key">
+    <p class="hint">Get a free key at <a href="https://www.bing.com/indexnow" target="_blank" rel="noopener">bing.com/indexnow</a>. Once set, articles, tools, and pages ping Bing/Yandex automatically on publish. The key file <code>/{key}.txt</code> is auto-created in your webroot.</p>
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
     <p class="hint" style="margin-top:14px">Sitemap: <code><?= e(site_url('sitemap.php')) ?></code> · Robots: <code><?= e(site_url('robots.php')) ?></code></p>
+  </form>
+
+<?php elseif ($tab === 'sitemap'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-sitemap"></i> Sitemap &amp; Robots Generator</h3>
+  <p class="hint">Generate physical <code>sitemap.xml</code> and <code>robots.txt</code> files at your webroot. The dynamic versions at <code>/sitemap.php</code> and <code>/robots.php</code> always work without this, but physical files load faster and some crawlers prefer them.</p>
+  <?php
+    $sitemapFile = ROOT_PATH . '/sitemap.xml';
+    $robotsFile  = ROOT_PATH . '/robots.txt';
+    $sitemapInfo = file_exists($sitemapFile) ? ['exists' => true, 'size' => filesize($sitemapFile), 'mtime' => filemtime($sitemapFile)] : ['exists' => false];
+    $robotsInfo  = file_exists($robotsFile)  ? ['exists' => true, 'size' => filesize($robotsFile),  'mtime' => filemtime($robotsFile)]  : ['exists' => false];
+  ?>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div style="border:1px solid var(--line);border-radius:12px;padding:18px">
+      <h4 style="margin:0 0 8px"><i class="fa-solid fa-file-code"></i> sitemap.xml</h4>
+      <?php if ($sitemapInfo['exists']): ?>
+        <p class="hint">Last generated: <?= date('M j, Y H:i', $sitemapInfo['mtime']) ?> · <?= number_format($sitemapInfo['size']) ?> bytes</p>
+        <span class="badge ok"><i class="fa-solid fa-check"></i> File exists</span>
+      <?php else: ?>
+        <span class="badge off">Not generated yet</span>
+      <?php endif; ?>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:18px">
+      <h4 style="margin:0 0 8px"><i class="fa-solid fa-robot"></i> robots.txt</h4>
+      <?php if ($robotsInfo['exists']): ?>
+        <p class="hint">Last generated: <?= date('M j, Y H:i', $robotsInfo['mtime']) ?> · <?= number_format($robotsInfo['size']) ?> bytes</p>
+        <span class="badge ok"><i class="fa-solid fa-check"></i> File exists</span>
+      <?php else: ?>
+        <span class="badge off">Not generated yet</span>
+      <?php endif; ?>
+    </div>
+  </div>
+  <form method="post" style="display:inline-flex;gap:10px;flex-wrap:wrap">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+    <input type="hidden" name="tab" value="sitemap">
+    <button class="btn" name="sitemap_action" value="generate_sitemap"><i class="fa-solid fa-arrows-rotate"></i> Generate sitemap.xml</button>
+    <button class="btn gray" name="sitemap_action" value="generate_robots"><i class="fa-solid fa-robot"></i> Generate robots.txt</button>
   </form>
 
 <?php elseif ($tab === 'security'): ?>
@@ -241,9 +433,18 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
 <?php elseif ($tab === 'social'): ?>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="social">
-    <label>Twitter / X URL</label><input type="text" name="social_twitter" value="<?= e(setting('social_twitter')) ?>">
-    <label>Facebook URL</label><input type="text" name="social_facebook" value="<?= e(setting('social_facebook')) ?>">
-    <label>LinkedIn URL</label><input type="text" name="social_linkedin" value="<?= e(setting('social_linkedin')) ?>">
+    <div class="row2">
+      <div><label><i class="fa-brands fa-x-twitter"></i> Twitter / X URL</label><input type="text" name="social_twitter" value="<?= e(setting('social_twitter')) ?>" placeholder="https://x.com/yourhandle"></div>
+      <div><label><i class="fa-brands fa-facebook-f"></i> Facebook URL</label><input type="text" name="social_facebook" value="<?= e(setting('social_facebook')) ?>" placeholder="https://facebook.com/yourpage"></div>
+    </div>
+    <div class="row2">
+      <div><label><i class="fa-brands fa-linkedin-in"></i> LinkedIn URL</label><input type="text" name="social_linkedin" value="<?= e(setting('social_linkedin')) ?>" placeholder="https://linkedin.com/company/..."></div>
+      <div><label><i class="fa-brands fa-youtube"></i> YouTube URL</label><input type="text" name="social_youtube" value="<?= e(setting('social_youtube')) ?>" placeholder="https://youtube.com/@yourchannel"></div>
+    </div>
+    <div class="row2">
+      <div><label><i class="fa-brands fa-github"></i> GitHub URL</label><input type="text" name="social_github" value="<?= e(setting('social_github')) ?>" placeholder="https://github.com/yourorg"></div>
+      <div><label><i class="fa-brands fa-instagram"></i> Instagram URL</label><input type="text" name="social_instagram" value="<?= e(setting('social_instagram')) ?>" placeholder="https://instagram.com/yourhandle"></div>
+    </div>
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
   </form>
 <?php endif; ?>

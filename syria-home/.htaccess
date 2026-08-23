@@ -8,6 +8,7 @@ RewriteRule ^article/([a-z0-9-]+)/?$ article.php?slug=$1 [L,QSA]
 RewriteRule ^tool/([a-z0-9-]+)/?$ tool.php?slug=$1 [L,QSA]
 RewriteRule ^product/([a-z0-9-]+)/?$ product.php?slug=$1 [L,QSA]
 RewriteRule ^category/([a-z0-9-]+)/?$ category.php?slug=$1 [L,QSA]
+RewriteRule ^p/([a-z0-9-]+)/?$ page.php?slug=$1 [L,QSA]
 
 # Never serve source/config/data files directly
 <FilesMatch "\.(sql|log|md)$">
