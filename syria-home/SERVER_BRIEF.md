@@ -8,6 +8,23 @@ a confirmed fact from that work, or an explicit instruction for you to
 verify/discover, clearly labeled as such. Do not assume anything not marked
 confirmed — check it against the real server first.
 
+## 0. Run this inside tmux — SSH connections drop, tmux sessions don't
+
+Before anything else: start (or reattach to) a tmux session so an SSH
+disconnect never kills your progress.
+
+```bash
+tmux new -s claude 2>/dev/null || tmux attach -t claude
+```
+
+If the SSH connection drops mid-work, just reconnect and run
+`tmux attach -t claude` again — you land back exactly where you left off,
+including mid-command output. If the tmux session itself is somehow lost
+(server restart), resume the Claude Code conversation itself with
+`claude --continue` (most recent conversation) or `claude --resume`
+(pick from a list) instead of starting over and re-reading this whole
+brief from scratch.
+
 Repo / branch: `shwybs3/sham`, branch `claude/articles-tools-website-i1j0ax`
 (PR #15, open). Pull latest before doing anything else:
 
