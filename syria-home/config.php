@@ -73,6 +73,7 @@ require_once __DIR__ . '/includes/google/AdSenseClient.php';
 require_once __DIR__ . '/includes/google/SearchConsoleClient.php';
 require_once __DIR__ . '/includes/google/AnalyticsDataClient.php';
 require_once __DIR__ . '/includes/google/GoogleAdsClient.php';
+require_once __DIR__ . '/includes/google/GoogleStats.php';
 require_once __DIR__ . '/includes/ai/GeminiClient.php';
 require_once __DIR__ . '/includes/ai/OpenRouterClient.php';
 require_once __DIR__ . '/includes/ai/AIRouter.php';

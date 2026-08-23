@@ -58,6 +58,9 @@ if ($agg) $jsonld['aggregateRating'] = $agg;
   <span class="badge-trending" style="background:#ecfdf5;color:var(--accent-green)"><i class="fa-solid fa-check-circle"></i> 100% Free · Runs in your browser</span>
   <h1><?= e($tool['name']) ?></h1>
   <p class="lead"><?= e($tool['short_description']) ?></p>
+  <?php if (!empty($tool['replaces'])): ?>
+    <p class="replaces-badge"><i class="fa-solid fa-unlock"></i> Free alternative to: <b><?= e($tool['replaces']) ?></b></p>
+  <?php endif; ?>
   <div class="article-meta"><span><i class="fa-regular fa-eye"></i> <?= number_format((int)$tool['uses_count']) ?> uses</span><span><i class="fa-solid fa-shield-halved"></i> Nothing is uploaded — all processing happens on your device</span></div>
 </div>
 
@@ -121,6 +124,7 @@ if ($agg) $jsonld['aggregateRating'] = $agg;
 </div>
 
 <?php site_footer(); ?>
-<script src="<?= site_url('assets/js/tools.js') ?>?v=2"></script>
+<script src="<?= site_url('assets/js/tools.js') ?>?v=3"></script>
+<script src="<?= site_url('assets/js/tools-pro.js') ?>?v=1"></script>
 <script>document.addEventListener('DOMContentLoaded', function(){ if (window.SHTools) SHTools.mount('tool-app'); });</script>
 </body></html>

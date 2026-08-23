@@ -177,10 +177,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once __DIR__ . '/../seed/seed_categories.php';
             require_once __DIR__ . '/../seed/seed_articles.php';
             require_once __DIR__ . '/../seed/seed_tools.php';
+            require_once __DIR__ . '/../seed/seed_pro_tools.php';
             require_once __DIR__ . '/../seed/seed_products.php';
             seed_categories($pdo);
             seed_articles($pdo);
             seed_tools($pdo);
+            seed_pro_tools($pdo);
             seed_products($pdo);
 
             file_put_contents($lockFile, date('c'));

@@ -7,6 +7,16 @@ if (isset($_GET['delete']) && csrf_check_get()) {
     header('Location: ?page=tools'); exit;
 }
 
+/* Installs created before the pro tool set shipped can pull it in here.
+   The seeder uses INSERT IGNORE, so re-running never disturbs existing rows. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'seed_pro' && csrf_check()) {
+    require_once __DIR__ . '/../../seed/seed_pro_tools.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn();
+    seed_pro_tools($pdo);
+    $added = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn() - $before;
+    $msg = ['ok', $added > 0 ? "$added pro tools added." : 'All pro tools were already installed.'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save' && csrf_check()) {
     $id = (int)($_POST['id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
@@ -30,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'premium_price' => (float)($_POST['premium_price'] ?? 3),
             'affiliate_url' => trim($_POST['affiliate_url'] ?? ''),
             'tool_code'     => $_POST['tool_code'] ?? '',
+            'replaces'      => trim($_POST['replaces'] ?? ''),
         ];
         if ($id) {
             $sql = "UPDATE tools SET " . implode(',', array_map(fn($k) => "$k = :$k", array_keys($fields))) . " WHERE id = :id";
@@ -58,7 +69,17 @@ $showForm = isset($_GET['new']) || $editing;
 
 <?php if (!$showForm): ?>
   <div class="card">
-    <div class="toolbar"><h3 style="margin:0">All tools</h3><a class="btn sm" href="?page=tools&new=1"><i class="fa-solid fa-plus"></i> New tool</a></div>
+    <div class="toolbar">
+      <h3 style="margin:0">All tools</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <form method="post" style="margin:0">
+          <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="action" value="seed_pro">
+          <button class="btn gray sm" type="submit"><i class="fa-solid fa-download"></i> Install pro tool set</button>
+        </form>
+        <a class="btn sm" href="?page=tools&new=1"><i class="fa-solid fa-plus"></i> New tool</a>
+      </div>
+    </div>
+    <p class="hint" style="margin-bottom:14px">The pro set adds 20 tools covering what paid services normally charge for — background removal, PDF building, transcription, SEO analysis and more. Every one is an original implementation that runs in the visitor's browser.</p>
     <table>
       <tr><th>Name</th><th>Engine</th><th>Slug</th><th>Status</th><th>Uses</th><th></th></tr>
       <?php foreach ($pdo->query("SELECT * FROM tools ORDER BY id DESC") as $t): ?>
@@ -121,6 +142,10 @@ $showForm = isset($_GET['new']) || $editing;
       <label>Meta keywords</label><input type="text" name="meta_keywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
 
       <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:16px"><input type="checkbox" name="enabled" style="width:auto" <?= (($editing['status'] ?? 'published') === 'published') ? 'checked' : '' ?>> Enable tool (visible on site)</label>
+
+      <label>Replaces (paid workflow this tool covers for free)</label>
+      <input type="text" name="replaces" value="<?= e($editing['replaces'] ?? '') ?>" placeholder="e.g. Paid per-image background removal services">
+      <p class="hint">Shown as a badge on the public page. Describe the <em>category</em> of paid service, not a specific company — naming a competitor in your own marketing invites a trademark complaint.</p>
 
       <h3>Source Code</h3>
       <label>Tool source code (shown to visitors as "View Source" — JavaScript)</label>

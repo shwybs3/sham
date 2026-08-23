@@ -139,12 +139,14 @@ class SiteProvisioner
         require_once __DIR__ . '/../../seed/seed_categories.php';
         require_once __DIR__ . '/../../seed/seed_articles.php';
         require_once __DIR__ . '/../../seed/seed_tools.php';
+        require_once __DIR__ . '/../../seed/seed_pro_tools.php';
         require_once __DIR__ . '/../../seed/seed_products.php';
         seed_categories($newPdo);
         seed_articles($newPdo);
         seed_tools($newPdo);
+        seed_pro_tools($newPdo);
         seed_products($newPdo);
-        $log[] = 'Seeded 21 starter articles, 20 tools and 10 store products.';
+        $log[] = 'Seeded 21 starter articles, 40 tools and 10 store products.';
 
         // 6. Optional: a few extra AI-written articles for this niche.
         $written = 0;
