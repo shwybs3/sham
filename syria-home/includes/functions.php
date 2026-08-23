@@ -208,3 +208,48 @@ function log_ai_activity(string $action, string $targetType, ?int $targetId, str
     $stmt = $pdo->prepare("INSERT INTO ai_activity_log (actor, action, target_type, target_id, summary) VALUES ('gemini', ?, ?, ?, ?)");
     $stmt->execute([$action, $targetType, $targetId, $summary]);
 }
+
+/** Turns tags/keywords into a handful of #Hashtags (CamelCase, no spaces). */
+function share_kit_hashtags(string $tagsCsv, int $limit = 4): string {
+    $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
+    $tags = array_slice($tags, 0, $limit);
+    $out = [];
+    foreach ($tags as $tag) {
+        $words = preg_split('~[\s\-]+~u', $tag, -1, PREG_SPLIT_NO_EMPTY);
+        $camel = implode('', array_map(fn($w) => mb_strtoupper(mb_substr($w, 0, 1)) . mb_substr($w, 1), $words));
+        if ($camel !== '') $out[] = '#' . $camel;
+    }
+    return implode(' ', $out);
+}
+
+/** Ready-to-paste promotional posts for one article — a "share kit" an
+ *  editor can copy straight into social media or another site's comment
+ *  section, no AI call required (deterministic, works with no API keys
+ *  configured). Templates are chosen by $lang. */
+function share_kit_variants(array $article, string $canonicalUrl, string $lang = 'en'): array {
+    $title = $article['title'];
+    $excerpt = trim((string)($article['excerpt'] ?? ''));
+    $hashtags = share_kit_hashtags((string)($article['tags'] ?? ''));
+
+    if ($lang === 'ar') {
+        $short = mb_substr($title, 0, 140) . ' ' . $canonicalUrl . ($hashtags ? ' ' . $hashtags : '');
+        $medium = $title . "\n\n" . mb_substr($excerpt, 0, 220) . "\n\n" . 'اقرأ المقال كاملاً: ' . $canonicalUrl;
+        $long = 'قرأت للتو مقالاً جيدًا بعنوان "' . $title . '". ' . $excerpt . ' يستحق الاطلاع عليه: ' . $canonicalUrl . ($hashtags ? "\n" . $hashtags : '');
+        return [
+            ['label' => 'منشور قصير (X / تويتر)', 'text' => $short],
+            ['label' => 'منشور متوسط (فيسبوك / لينكدإن)', 'text' => $medium],
+            ['label' => 'تعليق أو منتدى (نص أطول)', 'text' => $long],
+            ['label' => 'الرابط فقط', 'text' => $canonicalUrl],
+        ];
+    }
+
+    $short = mb_substr($title, 0, 160) . ' ' . $canonicalUrl . ($hashtags ? ' ' . $hashtags : '');
+    $medium = $title . "\n\n" . mb_substr($excerpt, 0, 220) . "\n\n" . 'Read the full breakdown: ' . $canonicalUrl;
+    $long = 'Just read a solid breakdown of this: "' . $title . '". ' . $excerpt . ' Worth a look if this is your kind of thing: ' . $canonicalUrl . ($hashtags ? "\n" . $hashtags : '');
+    return [
+        ['label' => 'Short post (X / Twitter)', 'text' => $short],
+        ['label' => 'Medium post (Facebook / LinkedIn)', 'text' => $medium],
+        ['label' => 'Comment / forum post (longer)', 'text' => $long],
+        ['label' => 'Link only', 'text' => $canonicalUrl],
+    ];
+}

@@ -391,6 +391,30 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
 
   <?php if ($editing && $editing['id']): ?>
   <div class="card">
+    <h3 style="margin-top:0"><i class="fa-solid fa-share-nodes"></i> Share Kit</h3>
+    <p class="hint">Ready-to-paste posts about this article, in its own language — copy one straight into social media, another site's comment section, or anywhere else you want to talk about it and drop the link.</p>
+    <?php
+    $shareUrl = site_url((($editing['lang'] ?? 'en') === 'ar' ? 'ar/article/' : 'article/') . $editing['slug']);
+    foreach (share_kit_variants($editing, $shareUrl, $editing['lang'] ?? 'en') as $i => $variant):
+    ?>
+      <div style="margin-bottom:14px">
+        <label style="margin-bottom:4px"><?= e($variant['label']) ?></label>
+        <textarea readonly id="shareKit<?= $i ?>" style="min-height:70px;font-size:13px"><?= e($variant['text']) ?></textarea>
+        <button type="button" class="btn gray sm" style="margin-top:6px" onclick="shCopyShareKit(<?= $i ?>, this)"><i class="fa-regular fa-copy"></i> Copy</button>
+      </div>
+    <?php endforeach; ?>
+  </div>
+  <script>
+  function shCopyShareKit(i, btn) {
+    var ta = document.getElementById('shareKit' + i);
+    navigator.clipboard.writeText(ta.value).then(function () {
+      var old = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+      setTimeout(function () { btn.innerHTML = old; }, 1500);
+    });
+  }
+  </script>
+
+  <div class="card">
     <h3 style="margin-top:0"><i class="fa-solid fa-diagram-project"></i> Schema Generator</h3>
     <p class="hint">Add extra structured data to this article — shown alongside its automatic Article schema, and eligible for rich results in Google (FAQ accordions, how-to steps, star ratings).</p>
 
