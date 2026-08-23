@@ -63,18 +63,26 @@ $jsonld = [
     'operatingSystem' => 'Any (runs in-browser)',
     'description' => $metaDesc,
     'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'USD'],
+    'inLanguage' => $lang,
 ];
 /* Star markup only when real visitors have actually rated this tool —
    fabricated review data violates Google's structured-data policy. */
 $agg = rating_jsonld('tool', (int)$tool['id']);
 if ($agg) $jsonld['aggregateRating'] = $agg;
+
+$crumbs = [
+    ['name' => t('Home', 'الرئيسية', $lang), 'url' => site_url($lang === 'ar' ? 'ar/' : '')],
+    ['name' => t('Tools', 'الأدوات', $lang), 'url' => site_url($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php')],
+    ['name' => $tool['name'], 'url' => $selfUrl],
+];
+$jsonldBlocks = [$jsonld, breadcrumb_jsonld($crumbs)];
 ?><!doctype html><html lang="<?= e($lang) ?>" dir="<?= $dir ?>"><head>
 <?php seo_head([
     'title' => $metaTitle . ' | ' . setting('site_name'),
     'description' => $metaDesc,
     'keywords' => $tool['meta_keywords'],
     'canonical' => $selfUrl,
-    'jsonld' => $jsonld,
+    'jsonld' => $jsonldBlocks,
     'lang' => $lang,
     'hreflang' => $hreflang,
 ]); ?>

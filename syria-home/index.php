@@ -21,11 +21,29 @@ $tools = $tools->fetchAll();
 
 $cats = $pdo->query("SELECT * FROM categories WHERE type='article' ORDER BY name")->fetchAll();
 
+/* Site-wide structured data — only needs to appear once, so the homepage
+   carries it. WebSite/SearchAction is what makes a sitelinks searchbox
+   possible in Google results; Organization gives the knowledge panel a
+   name, logo and social profiles to attach to. */
+$socialLinks = array_values(array_filter(array_map(
+    fn($key) => trim(setting($key)),
+    ['social_twitter', 'social_facebook', 'social_linkedin', 'social_youtube', 'social_github', 'social_instagram']
+), fn($url) => $url !== ''));
+$homeJsonld = [
+    ['@context' => 'https://schema.org', '@type' => 'WebSite',
+        'name' => setting('site_name'), 'url' => site_url(''),
+        'potentialAction' => ['@type' => 'SearchAction', 'target' => site_url('search.php?q={search_term_string}'), 'query-input' => 'required name=search_term_string']],
+    array_filter(['@context' => 'https://schema.org', '@type' => 'Organization',
+        'name' => setting('site_name'), 'url' => site_url(''),
+        'logo' => site_url('assets/img/favicon.svg'),
+        'sameAs' => $socialLinks ?: null]),
+];
 ?><!doctype html><html lang="<?= e($lang) ?>" dir="<?= $dir ?>"><head>
 <?php seo_head([
     'title' => setting('site_name') . t(' — Tech News, Comparisons, Guides & Free Web Tools', ' — أخبار تقنية ومقارنات وأدلة وأدوات ويب مجانية', $lang),
     'description' => setting('site_description'),
     'canonical' => site_url($lang === 'ar' ? 'ar/' : ''),
+    'jsonld' => $homeJsonld,
     'lang' => $lang,
     'hreflang' => ['en' => site_url(''), 'ar' => site_url('ar/'), 'x-default' => site_url('')],
 ]); ?>

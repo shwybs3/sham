@@ -222,6 +222,17 @@ function share_kit_hashtags(string $tagsCsv, int $limit = 4): string {
     return implode(' ', $out);
 }
 
+/** BreadcrumbList structured data — matches the visible breadcrumb trail on
+ *  article/tool/category pages, so Google can show the breadcrumb rich
+ *  result instead of a raw URL. $crumbs = [['name'=>..,'url'=>..], ...]. */
+function breadcrumb_jsonld(array $crumbs): array {
+    $items = [];
+    foreach ($crumbs as $i => $c) {
+        $items[] = ['@type' => 'ListItem', 'position' => $i + 1, 'name' => $c['name'], 'item' => $c['url']];
+    }
+    return ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $items];
+}
+
 /** Ready-to-paste promotional posts for one article — a "share kit" an
  *  editor can copy straight into social media or another site's comment
  *  section, no AI call required (deterministic, works with no API keys

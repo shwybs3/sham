@@ -20,9 +20,11 @@ $urls = [
     ['loc' => site_url('cookie-policy.php'), 'priority' => '0.2'],
 ];
 
-foreach ($pdo->query("SELECT slug, updated_at, lang FROM articles WHERE status='published'") as $a) {
+foreach ($pdo->query("SELECT slug, updated_at, lang, hero_image_path, title FROM articles WHERE status='published'") as $a) {
     $loc = $a['lang'] === 'ar' ? site_url('ar/article/' . $a['slug']) : site_url('article.php?slug=' . $a['slug']);
-    $urls[] = ['loc' => $loc, 'lastmod' => date('c', strtotime($a['updated_at'])), 'priority' => '0.8'];
+    $entry = ['loc' => $loc, 'lastmod' => date('c', strtotime($a['updated_at'])), 'priority' => '0.8'];
+    if (!empty($a['hero_image_path'])) $entry['image'] = ['loc' => site_url($a['hero_image_path']), 'title' => $a['title']];
+    $urls[] = $entry;
 }
 foreach ($pdo->query("SELECT slug, lang FROM tools WHERE status='published'") as $t) {
     $loc = $t['lang'] === 'ar' ? site_url('ar/tool/' . $t['slug']) : site_url('tool.php?slug=' . $t['slug']);
@@ -36,10 +38,14 @@ foreach ($pdo->query("SELECT slug FROM categories") as $c) {
 }
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' . "\n";
 foreach ($urls as $u) {
     echo '<url><loc>' . htmlspecialchars($u['loc']) . '</loc>';
     if (!empty($u['lastmod'])) echo '<lastmod>' . $u['lastmod'] . '</lastmod>';
+    if (!empty($u['image'])) {
+        echo '<image:image><image:loc>' . htmlspecialchars($u['image']['loc']) . '</image:loc>'
+            . '<image:title>' . htmlspecialchars($u['image']['title']) . '</image:title></image:image>';
+    }
     echo '<priority>' . $u['priority'] . '</priority></url>' . "\n";
 }
 echo '</urlset>';

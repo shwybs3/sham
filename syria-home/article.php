@@ -59,16 +59,27 @@ $jsonld = [
     '@type' => $article['content_type'] === 'news' ? 'NewsArticle' : 'Article',
     'headline' => $article['title'],
     'description' => $metaDesc,
-    'image' => [site_url('assets/img/og-default.svg')],
+    'image' => [!empty($article['hero_image_path']) ? site_url($article['hero_image_path']) : site_url('assets/img/og-default.svg')],
     'author' => ['@type' => 'Organization', 'name' => $article['author']],
     'publisher' => ['@type' => 'Organization', 'name' => setting('site_name'), 'logo' => ['@type' => 'ImageObject', 'url' => site_url('assets/img/favicon.svg')]],
     'datePublished' => date('c', strtotime($article['published_at'])),
     'dateModified' => date('c', strtotime($article['updated_at'])),
     'mainEntityOfPage' => $selfUrl,
+    'inLanguage' => $lang,
 ];
 /* Only real visitor votes produce star markup — see includes/ratings.php. */
 $agg = rating_jsonld('article', (int)$article['id']);
 if ($agg) $jsonld['aggregateRating'] = $agg;
+
+/* Structured breadcrumb trail — mirrors the visible breadcrumb below so
+   Google can show the breadcrumb rich result instead of a raw URL. */
+$crumbs = [
+    ['name' => t('Home', 'الرئيسية', $lang), 'url' => site_url($lang === 'ar' ? 'ar/' : '')],
+    ['name' => t('Articles', 'المقالات', $lang), 'url' => site_url($lang === 'ar' ? 'articles.php?lang=ar' : 'articles.php')],
+];
+if ($article['category_name']) $crumbs[] = ['name' => $article['category_name'], 'url' => site_url('category.php?slug=' . urlencode($article['category_slug']))];
+$crumbs[] = ['name' => $article['title'], 'url' => $selfUrl];
+$jsonldBlocks = [$jsonld, breadcrumb_jsonld($crumbs)];
 
 $extraSchema = $pdo->prepare("SELECT payload_json FROM article_schema_blocks WHERE article_id = ?");
 $extraSchema->execute([$article['id']]);
@@ -80,7 +91,7 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
     'keywords' => $article['meta_keywords'],
     'canonical' => $selfUrl,
     'type' => 'article',
-    'jsonld' => $jsonld,
+    'jsonld' => $jsonldBlocks,
     'lang' => $lang,
     'hreflang' => $hreflang,
 ]); ?>

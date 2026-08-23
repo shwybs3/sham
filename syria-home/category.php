@@ -19,11 +19,18 @@ if ($cat['type'] === 'tool') {
 }
 $items->execute([$cat['id'], $lang]);
 $items = $items->fetchAll();
+
+$crumbs = [
+    ['name' => t('Home', 'الرئيسية', $lang), 'url' => site_url($lang === 'ar' ? 'ar/' : '')],
+    ['name' => $cat['type'] === 'tool' ? t('Tools', 'الأدوات', $lang) : t('Articles', 'المقالات', $lang), 'url' => site_url($cat['type'] === 'tool' ? ($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php') : ($lang === 'ar' ? 'articles.php?lang=ar' : 'articles.php'))],
+    ['name' => $cat['name'], 'url' => site_url('category.php?slug=' . $cat['slug'] . ($lang === 'ar' ? '&lang=ar' : ''))],
+];
 ?><!doctype html><html lang="<?= e($lang) ?>" dir="<?= $dir ?>"><head>
 <?php seo_head([
     'title' => e($cat['name']) . ' | ' . setting('site_name'),
     'description' => t('Everything tagged ', 'كل ما هو مصنف تحت ', $lang) . $cat['name'] . t(' on ', ' على ', $lang) . setting('site_name') . '.',
     'canonical' => site_url('category.php?slug=' . $cat['slug'] . ($lang === 'ar' ? '&lang=ar' : '')),
+    'jsonld' => breadcrumb_jsonld($crumbs),
     'lang' => $lang,
 ]); ?>
 </head><body>

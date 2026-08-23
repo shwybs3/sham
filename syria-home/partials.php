@@ -34,6 +34,7 @@ function seo_head(array $o): void {
     <?php if (!empty($o['hreflang'])): foreach ($o['hreflang'] as $hl => $href): ?>
     <link rel="alternate" hreflang="<?= e($hl) ?>" href="<?= e($href) ?>">
     <?php endforeach; endif; ?>
+    <link rel="alternate" type="application/rss+xml" title="<?= e(setting('site_name', 'Syria Home')) ?> — <?= e(t('Latest articles', 'أحدث المقالات', $o['lang'] ?? 'en')) ?>" href="<?= site_url('feed.php' . (($o['lang'] ?? 'en') === 'ar' ? '?lang=ar' : '')) ?>">
     <?php
     $themes = [
         'default' => ['brand1' => '#6366f1', 'brand2' => '#22d3ee'],
@@ -49,9 +50,13 @@ function seo_head(array $o): void {
     <?php $pub = trim(setting('adsense_publisher_id')); if ($pub !== ''): ?>
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= e($pub) ?>" crossorigin="anonymous"></script>
     <?php endif; ?>
-    <?php if (!empty($o['jsonld'])): ?>
-    <script type="application/ld+json"><?= str_replace('</script', '<\/script', json_encode($o['jsonld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></script>
-    <?php endif; ?>
+    <?php if (!empty($o['jsonld'])):
+        // Accept either one schema object, or a list of several — a page can carry
+        // an Article schema and a BreadcrumbList schema at the same time, for example.
+        $blocks = array_is_list($o['jsonld']) ? $o['jsonld'] : [$o['jsonld']];
+        foreach ($blocks as $block): ?>
+    <script type="application/ld+json"><?= str_replace('</script', '<\/script', json_encode($block, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?></script>
+    <?php endforeach; endif; ?>
     <?php
 }
 
@@ -236,6 +241,7 @@ function site_footer(string $lang = 'en'): void {
           <a href="<?= site_url($lang === 'ar' ? 'articles.php?lang=ar&type=news' : 'articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> <?= e(t('News', 'الأخبار', $lang)) ?></a>
           <a href="<?= site_url($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> <?= e(t('Web Tools', 'أدوات الويب', $lang)) ?></a>
           <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> <?= e(t('Store', 'المتجر', $lang)) ?></a>
+          <a href="<?= site_url('feed.php' . ($lang === 'ar' ? '?lang=ar' : '')) ?>"><i class="fa-solid fa-rss fa-fw"></i> <?= e(t('RSS Feed', 'خلاصة RSS', $lang)) ?></a>
         </div>
         <div><h4><?= e(t('Company', 'الشركة', $lang)) ?></h4>
           <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> <?= e(t('About', 'من نحن', $lang)) ?></a>
