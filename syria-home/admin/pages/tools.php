@@ -18,6 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'seed_
     $msg = ['ok', $added > 0 ? "$added pro tools added." : 'All pro tools were already installed.'];
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'seed_pro2' && csrf_check()) {
+    require_once __DIR__ . '/../../seed/seed_tools_pro2.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn();
+    seed_tools_pro2($pdo);
+    $added = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn() - $before;
+    $msg = ['ok', $added > 0 ? "$added more pro tools added." : 'This tool set was already installed.'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save' && csrf_check()) {
     $id = (int)($_POST['id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
@@ -78,6 +86,10 @@ $showForm = isset($_GET['new']) || $editing;
         <form method="post" style="margin:0">
           <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="action" value="seed_pro">
           <button class="btn gray sm" type="submit"><i class="fa-solid fa-download"></i> Install pro tool set</button>
+        </form>
+        <form method="post" style="margin:0">
+          <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="action" value="seed_pro2">
+          <button class="btn gray sm" type="submit"><i class="fa-solid fa-download"></i> Install pro tool set 2</button>
         </form>
         <a class="btn sm" href="?page=tools&new=1"><i class="fa-solid fa-plus"></i> New tool</a>
       </div>

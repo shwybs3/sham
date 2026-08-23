@@ -154,6 +154,7 @@ nav.main-nav a.active::after{content:'';position:absolute;left:13px;right:13px;b
 .tool-shell textarea{min-height:140px;font-family:'JetBrains Mono',monospace;font-size:13px}
 .tool-shell .btn-run{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border:0;padding:12px 22px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px}
 .tool-shell .btn-ghost{background:#f1f3f9;color:var(--ink-soft);border:0;padding:12px 18px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px}
+.tool-shell .btn-ghost.active{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff}
 .tool-shell .result{margin-top:18px;padding:16px;background:#f8f9ff;border-radius:12px;border:1px solid var(--line);display:none}
 .tool-shell .result.show{display:block}
 .tool-shell .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}

@@ -155,5 +155,6 @@ if ($agg) $jsonld['aggregateRating'] = $agg;
 <?php site_footer($lang); ?>
 <script src="<?= site_url('assets/js/tools.js') ?>?v=3"></script>
 <script src="<?= site_url('assets/js/tools-pro.js') ?>?v=1"></script>
+<script src="<?= site_url('assets/js/tools-pro2.js') ?>?v=1"></script>
 <script>document.addEventListener('DOMContentLoaded', function(){ if (window.SHTools) SHTools.mount('tool-app'); });</script>
 </body></html>

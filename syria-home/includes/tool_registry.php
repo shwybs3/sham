@@ -51,4 +51,14 @@ const TOOL_REGISTRY = [
     'speech_to_text'     => ['name' => 'Speech to Text', 'icon' => 'fa-microphone-lines', 'replaces' => 'Transcription services billed per minute'],
     'robots_generator'   => ['name' => 'Robots.txt Generator', 'icon' => 'fa-robot', 'replaces' => 'SEO plugins gating robots editing'],
     'meta_generator'     => ['name' => 'Meta Tag Generator', 'icon' => 'fa-tags', 'replaces' => 'Premium SEO plugin meta editors'],
+
+    /* ── "Pro" set, part 2 (assets/js/tools-pro2.js) ── */
+    'contrast_checker'        => ['name' => 'Contrast Checker (WCAG)', 'icon' => 'fa-circle-half-stroke', 'replaces' => 'Paid accessibility auditing tools'],
+    'percentage_calculator'   => ['name' => 'Percentage Calculator', 'icon' => 'fa-percent', 'replaces' => 'Financial calculator apps with paid tiers'],
+    'loan_calculator'         => ['name' => 'Loan & Mortgage Calculator', 'icon' => 'fa-hand-holding-dollar', 'replaces' => 'Paid mortgage/loan calculator tools'],
+    'random_number_generator' => ['name' => 'Random Number & PIN Generator', 'icon' => 'fa-dice', 'replaces' => 'Paid randomization/lottery tools'],
+    'timezone_converter'      => ['name' => 'Timezone Converter', 'icon' => 'fa-earth-americas', 'replaces' => 'Scheduling apps with paid timezone features'],
+    'slug_generator'          => ['name' => 'URL Slug Generator', 'icon' => 'fa-link', 'replaces' => 'CMS plugins charging for slug/SEO utilities'],
+    'html_entity_tool'        => ['name' => 'HTML Entity Encoder / Decoder', 'icon' => 'fa-code', 'replaces' => 'Paid developer utility suites'],
+    'invoice_generator'       => ['name' => 'Invoice Generator', 'icon' => 'fa-file-invoice-dollar', 'replaces' => 'Subscription invoicing software'],
 ];
