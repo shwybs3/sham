@@ -158,8 +158,42 @@ function site_header(string $active = ''): void {
     <?php
 }
 
+/** Cross-domain "network" band — shown just above the footer on every
+ *  site in the family, linking out to the others (skips the current host). */
+function network_grid(): void {
+    $raw = setting('network_sites', '');
+    $sites = $raw !== '' ? json_decode($raw, true) : null;
+    if (!is_array($sites) || !$sites) return;
+    $selfHost = strtolower(preg_replace('~^www\.~', '', $_SERVER['HTTP_HOST'] ?? ''));
+    $cards = [];
+    foreach ($sites as $s) {
+        $url = trim($s['url'] ?? '');
+        if ($url === '') continue;
+        $host = strtolower(preg_replace('~^www\.~', '', (string)parse_url($url, PHP_URL_HOST)));
+        if ($selfHost !== '' && $host === $selfHost) continue;
+        $cards[] = $s;
+    }
+    if (!$cards) return;
+    ?>
+    <div class="network-band">
+      <div class="container">
+        <h4 class="network-title"><i class="fa-solid fa-diagram-project"></i> Explore the rest of the network</h4>
+        <div class="network-grid">
+          <?php foreach ($cards as $s): $url = trim($s['url'] ?? ''); if ($url === '') continue; ?>
+            <a class="network-card" href="<?= e($url) ?>" style="background:<?= e(trim($s['color'] ?? '') ?: '#1e293b') ?>" target="_blank" rel="noopener">
+              <span class="network-card-name"><?= e($s['name'] ?? $url) ?></span>
+              <?php if (!empty($s['tagline'])): ?><span class="network-card-tagline"><?= e($s['tagline']) ?></span><?php endif; ?>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    </div>
+    <?php
+}
+
 function site_footer(): void {
     $siteName = setting('site_name', 'Syria Home');
+    network_grid();
     ?>
     <footer class="site-footer">
       <div class="container cols">
@@ -244,6 +278,40 @@ function article_card(array $a): void {
         <span class="cta">Read article <i class="fa-solid fa-arrow-right"></i></span>
       </div>
     </a>
+    <?php
+}
+
+/** Parses "Title | https://url" lines (as entered in the admin article
+ *  form) into a clean list of {title,url}. Lines missing a URL or with an
+ *  unsafe scheme are skipped rather than guessed at. */
+function parse_sources(string $raw): array {
+    $out = [];
+    foreach (preg_split('~\r\n|\r|\n~', $raw) as $line) {
+        $line = trim($line);
+        if ($line === '') continue;
+        $parts = explode('|', $line, 2);
+        $url = trim($parts[1] ?? $parts[0]);
+        $title = count($parts) > 1 ? trim($parts[0]) : $url;
+        if (!preg_match('~^https?://~i', $url)) continue;
+        $out[] = ['title' => $title !== '' ? $title : $url, 'url' => $url];
+    }
+    return $out;
+}
+
+/** Real, editorial-entered citations only — never fabricated — shown as a
+ *  genuine "Sources" section for reader trust, E-E-A-T, and AdSense review. */
+function sources_block(?string $raw): void {
+    $sources = parse_sources((string)$raw);
+    if (!$sources) return;
+    ?>
+    <div class="sources-block container" style="padding:0;margin-top:26px">
+      <h4 style="font-size:14px;color:var(--ink-soft);margin:0 0 10px"><i class="fa-solid fa-book"></i> Sources</h4>
+      <ol style="margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-soft);line-height:1.9">
+        <?php foreach ($sources as $s): ?>
+          <li><a href="<?= e($s['url']) ?>" target="_blank" rel="noopener nofollow"><?= e($s['title']) ?></a></li>
+        <?php endforeach; ?>
+      </ol>
+    </div>
     <?php
 }
 

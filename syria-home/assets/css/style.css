@@ -158,7 +158,14 @@ nav.main-nav a.active::after{content:'';position:absolute;left:13px;right:13px;b
 .tool-swatches .sw{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);cursor:pointer;position:relative}
 
 /* ── Footer ── */
-.site-footer{margin-top:70px;background:#0f172a;color:#cbd5e1;padding:50px 0 24px}
+.network-band{margin-top:70px;background:#0b1220;padding:34px 0}
+.network-title{color:#fff;font-size:14px;font-weight:700;margin:0 0 16px;display:flex;align-items:center;gap:8px;opacity:.9}
+.network-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.network-card{display:flex;flex-direction:column;gap:4px;padding:18px 20px;border-radius:14px;text-decoration:none;transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.network-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(0,0,0,.3)}
+.network-card-name{color:#fff;font-weight:800;font-size:15px}
+.network-card-tagline{color:rgba(255,255,255,.82);font-size:12.5px;line-height:1.4}
+.site-footer{margin-top:0;background:#0f172a;color:#cbd5e1;padding:50px 0 24px}
 .site-footer .cols{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:30px}
 .site-footer h4{color:#fff;font-size:14px;margin-bottom:14px}
 .site-footer a{display:block;color:#94a3b8;font-size:13px;padding:5px 0}

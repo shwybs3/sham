@@ -328,6 +328,20 @@ function sh_ensure_schema(PDO $pdo): void {
 
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
+
+    /* Real citations/sources for E-E-A-T + AdSense trust signals — never
+       fabricated, only filled in when an article actually cites something. */
+    sh_ensure_column($pdo, 'articles', 'sources', "TEXT");
+
+    /* Cross-domain "network" footer — a JSON list of {name,url,tagline,color}
+       shown on every domain in the family so visitors can hop between them. */
+    $pdo->exec("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('network_sites', " . $pdo->quote(json_encode([
+        ['name' => 'Yassota.com',        'url' => 'https://yassota.com',          'tagline' => 'The main hub — every site in the network', 'color' => '#0f172a'],
+        ['name' => 'Blogs Yassota',      'url' => 'https://syria-home.yassota.com', 'tagline' => 'Articles, tutorials, news & comparisons', 'color' => '#2563eb'],
+        ['name' => 'Indexing Yassota',   'url' => 'https://indexing.yassota.com', 'tagline' => 'Fast search-engine indexing tools', 'color' => '#7c3aed'],
+        ['name' => 'Yassota Trends',     'url' => 'https://trends.yassota.com',   'tagline' => 'What is trending right now', 'color' => '#16a34a'],
+        ['name' => 'Yassota Chat',       'url' => 'https://chat.yassota.com',     'tagline' => 'Free AI chat assistant', 'color' => '#dc2626'],
+    ])) . ")");
 }
 
 /**

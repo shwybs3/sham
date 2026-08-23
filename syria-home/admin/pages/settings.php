@@ -1,6 +1,6 @@
 <?php
 $tab = $_GET['tab'] ?? 'general';
-$tabs = ['general' => 'General', 'themes' => 'Themes', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'ads' => 'Advertisements', 'seo' => 'SEO', 'sitemap' => 'Sitemap & Robots', 'security' => 'Security', 'social' => 'Social Media'];
+$tabs = ['general' => 'General', 'themes' => 'Themes', 'api' => 'API Keys', 'payments' => 'Payments', 'subdomains' => 'Subdomains', 'network' => 'Network Sites', 'ads' => 'Advertisements', 'seo' => 'SEO', 'sitemap' => 'Sitemap & Robots', 'security' => 'Security', 'social' => 'Social Media'];
 $msg = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
@@ -56,6 +56,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
             set_setting($k, trim($_POST[$k] ?? ''));
         }
         $msg = ['ok', 'cPanel settings saved.'];
+    }
+
+    if ($formTab === 'network') {
+        $names = $_POST['net_name'] ?? [];
+        $urls = $_POST['net_url'] ?? [];
+        $taglines = $_POST['net_tagline'] ?? [];
+        $colors = $_POST['net_color'] ?? [];
+        $sites = [];
+        for ($i = 0; $i < count($names); $i++) {
+            $name = trim($names[$i] ?? '');
+            $url = trim($urls[$i] ?? '');
+            if ($name === '' || $url === '') continue;
+            $sites[] = [
+                'name' => $name,
+                'url' => $url,
+                'tagline' => trim($taglines[$i] ?? ''),
+                'color' => trim($colors[$i] ?? '') ?: '#1e293b',
+            ];
+        }
+        set_setting('network_sites', json_encode($sites));
+        $msg = ['ok', 'Network sites saved.'];
     }
 
     if ($formTab === 'ads') {
@@ -365,6 +386,31 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <?php endif; ?>
   </div>
 
+<?php elseif ($tab === 'network'): ?>
+  <h3 style="margin-top:0"><i class="fa-solid fa-diagram-project"></i> Network Sites</h3>
+  <p class="hint">These sites show up as a colored card band above the footer on every site in your network, and link to each other. The current site is automatically hidden from its own list.</p>
+  <?php
+    $networkRaw = setting('network_sites', '');
+    $networkSites = $networkRaw !== '' ? (json_decode($networkRaw, true) ?: []) : [];
+    if (!$networkSites) $networkSites = [['name'=>'','url'=>'','tagline'=>'','color'=>'#1e293b']];
+    $networkSites[] = ['name'=>'','url'=>'','tagline'=>'','color'=>'#1e293b'];
+  ?>
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="network">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <?php foreach ($networkSites as $s): ?>
+        <div style="display:grid;grid-template-columns:1fr 1.4fr 1.4fr 90px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px">
+          <input type="text" name="net_name[]" placeholder="Site name" value="<?= e($s['name'] ?? '') ?>">
+          <input type="text" name="net_url[]" placeholder="https://example.yassota.com" value="<?= e($s['url'] ?? '') ?>">
+          <input type="text" name="net_tagline[]" placeholder="Short one-line description" value="<?= e($s['tagline'] ?? '') ?>">
+          <input type="color" name="net_color[]" value="<?= e($s['color'] ?? '#1e293b') ?>" style="width:100%;height:38px;padding:2px">
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <p class="hint" style="margin-top:10px">Leave the last row's name/URL blank — a fresh blank row is always added automatically. To remove a site, clear its name and URL.</p>
+    <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save network sites</button>
+  </form>
+
 <?php elseif ($tab === 'ads'): ?>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="ads">
@@ -390,7 +436,7 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <input type="text" name="indexnow_key" value="<?= e(setting('indexnow_key')) ?>" placeholder="your-indexnow-key">
     <p class="hint">Get a free key at <a href="https://www.bing.com/indexnow" target="_blank" rel="noopener">bing.com/indexnow</a>. Once set, articles, tools, and pages ping Bing/Yandex automatically on publish. The key file <code>/{key}.txt</code> is auto-created in your webroot.</p>
     <button class="btn" style="margin-top:14px" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save</button>
-    <p class="hint" style="margin-top:14px">Sitemap: <code><?= e(site_url('sitemap.php')) ?></code> · Robots: <code><?= e(site_url('robots.php')) ?></code></p>
+    <p class="hint" style="margin-top:14px">Sitemap: <code><?= e(site_url('sitemap.php')) ?></code> · Robots: <code><?= e(site_url('robots.php')) ?></code> · AI/LLM summary: <code><?= e(site_url('llms.txt')) ?></code></p>
   </form>
 
 <?php elseif ($tab === 'sitemap'): ?>

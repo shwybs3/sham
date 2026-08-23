@@ -2,6 +2,7 @@ RewriteEngine On
 
 # Friendly URLs
 RewriteRule ^robots\.txt$ robots.php [L]
+RewriteRule ^llms\.txt$ llms.php [L]
 RewriteRule ^sitemap\.xml$ sitemap.php [L]
 RewriteRule ^ads\.txt$ ads.php [L]
 RewriteRule ^article/([a-z0-9-]+)/?$ article.php?slug=$1 [L,QSA]

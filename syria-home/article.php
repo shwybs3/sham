@@ -114,6 +114,8 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
   </div>
   <?php endif; ?>
 
+  <?php sources_block($article['sources'] ?? ''); ?>
+
   <?php if (!$isLocked) rating_widget('article', (int)$article['id']); ?>
 
   <?php if (!$isLocked) tip_widget('Article: ' . $article['title']); ?>

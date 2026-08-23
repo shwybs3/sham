@@ -136,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'meta_description' => trim($_POST['meta_description'] ?? ''),
         'meta_keywords' => trim($_POST['meta_keywords'] ?? ''),
         'tags' => trim($_POST['tags'] ?? ''),
+        'sources' => trim($_POST['sources'] ?? ''),
         'author' => trim($_POST['author'] ?? '') ?: 'Editorial Team',
         'status' => $_POST['status'] ?? 'draft',
         'trending' => isset($_POST['trending']) ? 1 : 0,
@@ -329,6 +330,8 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
       <label>Meta description</label><textarea name="meta_description" id="seoMetaDesc" style="min-height:60px"><?= e($editing['meta_description'] ?? '') ?></textarea>
       <label>Meta keywords (comma separated)</label><input type="text" name="meta_keywords" id="seoKeywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
       <label>Tags (comma separated)</label><input type="text" name="tags" value="<?= e($editing['tags'] ?? '') ?>">
+      <label>Sources (one per line: "Title | https://url" — shown as a real "Sources" section on the article; leave blank if none)</label>
+      <textarea name="sources" rows="4" placeholder="Example: World Health Organization | https://who.int/..."><?= e($editing['sources'] ?? '') ?></textarea>
 
       <div class="card" style="background:#f8f9ff;margin-top:16px">
         <div style="display:flex;align-items:center;gap:14px">
