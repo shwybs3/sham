@@ -69,6 +69,7 @@ function nav_links(string $lang = 'en'): array {
             'المقارنات' => site_url('articles.php?lang=ar&type=comparison'),
             'الدروس' => site_url('articles.php?lang=ar&type=tutorial'),
             'الأدوات' => site_url('tools.php?lang=ar'),
+            'التطبيقات' => site_url('apps.php'),
             'المتجر' => site_url('products.php'),
         ];
     }
@@ -79,6 +80,7 @@ function nav_links(string $lang = 'en'): array {
         'Comparisons' => site_url('articles.php?type=comparison'),
         'Tutorials' => site_url('articles.php?type=tutorial'),
         'Tools' => site_url('tools.php'),
+        'Apps' => site_url('apps.php'),
         'Store' => site_url('products.php'),
     ];
 }
@@ -120,6 +122,26 @@ function product_card(array $p): void {
           <?php endif; ?>
         </div>
         <span class="pcta">View details <i class="fa-solid fa-arrow-right"></i></span>
+      </div>
+    </a>
+    <?php
+}
+
+function app_card(array $a): void {
+    ?>
+    <a class="product-card" href="<?= site_url('app.php?slug=' . urlencode($a['slug'])) ?>">
+      <div class="art-wrap" style="display:flex;align-items:center;justify-content:center;background:#f4f5fb;aspect-ratio:1.4/1">
+        <?php if ($a['icon_path']): ?>
+          <img src="<?= site_url($a['icon_path']) ?>" alt="<?= e($a['name']) ?>" style="width:72px;height:72px;border-radius:16px;box-shadow:var(--shadow)">
+        <?php else: ?>
+          <span class="art-icon"><i class="fa-brands fa-google-play"></i></span>
+        <?php endif; ?>
+      </div>
+      <div class="pbody">
+        <?php if ($a['category']): ?><span class="ptype"><i class="fa-solid fa-tag"></i> <?= e($a['category']) ?></span><?php endif; ?>
+        <h3><?= e($a['name']) ?></h3>
+        <p><?= e($a['short_description']) ?></p>
+        <span class="pcta"><i class="fa-brands fa-google-play"></i> <?= e($a['developer'] ?: 'Google Play') ?></span>
       </div>
     </a>
     <?php
@@ -247,6 +269,7 @@ function site_footer(string $lang = 'en'): void {
           <a href="<?= site_url($lang === 'ar' ? 'articles.php?lang=ar' : 'articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> <?= e(t('Articles', 'المقالات', $lang)) ?></a>
           <a href="<?= site_url($lang === 'ar' ? 'articles.php?lang=ar&type=news' : 'articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> <?= e(t('News', 'الأخبار', $lang)) ?></a>
           <a href="<?= site_url($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> <?= e(t('Web Tools', 'أدوات الويب', $lang)) ?></a>
+          <a href="<?= site_url('apps.php') ?>"><i class="fa-brands fa-google-play fa-fw"></i> <?= e(t('Apps', 'التطبيقات', $lang)) ?></a>
           <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> <?= e(t('Store', 'المتجر', $lang)) ?></a>
           <a href="<?= site_url('feed.php' . ($lang === 'ar' ? '?lang=ar' : '')) ?>"><i class="fa-solid fa-rss fa-fw"></i> <?= e(t('RSS Feed', 'خلاصة RSS', $lang)) ?></a>
         </div>

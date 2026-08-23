@@ -94,6 +94,7 @@ const ADMIN_NAV = [
     'pages' => ['Static Pages', 'fa-file-lines'],
     'content-expansion' => ['Content Expansion', 'fa-arrows-up-down-left-right'],
     'arabic-content' => ['Arabic Content', 'fa-language'],
+    'apps' => ['App Directory', 'fa-mobile-screen'],
     'products' => ['Store Products', 'fa-store'],
     'coupons' => ['Promo Codes', 'fa-ticket'],
     'orders' => ['Orders & Payments', 'fa-inbox'],
@@ -115,7 +116,7 @@ function admin_sidebar(string $active): void {
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Store</div>
-      <?php foreach (['products','coupons','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['apps','products','coupons','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Growth</div>

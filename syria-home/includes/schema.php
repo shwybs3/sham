@@ -9,7 +9,7 @@ const SH_TABLES = [
     'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
     'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
     'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results', 'pages',
-    'index_log', 'ratings', 'coupons',
+    'index_log', 'ratings', 'coupons', 'apps',
 ];
 
 /**
@@ -328,6 +328,30 @@ function sh_ensure_schema(PDO $pdo): void {
 
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
+
+    /* App directory — paste a Google Play Store link, the icon and
+       screenshots get fetched once and stored locally forever (same
+       fetch-and-compress pattern as article/tool hero images), so the
+       public page never hotlinks Google's CDN. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS apps (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      slug VARCHAR(220) NOT NULL UNIQUE,
+      play_store_url VARCHAR(500) NOT NULL,
+      developer VARCHAR(200) DEFAULT '',
+      category VARCHAR(120) DEFAULT '',
+      icon_path VARCHAR(300) DEFAULT '',
+      short_description VARCHAR(400) DEFAULT '',
+      full_description LONGTEXT,
+      screenshots TEXT,
+      meta_title VARCHAR(220) DEFAULT '',
+      meta_description VARCHAR(400) DEFAULT '',
+      status ENUM('published','draft') NOT NULL DEFAULT 'published',
+      views INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
     /* Bilingual content — an Arabic article/tool is a normal row with its
        own slug and lang='ar', pointing back at the English row it's a
