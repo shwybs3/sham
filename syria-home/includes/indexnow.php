@@ -62,7 +62,44 @@ function index_log(string $url, string $engine, string $status, int $httpCode = 
 }
 
 /**
- * Submits up to 10,000 URLs to every IndexNow endpoint in one batch each.
+ * Pings every IndexNow endpoint for exactly one URL using the protocol's
+ * simple GET form: https://<engine>/indexnow?url=...&key=...&keyLocation=...
+ * This is what fires automatically on every publish (article/tool/page) —
+ * one HTTP round trip per engine, no JSON body needed for a single URL.
+ */
+function indexnow_ping_get(string $url): array {
+    $key = indexnow_key();
+    if ($key === '') return [];
+    $keyLocation = indexnow_keyfile();
+
+    $results = [];
+    foreach (SH_INDEXNOW_ENDPOINTS as $name => $endpoint) {
+        $qs = http_build_query([
+            'url'         => $url,
+            'key'         => $key,
+            'keyLocation' => $keyLocation,
+        ]);
+        $ch = curl_init($endpoint . '?' . $qs);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $ok = ($code >= 200 && $code < 300);
+        $results[$name] = ['code' => $code, 'ok' => $ok];
+        index_log($url, 'indexnow:' . $name, $ok ? 'ok' : 'failed', $code, '');
+    }
+    return $results;
+}
+
+/**
+ * Submits up to 10,000 URLs to every IndexNow endpoint in one batch each
+ * (the POST + JSON body form). Used for bulk "submit everything" runs,
+ * where a single GET request per URL would be hundreds of round trips.
  * Returns ['endpoint' => ['code' => int, 'ok' => bool], ...]
  */
 function indexnow_submit(array $urls): array {
@@ -150,7 +187,7 @@ function gsc_inspect_url(string $url): array {
  */
 function index_submit_url(string $url): array {
     $out = ['indexnow' => [], 'google' => null];
-    try { $out['indexnow'] = indexnow_submit([$url]); } catch (Throwable $e) {}
+    try { $out['indexnow'] = indexnow_ping_get($url); } catch (Throwable $e) {}
     if ((int)setting('google_indexing_enabled', 0) === 1) {
         try { $out['google'] = google_index_submit($url); } catch (Throwable $e) {}
     }

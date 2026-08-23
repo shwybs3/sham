@@ -30,6 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         $msg = ['ok', 'API keys saved.'];
     }
 
+    if ($formTab === 'test_nowpayments') {
+        $test = NOWPayments::testConnection();
+        $msg = [$test['ok'] ? 'ok' : 'err', $test['ok'] ? $test['message'] : $test['error']];
+    }
+
     if ($formTab === 'payments') {
         set_setting('nowpayments_api_key', trim($_POST['nowpayments_api_key'] ?? ''));
         set_setting('nowpayments_ipn_secret', trim($_POST['nowpayments_ipn_secret'] ?? ''));
@@ -244,6 +249,12 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
       <span class="badge ok"><i class="fa-solid fa-check"></i> Crypto payments active — Store products, tips and premium unlocks now show a real "Pay with crypto" button.</span>
     <?php else: ?>
       <span class="badge off">Add your API key above to enable real crypto checkout everywhere on the site.</span>
+    <?php endif; ?>
+    <?php if (NOWPayments::isConfigured()): ?>
+    <form method="post" style="display:inline;margin-left:10px">
+      <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="test_nowpayments">
+      <button class="btn gray sm" type="submit"><i class="fa-solid fa-plug-circle-check"></i> Test API key now</button>
+    </form>
     <?php endif; ?>
   </div>
 
