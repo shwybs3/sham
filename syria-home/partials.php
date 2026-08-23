@@ -28,9 +28,12 @@ function seo_head(array $o): void {
     <link rel="icon" href="<?= site_url('assets/img/favicon.svg') ?>" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500<?= ($o['lang'] ?? 'en') === 'ar' ? '&family=Cairo:wght@400;500;600;700;800' : '' ?>&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=6">
+    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=7">
+    <?php if (!empty($o['hreflang'])): foreach ($o['hreflang'] as $hl => $href): ?>
+    <link rel="alternate" hreflang="<?= e($hl) ?>" href="<?= e($href) ?>">
+    <?php endforeach; endif; ?>
     <?php
     $themes = [
         'default' => ['brand1' => '#6366f1', 'brand2' => '#22d3ee'],
@@ -52,7 +55,18 @@ function seo_head(array $o): void {
     <?php
 }
 
-function nav_links(): array {
+function nav_links(string $lang = 'en'): array {
+    if ($lang === 'ar') {
+        return [
+            'الرئيسية' => site_url('ar/'),
+            'المقالات' => site_url('articles.php?lang=ar'),
+            'الأخبار' => site_url('articles.php?lang=ar&type=news'),
+            'المقارنات' => site_url('articles.php?lang=ar&type=comparison'),
+            'الدروس' => site_url('articles.php?lang=ar&type=tutorial'),
+            'الأدوات' => site_url('tools.php?lang=ar'),
+            'المتجر' => site_url('products.php'),
+        ];
+    }
     return [
         'Home' => site_url(''),
         'Articles' => site_url('articles.php'),
@@ -127,14 +141,21 @@ function cookie_consent_banner(): void {
     <?php
 }
 
-function site_header(string $active = ''): void {
+/** $switchUrl, when given, is the URL of this exact page's counterpart in
+ *  the other language (from a translation_of lookup) — shown as the
+ *  language-switcher link. Without it, the switcher falls back to each
+ *  language's homepage. */
+function site_header(string $active = '', string $lang = 'en', ?string $switchUrl = null): void {
     $siteName = setting('site_name', 'Syria Home');
     cookie_consent_banner();
+    $otherLang = $lang === 'ar' ? 'en' : 'ar';
+    $switchHref = $switchUrl ?? site_url($otherLang === 'ar' ? 'ar/' : '');
+    $switchLabel = $otherLang === 'ar' ? 'العربية' : 'English';
     ?>
     <header class="site-header">
       <div class="bar">
         <?php $logoUrl = trim(setting('logo_url')); ?>
-        <a href="<?= site_url('') ?>" class="logo">
+        <a href="<?= site_url($lang === 'ar' ? 'ar/' : '') ?>" class="logo">
           <?php if ($logoUrl !== ''): ?>
             <img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" style="max-height:38px;width:auto">
           <?php else: ?>
@@ -142,15 +163,16 @@ function site_header(string $active = ''): void {
           <?php endif; ?>
         </a>
         <nav class="main-nav" id="mainNav">
-          <?php foreach (nav_links() as $label => $url): ?>
+          <?php foreach (nav_links($lang) as $label => $url): ?>
             <a href="<?= e($url) ?>" class="<?= $active === $label ? 'active' : '' ?>"><?= e($label) ?></a>
           <?php endforeach; ?>
         </nav>
         <form class="header-search" action="<?= site_url('search.php') ?>" method="get">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" name="q" placeholder="Search articles &amp; tools...">
+          <input type="text" name="q" placeholder="<?= e(t('Search articles & tools...', 'ابحث في المقالات والأدوات...', $lang)) ?>">
         </form>
-        <a href="<?= site_url('tools.php') ?>" class="header-cta"><i class="fa-solid fa-bolt"></i> <span>Free Tools</span></a>
+        <a href="<?= e($switchHref) ?>" class="lang-switch"><i class="fa-solid fa-language"></i> <span><?= e($switchLabel) ?></span></a>
+        <a href="<?= site_url($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php') ?>" class="header-cta"><i class="fa-solid fa-bolt"></i> <span><?= e(t('Free Tools', 'أدوات مجانية', $lang)) ?></span></a>
         <button class="hamburger" id="navToggle" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
       </div>
     </header>
@@ -191,7 +213,7 @@ function network_grid(): void {
     <?php
 }
 
-function site_footer(): void {
+function site_footer(string $lang = 'en'): void {
     $siteName = setting('site_name', 'Syria Home');
     network_grid();
     ?>
@@ -209,24 +231,24 @@ function site_footer(): void {
             <?php endforeach; ?>
           </div>
         </div>
-        <div><h4>Explore</h4>
-          <a href="<?= site_url('articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> Articles</a>
-          <a href="<?= site_url('articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> News</a>
-          <a href="<?= site_url('tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> Web Tools</a>
-          <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> Store</a>
+        <div><h4><?= e(t('Explore', 'استكشف', $lang)) ?></h4>
+          <a href="<?= site_url($lang === 'ar' ? 'articles.php?lang=ar' : 'articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> <?= e(t('Articles', 'المقالات', $lang)) ?></a>
+          <a href="<?= site_url($lang === 'ar' ? 'articles.php?lang=ar&type=news' : 'articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> <?= e(t('News', 'الأخبار', $lang)) ?></a>
+          <a href="<?= site_url($lang === 'ar' ? 'tools.php?lang=ar' : 'tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> <?= e(t('Web Tools', 'أدوات الويب', $lang)) ?></a>
+          <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> <?= e(t('Store', 'المتجر', $lang)) ?></a>
         </div>
-        <div><h4>Company</h4>
-          <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> About</a>
-          <a href="<?= site_url('contact.php') ?>"><i class="fa-solid fa-envelope fa-fw"></i> Contact</a>
-          <a href="<?= site_url('sitemap.php') ?>"><i class="fa-solid fa-sitemap fa-fw"></i> Sitemap</a>
+        <div><h4><?= e(t('Company', 'الشركة', $lang)) ?></h4>
+          <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> <?= e(t('About', 'من نحن', $lang)) ?></a>
+          <a href="<?= site_url('contact.php') ?>"><i class="fa-solid fa-envelope fa-fw"></i> <?= e(t('Contact', 'اتصل بنا', $lang)) ?></a>
+          <a href="<?= site_url('sitemap.php') ?>"><i class="fa-solid fa-sitemap fa-fw"></i> <?= e(t('Sitemap', 'خريطة الموقع', $lang)) ?></a>
         </div>
-        <div><h4>Legal</h4>
-          <a href="<?= site_url('privacy-policy.php') ?>"><i class="fa-solid fa-user-shield fa-fw"></i> Privacy Policy</a>
-          <a href="<?= site_url('terms.php') ?>"><i class="fa-solid fa-gavel fa-fw"></i> Terms of Use</a>
-          <a href="<?= site_url('editorial-policy.php') ?>"><i class="fa-solid fa-feather fa-fw"></i> Editorial Policy</a>
-          <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> Refund Policy</a>
-          <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> License Terms</a>
-          <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> Cookie Policy</a>
+        <div><h4><?= e(t('Legal', 'قانوني', $lang)) ?></h4>
+          <a href="<?= site_url('privacy-policy.php') ?>"><i class="fa-solid fa-user-shield fa-fw"></i> <?= e(t('Privacy Policy', 'سياسة الخصوصية', $lang)) ?></a>
+          <a href="<?= site_url('terms.php') ?>"><i class="fa-solid fa-gavel fa-fw"></i> <?= e(t('Terms of Use', 'شروط الاستخدام', $lang)) ?></a>
+          <a href="<?= site_url('editorial-policy.php') ?>"><i class="fa-solid fa-feather fa-fw"></i> <?= e(t('Editorial Policy', 'السياسة التحريرية', $lang)) ?></a>
+          <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> <?= e(t('Refund Policy', 'سياسة الاسترجاع', $lang)) ?></a>
+          <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> <?= e(t('License Terms', 'شروط الترخيص', $lang)) ?></a>
+          <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> <?= e(t('Cookie Policy', 'سياسة ملفات تعريف الارتباط', $lang)) ?></a>
           <?php
           try {
               global $pdo;
@@ -238,8 +260,8 @@ function site_footer(): void {
         </div>
       </div>
       <div class="container bottom">
-        <span>© <?= date('Y') ?> <?= e($siteName) ?>. All rights reserved.</span>
-        <span>Built with a self-hosted CMS · Powered by curiosity</span>
+        <span>© <?= date('Y') ?> <?= e($siteName) ?>. <?= e(t('All rights reserved.', 'جميع الحقوق محفوظة.', $lang)) ?></span>
+        <span><?= e(t('Built with a self-hosted CMS · Powered by curiosity', 'مبني بنظام إدارة محتوى ذاتي الاستضافة · بدافع الفضول', $lang)) ?></span>
       </div>
     </footer>
     <script src="<?= site_url('assets/js/main.js') ?>?v=3"></script>
@@ -260,8 +282,9 @@ function ad_zone(string $slotKey = 'default'): void {
 
 function article_card(array $a): void {
     $cat = $a['category_name'] ?? ucfirst($a['content_type']);
+    $href = ($a['lang'] ?? 'en') === 'ar' ? site_url('ar/article/' . $a['slug']) : site_url('article.php?slug=' . urlencode($a['slug']));
     ?>
-    <a class="card" href="<?= site_url('article.php?slug=' . urlencode($a['slug'])) ?>">
+    <a class="card" href="<?= e($href) ?>">
       <div class="hero" style="<?= hero_style_css($a['hero_gradient']) ?>">
         <span class="badge"><?= e(ucfirst($a['content_type'])) ?></span>
         <?php if (!empty($a['trending'])): ?><span class="trend"><i class="fa-solid fa-fire"></i> Trending</span><?php endif; ?>
@@ -334,8 +357,9 @@ function tip_widget(string $label): void {
 
 function tool_card(array $t): void {
     $rating = rating_summary('tool', (int)$t['id']);
+    $href = ($t['lang'] ?? 'en') === 'ar' ? site_url('ar/tool/' . $t['slug']) : site_url('tool.php?slug=' . urlencode($t['slug']));
     ?>
-    <a class="tcard" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">
+    <a class="tcard" href="<?= e($href) ?>">
       <div class="tcard-top">
         <span class="tcard-icon" style="<?= hero_style_css('g' . (((int)$t['id'] % 8) + 1)) ?>"><i class="fa-solid <?= e($t['icon_class']) ?>"></i></span>
         <div class="tcard-heading">

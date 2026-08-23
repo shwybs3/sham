@@ -4,8 +4,11 @@ header('Content-Type: application/xml; charset=utf-8');
 
 $urls = [
     ['loc' => site_url(''), 'priority' => '1.0'],
+    ['loc' => site_url('ar/'), 'priority' => '1.0'],
     ['loc' => site_url('articles.php'), 'priority' => '0.9'],
+    ['loc' => site_url('articles.php?lang=ar'), 'priority' => '0.9'],
     ['loc' => site_url('tools.php'), 'priority' => '0.9'],
+    ['loc' => site_url('tools.php?lang=ar'), 'priority' => '0.9'],
     ['loc' => site_url('products.php'), 'priority' => '0.9'],
     ['loc' => site_url('about.php'), 'priority' => '0.4'],
     ['loc' => site_url('contact.php'), 'priority' => '0.3'],
@@ -17,11 +20,13 @@ $urls = [
     ['loc' => site_url('cookie-policy.php'), 'priority' => '0.2'],
 ];
 
-foreach ($pdo->query("SELECT slug, updated_at FROM articles WHERE status='published'") as $a) {
-    $urls[] = ['loc' => site_url('article.php?slug=' . $a['slug']), 'lastmod' => date('c', strtotime($a['updated_at'])), 'priority' => '0.8'];
+foreach ($pdo->query("SELECT slug, updated_at, lang FROM articles WHERE status='published'") as $a) {
+    $loc = $a['lang'] === 'ar' ? site_url('ar/article/' . $a['slug']) : site_url('article.php?slug=' . $a['slug']);
+    $urls[] = ['loc' => $loc, 'lastmod' => date('c', strtotime($a['updated_at'])), 'priority' => '0.8'];
 }
-foreach ($pdo->query("SELECT slug FROM tools WHERE status='published'") as $t) {
-    $urls[] = ['loc' => site_url('tool.php?slug=' . $t['slug']), 'priority' => '0.7'];
+foreach ($pdo->query("SELECT slug, lang FROM tools WHERE status='published'") as $t) {
+    $loc = $t['lang'] === 'ar' ? site_url('ar/tool/' . $t['slug']) : site_url('tool.php?slug=' . $t['slug']);
+    $urls[] = ['loc' => $loc, 'priority' => '0.7'];
 }
 foreach ($pdo->query("SELECT slug FROM products WHERE status='published'") as $p) {
     $urls[] = ['loc' => site_url('product.php?slug=' . $p['slug']), 'priority' => '0.7'];

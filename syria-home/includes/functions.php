@@ -78,6 +78,24 @@ function site_url(string $path = ''): string {
     return rtrim(SITE_URL, '/') . '/' . ltrim($path, '/');
 }
 
+/** True when this request is browsing the Arabic section — either an
+ *  /ar/-prefixed pretty URL, or the ?lang=ar query param those rewrite to. */
+function is_ar_request(): bool {
+    static $ar = null;
+    if ($ar === null) {
+        $ar = ($_GET['lang'] ?? '') === 'ar' || (bool)preg_match('~^/ar(/|$|\?)~', $_SERVER['REQUEST_URI'] ?? '');
+    }
+    return $ar;
+}
+
+/** English/Arabic UI string picker for chrome text that isn't stored in the
+ *  DB (nav labels, breadcrumbs, buttons). Pass $lang explicitly when it's
+ *  known from a content row (e.g. $article['lang']); otherwise it falls
+ *  back to the current request's language. */
+function t(string $en, string $ar, ?string $lang = null): string {
+    return ($lang ?? (is_ar_request() ? 'ar' : 'en')) === 'ar' ? $ar : $en;
+}
+
 /* Original CSS-only "hero" graphic per article/tool — avoids any copyright
    risk from stock/AI photo sourcing and keeps every page 100% self-contained. */
 const HERO_GRADIENTS = [

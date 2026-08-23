@@ -1,5 +1,6 @@
 <?php
 $cats = $pdo->query("SELECT * FROM categories WHERE type='article' ORDER BY name")->fetchAll();
+$enArticles = $pdo->query("SELECT id, title FROM articles WHERE lang='en' ORDER BY title")->fetchAll();
 $msg = null;
 
 /* ── Delete ── */
@@ -144,6 +145,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'premium_price' => (float)($_POST['premium_price'] ?? 3),
         'auto_link' => isset($_POST['auto_link']) ? 1 : 0,
         'reading_time' => reading_time_from_html($body),
+        'lang' => in_array($_POST['lang'] ?? 'en', ['en', 'ar'], true) ? $_POST['lang'] : 'en',
+        'translation_of' => ($_POST['translation_of'] ?? '') !== '' ? (int)$_POST['translation_of'] : null,
     ];
     if ($title === '') {
         $msg = ['err', 'Title is required.'];
@@ -246,14 +249,15 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
     </div>
 
     <table>
-      <tr><th>Title</th><th>Type</th><th>Status</th><th>Trending</th><th>Views</th><th>Date</th><th></th></tr>
+      <tr><th>Title</th><th>Lang</th><th>Type</th><th>Status</th><th>Trending</th><th>Views</th><th>Date</th><th></th></tr>
       <?php
       try {
-          $allArticles = $pdo->query("SELECT id,title,slug,content_type,status,trending,views,published_at FROM articles ORDER BY created_at DESC")->fetchAll();
-      } catch (PDOException $e) { $allArticles = []; echo '<tr><td colspan="7" style="color:#dc2626">DB error: ' . e($e->getMessage()) . '</td></tr>'; }
+          $allArticles = $pdo->query("SELECT id,title,slug,content_type,status,trending,views,published_at,lang FROM articles ORDER BY created_at DESC")->fetchAll();
+      } catch (PDOException $e) { $allArticles = []; echo '<tr><td colspan="8" style="color:#dc2626">DB error: ' . e($e->getMessage()) . '</td></tr>'; }
       foreach ($allArticles as $a): ?>
       <tr>
         <td><?= e($a['title']) ?></td>
+        <td><?= ($a['lang'] ?? 'en') === 'ar' ? '<span class="badge warn">AR</span>' : '<span class="badge off">EN</span>' ?></td>
         <td><?= e(ucfirst($a['content_type'])) ?></td>
         <td><?= $a['status'] === 'published' ? '<span class="badge ok">Published</span>' : '<span class="badge off">Draft</span>' ?></td>
         <td><?= $a['trending'] ? '<i class="fa-solid fa-fire" style="color:#f43f5e"></i>' : '—' ?></td>
@@ -278,6 +282,24 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
       <div class="row2">
         <div><label>Title</label><input type="text" name="title" id="seoTitle" value="<?= e($editing['title'] ?? '') ?>" required></div>
         <div><label>Slug (leave blank to auto-generate)</label><input type="text" name="slug" value="<?= e($editing['slug'] ?? '') ?>"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>Language</label>
+          <select name="lang">
+            <option value="en" <?= ($editing['lang'] ?? 'en') === 'en' ? 'selected' : '' ?>>English</option>
+            <option value="ar" <?= ($editing['lang'] ?? 'en') === 'ar' ? 'selected' : '' ?>>العربية (Arabic)</option>
+          </select>
+        </div>
+        <div><label>Translation of (for an Arabic version — pick the English original)</label>
+          <select name="translation_of">
+            <option value="">— None / this is the original —</option>
+            <?php foreach ($enArticles as $ea): if ($ea['id'] == ($editing['id'] ?? 0)) continue; ?>
+              <option value="<?= $ea['id'] ?>" <?= (int)($editing['translation_of'] ?? 0) === (int)$ea['id'] ? 'selected' : '' ?>><?= e($ea['title']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <p class="hint">Links this row as the Arabic (or other) translation of an existing English article — powers the language switcher and hreflang tags on the public page.</p>
+        </div>
       </div>
 
       <div class="row2">

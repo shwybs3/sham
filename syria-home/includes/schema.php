@@ -329,6 +329,15 @@ function sh_ensure_schema(PDO $pdo): void {
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
 
+    /* Bilingual content — an Arabic article/tool is a normal row with its
+       own slug and lang='ar', pointing back at the English row it's a
+       translation of (translation_of). The English row itself never sets
+       translation_of; its Arabic counterpart is found by reverse lookup. */
+    sh_ensure_column($pdo, 'articles', 'lang', "VARCHAR(5) NOT NULL DEFAULT 'en'");
+    sh_ensure_column($pdo, 'articles', 'translation_of', "INT NULL");
+    sh_ensure_column($pdo, 'tools', 'lang', "VARCHAR(5) NOT NULL DEFAULT 'en'");
+    sh_ensure_column($pdo, 'tools', 'translation_of', "INT NULL");
+
     /* Real citations/sources for E-E-A-T + AdSense trust signals — never
        fabricated, only filled in when an article actually cites something. */
     sh_ensure_column($pdo, 'articles', 'sources', "TEXT");

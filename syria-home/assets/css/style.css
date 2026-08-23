@@ -48,6 +48,9 @@ nav.main-nav a.active::after{content:'';position:absolute;left:13px;right:13px;b
 .header-cta:hover{opacity:.92;transform:translateY(-1px)}
 @media (max-width:900px){ .header-cta span{display:none} }
 @media (max-width:640px){ .header-cta{display:none} }
+.lang-switch{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ink-soft);padding:8px 12px;border-radius:99px;border:1px solid var(--line);white-space:nowrap;transition:border-color .15s,color .15s}
+.lang-switch:hover{border-color:var(--brand1);color:var(--brand1)}
+@media (max-width:640px){ .lang-switch span{display:none} }
 .hamburger{display:none;background:none;border:0;font-size:22px;cursor:pointer;color:var(--ink)}
 
 /* ── Hero / page header ── */
@@ -327,3 +330,23 @@ nav.main-nav a.active::after{content:'';position:absolute;left:13px;right:13px;b
 .replaces-badge{display:inline-flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;
   color:#15803d;border-radius:99px;padding:7px 16px;font-size:13.5px;margin:10px 0 0}
 .replaces-badge b{font-weight:800}
+
+/* ── Arabic / RTL ──
+   Flexbox layouts throughout this stylesheet use `gap` rather than manual
+   left/right margins, so most of the UI mirrors correctly just from
+   `direction:rtl` on the root. The overrides below only cover the spots
+   that use explicit left/right (absolute badges, list/blockquote indents,
+   icon margins) plus the Arabic webfont. */
+[dir="rtl"]{direction:rtl}
+[dir="rtl"] body{font-family:'Cairo','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Tahoma,Arial,sans-serif}
+[dir="rtl"] .article-body ul,[dir="rtl"] .article-body ol{padding-left:0;padding-right:1.3em}
+[dir="rtl"] .article-body blockquote{border-left:0;border-right:4px solid var(--brand1);border-radius:10px 0 0 10px}
+[dir="rtl"] .card .hero .badge{left:auto;right:10px}
+[dir="rtl"] .card .hero .trend{right:auto;left:10px}
+[dir="rtl"] .card .meta i{margin-right:0;margin-left:3px}
+[dir="rtl"] .tcard-rating b{margin-left:0;margin-right:4px}
+[dir="rtl"] .article-hero-photo .art-icon-overlay{left:auto;right:20px}
+[dir="rtl"] .product-card .badge-corner{left:auto;right:12px}
+[dir="rtl"] .product-card .art-icon{right:auto;left:14px}
+[dir="rtl"] nav.main-nav a.active::after{left:13px;right:13px}
+[dir="rtl"] .replaces-badge i,[dir="rtl"] .header-cta i,[dir="rtl"] .lang-switch i{margin-left:2px}
