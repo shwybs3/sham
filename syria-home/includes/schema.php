@@ -9,7 +9,7 @@ const SH_TABLES = [
     'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
     'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
     'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results', 'pages',
-    'index_log', 'ratings',
+    'index_log', 'ratings', 'coupons',
 ];
 
 /**
@@ -309,6 +309,25 @@ function sh_ensure_schema(PDO $pdo): void {
     sh_ensure_column($pdo, 'tools', 'premium_price', "DECIMAL(10,2) NOT NULL DEFAULT 3.00");
     sh_ensure_column($pdo, 'tools', 'tool_code', "LONGTEXT");
     sh_ensure_column($pdo, 'tools', 'replaces', "VARCHAR(200) DEFAULT ''");
+
+    /* Promo codes for the store. discount_type 'percent' or 'fixed'
+       (USD). product_id NULL = applies to every product. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS coupons (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      code VARCHAR(40) NOT NULL UNIQUE,
+      discount_type ENUM('percent','fixed') NOT NULL DEFAULT 'percent',
+      discount_value DECIMAL(10,2) NOT NULL DEFAULT 10,
+      product_id INT NULL,
+      max_uses INT NULL,
+      used_count INT NOT NULL DEFAULT 0,
+      expires_at DATETIME NULL,
+      status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
+    sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
 }
 
 /**

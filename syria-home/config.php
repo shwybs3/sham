@@ -85,5 +85,7 @@ require_once __DIR__ . '/includes/cpanel/SiteProvisioner.php';
 require_once __DIR__ . '/includes/image_fetcher.php';
 require_once __DIR__ . '/includes/indexnow.php';
 require_once __DIR__ . '/includes/ratings.php';
+require_once __DIR__ . '/includes/coupons.php';
+require_once __DIR__ . '/includes/content_expansion.php';
 require_once __DIR__ . '/includes/maintenance.php';
 sh_check_maintenance();

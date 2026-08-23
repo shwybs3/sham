@@ -150,6 +150,7 @@ function site_header(string $active = ''): void {
           <i class="fa-solid fa-magnifying-glass"></i>
           <input type="text" name="q" placeholder="Search articles &amp; tools...">
         </form>
+        <a href="<?= site_url('tools.php') ?>" class="header-cta"><i class="fa-solid fa-bolt"></i> <span>Free Tools</span></a>
         <button class="hamburger" id="navToggle" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
       </div>
     </header>
@@ -264,16 +265,30 @@ function tip_widget(string $label): void {
 }
 
 function tool_card(array $t): void {
+    $rating = rating_summary('tool', (int)$t['id']);
     ?>
-    <a class="card tool-card" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">
-      <div class="hero" style="<?= hero_style_css('g' . (((int)$t['id'] % 8) + 1)) ?>">
-        <i class="fa-solid <?= e($t['icon_class']) ?>"></i>
+    <a class="tcard" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">
+      <div class="tcard-top">
+        <span class="tcard-icon" style="<?= hero_style_css('g' . (((int)$t['id'] % 8) + 1)) ?>"><i class="fa-solid <?= e($t['icon_class']) ?>"></i></span>
+        <div class="tcard-heading">
+          <h3><?= e($t['name']) ?></h3>
+          <?php if ($rating['count'] >= 3): ?>
+            <span class="tcard-rating">
+              <?php for ($i = 1; $i <= 5; $i++): ?><i class="fa-solid fa-star<?= $i > round($rating['avg']) ? ' off' : '' ?>"></i><?php endfor; ?>
+              <b><?= number_format($rating['avg'], 1) ?></b>
+            </span>
+          <?php else: ?>
+            <span class="tcard-rating muted">Not yet rated</span>
+          <?php endif; ?>
+        </div>
       </div>
-      <div class="body">
-        <span class="cat">Free Tool</span>
-        <h3><?= e($t['name']) ?></h3>
-        <p><?= e($t['short_description']) ?></p>
-        <span class="cta">Open tool <i class="fa-solid fa-arrow-right"></i></span>
+      <p class="tcard-desc"><?= e($t['short_description']) ?></p>
+      <div class="tcard-foot">
+        <span class="tcard-badges">
+          <span class="pill pill-free">FREE</span>
+          <?php if ((int)($t['uses_count'] ?? 0) > 0): ?><span class="pill pill-views"><i class="fa-regular fa-eye"></i> <?= number_format((int)$t['uses_count']) ?></span><?php endif; ?>
+        </span>
+        <span class="tcard-cta">Visit Tool <i class="fa-solid fa-arrow-right"></i></span>
       </div>
     </a>
     <?php

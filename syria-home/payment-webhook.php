@@ -45,6 +45,8 @@ $pdo->prepare("UPDATE payments SET status = ?, actually_paid = ?, raw_ipn_json =
 $isConfirmed = in_array($paymentStatus, ['finished', 'confirmed'], true)
     && $actuallyPaid >= ((float)$payment['pay_amount'] * 0.98);
 if ($isConfirmed) {
+    if (!empty($payment['coupon_code'])) coupon_record_use($payment['coupon_code']);
+
     switch ($payment['reference_type']) {
         case 'product':
             $product = null;
