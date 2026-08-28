@@ -1,51 +1,173 @@
 <?php
+/* ═══════════════════════════════════════════
+   sitemap.xml
+   كل تطبيق بحالة "published" يُدرج في الخريطة
+   — تقييم الجودة (Layos) للإرشاد فقط وليس بوابة
+   ═══════════════════════════════════════════ */
 require_once __DIR__ . '/config.php';
 header('Content-Type: application/xml; charset=utf-8');
+// X-Robots-Tag: noindex أُزيل عمداً — يجعل Search Console يُبلّغ عن الصفحة
+// كـ"مُستبعدة بواسطة noindex" دون أي فائدة فعلية.
+// 1-hour public cache so bots don't hammer the DB
+header('Cache-Control: public, max-age=3600, s-maxage=3600');
 
-$apps = $pdo->query("SELECT slug, updated_at FROM apps WHERE status='published'")->fetchAll();
-$cats = $pdo->query("SELECT slug FROM categories")->fetchAll();
-$developers = $pdo->query("SELECT DISTINCT developer FROM apps WHERE status='published' AND developer IS NOT NULL AND developer<>''")->fetchAll(PDO::FETCH_COLUMN);
-$articles = $pdo->query("SELECT ar.slug, ar.created_at FROM app_articles ar JOIN apps a ON ar.app_id=a.id WHERE a.status='published'")->fetchAll();
-$blogPosts = $pdo->query("SELECT slug, updated_at FROM blog_posts WHERE status='published'")->fetchAll();
+// ── كل التطبيقات المنشورة بدون استثناء ──
+$apps = [];
+try {
+    $apps = $pdo->query(
+        "SELECT id, slug, name, seo_title, meta_description,
+                icon_path, download_url, updated_at
+         FROM apps
+         WHERE status='published' AND (parent_id IS NULL OR parent_id=0)
+         ORDER BY updated_at DESC"
+    )->fetchAll();
+} catch (\Throwable $e) {
+    // parent_id column may not exist on older installs — retry without it
+    try {
+        $apps = $pdo->query(
+            "SELECT id, slug, name, seo_title, meta_description,
+                    icon_path, download_url, updated_at
+             FROM apps WHERE status='published'
+             ORDER BY updated_at DESC"
+        )->fetchAll();
+    } catch (\Throwable $e2) { $apps = []; }
+}
+
+// ── التصنيفات التي فيها تطبيقات مقبولة ──
+$cats = [];
+try {
+    $cats = $pdo->query(
+        "SELECT DISTINCT c.slug
+         FROM categories c
+         INNER JOIN apps a ON a.category_id = c.id AND a.status='published'
+         WHERE c.slug IS NOT NULL AND c.slug <> ''"
+    )->fetchAll();
+} catch (\Throwable $e) { $cats = []; }
+
+// ── المطورون ──
+$developers = [];
+try {
+    $developers = $pdo->query(
+        "SELECT DISTINCT developer FROM apps
+         WHERE status='published' AND developer IS NOT NULL AND developer <> ''
+         LIMIT 50"
+    )->fetchAll(PDO::FETCH_COLUMN);
+} catch (\Throwable $e) { $developers = []; }
+
+// ── مقالات التطبيقات (app_articles) ──
+$appArticles = [];
+try {
+    $appArticles = $pdo->query(
+        "SELECT ar.slug, ar.created_at FROM app_articles ar
+         JOIN apps a ON a.id = ar.app_id
+         WHERE a.status='published' ORDER BY ar.created_at DESC LIMIT 500"
+    )->fetchAll();
+} catch (\Throwable $e) { $appArticles = []; }
+
+// ── مقالات المدونة ──
+$blogPosts = [];
+try {
+    $blogPosts = $pdo->query(
+        "SELECT slug, updated_at FROM blog_posts
+         WHERE status='published' ORDER BY updated_at DESC LIMIT 500"
+    )->fetchAll();
+} catch (\Throwable $e) { $blogPosts = []; }
+
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+  <!-- الصفحات الثابتة -->
   <url><loc><?= SITE_URL ?>/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
   <url><loc><?= SITE_URL ?>/top?by=downloads</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc><?= SITE_URL ?>/top?by=views</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc><?= SITE_URL ?>/updates</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
-  <url><loc><?= SITE_URL ?>/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
-  <url><loc><?= SITE_URL ?>/contact</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc><?= SITE_URL ?>/blog</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/exchange</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/gold</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc><?= SITE_URL ?>/calculators</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/solar</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc><?= SITE_URL ?>/tools/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc><?= SITE_URL ?>/about</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
   <url><loc><?= SITE_URL ?>/privacy-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc><?= SITE_URL ?>/terms</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-  <url><loc><?= SITE_URL ?>/cookie-policy</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-  <url><loc><?= SITE_URL ?>/dmca</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+
+  <!-- التصنيفات -->
   <?php foreach ($cats as $c): ?>
-  <url><loc><?= SITE_URL ?>/category/<?= rawurlencode($c['slug']) ?></loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url>
+    <loc><?= SITE_URL ?>/category/<?= rawurlencode($c['slug']) ?></loc>
+    <changefreq>daily</changefreq><priority>0.7</priority>
+  </url>
   <?php endforeach; ?>
+
+  <!-- المطورون -->
   <?php foreach ($developers as $d): ?>
-  <url><loc><?= SITE_URL ?>/developer/<?= rawurlencode($d) ?></loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url>
+    <loc><?= SITE_URL ?>/developer/<?= rawurlencode($d) ?></loc>
+    <changefreq>weekly</changefreq><priority>0.5</priority>
+  </url>
   <?php endforeach; ?>
+
+  <!-- التطبيقات المقبولة من Layos (≥50٪) -->
   <?php foreach ($apps as $a): ?>
   <url>
     <loc><?= h(app_url($a['slug'])) ?></loc>
-    <lastmod><?= date('Y-m-d', strtotime($a['updated_at'])) ?></lastmod>
-    <changefreq>weekly</changefreq><priority>0.8</priority>
+    <lastmod><?= date('Y-m-d', strtotime($a['updated_at'] ?: 'now')) ?></lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <?php if (!empty($a['icon_path'])): ?>
+    <image:image>
+      <image:loc><?= h(media_url($a['icon_path'])) ?></image:loc>
+      <image:title><?= h($a['name']) ?></image:title>
+    </image:image>
+    <?php endif; ?>
   </url>
   <?php endforeach; ?>
-  <?php foreach ($articles as $art): ?>
+
+  <!-- مقالات التطبيقات (app_articles) -->
+  <?php foreach ($appArticles as $art): ?>
   <url>
     <loc><?= h(article_url($art['slug'])) ?></loc>
-    <lastmod><?= date('Y-m-d', strtotime($art['created_at'])) ?></lastmod>
-    <changefreq>monthly</changefreq><priority>0.5</priority>
-  </url>
-  <?php endforeach; ?>
-  <url><loc><?= SITE_URL ?>/blog.php</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <?php foreach ($blogPosts as $bp): ?>
-  <url>
-    <loc><?= h(blog_post_url($bp['slug'])) ?></loc>
-    <lastmod><?= date('Y-m-d', strtotime($bp['updated_at'])) ?></lastmod>
+    <lastmod><?= date('Y-m-d', strtotime($art['created_at'] ?: 'now')) ?></lastmod>
     <changefreq>monthly</changefreq><priority>0.6</priority>
   </url>
   <?php endforeach; ?>
+
+  <!-- مقالات المدونة الرئيسية -->
+  <?php foreach ($blogPosts as $bp): ?>
+  <url>
+    <loc><?= h(blog_post_url($bp['slug'])) ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($bp['updated_at'] ?: 'now')) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.6</priority>
+  </url>
+  <?php endforeach; ?>
+
+  <!-- أدوات الويب المنشورة -->
+  <?php
+  $webTools = [];
+  try {
+    $webTools = $pdo->query(
+      "SELECT slug, name, updated_at FROM web_tools
+       WHERE status='published' ORDER BY updated_at DESC LIMIT 500"
+    )->fetchAll();
+  } catch (\Throwable $e) { $webTools = []; }
+  // Determine tools base URL
+  $toolsBase = defined('TOOLS_BASE_URL') ? TOOLS_BASE_URL : SITE_URL;
+  foreach ($webTools as $wt):
+  ?>
+  <url>
+    <loc><?= h($toolsBase . '/tools/' . rawurlencode($wt['slug']) . '/') ?></loc>
+    <lastmod><?= date('Y-m-d', strtotime($wt['updated_at'] ?: 'now')) ?></lastmod>
+    <changefreq>monthly</changefreq><priority>0.7</priority>
+  </url>
+  <?php endforeach; ?>
+
+  <!-- صفحات فئات الأدوات -->
+  <?php foreach (['ai','pdf','network','image','developer','security','seo','text'] as $catSlug): ?>
+  <url><loc><?= h($toolsBase . '/tools/category/' . $catSlug . '/') ?></loc><changefreq>weekly</changefreq><priority>0.75</priority></url>
+  <?php endforeach; ?>
+
+  <!-- ياسمين للمحادثة الذكاء الاصطناعي -->
+  <url><loc><?= h($toolsBase . '/tools/chat/') ?></loc><changefreq>weekly</changefreq><priority>0.85</priority></url>
+
 </urlset>
