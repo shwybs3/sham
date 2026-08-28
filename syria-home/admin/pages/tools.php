@@ -1,5 +1,6 @@
 <?php
 $cats = $pdo->query("SELECT * FROM categories WHERE type='tool' ORDER BY name")->fetchAll();
+$enTools = $pdo->query("SELECT id, name FROM tools WHERE lang='en' ORDER BY name")->fetchAll();
 $msg = null;
 
 if (isset($_GET['delete']) && csrf_check_get()) {
@@ -15,6 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'seed_
     seed_pro_tools($pdo);
     $added = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn() - $before;
     $msg = ['ok', $added > 0 ? "$added pro tools added." : 'All pro tools were already installed.'];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'seed_pro2' && csrf_check()) {
+    require_once __DIR__ . '/../../seed/seed_tools_pro2.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn();
+    seed_tools_pro2($pdo);
+    $added = (int)$pdo->query("SELECT COUNT(*) FROM tools")->fetchColumn() - $before;
+    $msg = ['ok', $added > 0 ? "$added more pro tools added." : 'This tool set was already installed.'];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save' && csrf_check()) {
@@ -41,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             'affiliate_url' => trim($_POST['affiliate_url'] ?? ''),
             'tool_code'     => $_POST['tool_code'] ?? '',
             'replaces'      => trim($_POST['replaces'] ?? ''),
+            'lang' => in_array($_POST['lang'] ?? 'en', ['en', 'ar'], true) ? $_POST['lang'] : 'en',
+            'translation_of' => ($_POST['translation_of'] ?? '') !== '' ? (int)$_POST['translation_of'] : null,
         ];
         if ($id) {
             $sql = "UPDATE tools SET " . implode(',', array_map(fn($k) => "$k = :$k", array_keys($fields))) . " WHERE id = :id";
@@ -76,15 +87,20 @@ $showForm = isset($_GET['new']) || $editing;
           <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="action" value="seed_pro">
           <button class="btn gray sm" type="submit"><i class="fa-solid fa-download"></i> Install pro tool set</button>
         </form>
+        <form method="post" style="margin:0">
+          <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="action" value="seed_pro2">
+          <button class="btn gray sm" type="submit"><i class="fa-solid fa-download"></i> Install pro tool set 2</button>
+        </form>
         <a class="btn sm" href="?page=tools&new=1"><i class="fa-solid fa-plus"></i> New tool</a>
       </div>
     </div>
     <p class="hint" style="margin-bottom:14px">The pro set adds 20 tools covering what paid services normally charge for — background removal, PDF building, transcription, SEO analysis and more. Every one is an original implementation that runs in the visitor's browser.</p>
     <table>
-      <tr><th>Name</th><th>Engine</th><th>Slug</th><th>Status</th><th>Uses</th><th></th></tr>
+      <tr><th>Name</th><th>Lang</th><th>Engine</th><th>Slug</th><th>Status</th><th>Uses</th><th></th></tr>
       <?php foreach ($pdo->query("SELECT * FROM tools ORDER BY id DESC") as $t): ?>
       <tr>
         <td><i class="fa-solid <?= e($t['icon_class']) ?>"></i> <?= e($t['name']) ?></td>
+        <td><?= ($t['lang'] ?? 'en') === 'ar' ? '<span class="badge warn">AR</span>' : '<span class="badge off">EN</span>' ?></td>
         <td><?= e(TOOL_REGISTRY[$t['tool_key']]['name'] ?? $t['tool_key']) ?></td>
         <td><code><?= e($t['slug']) ?></code></td>
         <td><?= $t['status'] === 'published' ? '<span class="badge ok">Live</span>' : '<span class="badge off">Draft</span>' ?></td>
@@ -107,6 +123,24 @@ $showForm = isset($_GET['new']) || $editing;
       <div class="row2">
         <div><label>Tool name</label><input type="text" name="name" value="<?= e($editing['name'] ?? '') ?>" required></div>
         <div><label>Slug (leave blank to auto-generate)</label><input type="text" name="slug" value="<?= e($editing['slug'] ?? '') ?>"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>Language</label>
+          <select name="lang">
+            <option value="en" <?= ($editing['lang'] ?? 'en') === 'en' ? 'selected' : '' ?>>English</option>
+            <option value="ar" <?= ($editing['lang'] ?? 'en') === 'ar' ? 'selected' : '' ?>>العربية (Arabic)</option>
+          </select>
+        </div>
+        <div><label>Translation of (for an Arabic version — pick the English original)</label>
+          <select name="translation_of">
+            <option value="">— None / this is the original —</option>
+            <?php foreach ($enTools as $et): if ($et['id'] == ($editing['id'] ?? 0)) continue; ?>
+              <option value="<?= $et['id'] ?>" <?= (int)($editing['translation_of'] ?? 0) === (int)$et['id'] ? 'selected' : '' ?>><?= e($et['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <p class="hint">Links this row as the Arabic translation of an existing tool page — powers the language switcher and hreflang tags.</p>
+        </div>
       </div>
 
       <div class="row2">

@@ -9,7 +9,7 @@ const SH_TABLES = [
     'admins', 'settings', 'categories', 'articles', 'tools', 'google_tokens',
     'ai_activity_log', 'products', 'orders', 'contact_messages', 'admin_login_attempts',
     'payments', 'unlocks', 'subsites', 'article_schema_blocks', 'link_check_results', 'pages',
-    'index_log', 'ratings', 'coupons',
+    'index_log', 'ratings', 'coupons', 'apps',
 ];
 
 /**
@@ -328,6 +328,53 @@ function sh_ensure_schema(PDO $pdo): void {
 
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
+
+    /* App directory — paste a Google Play Store link, the icon and
+       screenshots get fetched once and stored locally forever (same
+       fetch-and-compress pattern as article/tool hero images), so the
+       public page never hotlinks Google's CDN. */
+    $pdo->exec("CREATE TABLE IF NOT EXISTS apps (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      slug VARCHAR(220) NOT NULL UNIQUE,
+      play_store_url VARCHAR(500) NOT NULL,
+      developer VARCHAR(200) DEFAULT '',
+      category VARCHAR(120) DEFAULT '',
+      icon_path VARCHAR(300) DEFAULT '',
+      short_description VARCHAR(400) DEFAULT '',
+      full_description LONGTEXT,
+      screenshots TEXT,
+      meta_title VARCHAR(220) DEFAULT '',
+      meta_description VARCHAR(400) DEFAULT '',
+      status ENUM('published','draft') NOT NULL DEFAULT 'published',
+      views INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    /* Bilingual content — an Arabic article/tool is a normal row with its
+       own slug and lang='ar', pointing back at the English row it's a
+       translation of (translation_of). The English row itself never sets
+       translation_of; its Arabic counterpart is found by reverse lookup. */
+    sh_ensure_column($pdo, 'articles', 'lang', "VARCHAR(5) NOT NULL DEFAULT 'en'");
+    sh_ensure_column($pdo, 'articles', 'translation_of', "INT NULL");
+    sh_ensure_column($pdo, 'tools', 'lang', "VARCHAR(5) NOT NULL DEFAULT 'en'");
+    sh_ensure_column($pdo, 'tools', 'translation_of', "INT NULL");
+
+    /* Real citations/sources for E-E-A-T + AdSense trust signals — never
+       fabricated, only filled in when an article actually cites something. */
+    sh_ensure_column($pdo, 'articles', 'sources', "TEXT");
+
+    /* Cross-domain "network" footer — a JSON list of {name,url,tagline,color}
+       shown on every domain in the family so visitors can hop between them. */
+    $pdo->exec("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('network_sites', " . $pdo->quote(json_encode([
+        ['name' => 'Yassota.com',        'url' => 'https://yassota.com',          'tagline' => 'The main hub — every site in the network', 'color' => '#0f172a'],
+        ['name' => 'Blogs Yassota',      'url' => 'https://syria-home.yassota.com', 'tagline' => 'Articles, tutorials, news & comparisons', 'color' => '#2563eb'],
+        ['name' => 'Indexing Yassota',   'url' => 'https://indexing.yassota.com', 'tagline' => 'Fast search-engine indexing tools', 'color' => '#7c3aed'],
+        ['name' => 'Yassota Trends',     'url' => 'https://trends.yassota.com',   'tagline' => 'What is trending right now', 'color' => '#16a34a'],
+        ['name' => 'Yassota Chat',       'url' => 'https://chat.yassota.com',     'tagline' => 'Free AI chat assistant', 'color' => '#dc2626'],
+    ])) . ")");
 }
 
 /**

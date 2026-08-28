@@ -39,8 +39,10 @@ function indexnow_key(bool $autoCreate = true): string {
 
 /**
  * Writes /{key}.txt to the webroot — IndexNow requires this file to
- * contain exactly the key, proving you control the host.
- * Returns the public URL of the key file, or '' if it couldn't be written.
+ * contain exactly the key, proving you control the host. Also writes a
+ * plain, extension-less /{key} copy: some validators (and manual checks)
+ * probe the bare key path instead of the .txt one, so both are published.
+ * Returns the public URL of the .txt key file, or '' if it couldn't be written.
  */
 function indexnow_keyfile(): string {
     $key = indexnow_key();
@@ -48,6 +50,10 @@ function indexnow_keyfile(): string {
     $path = ROOT_PATH . '/' . $key . '.txt';
     if (!file_exists($path) || trim((string)@file_get_contents($path)) !== $key) {
         if (@file_put_contents($path, $key) === false) return '';
+    }
+    $bare = ROOT_PATH . '/' . $key;
+    if (!file_exists($bare) || trim((string)@file_get_contents($bare)) !== $key) {
+        @file_put_contents($bare, $key);
     }
     return rtrim(SITE_URL, '/') . '/' . $key . '.txt';
 }

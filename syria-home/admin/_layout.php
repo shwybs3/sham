@@ -93,6 +93,8 @@ const ADMIN_NAV = [
     'categories' => ['Categories', 'fa-tags'],
     'pages' => ['Static Pages', 'fa-file-lines'],
     'content-expansion' => ['Content Expansion', 'fa-arrows-up-down-left-right'],
+    'arabic-content' => ['Arabic Content', 'fa-language'],
+    'apps' => ['App Directory', 'fa-mobile-screen'],
     'products' => ['Store Products', 'fa-store'],
     'coupons' => ['Promo Codes', 'fa-ticket'],
     'orders' => ['Orders & Payments', 'fa-inbox'],
@@ -101,6 +103,7 @@ const ADMIN_NAV = [
     'link-checker' => ['Broken Link Checker', 'fa-link-slash'],
     'subsites' => ['Subdomain Sites', 'fa-sitemap'],
     'ai-assistant' => ['AI Assistant', 'fa-robot'],
+    'agent-console' => ['Agent Console', 'fa-terminal'],
     'insights' => ['Google Insights', 'fa-chart-line'],
     'settings' => ['Settings', 'fa-gear'],
 ];
@@ -110,11 +113,11 @@ function admin_sidebar(string $active): void {
     <aside class="sidebar" id="adminSidebar" onclick="if(event.target.closest('a')) shCloseSidebar()">
       <div class="brand"><span><i class="fa-solid fa-layer-group"></i></span> <?= e(setting('site_name', 'Syria Home')) ?></div>
       <div class="grp">Content</div>
-      <?php foreach (['dashboard','articles','tools','categories','pages','content-expansion'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['dashboard','articles','tools','categories','pages','content-expansion','arabic-content'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Store</div>
-      <?php foreach (['products','coupons','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['apps','products','coupons','orders'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Growth</div>
@@ -122,7 +125,7 @@ function admin_sidebar(string $active): void {
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">Intelligence</div>
-      <?php foreach (['ai-assistant','insights'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
+      <?php foreach (['ai-assistant','agent-console','insights'] as $k): [$label,$icon] = ADMIN_NAV[$k]; ?>
         <a class="<?= $active === $k ? 'active' : '' ?>" href="?page=<?= $k ?>"><i class="fa-solid <?= $icon ?>"></i> <?= $label ?></a>
       <?php endforeach; ?>
       <div class="grp">System</div>

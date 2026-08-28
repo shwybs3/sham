@@ -1,5 +1,6 @@
 <?php
 $cats = $pdo->query("SELECT * FROM categories WHERE type='article' ORDER BY name")->fetchAll();
+$enArticles = $pdo->query("SELECT id, title FROM articles WHERE lang='en' ORDER BY title")->fetchAll();
 $msg = null;
 
 /* ── Delete ── */
@@ -28,6 +29,42 @@ if (isset($_GET['add_bonus']) && csrf_check_get()) {
     require_once __DIR__ . '/../../seed/seed_bonus_articles.php';
     $added = seed_bonus_articles($pdo);
     header('Location: ?page=articles&bonus_added=' . $added); exit;
+}
+
+/* ── One-click: add the second wave of original long-form articles ── */
+if (isset($_GET['add_wave2']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_articles_batch2.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    seed_articles_batch2($pdo);
+    $wave2Added = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn() - $before;
+    header('Location: ?page=articles&wave2_added=' . $wave2Added); exit;
+}
+
+/* ── One-click: add the third wave of original long-form articles ── */
+if (isset($_GET['add_wave3']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_articles_batch3.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    seed_articles_batch3($pdo);
+    $wave3Added = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn() - $before;
+    header('Location: ?page=articles&wave3_added=' . $wave3Added); exit;
+}
+
+/* ── One-click: add the fourth wave of original long-form articles ── */
+if (isset($_GET['add_wave4']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_articles_batch4.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    seed_articles_batch4($pdo);
+    $wave4Added = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn() - $before;
+    header('Location: ?page=articles&wave4_added=' . $wave4Added); exit;
+}
+
+/* ── One-click: add the standalone "Gemini AI image generation" Arabic article ── */
+if (isset($_GET['add_gemini_article']) && csrf_check_get()) {
+    require_once __DIR__ . '/../../seed/seed_article_gemini_images_ar.php';
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
+    seed_article_gemini_images_ar($pdo);
+    $geminiAdded = (int)$pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn() - $before;
+    header('Location: ?page=articles&gemini_added=' . $geminiAdded); exit;
 }
 
 /* ── Schema Generator: add/delete extra JSON-LD blocks on an article ── */
@@ -136,6 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'meta_description' => trim($_POST['meta_description'] ?? ''),
         'meta_keywords' => trim($_POST['meta_keywords'] ?? ''),
         'tags' => trim($_POST['tags'] ?? ''),
+        'sources' => trim($_POST['sources'] ?? ''),
         'author' => trim($_POST['author'] ?? '') ?: 'Editorial Team',
         'status' => $_POST['status'] ?? 'draft',
         'trending' => isset($_POST['trending']) ? 1 : 0,
@@ -143,6 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         'premium_price' => (float)($_POST['premium_price'] ?? 3),
         'auto_link' => isset($_POST['auto_link']) ? 1 : 0,
         'reading_time' => reading_time_from_html($body),
+        'lang' => in_array($_POST['lang'] ?? 'en', ['en', 'ar'], true) ? $_POST['lang'] : 'en',
+        'translation_of' => ($_POST['translation_of'] ?? '') !== '' ? (int)$_POST['translation_of'] : null,
     ];
     if ($title === '') {
         $msg = ['err', 'Title is required.'];
@@ -205,6 +245,10 @@ if ($draft && !$editing) {
 <?php if (isset($_GET['saved'])): flash('ok', 'Article saved.'); endif; ?>
 <?php if (isset($_GET['shortened'])): flash('ok', (int)$_GET['shortened'] . ' slug(s) shortened.'); endif; ?>
 <?php if (isset($_GET['bonus_added'])): flash('ok', (int)$_GET['bonus_added'] > 0 ? (int)$_GET['bonus_added'] . ' starter article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
+<?php if (isset($_GET['wave2_added'])): flash('ok', (int)$_GET['wave2_added'] > 0 ? (int)$_GET['wave2_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
+<?php if (isset($_GET['wave3_added'])): flash('ok', (int)$_GET['wave3_added'] > 0 ? (int)$_GET['wave3_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
+<?php if (isset($_GET['wave4_added'])): flash('ok', (int)$_GET['wave4_added'] > 0 ? (int)$_GET['wave4_added'] . ' new article(s) added.' : 'Already added — nothing new to add.'); endif; ?>
+<?php if (isset($_GET['gemini_added'])): flash('ok', (int)$_GET['gemini_added'] > 0 ? 'Gemini article added.' : 'Already added — nothing new to add.'); endif; ?>
 <?php if ($msg): flash($msg[0] === 'ok' ? 'ok' : 'err', $msg[1]); endif; ?>
 
 <?php
@@ -220,6 +264,10 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
       <h3 style="margin:0">All articles</h3>
       <div style="display:flex;gap:8px">
         <a class="btn gray sm" href="?page=articles&add_bonus=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-star"></i> Add starter marketing articles</a>
+        <a class="btn gray sm" href="?page=articles&add_wave2=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles</a>
+        <a class="btn gray sm" href="?page=articles&add_wave3=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles 2</a>
+        <a class="btn gray sm" href="?page=articles&add_wave4=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-newspaper"></i> Add more articles 3</a>
+        <a class="btn gray sm" href="?page=articles&add_gemini_article=1&csrf=<?= csrf_token() ?>"><i class="fa-solid fa-wand-magic-sparkles"></i> Add Gemini AI images article (AR)</a>
         <a class="btn gray sm" href="#ai-generate" onclick="document.getElementById('aiBox').style.display='block'"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate with AI</a>
         <a class="btn sm" href="?page=articles&new=1"><i class="fa-solid fa-plus"></i> New article</a>
       </div>
@@ -245,14 +293,15 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
     </div>
 
     <table>
-      <tr><th>Title</th><th>Type</th><th>Status</th><th>Trending</th><th>Views</th><th>Date</th><th></th></tr>
+      <tr><th>Title</th><th>Lang</th><th>Type</th><th>Status</th><th>Trending</th><th>Views</th><th>Date</th><th></th></tr>
       <?php
       try {
-          $allArticles = $pdo->query("SELECT id,title,slug,content_type,status,trending,views,published_at FROM articles ORDER BY created_at DESC")->fetchAll();
-      } catch (PDOException $e) { $allArticles = []; echo '<tr><td colspan="7" style="color:#dc2626">DB error: ' . e($e->getMessage()) . '</td></tr>'; }
+          $allArticles = $pdo->query("SELECT id,title,slug,content_type,status,trending,views,published_at,lang FROM articles ORDER BY created_at DESC")->fetchAll();
+      } catch (PDOException $e) { $allArticles = []; echo '<tr><td colspan="8" style="color:#dc2626">DB error: ' . e($e->getMessage()) . '</td></tr>'; }
       foreach ($allArticles as $a): ?>
       <tr>
         <td><?= e($a['title']) ?></td>
+        <td><?= ($a['lang'] ?? 'en') === 'ar' ? '<span class="badge warn">AR</span>' : '<span class="badge off">EN</span>' ?></td>
         <td><?= e(ucfirst($a['content_type'])) ?></td>
         <td><?= $a['status'] === 'published' ? '<span class="badge ok">Published</span>' : '<span class="badge off">Draft</span>' ?></td>
         <td><?= $a['trending'] ? '<i class="fa-solid fa-fire" style="color:#f43f5e"></i>' : '—' ?></td>
@@ -277,6 +326,24 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
       <div class="row2">
         <div><label>Title</label><input type="text" name="title" id="seoTitle" value="<?= e($editing['title'] ?? '') ?>" required></div>
         <div><label>Slug (leave blank to auto-generate)</label><input type="text" name="slug" value="<?= e($editing['slug'] ?? '') ?>"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>Language</label>
+          <select name="lang">
+            <option value="en" <?= ($editing['lang'] ?? 'en') === 'en' ? 'selected' : '' ?>>English</option>
+            <option value="ar" <?= ($editing['lang'] ?? 'en') === 'ar' ? 'selected' : '' ?>>العربية (Arabic)</option>
+          </select>
+        </div>
+        <div><label>Translation of (for an Arabic version — pick the English original)</label>
+          <select name="translation_of">
+            <option value="">— None / this is the original —</option>
+            <?php foreach ($enArticles as $ea): if ($ea['id'] == ($editing['id'] ?? 0)) continue; ?>
+              <option value="<?= $ea['id'] ?>" <?= (int)($editing['translation_of'] ?? 0) === (int)$ea['id'] ? 'selected' : '' ?>><?= e($ea['title']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <p class="hint">Links this row as the Arabic (or other) translation of an existing English article — powers the language switcher and hreflang tags on the public page.</p>
+        </div>
       </div>
 
       <div class="row2">
@@ -329,6 +396,8 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
       <label>Meta description</label><textarea name="meta_description" id="seoMetaDesc" style="min-height:60px"><?= e($editing['meta_description'] ?? '') ?></textarea>
       <label>Meta keywords (comma separated)</label><input type="text" name="meta_keywords" id="seoKeywords" value="<?= e($editing['meta_keywords'] ?? '') ?>">
       <label>Tags (comma separated)</label><input type="text" name="tags" value="<?= e($editing['tags'] ?? '') ?>">
+      <label>Sources (one per line: "Title | https://url" — shown as a real "Sources" section on the article; leave blank if none)</label>
+      <textarea name="sources" rows="4" placeholder="Example: World Health Organization | https://who.int/..."><?= e($editing['sources'] ?? '') ?></textarea>
 
       <div class="card" style="background:#f8f9ff;margin-top:16px">
         <div style="display:flex;align-items:center;gap:14px">
@@ -365,6 +434,30 @@ $longSlugCount = (int)$pdo->query("SELECT COUNT(*) FROM articles WHERE CHAR_LENG
   </div>
 
   <?php if ($editing && $editing['id']): ?>
+  <div class="card">
+    <h3 style="margin-top:0"><i class="fa-solid fa-share-nodes"></i> Share Kit</h3>
+    <p class="hint">Ready-to-paste posts about this article, in its own language — copy one straight into social media, another site's comment section, or anywhere else you want to talk about it and drop the link.</p>
+    <?php
+    $shareUrl = site_url((($editing['lang'] ?? 'en') === 'ar' ? 'ar/article/' : 'article/') . $editing['slug']);
+    foreach (share_kit_variants($editing, $shareUrl, $editing['lang'] ?? 'en') as $i => $variant):
+    ?>
+      <div style="margin-bottom:14px">
+        <label style="margin-bottom:4px"><?= e($variant['label']) ?></label>
+        <textarea readonly id="shareKit<?= $i ?>" style="min-height:70px;font-size:13px"><?= e($variant['text']) ?></textarea>
+        <button type="button" class="btn gray sm" style="margin-top:6px" onclick="shCopyShareKit(<?= $i ?>, this)"><i class="fa-regular fa-copy"></i> Copy</button>
+      </div>
+    <?php endforeach; ?>
+  </div>
+  <script>
+  function shCopyShareKit(i, btn) {
+    var ta = document.getElementById('shareKit' + i);
+    navigator.clipboard.writeText(ta.value).then(function () {
+      var old = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+      setTimeout(function () { btn.innerHTML = old; }, 1500);
+    });
+  }
+  </script>
+
   <div class="card">
     <h3 style="margin-top:0"><i class="fa-solid fa-diagram-project"></i> Schema Generator</h3>
     <p class="hint">Add extra structured data to this article — shown alongside its automatic Article schema, and eligible for rich results in Google (FAQ accordions, how-to steps, star ratings).</p>

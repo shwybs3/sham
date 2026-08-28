@@ -2,13 +2,24 @@ RewriteEngine On
 
 # Friendly URLs
 RewriteRule ^robots\.txt$ robots.php [L]
+RewriteRule ^llms\.txt$ llms.php [L]
 RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteRule ^feed\.xml$ feed.php [L,QSA]
 RewriteRule ^ads\.txt$ ads.php [L]
 RewriteRule ^article/([a-z0-9-]+)/?$ article.php?slug=$1 [L,QSA]
 RewriteRule ^tool/([a-z0-9-]+)/?$ tool.php?slug=$1 [L,QSA]
 RewriteRule ^product/([a-z0-9-]+)/?$ product.php?slug=$1 [L,QSA]
+RewriteRule ^app/([a-z0-9-]+)/?$ app.php?slug=$1 [L,QSA]
 RewriteRule ^category/([a-z0-9-]+)/?$ category.php?slug=$1 [L,QSA]
 RewriteRule ^p/([a-z0-9-]+)/?$ page.php?slug=$1 [L,QSA]
+
+# Arabic section — same pages, filtered/rendered in Arabic (see is_ar_request())
+RewriteRule ^ar/article/([a-z0-9-]+)/?$ article.php?slug=$1 [L,QSA]
+RewriteRule ^ar/tool/([a-z0-9-]+)/?$ tool.php?slug=$1 [L,QSA]
+RewriteRule ^ar/category/([a-z0-9-]+)/?$ category.php?slug=$1&lang=ar [L,QSA]
+RewriteRule ^ar/articles/?$ articles.php?lang=ar [L,QSA]
+RewriteRule ^ar/tools/?$ tools.php?lang=ar [L,QSA]
+RewriteRule ^ar/?$ index.php?lang=ar [L,QSA]
 
 # Never serve source/config/data files directly
 <FilesMatch "\.(sql|log|md)$">

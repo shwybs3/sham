@@ -78,6 +78,24 @@ function site_url(string $path = ''): string {
     return rtrim(SITE_URL, '/') . '/' . ltrim($path, '/');
 }
 
+/** True when this request is browsing the Arabic section — either an
+ *  /ar/-prefixed pretty URL, or the ?lang=ar query param those rewrite to. */
+function is_ar_request(): bool {
+    static $ar = null;
+    if ($ar === null) {
+        $ar = ($_GET['lang'] ?? '') === 'ar' || (bool)preg_match('~^/ar(/|$|\?)~', $_SERVER['REQUEST_URI'] ?? '');
+    }
+    return $ar;
+}
+
+/** English/Arabic UI string picker for chrome text that isn't stored in the
+ *  DB (nav labels, breadcrumbs, buttons). Pass $lang explicitly when it's
+ *  known from a content row (e.g. $article['lang']); otherwise it falls
+ *  back to the current request's language. */
+function t(string $en, string $ar, ?string $lang = null): string {
+    return ($lang ?? (is_ar_request() ? 'ar' : 'en')) === 'ar' ? $ar : $en;
+}
+
 /* Original CSS-only "hero" graphic per article/tool — avoids any copyright
    risk from stock/AI photo sourcing and keeps every page 100% self-contained. */
 const HERO_GRADIENTS = [
@@ -189,4 +207,60 @@ function log_ai_activity(string $action, string $targetType, ?int $targetId, str
     global $pdo;
     $stmt = $pdo->prepare("INSERT INTO ai_activity_log (actor, action, target_type, target_id, summary) VALUES ('gemini', ?, ?, ?, ?)");
     $stmt->execute([$action, $targetType, $targetId, $summary]);
+}
+
+/** Turns tags/keywords into a handful of #Hashtags (CamelCase, no spaces). */
+function share_kit_hashtags(string $tagsCsv, int $limit = 4): string {
+    $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
+    $tags = array_slice($tags, 0, $limit);
+    $out = [];
+    foreach ($tags as $tag) {
+        $words = preg_split('~[\s\-]+~u', $tag, -1, PREG_SPLIT_NO_EMPTY);
+        $camel = implode('', array_map(fn($w) => mb_strtoupper(mb_substr($w, 0, 1)) . mb_substr($w, 1), $words));
+        if ($camel !== '') $out[] = '#' . $camel;
+    }
+    return implode(' ', $out);
+}
+
+/** BreadcrumbList structured data — matches the visible breadcrumb trail on
+ *  article/tool/category pages, so Google can show the breadcrumb rich
+ *  result instead of a raw URL. $crumbs = [['name'=>..,'url'=>..], ...]. */
+function breadcrumb_jsonld(array $crumbs): array {
+    $items = [];
+    foreach ($crumbs as $i => $c) {
+        $items[] = ['@type' => 'ListItem', 'position' => $i + 1, 'name' => $c['name'], 'item' => $c['url']];
+    }
+    return ['@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $items];
+}
+
+/** Ready-to-paste promotional posts for one article — a "share kit" an
+ *  editor can copy straight into social media or another site's comment
+ *  section, no AI call required (deterministic, works with no API keys
+ *  configured). Templates are chosen by $lang. */
+function share_kit_variants(array $article, string $canonicalUrl, string $lang = 'en'): array {
+    $title = $article['title'];
+    $excerpt = trim((string)($article['excerpt'] ?? ''));
+    $hashtags = share_kit_hashtags((string)($article['tags'] ?? ''));
+
+    if ($lang === 'ar') {
+        $short = mb_substr($title, 0, 140) . ' ' . $canonicalUrl . ($hashtags ? ' ' . $hashtags : '');
+        $medium = $title . "\n\n" . mb_substr($excerpt, 0, 220) . "\n\n" . 'اقرأ المقال كاملاً: ' . $canonicalUrl;
+        $long = 'قرأت للتو مقالاً جيدًا بعنوان "' . $title . '". ' . $excerpt . ' يستحق الاطلاع عليه: ' . $canonicalUrl . ($hashtags ? "\n" . $hashtags : '');
+        return [
+            ['label' => 'منشور قصير (X / تويتر)', 'text' => $short],
+            ['label' => 'منشور متوسط (فيسبوك / لينكدإن)', 'text' => $medium],
+            ['label' => 'تعليق أو منتدى (نص أطول)', 'text' => $long],
+            ['label' => 'الرابط فقط', 'text' => $canonicalUrl],
+        ];
+    }
+
+    $short = mb_substr($title, 0, 160) . ' ' . $canonicalUrl . ($hashtags ? ' ' . $hashtags : '');
+    $medium = $title . "\n\n" . mb_substr($excerpt, 0, 220) . "\n\n" . 'Read the full breakdown: ' . $canonicalUrl;
+    $long = 'Just read a solid breakdown of this: "' . $title . '". ' . $excerpt . ' Worth a look if this is your kind of thing: ' . $canonicalUrl . ($hashtags ? "\n" . $hashtags : '');
+    return [
+        ['label' => 'Short post (X / Twitter)', 'text' => $short],
+        ['label' => 'Medium post (Facebook / LinkedIn)', 'text' => $medium],
+        ['label' => 'Comment / forum post (longer)', 'text' => $long],
+        ['label' => 'Link only', 'text' => $canonicalUrl],
+    ];
 }
