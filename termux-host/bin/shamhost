@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+# shamhost — أداة التحكم بخادم الاستضافة على الجوال
+set -uo pipefail
+
+HOSTDIR="$HOME/.shamhost"
+CONF="$HOSTDIR/conf"
+RUN="$HOSTDIR/run"
+LOGS="$HOSTDIR/logs"
+CFG="$HOSTDIR/data/config.json"
+
+RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; DIM=$'\033[2m'; BLD=$'\033[1m'; RST=$'\033[0m'
+ok()   { printf '  %s●%s %-12s %s\n' "$GRN" "$RST" "$1" "${2:-يعمل}"; }
+bad()  { printf '  %s●%s %-12s %s\n' "$RED" "$RST" "$1" "${2:-متوقف}"; }
+skip() { printf '  %s○%s %-12s %s\n' "$DIM" "$RST" "$1" "${2:-غير مثبّت}"; }
+
+mkdir -p "$RUN" "$LOGS"
+
+jget() { # jget <path.in.json>  — قراءة قيمة من config.json بدون أدوات خارجية
+  node -e '
+    const fs=require("fs");
+    try{
+      const c=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const v=process.argv[2].split(".").reduce((o,k)=>(o==null?o:o[k]),c);
+      process.stdout.write(v==null?"":String(v));
+    }catch(e){process.stdout.write("")}
+  ' "$CFG" "$1" 2>/dev/null
+}
+
+pidfile() { printf '%s/%s.pid' "$RUN" "$1"; }
+
+is_up() {
+  local f; f="$(pidfile "$1")"
+  [ -f "$f" ] || return 1
+  local p; p="$(cat "$f" 2>/dev/null)"
+  [ -n "$p" ] || return 1
+  kill -0 "$p" 2>/dev/null
+}
+
+port_open() { # port_open <port>
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && exec 3<&- 3>&- && return 0
+  return 1
+}
+
+start_svc() { # start_svc <name> <command...>
+  local name="$1"; shift
+  if is_up "$name"; then printf '  %s●%s %-12s يعمل مسبقاً\n' "$GRN" "$RST" "$name"; return 0; fi
+  nohup "$@" >>"$LOGS/$name.out" 2>&1 &
+  local p=$!
+  echo "$p" > "$(pidfile "$name")"
+  sleep 1
+  if kill -0 "$p" 2>/dev/null; then ok "$name" "بدأ (pid $p)"; return 0; fi
+  bad "$name" "فشل التشغيل — راجع $LOGS/$name.out"
+  rm -f "$(pidfile "$name")"
+  return 1
+}
+
+stop_svc() { # stop_svc <name>
+  local name="$1" f p
+  f="$(pidfile "$name")"
+  if [ -f "$f" ]; then
+    p="$(cat "$f" 2>/dev/null)"
+    if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then
+      pkill -P "$p" 2>/dev/null
+      kill -TERM "$p" 2>/dev/null
+      for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$p" 2>/dev/null || break; sleep 1; done
+      kill -0 "$p" 2>/dev/null && kill -KILL "$p" 2>/dev/null
+    fi
+    rm -f "$f"
+  fi
+  printf '  %s○%s %-12s متوقف\n' "$DIM" "$RST" "$name"
+}
+
+mariadb_running() {
+  pgrep -f 'mariadbd|mysqld' >/dev/null 2>&1
+}
+
+start_mariadb() {
+  command -v mysqld_safe >/dev/null 2>&1 || command -v mariadbd-safe >/dev/null 2>&1 || { skip mariadb; return 0; }
+  if mariadb_running; then ok mariadb "يعمل مسبقاً"; return 0; fi
+  local safe; safe="$(command -v mariadbd-safe || command -v mysqld_safe)"
+  nohup "$safe" >>"$LOGS/mariadb.out" 2>&1 &
+  for _ in $(seq 1 30); do
+    sleep 1
+    if port_open 3306 || mariadb_running; then ok mariadb "بدأ"; return 0; fi
+  done
+  bad mariadb "لم يبدأ خلال 30 ثانية — راجع $LOGS/mariadb.out"
+  return 1
+}
+
+stop_mariadb() {
+  if mariadb_running; then
+    mysqladmin -u "$(id -un)" shutdown >/dev/null 2>&1 || pkill -f 'mariadbd|mysqld_safe|mysqld' 2>/dev/null
+    sleep 2
+  fi
+  printf '  %s○%s %-12s متوقف\n' "$DIM" "$RST" "mariadb"
+}
+
+cmd_start() {
+  printf '%sتشغيل ShamHost%s\n' "$BLD" "$RST"
+  termux-wake-lock 2>/dev/null
+  start_mariadb
+  if command -v php-fpm >/dev/null 2>&1; then
+    start_svc php-fpm php-fpm -y "$CONF/php-fpm.conf" -F
+  else skip php-fpm; fi
+  if command -v nginx >/dev/null 2>&1; then
+    nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" >>"$LOGS/nginx.out" 2>&1 \
+      || { bad nginx "إعداد غير صالح:"; nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" 2>&1 | tail -5; }
+    start_svc nginx nginx -c "$CONF/nginx.conf" -p "$PREFIX"
+  else skip nginx; fi
+  command -v crond >/dev/null 2>&1 && start_svc crond crond -n || skip crond
+  start_svc panel node "$HOSTDIR/panel/server.js"
+  echo
+  cmd_status
+}
+
+cmd_stop() {
+  printf '%sإيقاف ShamHost%s\n' "$BLD" "$RST"
+  stop_svc panel
+  stop_svc nginx
+  stop_svc php-fpm
+  stop_svc crond
+  stop_mariadb
+  # أنفاق cloudflared التي تديرها اللوحة
+  for f in "$RUN"/tunnel-*.pid; do
+    [ -e "$f" ] || continue
+    p="$(cat "$f" 2>/dev/null)"; [ -n "$p" ] && kill -TERM "$p" 2>/dev/null
+    rm -f "$f"
+  done
+}
+
+cmd_status() {
+  printf '%sحالة الخدمات%s\n' "$BLD" "$RST"
+  local hp wp
+  hp="$(jget panel.port)"; [ -z "$hp" ] && hp=8088
+  wp="$(jget web.http_port)"; [ -z "$wp" ] && wp=8080
+
+  if mariadb_running; then ok mariadb "المنفذ 3306"; else bad mariadb; fi
+  if is_up php-fpm; then ok php-fpm "المنفذ 9000"; else bad php-fpm; fi
+  if is_up nginx;   then ok nginx   "المنفذ $wp"; else bad nginx; fi
+  if is_up crond;   then ok crond   "المهام المجدولة"; else bad crond; fi
+  if is_up panel;   then ok panel   "المنفذ $hp"; else bad panel; fi
+
+  local n=0
+  for f in "$RUN"/tunnel-*.pid; do
+    [ -e "$f" ] || continue
+    p="$(cat "$f" 2>/dev/null)"
+    if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then n=$((n+1)); fi
+  done
+  [ "$n" -gt 0 ] && ok "الأنفاق" "$n نشط"
+
+  echo
+  local ip; ip="$(lan_ip)"
+  printf '  اللوحة:   http://%s:%s\n' "$ip" "$hp"
+  printf '  المواقع:  http://%s:%s\n' "$ip" "$wp"
+}
+
+lan_ip() {
+  local ip
+  ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}')"
+  [ -z "$ip" ] && ip="$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | grep -v '^127' | head -1)"
+  [ -z "$ip" ] && ip="127.0.0.1"
+  printf '%s' "$ip"
+}
+
+cmd_logs() {
+  local which="${1:-panel}"
+  case "$which" in
+    nginx)   tail -n 60 -f "$LOGS/nginx-error.log" "$LOGS/nginx-access.log" ;;
+    php)     tail -n 60 -f "$LOGS/php-error.log" "$LOGS/php-fpm.log" ;;
+    mariadb) tail -n 60 -f "$LOGS/mariadb.out" ;;
+    panel|*) tail -n 60 -f "$LOGS/panel.out" ;;
+  esac
+}
+
+cmd_password() {
+  local newpass="${1:-}"
+  if [ -z "$newpass" ]; then
+    newpass="$(head -c 9 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  fi
+  node -e '
+    const fs=require("fs"),c=require("crypto");
+    const p=process.argv[1],pass=process.argv[2];
+    const cfg=JSON.parse(fs.readFileSync(p,"utf8"));
+    const salt=c.randomBytes(16).toString("hex");
+    cfg.admin.salt=salt;
+    cfg.admin.hash=c.pbkdf2Sync(pass,salt,120000,32,"sha256").toString("hex");
+    fs.writeFileSync(p,JSON.stringify(cfg,null,2));
+  ' "$CFG" "$newpass" || { printf '%sفشل تغيير كلمة المرور%s\n' "$RED" "$RST"; exit 1; }
+  printf '\n  المستخدم:    admin\n  كلمة المرور: %s%s%s\n\n' "$BLD" "$newpass" "$RST"
+  is_up panel && { stop_svc panel >/dev/null; start_svc panel node "$HOSTDIR/panel/server.js" >/dev/null; echo "  (أُعيد تشغيل اللوحة)"; }
+}
+
+cmd_url() {
+  local ip hp; ip="$(lan_ip)"; hp="$(jget panel.port)"; [ -z "$hp" ] && hp=8088
+  printf 'http://%s:%s\n' "$ip" "$hp"
+}
+
+cmd_help() {
+  cat <<'HELP'
+shamhost — التحكم بخادم الاستضافة على الجوال
+
+  shamhost start              تشغيل كل الخدمات
+  shamhost stop               إيقاف كل الخدمات
+  shamhost restart            إعادة التشغيل
+  shamhost status             عرض حالة الخدمات والروابط
+  shamhost logs [panel|nginx|php|mariadb]
+                              متابعة السجلات مباشرة
+  shamhost password [كلمة]     تعيين كلمة مرور جديدة للوحة (عشوائية إن تُركت فارغة)
+  shamhost url                طباعة رابط لوحة التحكم
+  shamhost reload             إعادة تحميل إعدادات nginx بدون قطع الخدمة
+  shamhost service <اسم> <start|stop|restart>
+                              التحكم بخدمة واحدة
+  shamhost doctor             فحص شامل للمشاكل الشائعة
+  shamhost deploy <دومين> <مسار|رابط-git> [--type php|static|proxy] [--db]
+                              نشر موقع كامل من مجلد أو مستودع بأمر واحد
+HELP
+}
+
+cmd_reload() {
+  if is_up nginx; then
+    if nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" >/dev/null 2>&1; then
+      kill -HUP "$(cat "$(pidfile nginx)")" 2>/dev/null && ok nginx "أُعيد التحميل"
+    else
+      bad nginx "الإعداد غير صالح — لم يُعد التحميل"
+      nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" 2>&1 | tail -5
+      return 1
+    fi
+  else
+    cmd_service nginx start
+  fi
+}
+
+cmd_service() {
+  local svc="${1:-}" act="${2:-}"
+  case "$svc:$act" in
+    nginx:start)    start_svc nginx nginx -c "$CONF/nginx.conf" -p "$PREFIX" ;;
+    nginx:stop)     stop_svc nginx ;;
+    nginx:restart)  stop_svc nginx; start_svc nginx nginx -c "$CONF/nginx.conf" -p "$PREFIX" ;;
+    php-fpm:start)  start_svc php-fpm php-fpm -y "$CONF/php-fpm.conf" -F ;;
+    php-fpm:stop)   stop_svc php-fpm ;;
+    php-fpm:restart) stop_svc php-fpm; start_svc php-fpm php-fpm -y "$CONF/php-fpm.conf" -F ;;
+    mariadb:start)  start_mariadb ;;
+    mariadb:stop)   stop_mariadb ;;
+    mariadb:restart) stop_mariadb; start_mariadb ;;
+    crond:start)    start_svc crond crond -n ;;
+    crond:stop)     stop_svc crond ;;
+    crond:restart)  stop_svc crond; start_svc crond crond -n ;;
+    panel:restart)  stop_svc panel; start_svc panel node "$HOSTDIR/panel/server.js" ;;
+    panel:stop)     stop_svc panel ;;
+    panel:start)    start_svc panel node "$HOSTDIR/panel/server.js" ;;
+    *) echo "استخدام: shamhost service <nginx|php-fpm|mariadb|crond|panel> <start|stop|restart>"; return 1 ;;
+  esac
+}
+
+cmd_doctor() {
+  printf '%sفحص شامل%s\n\n' "$BLD" "$RST"
+  local issues=0
+  for b in node nginx php php-fpm mysqld_safe cloudflared curl; do
+    if command -v "$b" >/dev/null 2>&1; then ok "$b" "$(command -v "$b")"; else bad "$b" "غير مثبّت"; issues=$((issues+1)); fi
+  done
+  echo
+  [ -f "$CFG" ] && ok "config.json" "موجود" || { bad "config.json" "مفقود — أعد التثبيت"; issues=$((issues+1)); }
+  [ -f "$CONF/nginx.conf" ] && ok "nginx.conf" "موجود" || { bad "nginx.conf" "مفقود"; issues=$((issues+1)); }
+  if command -v nginx >/dev/null 2>&1; then
+    nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" >/dev/null 2>&1 && ok "إعداد nginx" "صالح" \
+      || { bad "إعداد nginx" "غير صالح"; nginx -t -c "$CONF/nginx.conf" -p "$PREFIX" 2>&1 | tail -3; issues=$((issues+1)); }
+  fi
+  echo
+  local avail; avail="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
+  if [ -n "$avail" ] && [ "$avail" -lt 300 ]; then bad "المساحة" "${avail}MB — منخفضة جداً"; issues=$((issues+1));
+  else ok "المساحة" "${avail:-?}MB متاحة"; fi
+  if command -v termux-battery-status >/dev/null 2>&1; then
+    local b; b="$(termux-battery-status 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.percentage+"% / "+j.status)}catch(e){console.log("?")}})' 2>/dev/null)"
+    ok "البطارية" "${b:-?}"
+  fi
+  if curl -fsS -m 8 https://api.namecheap.com >/dev/null 2>&1 || curl -fsS -m 8 https://1.1.1.1 >/dev/null 2>&1; then
+    ok "الإنترنت" "متصل"
+  else bad "الإنترنت" "لا يوجد اتصال"; issues=$((issues+1)); fi
+  echo
+  if [ "$issues" -eq 0 ]; then printf '  %sلا توجد مشاكل%s\n' "$GRN" "$RST"
+  else printf '  %s%d مشكلة تحتاج معالجة%s\n' "$YLW" "$issues" "$RST"; fi
+}
+
+case "${1:-status}" in
+  start)    shift; cmd_start "$@" ;;
+  stop)     shift; cmd_stop "$@" ;;
+  restart)  cmd_stop; echo; cmd_start ;;
+  status)   cmd_status ;;
+  logs)     shift; cmd_logs "${1:-panel}" ;;
+  password) shift; cmd_password "${1:-}" ;;
+  url)      cmd_url ;;
+  reload)   cmd_reload ;;
+  service)  shift; cmd_service "${1:-}" "${2:-}" ;;
+  doctor)   cmd_doctor ;;
+  deploy)   shift; node "$HOSTDIR/panel/deploy.js" "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *) echo "أمر غير معروف: $1"; echo; cmd_help; exit 1 ;;
+esac
