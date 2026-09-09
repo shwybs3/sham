@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Phone hosting panel</string>
+    <string name="host_label">Server address (host phone IP)</string>
+    <string name="port_label">Panel port</string>
+    <string name="connect">Connect</string>
+    <string name="discover">Scan network</string>
+    <string name="this_device">This device</string>
+    <string name="termux_control">Termux service control</string>
+    <string name="setup_hint">Start ShamHost on the host phone, run "shamhost url" there and copy the address.</string>
+    <string name="scanning">Scanning network…</string>
+    <string name="none_found">No ShamHost server found on this network.</string>
+    <string name="pick_server">Pick a server</string>
+    <string name="bad_host">Enter a valid server address</string>
+    <string name="retry">Retry</string>
+    <string name="change_server">Change server</string>
+    <string name="refresh">Refresh</string>
+    <string name="load_error">Could not reach the panel</string>
+    <string name="load_error_hint">Check both devices are on the same network and the service is running (shamhost status).</string>
+    <string name="exit_confirm">Press back again to exit</string>
+    <string name="termux_missing">Termux is not installed on this device. This screen only works on the host phone.</string>
+    <string name="termux_note">Add this line to ~/.termux/termux.properties inside Termux and restart it:\nallow-external-apps = true</string>
+    <string name="cmd_sent">Command sent to Termux</string>
+    <string name="cmd_failed">Could not send the command. Check allow-external-apps = true</string>
+    <string name="open_panel">Open panel</string>
+</resources>
