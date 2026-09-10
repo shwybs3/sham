@@ -49,6 +49,8 @@ foreach ($services as $svc) {
 
   <?php if ($saved === 'settings'): ?>
     <div class="success-box">تم حفظ الإعدادات العامة بنجاح. التغييرات تظهر فوراً على كل صفحات الموقع.</div>
+  <?php elseif ($saved === 'ai'): ?>
+    <div class="success-box">تم حفظ إعدادات المساعد الذكي بنجاح.</div>
   <?php elseif ($saved === 'services'): ?>
     <div class="success-box">تم حفظ حالة الخدمات بنجاح.</div>
   <?php elseif ($saved === 'password_hash'): ?>
@@ -132,6 +134,59 @@ foreach ($services as $svc) {
     </form>
   </div>
 
+  <!-- المساعد الذكي (OpenRouter) -->
+  <div class="panel">
+    <h2>المساعد الذكي (ذكاء اصطناعي حقيقي عبر OpenRouter)</h2>
+    <p class="hint">
+      عند التفعيل، أي سؤال لا تغطيه الردود الجاهزة يُرسَل مباشرة من متصفح الزائر إلى OpenRouter (وليس من خادم الاستضافة) — وهذا يلتف بشكل مشروع تماماً على منع استضافة Infinity Free المجانية للاتصالات الصادرة من PHP، لأن الطلب يخرج من جهاز الزائر نفسه.
+      <br><br>
+      <strong>تنبيه أمني مهم:</strong> بما أن الاتصال من المتصفح مباشرة، فإن أي زائر يفتح "أدوات المطوّر" في متصفحه يستطيع رؤية مفتاح API واستخدامه بنفسه. لتقليل الخطر:
+    </p>
+    <ul style="color:var(--muted); font-size:.85rem; margin:0 0 20px; padding-right:20px; list-style:disc;">
+      <li>أنشئ حساب OpenRouter مخصصاً لهذا الموقع فقط، بدون ربط أي بطاقة دفع.</li>
+      <li>استخدم نموذجاً ينتهي اسمه بـ <code>:free</code> فقط (مجاني تماماً، بلا أي كلفة حتى لو أُسيء استخدامه).</li>
+      <li>راقب استهلاك المفتاح من لوحة OpenRouter بين حين وآخر، وأعد توليد مفتاح جديد إن لاحظت استخداماً غريباً.</li>
+      <li>الحد الأقصى للأسئلة لكل جلسة زائر أدناه يقلّل من الاستهلاك العشوائي.</li>
+    </ul>
+    <form method="post" action="save.php">
+      <input type="hidden" name="csrf" value="<?= v($csrf) ?>">
+      <input type="hidden" name="action" value="save_ai">
+
+      <div class="check-row">
+        <input type="checkbox" id="ai_chat_enabled" name="ai_chat_enabled" <?= !empty($settings['ai_chat_enabled']) ? 'checked' : '' ?>>
+        <label for="ai_chat_enabled" style="margin:0;">تفعيل الردود الذكية الحقيقية (خارج الأسئلة الجاهزة)</label>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label>مفتاح OpenRouter API</label>
+          <input type="text" name="openrouter_api_key" value="<?= v($settings['openrouter_api_key'] ?? '') ?>" placeholder="sk-or-v1-...">
+        </div>
+        <div class="field">
+          <label>معرّف النموذج (يُفضّل نموذج مجاني ينتهي بـ :free)</label>
+          <input type="text" name="openrouter_model" value="<?= v($settings['openrouter_model'] ?? 'meta-llama/llama-3.1-8b-instruct:free') ?>">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>شخصية المساعد وتعليماته (System Prompt)</label>
+        <textarea name="ai_system_prompt" style="min-height:110px;"><?= v($settings['ai_system_prompt'] ?? '') ?></textarea>
+      </div>
+
+      <div class="field" style="max-width:280px;">
+        <label>الحد الأقصى للأسئلة الذكية لكل زائر بالجلسة الواحدة</label>
+        <input type="number" min="1" max="50" name="ai_max_turns_per_session" value="<?= v($settings['ai_max_turns_per_session'] ?? 12) ?>">
+      </div>
+
+      <p class="hint" style="margin-top:4px;">
+        احصل على مفتاح ونماذج مجانية من
+        <a href="https://openrouter.ai/models?max_price=0" target="_blank" style="color:var(--gold);">openrouter.ai/models (فلترة بسعر صفر)</a>.
+      </p>
+
+      <button type="submit" class="btn" style="width:auto; padding:12px 28px;">حفظ إعدادات المساعد الذكي</button>
+    </form>
+  </div>
+
   <!-- حالة الخدمات -->
   <div class="panel">
     <h2>حالة الخدمات (<?= count($services) ?> خدمة)</h2>
@@ -195,6 +250,7 @@ foreach ($services as $svc) {
     <h2>روابط سريعة</h2>
     <p class="hint">أدوات مفيدة بعد رفع الموقع على استضافتك.</p>
     <div class="grid3">
+      <a class="btn ghost" href="products.php">إدارة المنتجات والأسعار ←</a>
       <a class="btn ghost" href="../sitemap.xml" target="_blank">عرض خريطة الموقع (sitemap.xml)</a>
       <a class="btn ghost" href="../robots.txt" target="_blank">عرض ملف robots.txt</a>
       <a class="btn ghost" href="https://search.google.com/search-console" target="_blank">Google Search Console ↗</a>

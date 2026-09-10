@@ -41,6 +41,21 @@ if ($action === 'save_settings') {
     exit;
 }
 
+if ($action === 'save_ai') {
+    $settings = nari_read_json(SETTINGS_FILE);
+
+    $settings['ai_chat_enabled']         = isset($_POST['ai_chat_enabled']);
+    $settings['openrouter_api_key']      = trim($_POST['openrouter_api_key'] ?? ($settings['openrouter_api_key'] ?? ''));
+    $settings['openrouter_model']        = trim($_POST['openrouter_model'] ?? ($settings['openrouter_model'] ?? ''));
+    $settings['ai_system_prompt']        = trim($_POST['ai_system_prompt'] ?? ($settings['ai_system_prompt'] ?? ''));
+    $turns = (int)($_POST['ai_max_turns_per_session'] ?? 12);
+    $settings['ai_max_turns_per_session'] = $turns > 0 ? $turns : 12;
+
+    nari_write_json(SETTINGS_FILE, $settings);
+    header('Location: index.php?saved=ai');
+    exit;
+}
+
 if ($action === 'save_services') {
     $services = nari_read_json(SERVICES_FILE);
     $posted = $_POST['services'] ?? [];
@@ -54,6 +69,27 @@ if ($action === 'save_services') {
 
     nari_write_json(SERVICES_FILE, $services);
     header('Location: index.php?saved=services');
+    exit;
+}
+
+if ($action === 'save_products') {
+    $products = nari_read_json(PRODUCTS_FILE);
+    $posted = $_POST['products'] ?? [];
+
+    foreach ($products as &$p) {
+        $id = $p['id'] ?? '';
+        if (!isset($posted[$id])) {
+            continue;
+        }
+        $price = preg_replace('/\D/', '', $posted[$id]['price_syp'] ?? '');
+        $p['price_syp'] = $price === '' ? 0 : (int)$price;
+        $p['active'] = isset($posted[$id]['active']);
+        $p['note'] = trim((string)($posted[$id]['note'] ?? ($p['note'] ?? '')));
+    }
+    unset($p);
+
+    nari_write_json(PRODUCTS_FILE, $products);
+    header('Location: products.php?saved=1');
     exit;
 }
 
