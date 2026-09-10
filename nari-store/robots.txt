@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /data/
+
+Sitemap: https://yassota.com/sitemap.xml

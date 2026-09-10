@@ -1,0 +1,3 @@
+# يمنع عرض قائمة الملفات، لكنه يسمح بقراءة settings.json و services.json
+# لأن سكربت الموقع (script.js) يحتاج لقراءتها مباشرة من كل صفحة.
+Options -Indexes
