@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#FF3D68"/><stop offset="100%" stop-color="#FF3D68" stop-opacity="0"/></radialGradient>
+<linearGradient id="flame" x1="0.5" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#B0134A"/></linearGradient><linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3DD9EB"/><stop offset="100%" stop-color="#9B5DE5"/></linearGradient><linearGradient id="gem2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FBF0E4"/><stop offset="100%" stop-color="#3DD9EB"/></linearGradient>
+</defs>
+<rect width="480" height="320" rx="22" fill="url(#bg)"/>
+<circle cx="374" cy="70" r="176" fill="url(#glow)" opacity=".55"/>
+<circle cx="86" cy="272" r="134" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(240,158)">
+  <path d="M0-92c14 30-26 52-26 88 0 22 16 34 16 34s-46-12-46-58c0-12 3-22 3-22s-34 28-34 82c0 56 39 92 87 92s87-36 87-92c0-46-34-70-46-104-4 24-12 40-28 46 8-28-6-50-28-66z" fill="url(#flame)" opacity=".92"/>
+  <g transform="translate(0,26)">
+    <path d="M-58 -18L-30 -58h60l28 40L0 62z" fill="url(#gem)" stroke="#FBF0E4" stroke-opacity=".35" stroke-width="2"/>
+    <path d="M-58 -18h116" stroke="#FBF0E4" stroke-opacity=".45" stroke-width="2"/>
+    <path d="M-30 -58L0 -18l30-40" stroke="#FBF0E4" stroke-opacity=".35" stroke-width="2" fill="none"/>
+    <path d="M-58 -18L0 62l58-80" fill="none" stroke="#FBF0E4" stroke-opacity=".2" stroke-width="2"/>
+  </g>
+  <g transform="translate(-96,44)"><path d="M-30 -10L-16 -30h32l14 20L0 34z" fill="url(#gem2)" opacity=".9"/></g>
+  <g transform="translate(104,58)"><path d="M-22 -8L-12 -22h24l10 14L0 26z" fill="url(#gem2)" opacity=".8"/></g>
+</g>
+<path d="M80 51L82.5 57.5L89 60L82.5 62.5L80 69L77.5 62.5L71 60L77.5 57.5Z" fill="#FFD166" opacity=".9"/><path d="M392 81L394.0 86.0L399 88L394.0 90.0L392 95L390.0 90.0L385 88L390.0 86.0Z" fill="#FBF0E4" opacity=".7"/><path d="M410 210L412.8 217.2L420 220L412.8 222.8L410 230L407.2 222.8L400 220L407.2 217.2Z" fill="#FFD166" opacity=".65"/><path d="M64 229L66.0 234.0L71 236L66.0 238.0L64 243L62.0 238.0L57 236L62.0 234.0Z" fill="#FF3D68" opacity=".8"/>
+
+</svg>

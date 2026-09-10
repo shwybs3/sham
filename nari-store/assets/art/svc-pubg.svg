@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#9B5DE5"/><stop offset="100%" stop-color="#9B5DE5" stop-opacity="0"/></radialGradient>
+<linearGradient id="helm" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B5DE5"/><stop offset="100%" stop-color="#6A2FB5"/></linearGradient><linearGradient id="crate" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF8A3D"/><stop offset="100%" stop-color="#B0134A"/></linearGradient>
+</defs>
+<rect width="480" height="320" rx="22" fill="url(#bg)"/>
+<circle cx="374" cy="70" r="176" fill="url(#glow)" opacity=".55"/>
+<circle cx="86" cy="272" r="134" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(224,166)">
+  <!-- خوذة قتالية: قبة + واقي جانبي + حاجب -->
+  <path d="M-92 26c0-56 41-96 92-96s92 40 92 96v6c0 10-8 18-18 18h-22V34c0-4-3-7-7-7H-45c-4 0-7 3-7 7v16h-22c-10 0-18-8-18-18z" fill="url(#helm)"/>
+  <path d="M-92 26c0-56 41-96 92-96s92 40 92 96" fill="none" stroke="#FBF0E4" stroke-opacity=".3" stroke-width="3"/>
+  <!-- حاجب الرؤية -->
+  <path d="M-72 6h144c6 0 10 5 9 11l-4 24c-1 6-6 10-12 10H-65c-6 0-11-4-12-10l-4-24c-1-6 3-11 9-11z" fill="#140A11" opacity=".72"/>
+  <path d="M-72 6h144c6 0 10 5 9 11l-4 24c-1 6-6 10-12 10H-65c-6 0-11-4-12-10l-4-24c-1-6 3-11 9-11z" fill="none" stroke="#3DD9EB" stroke-opacity=".55" stroke-width="2.5"/>
+  <path d="M-52 18h44" stroke="#3DD9EB" stroke-opacity=".5" stroke-width="4" stroke-linecap="round"/>
+  <!-- واقيات جانبية -->
+  <rect x="-114" y="18" width="30" height="52" rx="14" fill="url(#helm)"/>
+  <rect x="84" y="18" width="30" height="52" rx="14" fill="url(#helm)"/>
+  <!-- شريط أعلى -->
+  <rect x="-16" y="-66" width="32" height="16" rx="8" fill="#FFD166" opacity=".8"/>
+</g>
+<g transform="translate(392,86)" opacity=".95">
+  <circle r="36" fill="none" stroke="#FFD166" stroke-width="4"/>
+  <circle r="19" fill="none" stroke="#FFD166" stroke-width="3" opacity=".8"/>
+  <circle r="4" fill="#FF3D68"/>
+  <path d="M0-48v16M0 32v16M-48 0h16M32 0h16" stroke="#FFD166" stroke-width="4" stroke-linecap="round"/>
+</g>
+<g transform="translate(74,236)" opacity=".9">
+  <rect x="-34" y="-24" width="68" height="48" rx="8" fill="url(#crate)"/>
+  <path d="M-34 -4h68M0 -24v48" stroke="#140A11" stroke-opacity=".45" stroke-width="4"/>
+</g>
+<path d="M438 216L440.2 221.8L446 224L440.2 226.2L438 232L435.8 226.2L430 224L435.8 221.8Z" fill="#FBF0E4" opacity=".55"/><path d="M56 65L58.0 70.0L63 72L58.0 74.0L56 79L54.0 74.0L49 72L54.0 70.0Z" fill="#FFD166" opacity=".6"/>
+
+</svg>

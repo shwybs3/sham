@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#9B5DE5"/><stop offset="100%" stop-color="#9B5DE5" stop-opacity="0"/></radialGradient>
+<linearGradient id="phone" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6A2FB5"/><stop offset="100%" stop-color="#140A11"/></linearGradient><linearGradient id="hflame" x1="0.5" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF3D68"/></linearGradient><linearGradient id="btn" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF3D68"/><stop offset="100%" stop-color="#6A2FB5"/></linearGradient><linearGradient id="hgem" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3DD9EB"/><stop offset="100%" stop-color="#9B5DE5"/></linearGradient><linearGradient id="hgem2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF8A3D"/></linearGradient><linearGradient id="hcoinT" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF8A3D"/></linearGradient><linearGradient id="hcoinD" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF8A3D"/><stop offset="100%" stop-color="#B0134A"/></linearGradient><linearGradient id="hcard" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#34E5A0"/><stop offset="100%" stop-color="#3DD9EB"/></linearGradient>
+</defs>
+<rect width="640" height="480" rx="22" fill="url(#bg)"/>
+<circle cx="499" cy="106" r="264" fill="url(#glow)" opacity=".55"/>
+<circle cx="115" cy="408" r="202" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(300,215)">
+  <!-- جوال -->
+  <g transform="rotate(-8)">
+    <rect x="-108" y="-172" width="216" height="344" rx="30" fill="url(#phone)"/>
+    <rect x="-108" y="-172" width="216" height="344" rx="30" fill="none" stroke="#FBF0E4" stroke-opacity=".28" stroke-width="3"/>
+    <rect x="-92" y="-152" width="184" height="304" rx="20" fill="#140A11" opacity=".72"/>
+    <rect x="-30" y="-164" width="60" height="10" rx="5" fill="#140A11"/>
+    <!-- محتوى الشاشة -->
+    <g transform="translate(0,-96)">
+      <path d="M0-46c8 18-16 30-16 52 0 13 10 20 10 20s-28-7-28-35c0-7 2-13 2-13s-20 17-20 49c0 33 23 54 52 54s52-21 52-54c0-27-20-41-27-61-3 14-8 24-17 27 5-16-4-29-16-39z" fill="url(#hflame)"/>
+    </g>
+    <g transform="translate(0,16)">
+      <rect x="-66" y="-8" width="132" height="16" rx="8" fill="#FBF0E4" opacity=".28"/>
+      <rect x="-46" y="20" width="92" height="12" rx="6" fill="#FBF0E4" opacity=".18"/>
+    </g>
+    <g transform="translate(0,96)">
+      <rect x="-76" y="-22" width="152" height="44" rx="22" fill="url(#btn)"/>
+      <rect x="-40" y="-5" width="80" height="10" rx="5" fill="#FBF0E4" opacity=".85"/>
+    </g>
+  </g>
+</g>
+
+<!-- جواهر وعملات طائرة -->
+<g transform="translate(112,132)">
+  <path d="M-40-14L-20-48h40l20 34L0 52z" fill="url(#hgem)"/>
+  <path d="M-40-14h80" stroke="#FBF0E4" stroke-opacity=".5" stroke-width="3"/>
+</g>
+<g transform="translate(496,150)">
+  <ellipse cx="0" cy="24" rx="54" ry="17" fill="url(#hcoinD)"/>
+  <rect x="-54" y="4" width="108" height="20" fill="url(#hcoinD)"/>
+  <ellipse cx="0" cy="4" rx="54" ry="17" fill="url(#hcoinT)"/>
+</g>
+<g transform="translate(520,300)">
+  <ellipse cx="0" cy="18" rx="40" ry="13" fill="url(#hcoinD)"/>
+  <rect x="-40" y="4" width="80" height="14" fill="url(#hcoinD)"/>
+  <ellipse cx="0" cy="4" rx="40" ry="13" fill="url(#hcoinT)"/>
+</g>
+<g transform="translate(96,330)">
+  <path d="M-30-10L-16-34h32l14 24L0 40z" fill="url(#hgem2)" opacity=".9"/>
+</g>
+<!-- بطاقة هدايا صغيرة -->
+<g transform="translate(486,404) rotate(-12)">
+  <rect x="-56" y="-34" width="112" height="68" rx="12" fill="url(#hcard)"/>
+  <rect x="-56" y="-14" width="112" height="12" fill="#140A11" opacity=".5"/>
+  <rect x="-44" y="10" width="48" height="8" rx="4" fill="#FBF0E4" opacity=".6"/>
+</g>
+<path d="M150 47L153.6 56.4L163 60L153.6 63.6L150 73L146.4 63.6L137 60L146.4 56.4Z" fill="#FFD166" opacity=".9"/><path d="M560 76L562.8 83.2L570 86L562.8 88.8L560 96L557.2 88.8L550 86L557.2 83.2Z" fill="#FBF0E4" opacity=".7"/><path d="M74 226L76.8 233.2L84 236L76.8 238.8L74 246L71.2 238.8L64 236L71.2 233.2Z" fill="#3DD9EB" opacity=".7"/><path d="M566 223L568.5 229.5L575 232L568.5 234.5L566 241L563.5 234.5L557 232L563.5 229.5Z" fill="#FFD166" opacity=".75"/><path d="M196 427L199.1 434.9L207 438L199.1 441.1L196 449L192.9 441.1L185 438L192.9 434.9Z" fill="#FF3D68" opacity=".7"/><path d="M392 58L394.2 63.8L400 66L394.2 68.2L392 74L389.8 68.2L384 66L389.8 63.8Z" fill="#FBF0E4" opacity=".55"/>
+
+</svg>

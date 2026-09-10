@@ -78,6 +78,24 @@ function applySettings(cfg){
     }
   }
 
+  // روابط التواصل الاجتماعي في الفوتر (تُدار من لوحة التحكم)
+  const socialBox = document.getElementById("socialLinks");
+  if(socialBox){
+    const links = [
+      ["instagram_url", "انستقرام"],
+      ["tiktok_url", "تيك توك"],
+      ["facebook_url", "فيسبوك"],
+    ];
+    const html = links
+      .filter(([key]) => cfg[key] && String(cfg[key]).trim())
+      .map(([key, label]) => {
+        const url = String(cfg[key]).trim().replace(/"/g, "&quot;");
+        return `<li><a href="${url}" target="_blank" rel="noopener nofollow">${label}</a></li>`;
+      })
+      .join("");
+    socialBox.innerHTML = html;
+  }
+
   AI_CONFIG.enabled = !!(cfg.ai_chat_enabled && cfg.openrouter_api_key);
   AI_CONFIG.apiKey = cfg.openrouter_api_key || "";
   AI_CONFIG.model = cfg.openrouter_model || AI_CONFIG.model;

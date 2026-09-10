@@ -47,6 +47,41 @@ foreach ($services as $svc) {
 
 <div class="wrap">
 
+  <?php
+    $activeServices = count(array_filter($services, fn($s) => !empty($s['active'])));
+    $products = nari_read_json(PRODUCTS_FILE);
+    $activeProducts = count(array_filter($products, fn($p) => !empty($p['active'])));
+    $pageCount = count(glob(__DIR__ . '/../*.html'));
+    $aiOn = !empty($settings['ai_chat_enabled']) && !empty($settings['openrouter_api_key']);
+    $maintOn = !empty($settings['maintenance_mode']);
+  ?>
+  <div class="panel">
+    <h2>نظرة عامة</h2>
+    <p class="hint">ملخّص سريع لحالة المتجر الآن.</p>
+    <div class="grid3" style="gap:14px;">
+      <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-family:Cairo,sans-serif;font-weight:900;font-size:1.7rem;color:var(--gold);"><?= $pageCount ?></div>
+        <div style="color:var(--muted);font-size:.84rem;">صفحة منشورة</div>
+      </div>
+      <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-family:Cairo,sans-serif;font-weight:900;font-size:1.7rem;color:var(--gold);"><?= $activeServices ?>/<?= count($services) ?></div>
+        <div style="color:var(--muted);font-size:.84rem;">خدمة مُفعّلة</div>
+      </div>
+      <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-family:Cairo,sans-serif;font-weight:900;font-size:1.7rem;color:var(--gold);"><?= $activeProducts ?>/<?= count($products) ?></div>
+        <div style="color:var(--muted);font-size:.84rem;">منتج مُفعّل</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;">
+      <span class="badge <?= $aiOn ? 'on' : 'off' ?>">المساعد الذكي: <?= $aiOn ? 'مفعّل' : 'متوقف' ?></span>
+      <span class="badge <?= $maintOn ? 'off' : 'on' ?>">وضع الصيانة: <?= $maintOn ? 'مفعّل — الموقع مخفي عن الزوار!' : 'متوقف (الموقع يعمل)' ?></span>
+      <span class="badge on">واتساب: <?= v($settings['whatsapp_display'] ?? '') ?></span>
+    </div>
+    <div style="margin-top:18px;">
+      <a class="btn ghost small" href="products.php">إدارة المنتجات والأسعار ←</a>
+    </div>
+  </div>
+
   <?php if ($saved === 'settings'): ?>
     <div class="success-box">تم حفظ الإعدادات العامة بنجاح. التغييرات تظهر فوراً على كل صفحات الموقع.</div>
   <?php elseif ($saved === 'ai'): ?>

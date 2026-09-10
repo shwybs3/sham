@@ -1,0 +1,116 @@
+# ============================================================
+# ناري ستور — إعدادات الخادم (Apache / Infinity Free)
+# ------------------------------------------------------------
+# ملاحظة صريحة: بعض التوجيهات أدناه قد تتجاهلها الاستضافات
+# المجانية لأنها مضبوطة على مستوى الحساب لا على مستوى الموقع.
+# لذلك وضعنا كل توجيه حسّاس داخل <IfModule> حتى لا يسبّب خطأ
+# 500 إن كانت الوحدة غير مفعّلة على الخادم.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1) صفحات الخطأ المخصّصة
+#    هذا هو الحل الرسمي لمنع استضافة Infinity Free من عرض
+#    صفحة الخطأ الخاصة بها (أو تحويلك لصفحتها) بدل صفحتك أنت.
+# ------------------------------------------------------------
+ErrorDocument 400 /404.html
+ErrorDocument 401 /404.html
+ErrorDocument 403 /404.html
+ErrorDocument 404 /404.html
+ErrorDocument 500 /404.html
+ErrorDocument 502 /404.html
+ErrorDocument 503 /404.html
+
+# ------------------------------------------------------------
+# 2) منع تصفّح المجلدات + إخفاء الملفات الحساسة
+# ------------------------------------------------------------
+Options -Indexes
+
+<FilesMatch "^\.(htaccess|htpasswd|env|git)">
+  Require all denied
+</FilesMatch>
+
+# ------------------------------------------------------------
+# 3) الترميز الافتراضي (مهم جداً للغة العربية)
+# ------------------------------------------------------------
+AddDefaultCharset UTF-8
+<IfModule mod_mime.c>
+  AddCharset UTF-8 .html .css .js .json .xml .svg
+  AddType image/svg+xml .svg
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# ------------------------------------------------------------
+# 4) رفع حدود الملفات ووقت التنفيذ (محاولة على مستوى الموقع)
+#    على الخطة المجانية غالباً تُتجاهل هذه القيم لأن الاستضافة
+#    تفرضها على مستوى الحساب — وجودها هنا لا يضر، وتعمل فوراً
+#    لو انتقلت لاستضافة مدفوعة أو خادم خاص.
+# ------------------------------------------------------------
+<IfModule mod_php.c>
+  php_value upload_max_filesize 64M
+  php_value post_max_size 64M
+  php_value memory_limit 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 64M
+  php_value post_max_size 64M
+  php_value memory_limit 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 64M
+  php_value post_max_size 64M
+  php_value memory_limit 256M
+  php_value max_execution_time 300
+  php_value max_input_time 300
+</IfModule>
+
+# ------------------------------------------------------------
+# 5) ضغط الملفات (يقلّل استهلاك الباندويدث ويسرّع الموقع)
+# ------------------------------------------------------------
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+  AddOutputFilterByType DEFLATE application/json application/xml
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------
+# 6) التخزين المؤقت في المتصفح (يخفّف الضغط على الاستضافة)
+#    ملفات البيانات JSON بلا تخزين حتى تظهر تعديلات لوحة
+#    التحكم فوراً على الموقع.
+# ------------------------------------------------------------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.json$">
+    Header set Cache-Control "no-store, must-revalidate"
+  </FilesMatch>
+  # رؤوس أمان أساسية
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ------------------------------------------------------------
+# 7) روابط أنظف: فتح الصفحة بدون كتابة .html
+#    (اختياري — يعمل على أغلب استضافات Apache ومنها Infinity Free)
+# ------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # لا تعالج الملفات أو المجلدات الموجودة فعلاً
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/admin/
+  RewriteRule ^([^\.]+)$ $1.html [NC,L]
+</IfModule>
