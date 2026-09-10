@@ -30,6 +30,7 @@ if ($action === 'save_settings') {
     $settings['instagram_url']        = trim($_POST['instagram_url'] ?? ($settings['instagram_url'] ?? ''));
     $settings['tiktok_url']           = trim($_POST['tiktok_url'] ?? ($settings['tiktok_url'] ?? ''));
     $settings['facebook_url']         = trim($_POST['facebook_url'] ?? ($settings['facebook_url'] ?? ''));
+    $settings['ad_header_code']       = trim($_POST['ad_header_code'] ?? ($settings['ad_header_code'] ?? ''));
 
     if ($settings['whatsapp_number'] === '') {
         header('Location: index.php?error=phone');

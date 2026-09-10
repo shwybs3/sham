@@ -81,12 +81,18 @@ AddDefaultCharset UTF-8
 # 6) التخزين المؤقت في المتصفح (يخفّف الضغط على الاستضافة)
 #    ملفات البيانات JSON بلا تخزين حتى تظهر تعديلات لوحة
 #    التحكم فوراً على الموقع.
+#
+#    ملاحظة مهمة: style.css و script.js وشعار الموقع تُطلَب من كل
+#    صفحة بصيغة "style.css?v=X" (رقم إصدار). عند رفع تحديث جديد لهذه
+#    الملفات، ارفع رقم ASSET_VER في مولّد الصفحات حتى يتغيّر الرابط
+#    ويُجبر متصفح الزائر على تحميل النسخة الجديدة فوراً، بدل انتظار
+#    انتهاء مدة التخزين المؤقت أدناه.
 # ------------------------------------------------------------
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType image/svg+xml "access plus 30 days"
-  ExpiresByType text/css "access plus 7 days"
-  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 7 days"
+  ExpiresByType text/css "access plus 1 days"
+  ExpiresByType application/javascript "access plus 1 days"
   ExpiresByType text/html "access plus 0 seconds"
   ExpiresByType application/json "access plus 0 seconds"
 </IfModule>

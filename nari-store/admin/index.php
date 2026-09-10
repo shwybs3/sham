@@ -165,6 +165,18 @@ foreach ($services as $svc) {
         <textarea name="maintenance_message"><?= v($settings['maintenance_message'] ?? '') ?></textarea>
       </div>
 
+      <hr style="border-color:var(--line); margin:22px 0;">
+
+      <div class="field">
+        <label>كود الإعلانات (AdSense / Monetag / أي شبكة أخرى)</label>
+        <textarea name="ad_header_code" style="min-height:100px; direction:ltr; text-align:left; font-family:monospace; font-size:.85rem;" placeholder="&lt;script async src=&quot;...&quot;&gt;&lt;/script&gt;"><?= v($settings['ad_header_code'] ?? '') ?></textarea>
+        <p class="hint" style="margin-top:8px;">
+          الصق هنا كود التحقق أو الإعلانات التلقائية (Auto Ads) كما أعطتك إياه الشبكة الإعلانية بالضبط، بدون تعديل.
+          يُضاف تلقائياً إلى &lt;head&gt; في كل صفحات الموقع فور حفظه. الموقع مفتوح للفهرسة بالكامل
+          (robots: index, follow) في كل صفحاته، فلا حاجة لأي إعداد إضافي لقبول أدسنس أو مونيتاغ.
+        </p>
+      </div>
+
       <button type="submit" class="btn" style="width:auto; padding:12px 28px;">حفظ الإعدادات العامة</button>
     </form>
   </div>

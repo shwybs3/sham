@@ -44,10 +44,39 @@ function refreshWhatsappLinks(){
   });
 }
 
+// يحقن كتلة HTML/JS خام (كود إعلانات مثلاً) داخل عنصر مُعطى، مع إعادة
+// إنشاء أي وسم <script> بداخلها حتى يُنفَّذ فعلياً (وضع النص مباشرة عبر
+// innerHTML/insertAdjacentHTML لا يُشغّل السكربتات تلقائياً في المتصفح).
+function injectRawHTML(container, htmlString){
+  if(!htmlString || !htmlString.trim()) return;
+  const temp = document.createElement("div");
+  temp.innerHTML = htmlString;
+  Array.from(temp.childNodes).forEach(node => {
+    if(node.tagName === "SCRIPT"){
+      const s = document.createElement("script");
+      Array.from(node.attributes).forEach(attr => s.setAttribute(attr.name, attr.value));
+      s.textContent = node.textContent;
+      container.appendChild(s);
+    } else {
+      container.appendChild(node.cloneNode(true));
+    }
+  });
+}
+
+let AD_HEADER_INJECTED = false;
+
 function applySettings(cfg){
   if(!cfg) return;
 
   if(cfg.site_name) SITE_NAME = cfg.site_name;
+
+  // كود الإعلانات (AdSense / Monetag ...) — يُلصَق من لوحة التحكم كما هو
+  // ويُحقَن مرة واحدة فقط في <head>. الإتاحة للفهرسة غير متأثرة: كل
+  // الصفحات تحمل meta name="robots" content="index, follow" افتراضياً.
+  if(cfg.ad_header_code && !AD_HEADER_INJECTED){
+    AD_HEADER_INJECTED = true;
+    injectRawHTML(document.head, cfg.ad_header_code);
+  }
 
   if(cfg.whatsapp_number){
     WHATSAPP_NUMBER = String(cfg.whatsapp_number).replace(/\D/g, "");
