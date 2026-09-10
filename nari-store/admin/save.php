@@ -94,6 +94,204 @@ if ($action === 'save_products') {
     exit;
 }
 
+function nari_valid_slug(string $s): bool {
+    return (bool) preg_match('/^[a-z0-9]+(-[a-z0-9]+)*$/', $s);
+}
+
+if ($action === 'save_page') {
+    $pages = nari_read_json(PAGES_FILE);
+    $originalSlug = trim((string)($_POST['original_slug'] ?? ''));
+    $slug = strtolower(trim((string)($_POST['slug'] ?? '')));
+    $title = trim((string)($_POST['title'] ?? ''));
+
+    if ($title === '' || !nari_valid_slug($slug)) {
+        header('Location: content.php?type=page&edit=' . rawurlencode($originalSlug) . '&err=invalid');
+        exit;
+    }
+
+    foreach ($pages as $p) {
+        if (($p['slug'] ?? '') === $slug && $slug !== $originalSlug) {
+            header('Location: content.php?type=page&edit=' . rawurlencode($originalSlug) . '&err=exists');
+            exit;
+        }
+    }
+
+    $entry = [
+        'slug' => $slug,
+        'title' => $title,
+        'meta_description' => trim((string)($_POST['meta_description'] ?? '')),
+        'keywords' => trim((string)($_POST['keywords'] ?? '')),
+        'content_html' => (string)($_POST['content_html'] ?? ''),
+        'published' => isset($_POST['published']),
+        'updated_at' => date('Y-m-d'),
+    ];
+
+    $found = false;
+    foreach ($pages as &$p) {
+        if (($p['slug'] ?? '') === $originalSlug) {
+            $p = $entry;
+            $found = true;
+            break;
+        }
+    }
+    unset($p);
+    if (!$found) {
+        $pages[] = $entry;
+    }
+
+    nari_write_json(PAGES_FILE, $pages);
+    header('Location: content.php?type=page&edit=' . rawurlencode($slug) . '&msg=saved');
+    exit;
+}
+
+if ($action === 'delete_page') {
+    $pages = nari_read_json(PAGES_FILE);
+    $target = (string)($_POST['target_slug'] ?? '');
+    $pages = array_values(array_filter($pages, fn($p) => ($p['slug'] ?? '') !== $target));
+    nari_write_json(PAGES_FILE, $pages);
+    header('Location: content.php?type=page&msg=deleted');
+    exit;
+}
+
+if ($action === 'save_article') {
+    $articles = nari_read_json(ARTICLES_FILE);
+    $originalSlug = trim((string)($_POST['original_slug'] ?? ''));
+    $slug = strtolower(trim((string)($_POST['slug'] ?? '')));
+    $title = trim((string)($_POST['title'] ?? ''));
+
+    if ($title === '' || !nari_valid_slug($slug)) {
+        header('Location: content.php?type=article&edit=' . rawurlencode($originalSlug) . '&err=invalid');
+        exit;
+    }
+
+    foreach ($articles as $a) {
+        if (($a['slug'] ?? '') === $slug && $slug !== $originalSlug) {
+            header('Location: content.php?type=article&edit=' . rawurlencode($originalSlug) . '&err=exists');
+            exit;
+        }
+    }
+
+    $existingPublishedAt = '';
+    foreach ($articles as $a) {
+        if (($a['slug'] ?? '') === $originalSlug) {
+            $existingPublishedAt = $a['published_at'] ?? '';
+            break;
+        }
+    }
+
+    $entry = [
+        'slug' => $slug,
+        'title' => $title,
+        'excerpt' => trim((string)($_POST['excerpt'] ?? '')),
+        'meta_description' => trim((string)($_POST['meta_description'] ?? '')),
+        'keywords' => trim((string)($_POST['keywords'] ?? '')),
+        'category' => trim((string)($_POST['category'] ?? '')) ?: 'مقال',
+        'content_html' => (string)($_POST['content_html'] ?? ''),
+        'published' => isset($_POST['published']),
+        'published_at' => $existingPublishedAt ?: date('Y-m-d'),
+        'updated_at' => date('Y-m-d'),
+    ];
+
+    $found = false;
+    foreach ($articles as &$a) {
+        if (($a['slug'] ?? '') === $originalSlug) {
+            $a = $entry;
+            $found = true;
+            break;
+        }
+    }
+    unset($a);
+    if (!$found) {
+        $articles[] = $entry;
+    }
+
+    nari_write_json(ARTICLES_FILE, $articles);
+    header('Location: content.php?type=article&edit=' . rawurlencode($slug) . '&msg=saved');
+    exit;
+}
+
+if ($action === 'delete_article') {
+    $articles = nari_read_json(ARTICLES_FILE);
+    $target = (string)($_POST['target_slug'] ?? '');
+    $articles = array_values(array_filter($articles, fn($a) => ($a['slug'] ?? '') !== $target));
+    nari_write_json(ARTICLES_FILE, $articles);
+    header('Location: content.php?type=article&msg=deleted');
+    exit;
+}
+
+if ($action === 'save_site') {
+    $settings = nari_read_json(SETTINGS_FILE);
+    $siteUrl = rtrim(trim($_POST['site_url'] ?? ''), '/');
+    if ($siteUrl !== '' && !preg_match('#^https?://#i', $siteUrl)) {
+        $siteUrl = 'https://' . $siteUrl;
+    }
+    $settings['site_url'] = $siteUrl !== '' ? $siteUrl : ($settings['site_url'] ?? 'https://yassota.com');
+    nari_write_json(SETTINGS_FILE, $settings);
+    header('Location: site-settings.php?saved=site');
+    exit;
+}
+
+if ($action === 'save_robots') {
+    $content = (string)($_POST['robots_content'] ?? '');
+    if (trim($content) === '') {
+        header('Location: site-settings.php?error=empty_robots');
+        exit;
+    }
+    file_put_contents(__DIR__ . '/../robots.txt', $content);
+    header('Location: site-settings.php?saved=robots');
+    exit;
+}
+
+if ($action === 'regenerate_sitemap') {
+    $settings = nari_read_json(SETTINGS_FILE);
+    $siteUrl = rtrim($settings['site_url'] ?? 'https://yassota.com', '/');
+    $root = realpath(__DIR__ . '/..');
+
+    $urls = [];
+    $htmlFiles = glob($root . '/*.html');
+    natsort($htmlFiles);
+    foreach ($htmlFiles as $file) {
+        $name = basename($file);
+        if ($name === '404.html') continue;
+        $isHome = $name === 'index.html';
+        $urls[] = [
+            'loc' => $siteUrl . '/' . ($isHome ? '' : $name),
+            'changefreq' => $isHome ? 'weekly' : 'monthly',
+            'priority' => $isHome ? '1.0' : '0.6',
+        ];
+    }
+
+    $pages = nari_read_json(PAGES_FILE);
+    foreach ($pages as $p) {
+        if (empty($p['published']) || empty($p['slug'])) continue;
+        $urls[] = ['loc' => $siteUrl . '/p/' . $p['slug'], 'changefreq' => 'monthly', 'priority' => '0.5'];
+    }
+
+    $articles = nari_read_json(ARTICLES_FILE);
+    if (!empty($articles)) {
+        $urls[] = ['loc' => $siteUrl . '/blog', 'changefreq' => 'weekly', 'priority' => '0.6'];
+    }
+    foreach ($articles as $a) {
+        if (empty($a['published']) || empty($a['slug'])) continue;
+        $urls[] = ['loc' => $siteUrl . '/article/' . $a['slug'], 'changefreq' => 'monthly', 'priority' => '0.6'];
+    }
+
+    $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+    $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+    foreach ($urls as $u) {
+        $xml .= "  <url>\n";
+        $xml .= '    <loc>' . htmlspecialchars($u['loc'], ENT_QUOTES | ENT_XML1, 'UTF-8') . "</loc>\n";
+        $xml .= '    <changefreq>' . $u['changefreq'] . "</changefreq>\n";
+        $xml .= '    <priority>' . $u['priority'] . "</priority>\n";
+        $xml .= "  </url>\n";
+    }
+    $xml .= '</urlset>' . "\n";
+
+    file_put_contents($root . '/sitemap.xml', $xml);
+    header('Location: site-settings.php?saved=sitemap&count=' . count($urls));
+    exit;
+}
+
 if ($action === 'change_password') {
     // ملاحظة: هذا الإجراء يعرض لك القيمة الجاهزة لوضعها يدوياً في config.php
     // لأن استضافات مجانية كثيرة تمنع الكتابة على ملفات .php من داخل السكربت نفسه لأسباب أمنية.

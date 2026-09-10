@@ -26,6 +26,8 @@ define('ADMIN_PASSWORD_HASH', '$2y$12$BsgmH.rLrdbZjwhCsZcihe.i2zzhGYwP8skFKe5BI/
 define('SETTINGS_FILE', __DIR__ . '/../data/settings.json');
 define('SERVICES_FILE', __DIR__ . '/../data/services.json');
 define('PRODUCTS_FILE', __DIR__ . '/../data/products.json');
+define('PAGES_FILE', __DIR__ . '/../data/pages.json');
+define('ARTICLES_FILE', __DIR__ . '/../data/articles.json');
 
 // اسم جلسة مخصص لتفادي أي تعارض مع تطبيقات أخرى على نفس الاستضافة
 define('ADMIN_SESSION_NAME', 'nari_admin_session');

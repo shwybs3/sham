@@ -1,6 +1,7 @@
 <?php
 define('NARI_ADMIN', true);
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/nav.php';
 nari_require_login();
 
 $products = nari_read_json(PRODUCTS_FILE);
@@ -44,6 +45,7 @@ foreach ($products as $p) {
     </div>
   </div>
 </div>
+<?php nari_admin_nav('products'); ?>
 
 <div class="wrap">
 

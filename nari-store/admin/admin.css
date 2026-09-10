@@ -51,11 +51,38 @@ a{ color:inherit; }
 }
 
 .top-bar{
-  border-bottom:1px solid var(--line); background:var(--panel); padding:16px 0; margin-bottom:30px;
+  border-bottom:1px solid var(--line); background:var(--panel); padding:16px 0;
 }
 .top-bar .wrap{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
 .top-bar h1{ font-size:1.15rem; }
 .top-bar h1 span{ color:var(--red); }
+
+.admin-nav{ background:var(--panel-2); border-bottom:1px solid var(--line); margin-bottom:30px; }
+.admin-nav .wrap{ display:flex; gap:2px; overflow-x:auto; padding:0 20px; }
+.admin-nav a{
+  display:inline-block; padding:14px 16px; color:var(--muted); text-decoration:none;
+  font-weight:700; font-size:.87rem; white-space:nowrap; border-bottom:3px solid transparent;
+}
+.admin-nav a:hover{ color:var(--paper); }
+.admin-nav a.active{ color:var(--paper); border-bottom-color:var(--red); }
+
+.file-row{ display:flex; align-items:center; gap:12px; padding:10px 8px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.file-row:last-child{ border-bottom:none; }
+.file-row .fname{ flex:1; min-width:180px; display:flex; align-items:center; gap:8px; }
+.file-row .fmeta{ color:var(--muted); font-size:.78rem; white-space:nowrap; }
+.file-row form{ display:inline-flex; gap:6px; align-items:center; margin:0; }
+.file-row input[type=text]{ width:auto; padding:6px 9px; font-size:.82rem; }
+.file-actions{ display:flex; gap:6px; flex-wrap:wrap; }
+.btn.tiny{ width:auto; padding:6px 12px; font-size:.78rem; border-radius:6px; }
+.btn.danger{ background:linear-gradient(90deg,#B0134A,#7a0d34); }
+.breadcrumbs{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:.85rem; margin-bottom:16px; }
+.breadcrumbs a{ color:var(--gold); text-decoration:none; }
+.code-editor{
+  width:100%; min-height:480px; background:var(--ink); color:var(--paper); border:1px solid var(--line);
+  border-radius:8px; padding:14px; font-family:'Courier New',monospace; font-size:.88rem; direction:ltr;
+  text-align:left; line-height:1.5; resize:vertical;
+}
+.tag-pill{ display:inline-block; background:var(--panel-2); border:1px solid var(--line); color:var(--muted); padding:2px 10px; border-radius:20px; font-size:.72rem; margin-inline-start:6px; }
 
 .panel{
   background:var(--panel); border:1px solid var(--line); border-radius:12px;

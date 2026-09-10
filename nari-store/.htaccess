@@ -114,6 +114,11 @@ AddDefaultCharset UTF-8
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # الصفحات والمقالات الديناميكية (تُدار من لوحة التحكم ← الصفحات والمقالات)
+  RewriteRule ^p/([a-z0-9\-]+)/?$ page.php?slug=$1 [NC,L,QSA]
+  RewriteRule ^article/([a-z0-9\-]+)/?$ article.php?slug=$1 [NC,L,QSA]
+  RewriteRule ^blog/?$ blog.php [NC,L,QSA]
+
   # لا تعالج الملفات أو المجلدات الموجودة فعلاً
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

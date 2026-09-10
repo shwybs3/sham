@@ -1,6 +1,7 @@
 <?php
 define('NARI_ADMIN', true);
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/nav.php';
 nari_require_login();
 
 $settings = nari_read_json(SETTINGS_FILE);
@@ -44,6 +45,7 @@ foreach ($services as $svc) {
     </div>
   </div>
 </div>
+<?php nari_admin_nav('overview'); ?>
 
 <div class="wrap">
 
@@ -298,6 +300,9 @@ foreach ($services as $svc) {
     <p class="hint">أدوات مفيدة بعد رفع الموقع على استضافتك.</p>
     <div class="grid3">
       <a class="btn ghost" href="products.php">إدارة المنتجات والأسعار ←</a>
+      <a class="btn ghost" href="content.php">الصفحات والمقالات ←</a>
+      <a class="btn ghost" href="files.php">مدير الملفات ←</a>
+      <a class="btn ghost" href="site-settings.php">إعدادات الموقع والدومين ←</a>
       <a class="btn ghost" href="../sitemap.xml" target="_blank">عرض خريطة الموقع (sitemap.xml)</a>
       <a class="btn ghost" href="../robots.txt" target="_blank">عرض ملف robots.txt</a>
       <a class="btn ghost" href="https://search.google.com/search-console" target="_blank">Google Search Console ↗</a>
