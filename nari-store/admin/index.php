@@ -36,7 +36,7 @@ foreach ($services as $svc) {
 
 <div class="top-bar">
   <div class="wrap">
-    <h1>🔥 لوحة تحكم <span>ناري ستور</span></h1>
+    <h1><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2c1 3-2 5-2 8 0 2 1.5 3 1.5 3s-4-1-4-5c0-1 .2-2 .2-2S4 9 4 13c0 5 3.5 8 8 8s8-3 8-8c0-4-3-6-4-9-.3 2-1 3.5-2.5 4 .5-2.5-.5-4.5-2.5-6z"/></svg> لوحة تحكم <span>ناري ستور</span></h1>
     <div style="display:flex; align-items:center; gap:14px;">
       <a href="../index.html" target="_blank" class="btn ghost small">عرض الموقع ↗</a>
       <span style="color:var(--muted); font-size:.85rem;">مرحباً، <?= v($_SESSION['nari_admin_user'] ?? 'المشرف') ?></span>

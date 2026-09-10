@@ -42,7 +42,7 @@ $csrf = nari_csrf_token();
 <body>
 <div class="login-page">
   <div class="login-card">
-    <h1>🔥 لوحة تحكم ناري ستور</h1>
+    <h1><svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2c1 3-2 5-2 8 0 2 1.5 3 1.5 3s-4-1-4-5c0-1 .2-2 .2-2S4 9 4 13c0 5 3.5 8 8 8s8-3 8-8c0-4-3-6-4-9-.3 2-1 3.5-2.5 4 .5-2.5-.5-4.5-2.5-6z"/></svg> لوحة تحكم ناري ستور</h1>
     <p class="sub">سجّل الدخول لإدارة إعدادات الموقع والخدمات</p>
     <?php if ($error): ?>
       <div class="error-box"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
