@@ -60,16 +60,18 @@ if (!empty($_GET['order'])) {
 <title>الدفع | <?= e(setting('site_title')) ?></title>
 <meta name="robots" content="noindex">
 <style>
-body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#0b1120;color:#e5edf7;padding:40px 16px}
-.box{max-width:420px;margin:0 auto;background:#141c30;border:1px solid #243149;border-radius:14px;padding:24px}
-h1{font-size:17px;margin:0 0 16px}
-.err{background:#450a0a;border:1px solid #991b1b;color:#fecaca;padding:10px;border-radius:8px;font-size:13px}
-img.qr{display:block;margin:16px auto;border-radius:10px}
-label{display:block;font-size:12px;color:#8ea0bd;margin:12px 0 4px}
-input{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1px solid #243149;background:#0b1120;color:#e5edf7;font-size:13px;direction:ltr;text-align:center}
-.copy{width:100%;margin-top:8px;padding:9px;border:0;border-radius:8px;background:#243149;color:#e5edf7;cursor:pointer;font-size:12.5px}
-.ok{background:#052e16;border:1px solid #16a34a;color:#bbf7d0;padding:14px;border-radius:10px;font-size:13.5px}
-a.back{color:#38bdf8;font-size:13px}
+body{margin:0;font-family:'Courier New',ui-monospace,monospace;background:#0a0a0c;color:#f2f2f4;padding:40px 16px}
+body::after{content:"";position:fixed;top:-30%;left:50%;transform:translateX(-50%);width:800px;height:500px;max-width:120vw;background:radial-gradient(circle,rgba(225,6,0,.2),transparent 60%);pointer-events:none;z-index:0}
+.box{max-width:420px;margin:0 auto;background:#141417;border:1px solid #ff0033;border-radius:8px;padding:24px;position:relative;z-index:1;box-shadow:0 0 40px rgba(255,0,51,.25)}
+h1{font-size:17px;margin:0 0 16px;color:#ff0033;text-shadow:0 0 12px rgba(255,0,51,.55)}
+.err{background:#1a0507;border:1px solid #8a0018;color:#ff6b81;padding:10px;border-radius:6px;font-size:13px}
+img.qr{display:block;margin:16px auto;border-radius:8px;border:1px solid #ff0033}
+label{display:block;font-size:12px;color:#8a8a92;margin:12px 0 4px}
+input{width:100%;box-sizing:border-box;padding:9px 10px;border-radius:4px;border:1px solid #2a1416;background:#000;color:#f2f2f4;font-size:13px;direction:ltr;text-align:center;font-family:inherit}
+.copy{width:100%;margin-top:8px;padding:9px;border:1px solid #ff0033;border-radius:4px;background:transparent;color:#ff0033;cursor:pointer;font-size:12.5px;font-family:inherit;font-weight:800}
+.copy:hover{background:#e10600;color:#fff}
+.ok{background:#031a0d;border:1px solid #16a34a;color:#4ade80;padding:14px;border-radius:8px;font-size:13.5px}
+a.back{color:#ff0033;font-size:13px}
 </style></head><body>
 <div class="box">
 <?php if (!empty($error)): ?>
@@ -88,7 +90,7 @@ a.back{color:#38bdf8;font-size:13px}
     <label>عنوان الإرسال</label>
     <input id="addr" readonly value="<?= e($order['pay_address']) ?>">
     <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('addr').value)">نسخ العنوان</button>
-    <p style="font-size:12px;color:#8ea0bd;margin-top:14px">⏳ بانتظار الدفع (≈ $<?= number_format((float)$order['price_usd'], 2) ?>)... سيتحدّث هذا الصفحة تلقائياً.</p>
+    <p style="font-size:12px;color:#8a8a92;margin-top:14px">⏳ بانتظار الدفع (≈ $<?= number_format((float)$order['price_usd'], 2) ?>)... سيتحدّث هذا الصفحة تلقائياً.</p>
   <?php endif; ?>
   </div>
   <script>
