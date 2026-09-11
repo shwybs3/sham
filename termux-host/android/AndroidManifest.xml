@@ -7,6 +7,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- إشعارات التنزيل على أندرويد 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- استثناء من تحسين البطارية: خادم على الجوال يجب ألا يُقتل في الخلفية -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- للتحكم بخدمات ShamHost داخل Termux على نفس الجهاز -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 

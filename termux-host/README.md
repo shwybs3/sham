@@ -44,11 +44,25 @@
 
 ## التثبيت
 
+### الطريقة الأسهل: أمر واحد
+
 في Termux على **جهاز الاستضافة** (الجوال الآخر):
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/shwybs3/sham/claude/web-app-hosting-domain-1enxch/termux-host/bootstrap.sh | bash
+```
+
+يجلب المشروع ويشغّل المثبّت كاملاً. آمن لإعادة التشغيل: يحدّث نسخة موجودة ويحافظ على إعداداتك وكلمة مرورك.
+
+### أو من داخل التطبيق
+
+ثبّت `ShamHost.apk` على جهاز الاستضافة واضغط **تثبيت ShamHost على هذا الجهاز** — يرسل التطبيق الأمر أعلاه إلى Termux ويعرض لك التنفيذ مباشرة. لا حاجة لكتابة أي شيء.
+
+### أو يدوياً
+
+```bash
 pkg install -y git
-git clone https://github.com/shwybs3/sham.git
+git clone -b claude/web-app-hosting-domain-1enxch https://github.com/shwybs3/sham.git
 cd sham/termux-host
 bash install.sh
 ```
@@ -63,7 +77,9 @@ http://عنوان-الجوال:8088
 
 العنوان مطبوع في نهاية التثبيت، ويمكنك استرجاعه في أي وقت بالأمر `shamhost url`.
 
----
+> إن ظهر لك `bash: shamhost: command not found` فمعناه أن ShamHost لم يُثبَّت بعد على هذا الجهاز —
+> نفّذ أمر التثبيت أعلاه أولاً. وإن ظهر `ERR_CONNECTION_REFUSED` على المنفذ 8088 فالخدمة متوقفة:
+> نفّذ `shamhost start`.
 
 ## تطبيق أندرويد (APK)
 

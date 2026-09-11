@@ -15,6 +15,7 @@ public class ControlActivity extends Activity {
 
     /** الاسم المعروض، الأمر، هل يُنفَّذ صامتاً */
     private static final String[][] ACTIONS = {
+            { "تثبيت / تحديث ShamHost", Termux.INSTALL_COMMAND, "false" },
             { "تشغيل الخدمات",        "shamhost start",    "false" },
             { "إيقاف الخدمات",        "shamhost stop",     "false" },
             { "إعادة التشغيل",        "shamhost restart",  "false" },

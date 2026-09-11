@@ -18,6 +18,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
@@ -34,6 +35,7 @@ public class WebActivity extends Activity {
     private TextView barTitle;
     private View errorBox;
     private TextView errorDetail;
+    private Button errInstall;
 
     private String baseUrl;
     private ValueCallback<Uri[]> filePathCallback;
@@ -57,6 +59,7 @@ public class WebActivity extends Activity {
         barTitle = findViewById(R.id.barTitle);
         errorBox = findViewById(R.id.errorBox);
         errorDetail = findViewById(R.id.errorDetail);
+        errInstall = findViewById(R.id.btnErrInstall);
 
         barTitle.setText(baseUrl);
 
@@ -147,6 +150,11 @@ public class WebActivity extends Activity {
         findViewById(R.id.btnReload).setOnClickListener(v -> load());
         findViewById(R.id.btnRetry).setOnClickListener(v -> load());
         findViewById(R.id.btnBackSetup).setOnClickListener(v -> backToSetup());
+        errInstall.setOnClickListener(v -> {
+            boolean sent = Termux.run(this, Termux.INSTALL_COMMAND, false);
+            Toast.makeText(this, sent ? R.string.install_started : R.string.cmd_failed,
+                    Toast.LENGTH_LONG).show();
+        });
         findViewById(R.id.btnMenu).setOnClickListener(this::showMenu);
 
         load();
@@ -158,11 +166,23 @@ public class WebActivity extends Activity {
         web.loadUrl(baseUrl);
     }
 
+    /**
+     * الاتصال المرفوض يعني أن لا شيء يستمع على المنفذ — أي أن ShamHost غير مثبّت
+     * أو متوقف. نقول ذلك صراحةً بدل رسالة شبكة عامة، ونعرض زر التثبيت عند توفر Termux.
+     */
     private void showError(String detail) {
         web.setVisibility(View.GONE);
         errorBox.setVisibility(View.VISIBLE);
-        String hint = getString(R.string.load_error_hint);
+
+        boolean refused = detail != null
+                && (detail.contains("ERR_CONNECTION_REFUSED")
+                 || detail.toLowerCase().contains("refused")
+                 || detail.contains("ERR_ADDRESS_UNREACHABLE"));
+
+        String hint = refused ? getString(R.string.not_installed_hint)
+                              : getString(R.string.load_error_hint);
         errorDetail.setText(detail == null ? hint : hint + "\n\n" + detail);
+        errInstall.setVisibility(refused && Termux.installed(this) ? View.VISIBLE : View.GONE);
     }
 
     private void showMenu(View anchor) {

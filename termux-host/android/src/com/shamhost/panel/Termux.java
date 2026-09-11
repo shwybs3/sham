@@ -15,6 +15,13 @@ final class Termux {
     private static final String BASH = "/data/data/com.termux/files/usr/bin/bash";
     private static final String HOME = "/data/data/com.termux/files/home";
 
+    /** أمر التثبيت الذاتي: يجلب ShamHost ويشغّل المثبّت داخل Termux. */
+    static final String BOOTSTRAP_URL =
+            "https://raw.githubusercontent.com/shwybs3/sham/"
+            + "claude/web-app-hosting-domain-1enxch/termux-host/bootstrap.sh";
+
+    static final String INSTALL_COMMAND = "curl -fsSL " + BOOTSTRAP_URL + " | bash";
+
     static boolean installed(Context c) {
         try {
             c.getPackageManager().getPackageInfo(PKG, 0);
@@ -29,6 +36,7 @@ final class Termux {
      * @return true إذا قُبل الطلب.
      */
     static boolean run(Context c, String command, boolean background) {
+        if (!installed(c)) return false;
         Intent i = new Intent();
         i.setClassName(PKG, SERVICE);
         i.setAction(ACTION);

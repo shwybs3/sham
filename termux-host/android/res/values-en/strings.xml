@@ -23,4 +23,17 @@
     <string name="cmd_sent">Command sent to Termux</string>
     <string name="cmd_failed">Could not send the command. Check allow-external-apps = true</string>
     <string name="open_panel">Open panel</string>
+    <string name="install_shamhost">Install ShamHost on this device</string>
+    <string name="copy_command">Copy install command</string>
+    <string name="copied">Command copied — paste it into Termux</string>
+    <string name="status_checking">Checking the service…</string>
+    <string name="status_up">Service is running on %1$s</string>
+    <string name="status_down">Service is not running on %1$s</string>
+    <string name="termux_not_installed">Termux is not installed. Get it from F-Droid (not Google Play), then come back.</string>
+    <string name="open_fdroid">Get Termux from F-Droid</string>
+    <string name="not_installed_hint">ShamHost seems not installed or not running on this device. Tap "Install ShamHost" to do everything automatically inside Termux, or "Start services" if it is already installed.</string>
+    <string name="install_started">Install started in Termux — wait for the password, then come back and tap Connect.</string>
+    <string name="battery_prompt">To stop Android killing the server, allow unrestricted battery use.</string>
+    <string name="perm_note">On launch the app requests: notifications, file access, and running commands in Termux. Android has no single "grant all" switch, so each permission gets its own dialog.</string>
+    <string name="start_services">Start services</string>
 </resources>

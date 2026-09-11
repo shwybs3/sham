@@ -89,6 +89,12 @@
                 android:layout_marginTop="20dp"
                 android:text="@string/retry" />
 
+            <Button style="@style/Btn.Ghost" android:id="@+id/btnErrInstall"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:visibility="gone"
+                android:text="@string/install_shamhost" />
+
             <Button style="@style/Btn.Ghost" android:id="@+id/btnBackSetup"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"

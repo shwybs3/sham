@@ -39,6 +39,17 @@
             android:textColor="@color/muted"
             android:textSize="14sp" />
 
+        <TextView android:id="@+id/statusChip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card"
+            android:padding="12dp"
+            android:gravity="center"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp"
+            android:text="@string/status_checking" />
+
         <TextView style="@style/Label" android:id="@+id/lblHost"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="@string/host_label" />
@@ -73,6 +84,29 @@
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="@string/this_device" />
+
+        <Button style="@style/Btn" android:id="@+id/btnInstall"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/install_shamhost" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnStart"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/start_services" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnCopyCmd"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/copy_command" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnFdroid"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/open_fdroid" />
 
         <Button style="@style/Btn.Ghost" android:id="@+id/btnTermux"
             android:layout_width="match_parent" android:layout_height="wrap_content"
