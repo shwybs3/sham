@@ -15,8 +15,10 @@ function seo_head(array $o): void {
     <meta name="description" content="<?= e($desc) ?>">
     <?php if ($keywords): ?><meta name="keywords" content="<?= e($keywords) ?>"><?php endif; ?>
     <link rel="canonical" href="<?= e($canonical) ?>">
-    <meta name="robots" content="index, follow, max-image-preview:large">
+    <?php /* One robots directive per page — a second, conflicting tag is worse than none. */ ?>
+    <meta name="robots" content="<?= !empty($o['noindex']) ? 'noindex, follow' : 'index, follow, max-image-preview:large' ?>">
     <meta property="og:type" content="<?= e($type) ?>">
+    <meta property="og:locale" content="ar_AR">
     <meta property="og:title" content="<?= e($title) ?>">
     <meta property="og:description" content="<?= e($desc) ?>">
     <meta property="og:url" content="<?= e($canonical) ?>">
@@ -28,12 +30,12 @@ function seo_head(array $o): void {
     <link rel="icon" href="<?= site_url('assets/img/favicon.svg') ?>" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=6">
+    <link rel="stylesheet" href="<?= site_url('assets/css/style.css') ?>?v=7">
     <?php
     $themes = [
-        'default' => ['brand1' => '#6366f1', 'brand2' => '#22d3ee'],
+        'default' => ['brand1' => '#22d3ee', 'brand2' => '#a855f7'],
         'dark'    => ['brand1' => '#a78bfa', 'brand2' => '#34d399'],
         'ocean'   => ['brand1' => '#0ea5e9', 'brand2' => '#38bdf8'],
         'sunset'  => ['brand1' => '#f97316', 'brand2' => '#fbbf24'],
@@ -54,13 +56,14 @@ function seo_head(array $o): void {
 
 function nav_links(): array {
     return [
-        'Home' => site_url(''),
-        'Articles' => site_url('articles.php'),
-        'News' => site_url('articles.php?type=news'),
-        'Comparisons' => site_url('articles.php?type=comparison'),
-        'Tutorials' => site_url('articles.php?type=tutorial'),
-        'Tools' => site_url('tools.php'),
-        'Store' => site_url('products.php'),
+        'الرئيسية' => site_url(''),
+        'الباقات' => site_url('products.php'),
+        'إنستقرام' => site_url('products.php?platform=instagram'),
+        'فيسبوك' => site_url('products.php?platform=facebook'),
+        'يوتيوب' => site_url('products.php?platform=youtube'),
+        'تيليجرام' => site_url('products.php?platform=telegram'),
+        'الحماية الرقمية' => site_url('products.php?platform=security'),
+        'المدونة' => site_url('articles.php'),
     ];
 }
 
@@ -76,11 +79,11 @@ function product_card(array $p): void {
         $off = (int)round(100 - ((float)$p['price'] / (float)$p['compare_at_price'] * 100));
     }
     ?>
-    <a class="product-card" href="<?= site_url('product.php?slug=' . urlencode($p['slug'])) ?>">
+    <a class="product-card" href="<?= product_url($p['slug']) ?>">
       <div class="art-wrap">
         <?= svg_product_art($p['art_key']) ?>
         <?php if (!empty($p['badge'])): ?><span class="badge-corner"><?= e($p['badge']) ?></span><?php endif; ?>
-        <span class="art-icon"><i class="fa-solid <?= e($p['icon_class']) ?>"></i></span>
+        <span class="art-icon"><i class="<?= e($p['icon_class'] ?: 'fa-solid fa-cube') ?>"></i></span>
       </div>
       <div class="pbody">
         <span class="ptype"><i class="fa-solid fa-tag"></i> <?= e($p['product_type']) ?></span>
@@ -93,7 +96,7 @@ function product_card(array $p): void {
             <span class="price-off">−<?= $off ?>%</span>
           <?php endif; ?>
         </div>
-        <span class="pcta">View details <i class="fa-solid fa-arrow-right"></i></span>
+        <span class="pcta">عرض الباقة <i class="fa-solid fa-arrow-left"></i></span>
       </div>
     </a>
     <?php
@@ -101,10 +104,10 @@ function product_card(array $p): void {
 
 function cookie_consent_banner(): void {
     ?>
-    <div id="cookieBanner" class="cookie-banner" role="dialog" aria-label="Cookie notice">
-      <p>We use cookies for core site functionality, analytics, and (once approved) ads. <a href="<?= site_url('cookie-policy.php') ?>">Learn more</a></p>
+    <div id="cookieBanner" class="cookie-banner" role="dialog" aria-label="تنبيه ملفات تعريف الارتباط">
+      <p>نستخدم ملفات تعريف الارتباط لتشغيل الموقع وتحليل الزيارات. <a href="<?= site_url('cookie-policy.php') ?>">اعرف أكثر</a></p>
       <div class="cookie-actions">
-        <button type="button" onclick="shAcceptCookies()">Got it</button>
+        <button type="button" onclick="shAcceptCookies()">حسناً</button>
       </div>
     </div>
     <script>
@@ -128,7 +131,7 @@ function cookie_consent_banner(): void {
 }
 
 function site_header(string $active = ''): void {
-    $siteName = setting('site_name', 'Syria Home');
+    $siteName = setting('site_name', 'Yassota');
     cookie_consent_banner();
     ?>
     <header class="site-header">
@@ -138,7 +141,7 @@ function site_header(string $active = ''): void {
           <?php if ($logoUrl !== ''): ?>
             <img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" style="max-height:38px;width:auto">
           <?php else: ?>
-            <span class="mark"><i class="fa-solid fa-layer-group"></i></span><?= e($siteName) ?>
+            <span class="mark"><i class="fa-solid fa-bolt"></i></span><?= e($siteName) ?>
           <?php endif; ?>
         </a>
         <nav class="main-nav" id="mainNav">
@@ -148,10 +151,11 @@ function site_header(string $active = ''): void {
         </nav>
         <form class="header-search" action="<?= site_url('search.php') ?>" method="get">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" name="q" placeholder="Search articles &amp; tools...">
+          <input type="text" name="q" placeholder="بحث عن باقة...">
         </form>
-        <a href="<?= site_url('tools.php') ?>" class="header-cta"><i class="fa-solid fa-bolt"></i> <span>Free Tools</span></a>
-        <button class="hamburger" id="navToggle" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+        <?php $tg = trim(setting('support_telegram')); ?>
+        <a href="<?= $tg !== '' ? e('https://t.me/' . ltrim($tg, '@')) : site_url('contact.php') ?>" target="<?= $tg !== '' ? '_blank' : '_self' ?>" rel="noopener" class="header-cta"><i class="fa-solid fa-headset"></i> <span>تواصل معنا</span></a>
+        <button class="hamburger" id="navToggle" aria-label="فتح القائمة"><i class="fa-solid fa-bars"></i></button>
       </div>
     </header>
     <div class="nav-backdrop" id="navBackdrop"></div>
@@ -159,13 +163,13 @@ function site_header(string $active = ''): void {
 }
 
 function site_footer(): void {
-    $siteName = setting('site_name', 'Syria Home');
+    $siteName = setting('site_name', 'Yassota');
     ?>
     <footer class="site-footer">
       <div class="container cols">
         <div>
-          <div class="brand"><span class="mark" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--brand1),var(--brand2));display:inline-flex;align-items:center;justify-content:center"><i class="fa-solid fa-layer-group" style="font-size:14px"></i></span><?= e($siteName) ?></div>
-          <p style="max-width:320px;color:#94a3b8;font-size:13px"><?= e(setting('site_tagline')) ?></p>
+          <div class="brand"><span class="mark" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--brand1),var(--brand2));display:inline-flex;align-items:center;justify-content:center"><i class="fa-solid fa-bolt" style="font-size:14px"></i></span><?= e($siteName) ?></div>
+          <p style="max-width:320px;color:#94a3b8;font-size:13px"><?= e(setting('site_tagline', 'باقات نمو رقمي وحماية سيبرانية بدفع فوري بالعملات الرقمية.')) ?></p>
           <?php $footerEmail = trim(setting('contact_email', 'contact@yassota.com')); if ($footerEmail !== ''): ?>
             <a href="mailto:<?= e($footerEmail) ?>" style="color:#94a3b8;font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px"><i class="fa-solid fa-envelope"></i> <?= e($footerEmail) ?></a>
           <?php endif; ?>
@@ -175,40 +179,107 @@ function site_footer(): void {
             <?php endforeach; ?>
           </div>
         </div>
-        <div><h4>Explore</h4>
-          <a href="<?= site_url('articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> Articles</a>
-          <a href="<?= site_url('articles.php?type=news') ?>"><i class="fa-solid fa-bolt fa-fw"></i> News</a>
-          <a href="<?= site_url('tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> Web Tools</a>
-          <a href="<?= site_url('products.php') ?>"><i class="fa-solid fa-store fa-fw"></i> Store</a>
+        <div><h4>الخدمات</h4>
+          <a href="<?= site_url('products.php?platform=instagram') ?>"><i class="fa-brands fa-instagram fa-fw"></i> إنستقرام</a>
+          <a href="<?= site_url('products.php?platform=facebook') ?>"><i class="fa-brands fa-facebook fa-fw"></i> فيسبوك</a>
+          <a href="<?= site_url('products.php?platform=youtube') ?>"><i class="fa-brands fa-youtube fa-fw"></i> يوتيوب</a>
+          <a href="<?= site_url('products.php?platform=telegram') ?>"><i class="fa-brands fa-telegram fa-fw"></i> تيليجرام</a>
+          <a href="<?= site_url('products.php?platform=security') ?>"><i class="fa-solid fa-shield-halved fa-fw"></i> الحماية الرقمية</a>
         </div>
-        <div><h4>Company</h4>
-          <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> About</a>
-          <a href="<?= site_url('contact.php') ?>"><i class="fa-solid fa-envelope fa-fw"></i> Contact</a>
-          <a href="<?= site_url('sitemap.php') ?>"><i class="fa-solid fa-sitemap fa-fw"></i> Sitemap</a>
+        <div><h4>الشركة</h4>
+          <a href="<?= site_url('about.php') ?>"><i class="fa-solid fa-circle-info fa-fw"></i> من نحن</a>
+          <a href="<?= site_url('contact.php') ?>"><i class="fa-solid fa-envelope fa-fw"></i> تواصل معنا</a>
+          <a href="<?= site_url('articles.php') ?>"><i class="fa-solid fa-newspaper fa-fw"></i> المدونة</a>
+          <a href="<?= site_url('tools.php') ?>"><i class="fa-solid fa-wrench fa-fw"></i> أدوات مجانية</a>
+          <a href="<?= site_url('sitemap.php') ?>"><i class="fa-solid fa-sitemap fa-fw"></i> خريطة الموقع</a>
         </div>
-        <div><h4>Legal</h4>
-          <a href="<?= site_url('privacy-policy.php') ?>"><i class="fa-solid fa-user-shield fa-fw"></i> Privacy Policy</a>
-          <a href="<?= site_url('terms.php') ?>"><i class="fa-solid fa-gavel fa-fw"></i> Terms of Use</a>
-          <a href="<?= site_url('editorial-policy.php') ?>"><i class="fa-solid fa-feather fa-fw"></i> Editorial Policy</a>
-          <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> Refund Policy</a>
-          <a href="<?= site_url('license.php') ?>"><i class="fa-solid fa-file-contract fa-fw"></i> License Terms</a>
-          <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> Cookie Policy</a>
+        <div><h4>قانوني</h4>
+          <a href="<?= site_url('privacy-policy.php') ?>"><i class="fa-solid fa-user-shield fa-fw"></i> سياسة الخصوصية</a>
+          <a href="<?= site_url('terms.php') ?>"><i class="fa-solid fa-gavel fa-fw"></i> شروط الاستخدام</a>
+          <a href="<?= site_url('refund-policy.php') ?>"><i class="fa-solid fa-rotate-left fa-fw"></i> سياسة الاسترجاع</a>
+          <a href="<?= site_url('cookie-policy.php') ?>"><i class="fa-solid fa-cookie-bite fa-fw"></i> سياسة الكوكيز</a>
           <?php
           try {
               global $pdo;
               $footerPages = $pdo->query("SELECT title, slug FROM pages WHERE show_in_footer=1 AND status='published' ORDER BY title ASC")->fetchAll();
               foreach ($footerPages as $fp):
           ?>
-            <a href="<?= e(site_url('p/' . $fp['slug'])) ?>"><i class="fa-solid fa-file-lines fa-fw"></i> <?= e($fp['title']) ?></a>
+            <a href="<?= e(page_url($fp['slug'])) ?>"><i class="fa-solid fa-file-lines fa-fw"></i> <?= e($fp['title']) ?></a>
           <?php endforeach; } catch (Throwable $e) {} ?>
         </div>
       </div>
       <div class="container bottom">
-        <span>© <?= date('Y') ?> <?= e($siteName) ?>. All rights reserved.</span>
-        <span>Built with a self-hosted CMS · Powered by curiosity</span>
+        <span>© <?= date('Y') ?> <?= e($siteName) ?> — جميع الحقوق محفوظة</span>
+        <span>الدفع بالعملات الرقمية عبر NOWPayments</span>
       </div>
     </footer>
+    <?php chatbot_widget(); ?>
     <script src="<?= site_url('assets/js/main.js') ?>?v=3"></script>
+    <?php
+}
+
+/** Builds the OpenRouter system prompt from the live, published packages catalog. */
+function storefront_chatbot_prompt(): string {
+    global $pdo;
+    $siteName = setting('site_name', 'Yassota');
+    $lines = [];
+    try {
+        $rows = $pdo->query("SELECT name, tagline, price, currency, platform FROM products WHERE status='published' ORDER BY sort_order LIMIT 60")->fetchAll();
+        foreach ($rows as $r) {
+            $lines[] = '- ' . $r['name'] . ' (' . $r['platform'] . '): ' . money((float)$r['price'], $r['currency']) . ' — ' . $r['tagline'];
+        }
+    } catch (Throwable $e) {}
+    $catalog = $lines ? implode("\n", $lines) : 'لا توجد باقات منشورة حالياً.';
+    return "أنت مساعد مبيعات لموقع \"$siteName\" الذي يبيع باقات متابعين ومشاهدات وإعجابات لمنصات التواصل الاجتماعي "
+        . "(إنستقرام، فيسبوك، يوتيوب، تيليجرام) بالإضافة إلى أدوات حماية رقمية (VPN، مدير كلمات مرور، وغيرها)، والدفع يتم "
+        . "بالعملات الرقمية عبر NOWPayments. أجب بالعربية بإيجاز ووضوح، وساعد الزائر على اختيار الباقة المناسبة واذكر له "
+        . "رابط صفحة \"الباقات\" لإتمام الطلب. لا تخترع أسعاراً أو باقات غير المذكورة أدناه. قائمة الباقات المتاحة حالياً:\n"
+        . $catalog . "\nإن سُئلت عن دعم بشري وجّه المستخدم إلى صفحة \"تواصل معنا\".";
+}
+
+function chatbot_widget(): void {
+    if (!OpenRouterClient::isConfigured()) return;
+    $siteName = setting('site_name', 'Yassota');
+    ?>
+    <button id="chatToggle" onclick="shToggleChat()" aria-label="افتح المساعد الذكي"><i class="fa-solid fa-comment-dots"></i></button>
+    <div id="chatPanel" role="dialog" aria-label="المساعد الذكي">
+      <div class="chat-head">
+        <span><i class="fa-solid fa-robot"></i> مساعد <?= e($siteName) ?></span>
+        <span class="chat-close" onclick="shToggleChat()"><i class="fa-solid fa-xmark"></i></span>
+      </div>
+      <div class="chat-body" id="chatBody">
+        <div class="bubble bot">أهلاً 👋 أنا هنا لمساعدتك باختيار الباقة المناسبة. شو محتاج؟</div>
+      </div>
+      <div class="chat-input">
+        <input id="chatInput" placeholder="اكتب سؤالك..." onkeydown="if(event.key==='Enter')shSendChat()">
+        <button onclick="shSendChat()"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+    <script>
+    function shToggleChat(){ document.getElementById('chatPanel').classList.toggle('open'); }
+    var shChatHistory = [];
+    function shEscapeHtml(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+    function shSendChat(){
+      var input = document.getElementById('chatInput');
+      var text = input.value.trim();
+      if(!text) return;
+      var body = document.getElementById('chatBody');
+      body.insertAdjacentHTML('beforeend', '<div class="bubble user">' + shEscapeHtml(text) + '</div>');
+      shChatHistory.push({role:'user', content:text});
+      input.value=''; body.scrollTop = body.scrollHeight;
+      fetch('<?= site_url('chat.php') ?>', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message:text, history:shChatHistory})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          body.insertAdjacentHTML('beforeend', '<div class="bubble bot">' + shEscapeHtml(j.reply) + '</div>');
+          shChatHistory.push({role:'assistant', content:j.reply});
+          body.scrollTop = body.scrollHeight;
+        })
+        .catch(function(){
+          body.insertAdjacentHTML('beforeend', '<div class="bubble bot">تعذّر الاتصال، حاول مرة أخرى.</div>');
+          body.scrollTop = body.scrollHeight;
+        });
+    }
+    </script>
     <?php
 }
 
@@ -227,7 +298,7 @@ function ad_zone(string $slotKey = 'default'): void {
 function article_card(array $a): void {
     $cat = $a['category_name'] ?? ucfirst($a['content_type']);
     ?>
-    <a class="card" href="<?= site_url('article.php?slug=' . urlencode($a['slug'])) ?>">
+    <a class="card" href="<?= article_url($a['slug']) ?>">
       <div class="hero" style="<?= hero_style_css($a['hero_gradient']) ?>">
         <span class="badge"><?= e(ucfirst($a['content_type'])) ?></span>
         <?php if (!empty($a['trending'])): ?><span class="trend"><i class="fa-solid fa-fire"></i> Trending</span><?php endif; ?>
@@ -267,7 +338,7 @@ function tip_widget(string $label): void {
 function tool_card(array $t): void {
     $rating = rating_summary('tool', (int)$t['id']);
     ?>
-    <a class="tcard" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">
+    <a class="tcard" href="<?= tool_url($t['slug']) ?>">
       <div class="tcard-top">
         <span class="tcard-icon" style="<?= hero_style_css('g' . (((int)$t['id'] % 8) + 1)) ?>"><i class="fa-solid <?= e($t['icon_class']) ?>"></i></span>
         <div class="tcard-heading">

@@ -106,9 +106,8 @@ else {
         http_response_code(404); require __DIR__ . '/404.php'; exit;
     }
 }
-?><!doctype html><html lang="en"><head>
-<?php seo_head(['title' => 'Checkout | ' . setting('site_name'), 'description' => 'Secure crypto checkout.', 'canonical' => site_url('checkout.php')]); ?>
-<meta name="robots" content="noindex">
+?><!doctype html><html lang="ar" dir="rtl"><head>
+<?php seo_head(['title' => 'الدفع | ' . setting('site_name', 'Yassota'), 'description' => 'دفع آمن بالعملات الرقمية.', 'canonical' => site_url('checkout.php'), 'noindex' => true]); ?>
 </head><body>
 <?php site_header(); ?>
 
@@ -123,22 +122,22 @@ else {
 
     <div id="payStatus">
       <?php if ($isFinal): ?>
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;color:#047857;padding:16px;border-radius:12px">
-          <i class="fa-solid fa-circle-check"></i> Payment confirmed — thank you!
-          <?php if ($payment['reference_type'] === 'product'): ?><p style="margin:8px 0 0">We'll be in touch at the email you provided with your download.</p><?php endif; ?>
-          <?php if (str_starts_with($payment['reference_type'], 'unlock_')): ?><p style="margin:8px 0 0">Content unlocked — <a href="javascript:history.back()">go back to view it</a>.</p><?php endif; ?>
+        <div style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#6ee7b7;padding:16px;border-radius:12px">
+          <i class="fa-solid fa-circle-check"></i> تم تأكيد الدفع — شكراً لثقتك!
+          <?php if ($payment['reference_type'] === 'product'): ?><p style="margin:8px 0 0">سيتم تفعيل باقتك قريباً، وسنتواصل معك عند الحاجة على البيانات التي أدخلتها.</p><?php endif; ?>
+          <?php if (str_starts_with($payment['reference_type'], 'unlock_')): ?><p style="margin:8px 0 0">تم فتح المحتوى — <a href="javascript:history.back()">رجوع لعرضه</a>.</p><?php endif; ?>
         </div>
       <?php else: ?>
-        <p style="color:var(--muted);font-size:13.5px">Send exactly the amount below to this address. This page updates automatically once payment is detected on the network.</p>
+        <p style="color:var(--muted);font-size:13.5px">أرسل المبلغ بالضبط إلى العنوان أدناه. تتحدث هذه الصفحة تلقائياً بعد رصد الدفع على الشبكة.</p>
         <div style="text-align:center;margin:18px 0">
           <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=<?= urlencode($payment['pay_address']) ?>" width="180" height="180" style="border-radius:10px;border:1px solid var(--line)">
         </div>
-        <label>Amount (<?= e(strtoupper($payment['pay_currency'])) ?>)</label>
+        <label>المبلغ (<?= e(strtoupper($payment['pay_currency'])) ?>)</label>
         <input type="text" readonly value="<?= e(rtrim(rtrim(number_format((float)$payment['pay_amount'], 8, '.', ''), '0'), '.')) ?>">
-        <label>Address</label>
+        <label>العنوان</label>
         <input type="text" id="payAddr" readonly value="<?= e($payment['pay_address']) ?>">
-        <button class="btn-ghost" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('payAddr').value)">Copy address</button>
-        <p class="hint" style="margin-top:14px"><i class="fa-solid fa-hourglass-half"></i> Waiting for payment… (~<?= e(number_format((float)$payment['price_usd'], 2)) ?> USD<?php if (!empty($payment['coupon_code'])): ?> — code <b><?= e($payment['coupon_code']) ?></b> saved you $<?= number_format((float)$payment['discount_usd'], 2) ?><?php endif; ?>)</p>
+        <button class="btn-ghost" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('payAddr').value)">نسخ العنوان</button>
+        <p class="hint" style="margin-top:14px"><i class="fa-solid fa-hourglass-half"></i> في انتظار الدفع… (~<?= e(number_format((float)$payment['price_usd'], 2)) ?> USD<?php if (!empty($payment['coupon_code'])): ?> — كود <b><?= e($payment['coupon_code']) ?></b> وفّر لك $<?= number_format((float)$payment['discount_usd'], 2) ?><?php endif; ?>)</p>
       <?php endif; ?>
     </div>
   </div>
@@ -156,12 +155,12 @@ else {
 
 <?php else: ?>
   <div class="tool-shell">
-    <h1 style="font-size:20px;margin-top:0"><i class="fa-solid fa-wallet" style="color:var(--brand1)"></i> Pay with crypto</h1>
+    <h1 style="font-size:20px;margin-top:0"><i class="fa-solid fa-wallet" style="color:var(--brand1)"></i> الدفع بالعملات الرقمية</h1>
 
     <?php if (!NOWPayments::isConfigured()): ?>
-      <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:14px;border-radius:10px;font-size:13.5px">Crypto payments aren't configured on this site yet.</div>
+      <div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:14px;border-radius:10px;font-size:13.5px">الدفع بالعملات الرقمية غير مُفعّل على هذا الموقع حالياً.</div>
     <?php else: ?>
-      <?php if ($error): ?><div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:12px;border-radius:10px;font-size:13.5px;margin-bottom:14px"><?= e($error) ?></div><?php endif; ?>
+      <?php if ($error): ?><div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:12px;border-radius:10px;font-size:13.5px;margin-bottom:14px"><?= e($error) ?></div><?php endif; ?>
       <form method="post">
         <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
         <input type="hidden" name="type" value="<?= e($pendingType) ?>">
@@ -169,25 +168,25 @@ else {
         <input type="hidden" name="label" value="<?= e((string)$pendingLabel) ?>">
 
         <?php if ($pendingType === 'tip'): ?>
-          <label>Amount (USD)</label>
+          <label>المبلغ (USD)</label>
           <input type="text" name="amount" value="<?= e((string)($pendingAmount ?: '5')) ?>" required>
         <?php endif; ?>
 
         <?php if ($pendingType === 'product'): ?>
-          <label>Email (for delivery)</label>
+          <label>البريد الإلكتروني (للتواصل)</label>
           <input type="text" name="email" placeholder="you@example.com" required>
 
-          <label>Promo code (optional)</label>
-          <input type="text" name="promo_code" value="<?= e($_POST['promo_code'] ?? '') ?>" placeholder="e.g. SAVE20" style="text-transform:uppercase">
+          <label>كود الخصم (اختياري)</label>
+          <input type="text" name="promo_code" value="<?= e($_POST['promo_code'] ?? '') ?>" placeholder="مثال: SAVE20" style="text-transform:uppercase">
         <?php endif; ?>
 
-        <label>Pay with</label>
+        <label>الدفع باستخدام</label>
         <select name="currency" required>
-          <option value="">— choose a currency —</option>
+          <option value="">— اختر عملة —</option>
           <?php foreach (NOWPayments::CURRENCIES as $k => $l): ?><option value="<?= $k ?>"><?= e($l) ?></option><?php endforeach; ?>
         </select>
 
-        <button class="btn-run" style="margin-top:16px;width:100%" type="submit"><i class="fa-solid fa-wallet"></i> Create payment</button>
+        <button class="btn-run" style="margin-top:16px;width:100%" type="submit"><i class="fa-solid fa-wallet"></i> إنشاء فاتورة الدفع</button>
       </form>
     <?php endif; ?>
   </div>

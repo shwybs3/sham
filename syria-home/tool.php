@@ -18,6 +18,8 @@ if (!empty($tool['affiliate_url']) && isset($_GET['visit'])) {
     header('Location: ' . $tool['affiliate_url']); exit;
 }
 
+enforce_canonical_url(tool_url($tool['slug']));
+
 $isLocked = !empty($tool['is_premium']) && !is_content_unlocked('tool', (int)$tool['id']);
 if (!$isLocked) {
     $pdo->prepare("UPDATE tools SET uses_count = uses_count + 1 WHERE id = ?")->execute([$tool['id']]);
@@ -46,7 +48,7 @@ if ($agg) $jsonld['aggregateRating'] = $agg;
     'title' => $metaTitle . ' | ' . setting('site_name'),
     'description' => $metaDesc,
     'keywords' => $tool['meta_keywords'],
-    'canonical' => site_url('tool.php?slug=' . $tool['slug']),
+    'canonical' => tool_url($tool['slug']),
     'jsonld' => $jsonld,
 ]); ?>
 </head><body>

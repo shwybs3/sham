@@ -11,11 +11,34 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 $lockFile = __DIR__ . '/install.lock';
 $installed = file_exists($lockFile);
 
+/** App root without a ".." segment — some hosts restrict such paths via open_basedir. */
+function sh_app_root(): string {
+    return realpath(dirname(__DIR__)) ?: dirname(__DIR__);
+}
+
+/** The optional demo/starter content, in the order it must be applied. */
+const SH_SEEDS = [
+    'seed_categories.php' => 'seed_categories',
+    'seed_articles.php'   => 'seed_articles',
+    'seed_tools.php'      => 'seed_tools',
+    'seed_pro_tools.php'  => 'seed_pro_tools',
+    'seed_products.php'   => 'seed_products',
+];
+
+/** Which seed files are actually present and readable on this server. */
+function sh_missing_seeds(): array {
+    $missing = [];
+    foreach (array_keys(SH_SEEDS) as $file) {
+        if (!is_readable(sh_app_root() . '/seed/' . $file)) $missing[] = $file;
+    }
+    return $missing;
+}
+
 $step = max(1, min(5, (int)($_GET['step'] ?? 1)));
 $data = $_SESSION['install'] ?? [
-    'site_name' => 'Syria Home',
-    'site_tagline' => 'Trending news, hands-on comparisons, practical guides, and free web tools.',
-    'site_description' => 'A modern hub for tech news, tutorials, comparisons and 100% free browser-based tools.',
+    'site_name' => 'Yassota',
+    'site_tagline' => 'باقات متابعين ومشاهدات وإعجابات حقيقية لإنستقرام وفيسبوك ويوتيوب وتيليجرام، وأدوات حماية رقمية — بدفع فوري بالعملات الرقمية.',
+    'site_description' => 'باقات متابعين ومشاهدات وإعجابات حقيقية لإنستقرام وفيسبوك ويوتيوب وتيليجرام، بالإضافة إلى أدوات حماية رقمية، بالدفع الفوري بالعملات الرقمية عبر NOWPayments.',
     'db_host' => 'localhost', 'db_name' => '', 'db_user' => '', 'db_pass' => '',
     'admin_user' => 'admin', 'admin_pass' => '', 'admin_pass2' => '',
 ];
@@ -24,9 +47,9 @@ $errors = [];
 function render_head(string $title): void { ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?= htmlspecialchars($title) ?> — Syria Home Setup</title>
+<title><?= htmlspecialchars($title) ?> — Yassota Setup</title>
 <style>
-:root{--brand1:#6366f1;--brand2:#22d3ee;--ink:#0f172a;--muted:#64748b;--bg:#f4f6fb;--card:#fff;--ok:#16a34a;--err:#dc2626}
+:root{--brand1:#22d3ee;--brand2:#a855f7;--ink:#0f172a;--muted:#64748b;--bg:#f4f6fb;--card:#fff;--ok:#16a34a;--err:#dc2626;--warn:#b45309}
 *{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;background:linear-gradient(160deg,#eef2ff,var(--bg) 40%);color:var(--ink);min-height:100vh}
 .wrap{max-width:640px;margin:0 auto;padding:48px 20px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;margin-bottom:28px}
@@ -46,6 +69,9 @@ textarea{resize:vertical;min-height:70px}
 .actions{display:flex;justify-content:space-between;align-items:center}
 .err{background:#fef2f2;border:1px solid #fecaca;color:var(--err);padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:16px}
 .ok{background:#f0fdf4;border:1px solid #bbf7d0;color:var(--ok);padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:16px}
+.warn{background:#fffbeb;border:1px solid #fde68a;color:var(--warn);padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:16px;line-height:1.65}
+.warn code{background:#fef3c7;padding:1px 5px;border-radius:4px}
+ul.reqs li .warnmark{color:var(--warn);font-weight:700}
 ul.reqs{list-style:none;padding:0;margin:0}
 ul.reqs li{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
 ul.reqs li .yes{color:var(--ok);font-weight:700}ul.reqs li .no{color:var(--err);font-weight:700}
@@ -53,7 +79,7 @@ ul.reqs li .yes{color:var(--ok);font-weight:700}ul.reqs li .no{color:var(--err);
 .spinner-list{font-size:13px;color:#334155;line-height:2}
 .spinner-list .go{color:var(--ok)}
 </style></head><body><div class="wrap">
-<div class="brand"><span class="dot">SH</span> Syria Home Setup</div>
+<div class="brand"><span class="dot">Y</span> Yassota Setup</div>
 <?php }
 
 function render_foot(): void { ?>
@@ -63,7 +89,7 @@ function render_foot(): void { ?>
 /* ── already installed ── */
 if ($installed && $step < 5) {
     render_head('Already installed');
-    echo '<div class="card"><h1>Already installed ✅</h1><p class="sub">Syria Home is already set up. Delete <code>install/install.lock</code> manually if you really need to re-run this wizard (this will NOT be done automatically for safety).</p>
+    echo '<div class="card"><h1>Already installed ✅</h1><p class="sub">This site is already set up. Delete <code>install/install.lock</code> manually if you really need to re-run this wizard (this will NOT be done automatically for safety). To load starter packages without reinstalling, use <b>Admin → Store Products → Seed default packages</b>.</p>
     <a class="btn" href="../">Go to the homepage</a> <a class="btn secondary" href="../admin/">Open admin panel</a></div>';
     render_foot();
     exit;
@@ -126,7 +152,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sh_reset_schema($pdo);
             sh_ensure_schema($pdo);
 
-            $siteUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
+            /* request_is_https() rather than isset($_SERVER['HTTPS']) — the latter
+               is true even when the value is the string "off", which bakes an
+               http:// canonical into every URL the site will ever publish. */
+            $siteUrl = (request_is_https() ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
                 . rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'])), '/');
 
             $configPhp = "<?php\n"
@@ -167,6 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'cpanel_root_domain' => '',
                 'cpanel_home_dir' => '',
                 'contact_email' => 'contact@yassota.com',
+                'support_telegram' => '',
                 'maintenance_mode' => '0',
                 'parent_site_url' => '',
                 'social_twitter' => '', 'social_facebook' => '', 'social_linkedin' => '',
@@ -174,24 +204,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ins = $pdo->prepare("INSERT INTO settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
             foreach ($settings as $k => $v) $ins->execute([$k, $v]);
 
-            require_once __DIR__ . '/../seed/seed_categories.php';
-            require_once __DIR__ . '/../seed/seed_articles.php';
-            require_once __DIR__ . '/../seed/seed_tools.php';
-            require_once __DIR__ . '/../seed/seed_pro_tools.php';
-            require_once __DIR__ . '/../seed/seed_products.php';
-            seed_categories($pdo);
-            seed_articles($pdo);
-            seed_tools($pdo);
-            seed_pro_tools($pdo);
-            seed_products($pdo);
+            /* Starter content is optional: a partial upload (a missing seed/
+               folder) or one bad seed must never abandon an install that has
+               already created the schema, the admin account and the config. */
+            $seedSkipped = [];
+            foreach (SH_SEEDS as $file => $fn) {
+                $path = sh_app_root() . '/seed/' . $file;
+                if (!is_readable($path)) { $seedSkipped[$file] = 'not uploaded to the server'; continue; }
+                try {
+                    require_once $path;
+                    if (!function_exists($fn)) { $seedSkipped[$file] = 'file present but incomplete'; continue; }
+                    $fn($pdo);
+                } catch (Throwable $seedError) {
+                    $seedSkipped[$file] = $seedError->getMessage();
+                }
+            }
 
             file_put_contents($lockFile, date('c'));
             unset($_SESSION['install']);
 
             render_head('Done');
-            echo '<div class="card"><h1>🎉 Syria Home is ready</h1><p class="sub">Your site, 20 articles, and 20 free tools are live. Delete this <code>install/</code> folder\'s write access is fine to leave — the wizard is now locked and won\'t run again.</p>
-            <div class="ok">Admin account: <b>' . htmlspecialchars($data['admin_user']) . '</b> — keep your password safe.</div>
-            <a class="btn" href="../">View the homepage</a> <a class="btn secondary" href="../admin/">Open admin panel</a></div>';
+            echo '<div class="card"><h1>🎉 ' . htmlspecialchars($data['site_name']) . ' is ready</h1>
+            <p class="sub">The database, your admin account and the site settings are all set up. The wizard is now locked and won\'t run again.</p>
+            <div class="ok">Admin account: <b>' . htmlspecialchars($data['admin_user']) . '</b> — keep your password safe.</div>';
+            if ($seedSkipped) {
+                echo '<div class="warn"><b>Starter content was skipped</b> for ' . count($seedSkipped) . ' file(s) — your site works, but it starts empty:<ul style="margin:8px 0 0;padding-inline-start:18px">';
+                foreach ($seedSkipped as $file => $why) {
+                    echo '<li><code>seed/' . htmlspecialchars($file) . '</code> — ' . htmlspecialchars($why) . '</li>';
+                }
+                echo '</ul><p style="margin:10px 0 0">Upload the missing files into the <code>seed/</code> folder, then use
+                <b>Admin → Store Products → Seed default packages</b> to load the packages. Articles and tools can be added
+                from the admin panel at any time.</p></div>';
+            }
+            echo '<a class="btn" href="../">View the homepage</a> <a class="btn secondary" href="../admin/">Open admin panel</a></div>';
             render_foot();
             exit;
         } catch (Throwable $e) {
@@ -217,7 +262,7 @@ render_head('Step ' . $step);
 
 <?php if ($step === 1): ?>
   <h1>Welcome</h1>
-  <p class="sub">This wizard sets up Syria Home: database, admin account, and 20 ready-to-publish articles + 20 free web tools. It takes about two minutes.</p>
+  <p class="sub">This wizard sets up your store: database, admin account, and the starter packages, articles and free tools. It takes about two minutes.</p>
   <ul class="reqs">
     <?php
     $reqs = [
@@ -230,7 +275,16 @@ render_head('Step ' . $step);
     foreach ($reqs as $label => $ok): ?>
       <li><span><?= e($label) ?></span><span class="<?= $ok ? 'yes' : 'no' ?>"><?= $ok ? '✓ OK' : '✗ Missing' ?></span></li>
     <?php endforeach; ?>
+    <?php $missingSeeds = sh_missing_seeds(); ?>
+    <li><span>Starter content (<code>seed/</code>)</span>
+      <span class="<?= $missingSeeds ? 'warnmark' : 'yes' ?>"><?= $missingSeeds ? '⚠ ' . count($missingSeeds) . ' file(s) missing' : '✓ All ' . count(SH_SEEDS) . ' present' ?></span></li>
   </ul>
+  <?php if ($missingSeeds): ?>
+    <div class="warn" style="margin-top:16px"><b>Optional — the install will still work.</b> These files aren't on the server, so that part of the starter content will be skipped:
+      <ul style="margin:8px 0 0;padding-inline-start:18px"><?php foreach ($missingSeeds as $f): ?><li><code>seed/<?= e($f) ?></code></li><?php endforeach; ?></ul>
+      <p style="margin:10px 0 0">Upload the whole <code>seed/</code> folder over FTP and reload this page to fix it — or continue now and load the packages later from <b>Admin → Store Products</b>.</p>
+    </div>
+  <?php endif; ?>
   <div class="actions"><span></span><a class="btn" href="?step=2">Start setup →</a></div>
 
 <?php elseif ($step === 2): ?>
@@ -279,11 +333,13 @@ render_head('Step ' . $step);
 
 <?php elseif ($step === 5): ?>
   <h1>Ready to install</h1>
-  <p class="sub">This will create the database tables, your admin account, and seed 21 articles, 20 tools and 10 store products.</p>
+  <p class="sub">This will create the database tables, your admin account, and load whatever starter content is available on the server.</p>
+  <?php $missingSeeds = sh_missing_seeds(); ?>
   <div class="spinner-list">
     <div>✓ Site: <b><?= e($data['site_name']) ?></b></div>
     <div>✓ Database: <b><?= e($data['db_name']) ?></b> on <?= e($data['db_host']) ?></div>
     <div>✓ Admin user: <b><?= e($data['admin_user']) ?></b></div>
+    <div><?= $missingSeeds ? '⚠' : '✓' ?> Starter content: <b><?= count(SH_SEEDS) - count($missingSeeds) ?>/<?= count(SH_SEEDS) ?></b> seed files found<?= $missingSeeds ? ' — the rest is skipped' : '' ?></div>
   </div>
   <form method="post">
     <input type="hidden" name="step" value="5">

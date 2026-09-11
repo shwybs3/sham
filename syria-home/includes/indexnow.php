@@ -214,16 +214,16 @@ function sh_all_public_urls(): array {
     $urls = [site_url('')];
     try {
         foreach ($pdo->query("SELECT slug FROM articles WHERE status='published'") as $r) {
-            $urls[] = site_url('article/' . $r['slug']);
+            $urls[] = article_url($r['slug']);
         }
         foreach ($pdo->query("SELECT slug FROM tools WHERE status='published'") as $r) {
-            $urls[] = site_url('tool/' . $r['slug']);
+            $urls[] = tool_url($r['slug']);
         }
         foreach ($pdo->query("SELECT slug FROM pages WHERE status='published'") as $r) {
-            $urls[] = site_url('p/' . $r['slug']);
+            $urls[] = page_url($r['slug']);
         }
         foreach ($pdo->query("SELECT slug FROM products WHERE status='published'") as $r) {
-            $urls[] = site_url('product/' . $r['slug']);
+            $urls[] = product_url($r['slug']);
         }
     } catch (PDOException $e) { /* table may not exist yet on a fresh install */ }
     return array_values(array_unique($urls));

@@ -1,14 +1,48 @@
 RewriteEngine On
 
-# Friendly URLs
+# ── Canonical origin, before anything else ─────────────────────────────
+# Every page must live at exactly one scheme+host. Serving the same content on
+# http:// and https://, or on both www. and the bare domain, splits crawl
+# signals between duplicate URLs — one of the most common indexing problems.
+# These run first so even /robots.txt and /sitemap.xml get canonicalized.
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+# ── mod_rewrite liveness marker ────────────────────────────────────────
+# Matches every request and does nothing but set this variable. PHP reads it to
+# decide whether it is safe to publish rewritten URLs (/article/slug) — on a
+# host without mod_rewrite the variable is simply absent and the site keeps
+# linking with the ?slug= form instead of publishing links that would 404.
+RewriteRule ^ - [E=SH_REWRITE_OK:1]
+
+# ── Friendly URLs ──────────────────────────────────────────────────────
+# A real file wins over the dynamic endpoint, so a generated sitemap.xml or
+# robots.txt at the webroot is served as-is instead of being shadowed.
+RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^robots\.txt$ robots.php [L]
+RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ads\.txt$ ads.php [L]
+
 RewriteRule ^article/([a-z0-9-]+)/?$ article.php?slug=$1 [L,QSA]
 RewriteRule ^tool/([a-z0-9-]+)/?$ tool.php?slug=$1 [L,QSA]
 RewriteRule ^product/([a-z0-9-]+)/?$ product.php?slug=$1 [L,QSA]
 RewriteRule ^category/([a-z0-9-]+)/?$ category.php?slug=$1 [L,QSA]
 RewriteRule ^p/([a-z0-9-]+)/?$ page.php?slug=$1 [L,QSA]
+
+# Lets the admin panel confirm from the browser that rewriting actually works
+# on this host before switching the site over to the pretty URL shape.
+RewriteRule ^__rewrite-probe$ index.php?__rewrite_probe=1 [L]
+
+# ── Error documents ────────────────────────────────────────────────────
+# Without this, unknown URLs return the host's generic error page with a 200-ish
+# body, which crawlers record as a soft 404 instead of a clean "gone".
+ErrorDocument 404 /404.php
 
 # Never serve source/config/data files directly
 <FilesMatch "\.(sql|log|md)$">
@@ -26,13 +60,8 @@ RewriteRule ^p/([a-z0-9-]+)/?$ page.php?slug=$1 [L,QSA]
 Options -Indexes
 DirectoryIndex index.php
 
-# Force HTTPS (leave disabled on local/dev by commenting out if needed)
-RewriteCond %{HTTPS} off
-RewriteCond %{HTTP:X-Forwarded-Proto} !https
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json application/xml
 </IfModule>
 
 <IfModule mod_expires.c>

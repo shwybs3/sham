@@ -14,6 +14,8 @@ if (!$article) {
     exit;
 }
 
+enforce_canonical_url(article_url($article['slug']));
+
 $pdo->prepare("UPDATE articles SET views = views + 1 WHERE id = ?")->execute([$article['id']]);
 
 $related = $pdo->prepare("SELECT a.*, c.name AS category_name FROM articles a LEFT JOIN categories c ON c.id=a.category_id
@@ -38,7 +40,7 @@ $jsonld = [
     'publisher' => ['@type' => 'Organization', 'name' => setting('site_name'), 'logo' => ['@type' => 'ImageObject', 'url' => site_url('assets/img/favicon.svg')]],
     'datePublished' => date('c', strtotime($article['published_at'])),
     'dateModified' => date('c', strtotime($article['updated_at'])),
-    'mainEntityOfPage' => site_url('article.php?slug=' . $article['slug']),
+    'mainEntityOfPage' => article_url($article['slug']),
 ];
 /* Only real visitor votes produce star markup — see includes/ratings.php. */
 $agg = rating_jsonld('article', (int)$article['id']);
@@ -52,7 +54,7 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
     'title' => $metaTitle . ' | ' . setting('site_name'),
     'description' => $metaDesc,
     'keywords' => $article['meta_keywords'],
-    'canonical' => site_url('article.php?slug=' . $article['slug']),
+    'canonical' => article_url($article['slug']),
     'type' => 'article',
     'jsonld' => $jsonld,
 ]); ?>
@@ -63,7 +65,7 @@ $extraSchema = $extraSchema->fetchAll(PDO::FETCH_COLUMN);
 <?php site_header(); ?>
 
 <div class="container article-hero">
-  <div class="breadcrumb"><a href="<?= site_url('') ?>">Home</a> / <a href="<?= site_url('articles.php') ?>">Articles</a> <?php if ($article['category_name']): ?> / <a href="<?= site_url('category.php?slug=' . urlencode($article['category_slug'])) ?>"><?= e($article['category_name']) ?></a><?php endif; ?></div>
+  <div class="breadcrumb"><a href="<?= site_url('') ?>">Home</a> / <a href="<?= site_url('articles.php') ?>">Articles</a> <?php if ($article['category_name']): ?> / <a href="<?= category_url($article['category_slug']) ?>"><?= e($article['category_name']) ?></a><?php endif; ?></div>
   <?php if (!empty($article['hero_image_path'])): ?>
     <div class="article-hero-photo">
       <img src="<?= site_url($article['hero_image_path']) ?>" alt="<?= e($article['title']) ?>" loading="eager">

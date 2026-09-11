@@ -328,6 +328,14 @@ function sh_ensure_schema(PDO $pdo): void {
 
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
+
+    /* Which platform/category a store package belongs to, so the
+       storefront can filter packages by tab (Instagram/Facebook/etc.). */
+    sh_ensure_column($pdo, 'products', 'platform', "VARCHAR(40) NOT NULL DEFAULT 'other'");
+
+    /* Real edit timestamp, so <lastmod> in the sitemap reflects when a package
+       actually changed rather than when it was first created. */
+    sh_ensure_column($pdo, 'products', 'updated_at', "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 }
 
 /**

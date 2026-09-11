@@ -9,6 +9,8 @@ $cat = $stmt->fetch();
 
 if (!$cat) { http_response_code(404); require __DIR__ . '/404.php'; exit; }
 
+enforce_canonical_url(category_url($cat['slug']));
+
 if ($cat['type'] === 'tool') {
     $items = $pdo->prepare("SELECT * FROM tools WHERE category_id = ? AND status='published' ORDER BY uses_count DESC");
 } else {
@@ -20,7 +22,7 @@ $items = $items->fetchAll();
 <?php seo_head([
     'title' => e($cat['name']) . ' | ' . setting('site_name'),
     'description' => 'Everything tagged ' . $cat['name'] . ' on ' . setting('site_name') . '.',
-    'canonical' => site_url('category.php?slug=' . $cat['slug']),
+    'canonical' => category_url($cat['slug']),
 ]); ?>
 </head><body>
 <?php site_header(); ?>

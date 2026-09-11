@@ -2,7 +2,7 @@
 if (!isset($pdo)) { require_once __DIR__ . '/config.php'; }
 require_once __DIR__ . '/partials.php';
 ?><!doctype html><html lang="en"><head>
-<?php seo_head(['title' => 'Page not found | ' . setting('site_name'), 'description' => 'This page does not exist.']); ?>
+<?php seo_head(['title' => 'الصفحة غير موجودة | ' . setting('site_name'), 'description' => 'هذه الصفحة غير موجودة.', 'noindex' => true]); ?>
 </head><body>
 <?php site_header(); ?>
 <div class="container empty-state" style="padding:100px 20px">
