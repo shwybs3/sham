@@ -137,11 +137,22 @@ $jsonld = [
       </div>
       <p style="font-size:12.5px;color:var(--muted);margin:0">دفعة واحدة · تفعيل فوري</p>
 
-      <?php if (NOWPayments::isConfigured()): ?>
+      <?php
+      /* A hosted payment link set on the package wins over the API checkout:
+         it's the admin's explicit per-package choice, and it's the only path
+         that works on hosts which block outbound connections (InfinityFree
+         free hosting among them), where creating an invoice server-side fails. */
+      $directPay = trim((string)$product['payment_url']);
+      ?>
+      <?php if ($directPay !== ''): ?>
+        <a class="btn-buy" href="<?= e($directPay) ?>" target="_blank" rel="noopener"><i class="fa-solid fa-wallet"></i> ادفع الآن</a>
+        <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0;text-align:center">صفحة دفع آمنة — BTC · ETH · USDT وأكثر</p>
+        <?php if (NOWPayments::isConfigured()): ?>
+          <a class="btn-demo" href="<?= site_url('checkout.php?type=product&id=' . (int)$product['id']) ?>"><i class="fa-solid fa-qrcode"></i> الدفع داخل الموقع (QR)</a>
+        <?php endif; ?>
+      <?php elseif (NOWPayments::isConfigured()): ?>
         <a class="btn-buy" href="<?= site_url('checkout.php?type=product&id=' . (int)$product['id']) ?>"><i class="fa-solid fa-wallet"></i> الدفع بالعملات الرقمية</a>
         <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0;text-align:center">BTC · ETH · USDT وأكثر — عبر NOWPayments</p>
-      <?php elseif (trim((string)$product['payment_url']) !== ''): ?>
-        <a class="btn-buy" href="<?= e($product['payment_url']) ?>" target="_blank" rel="noopener"><i class="fa-solid fa-cart-shopping"></i> اطلب الآن</a>
       <?php else: ?>
         <a class="btn-buy" href="#order"><i class="fa-solid fa-cart-shopping"></i> سجّل طلبك</a>
       <?php endif; ?>

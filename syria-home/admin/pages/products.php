@@ -1,6 +1,26 @@
 <?php
 $msg = null;
 
+/* Loads the default packages from seed/seed_products.php. Useful when the
+   install skipped seeding (e.g. the seed/ folder wasn't uploaded yet) —
+   the seed uses INSERT IGNORE, so re-running never duplicates anything. */
+if (isset($_GET['seed_defaults']) && csrf_check_get()) {
+    $seedFile = ROOT_PATH . '/seed/seed_products.php';
+    if (!is_readable($seedFile)) {
+        $msg = ['err', 'seed/seed_products.php is not on the server — upload the seed/ folder over FTP first.'];
+    } else {
+        try {
+            require_once $seedFile;
+            $before = (int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+            seed_products($pdo);
+            $added = (int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn() - $before;
+            header('Location: ?page=products&seeded=' . $added); exit;
+        } catch (Throwable $e) {
+            $msg = ['err', 'Seeding failed: ' . $e->getMessage()];
+        }
+    }
+}
+
 if (isset($_GET['delete']) && csrf_check_get()) {
     $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([(int)$_GET['delete']]);
     header('Location: ?page=products'); exit;
@@ -59,12 +79,18 @@ if (isset($_GET['edit'])) {
 $showForm = isset($_GET['new']) || $editing;
 ?>
 <?php if (isset($_GET['saved'])): flash('ok', 'Product saved.'); endif; ?>
-<?php if ($msg): flash('err', $msg[1]); endif; ?>
+<?php if (isset($_GET['seeded'])): flash('ok', ((int)$_GET['seeded'] > 0) ? ((int)$_GET['seeded'] . ' default package(s) added.') : 'Default packages were already loaded — nothing to add.'); endif; ?>
+<?php if ($msg): flash($msg[0], $msg[1]); endif; ?>
 
 <?php if (!$showForm): ?>
   <div class="card">
-    <div class="toolbar"><h3 style="margin:0">Store products</h3><a class="btn sm" href="?page=products&new=1"><i class="fa-solid fa-plus"></i> New product</a></div>
-    <p class="hint" style="margin-top:0">Leave <b>Payment URL</b> empty and the product page shows a "Request to buy" form that saves to your Orders inbox. Paste a checkout link (Gumroad, Paddle, PayPal, Stripe Payment Link…) to send buyers straight there instead.</p>
+    <div class="toolbar"><h3 style="margin:0">Store products</h3>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn gray sm" href="?page=products&seed_defaults=1&csrf=<?= csrf_token() ?>" onclick="return confirm('Load the default packages from seed/seed_products.php? Existing packages are never overwritten.')"><i class="fa-solid fa-seedling"></i> Seed default packages</a>
+        <a class="btn sm" href="?page=products&new=1"><i class="fa-solid fa-plus"></i> New product</a>
+      </span>
+    </div>
+    <p class="hint" style="margin-top:0">Buy-button order on the package page: a <b>Payment URL</b> if you set one, otherwise the built-in NOWPayments checkout if its API key is configured, otherwise a "register your order" form that saves to your Orders inbox. On hosting that blocks outgoing connections (InfinityFree free hosting), the built-in checkout can't create invoices — paste a NOWPayments hosted payment link here per package instead.</p>
     <table>
       <tr><th>Product</th><th>Platform</th><th>Type</th><th>Price</th><th>Status</th><th>Featured</th><th>Views</th><th></th></tr>
       <?php foreach ($pdo->query("SELECT * FROM products ORDER BY sort_order, id") as $p): ?>
@@ -145,8 +171,8 @@ $showForm = isset($_GET['new']) || $editing;
 
       <div class="row2">
         <div><label>Live demo URL (optional)</label><input type="text" name="demo_url" value="<?= e($editing['demo_url'] ?? '') ?>"></div>
-        <div><label>Payment / checkout URL (optional)</label><input type="text" name="payment_url" value="<?= e($editing['payment_url'] ?? '') ?>" placeholder="https://gumroad.com/l/...">
-          <p class="hint">Leave empty to use the built-in request form instead.</p>
+        <div><label>Payment / checkout URL (optional — takes priority over the built-in checkout)</label><input type="text" name="payment_url" value="<?= e($editing['payment_url'] ?? '') ?>" placeholder="https://nowpayments.io/payment/?iid=...">
+          <p class="hint">A NOWPayments hosted payment link (or Gumroad/Paddle/Stripe). Required on hosts that block outgoing connections; leave empty to use the built-in checkout.</p>
         </div>
       </div>
 

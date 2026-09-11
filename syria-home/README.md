@@ -22,6 +22,29 @@ the moment an OpenRouter key is saved in **Admin → Settings → API Keys**, no
   so pointing the domain (or a subdomain) at this folder and running `install/` makes them live immediately at
   `https://yassota.com/sitemap.xml` and `https://yassota.com/robots.txt` via the existing `.htaccess` rewrites.
 
+## Deploying on InfinityFree free hosting (yassota.com)
+
+Two things bite on that host specifically:
+
+1. **Upload the whole `seed/` folder.** If it's missing, the installer no longer dies — it finishes the
+   install (schema + admin account + settings) and lists which seed files were skipped. You can load the
+   packages afterwards with **Admin → Store Products → Seed default packages** (safe to re-run; it never
+   duplicates or overwrites). The install wizard's first screen also warns up front if any seed file is missing.
+2. **Outgoing connections are blocked on InfinityFree's free plan**, so anything where *our server* calls an
+   external API cannot work there:
+   - **NOWPayments invoice creation** (`checkout.php`) → fails with an API error. **Workaround:** create a hosted
+     payment link per package in the NOWPayments dashboard and paste it into that package's **Payment URL**
+     field in the admin. The package page then sends buyers straight to NOWPayments' own page, and the
+     **IPN webhook still works** (that's an *inbound* request to `payment-webhook.php`), so paid orders are
+     still confirmed automatically.
+   - **The OpenRouter chat assistant** (`chat.php`) → returns its "contact us instead" fallback rather than
+     crashing. It'll start working the moment the site moves to a host that allows outbound HTTPS.
+   - Same for Google APIs / IndexNow. Everything else (the whole storefront, admin panel, orders, SEO,
+     sitemap/robots) works fine on free hosting.
+
+If crypto checkout and the AI assistant matter, a cheap shared host that permits outbound cURL (or InfinityFree's
+paid tier) turns both on with no code changes — just the API keys already in Settings.
+
 ---
 
 A self-contained PHP/MySQL content + tools site: news/articles/comparisons/tutorials, 20 free client-side web tools, an admin panel with a scoped AI content assistant, and OAuth-based integrations for Google AdSense Management, Search Console, Analytics (GA4) and Google Ads.
