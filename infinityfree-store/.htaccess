@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+RewriteEngine On
+</IfModule>
+
+<Files "config.local.php">
+  Require all denied
+</Files>
+<Files "config.php">
+  # القراءة عبر PHP فقط، لا كملف نصي مباشر عند تعطّل PHP
+  <IfModule mod_php.c>
+    Require all granted
+  </IfModule>
+</Files>
+
+Options -Indexes

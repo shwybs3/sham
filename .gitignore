@@ -18,3 +18,7 @@ syria-home/config.generated.php
 syria-home/install/install.lock
 syria-home/uploads/*
 !syria-home/uploads/.gitkeep
+
+# infinityfree-store sub-app — DB credentials & admin secret, written by
+# the in-browser setup wizard, never committed
+infinityfree-store/config.local.php
