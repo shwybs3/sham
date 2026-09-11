@@ -1,0 +1,7 @@
+# امنع تنفيذ أي كود داخل مجلد الرفع — صور فقط
+php_flag engine off
+Options -ExecCGI -Indexes
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|pht|phar|cgi|pl|py|sh)$">
+  Require all denied
+</FilesMatch>
+AddType text/plain .php .phtml .phar

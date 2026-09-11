@@ -22,3 +22,14 @@ syria-home/uploads/*
 # infinityfree-store sub-app — DB credentials & admin secret, written by
 # the in-browser setup wizard, never committed
 infinityfree-store/config.local.php
+
+# yassota sub-app — DB credentials (setup wizard) + user uploads, never committed
+yassota/config.local.php
+yassota/uploads/*
+!yassota/uploads/.gitkeep
+!yassota/uploads/.htaccess
+# Android signing secrets (APK build phase)
+yassota/android/*.jks
+yassota/android/*.keystore
+yassota/android/keystore.properties
+yassota/android/secrets.properties
