@@ -1,163 +1,167 @@
 <?php
 /**
- * 10 digital products for the storefront.
+ * Store packages: social-growth services (Instagram/Facebook/YouTube/Telegram
+ * followers, likes, views, premium) + digital security tools.
  *
- * A deliberate copywriting note: nothing here promises that Google will
- * approve a buyer's AdSense application. That decision is Google's, is
- * made manually, and depends on the buyer's own domain, traffic and
- * content — so promising it would be a claim we could not honor and
- * would generate refund demands we could not satisfy. What we do
- * promise is what we actually control: the build meets AdSense's
- * technical and policy prerequisites, plus free updates, setup support
- * and a refund window.
+ * Copywriting note: growth numbers describe delivery targets, not a promise
+ * that a platform's own algorithm will keep them static forever — that is
+ * each platform's decision, not ours. What we do promise is what we
+ * actually control: activation after payment confirmation, no password
+ * requests, and a clear refund policy (see refund-policy.php).
  */
 function seed_products(PDO $pdo): void {
     $P = [];
 
     $P[] = [
-        'name' => 'Syria Home — Complete Articles & Tools CMS',
-        'type' => 'PHP Script', 'icon' => 'fa-newspaper', 'art' => 'p1',
-        'price' => 89.00, 'compare' => 149.00, 'badge' => 'Best Seller', 'featured' => 1,
-        'tagline' => 'The exact script powering this site — articles, 20 web tools, AI admin panel, Google API integrations.',
-        'short' => 'A complete, self-hosted publishing platform: content CMS, 20 client-side web tools, scoped AI writing assistant, and OAuth integrations for AdSense, Search Console, Analytics and Google Ads.',
-        'features' => "Full article CMS (news, tutorials, comparisons, reviews)\n20 working client-side web tools included\nScoped AI assistant (Gemini + OpenRouter fallback)\nGoogle AdSense / Search Console / Analytics / Ads integration\nGUI installer — no manual SQL import\nPer-page SEO: meta, Open Graph, JSON-LD schema\nDynamic sitemap, robots.txt and ads.txt\nAdSense-ready structure and required legal pages\nFully responsive, mobile-first design",
-        'includes' => "Complete PHP source code\nInstallation wizard\nDocumentation (README)\n12 months of free updates\nEmail setup support\n14-day refund window",
-        'meta_desc' => 'Complete self-hosted PHP CMS for articles and free web tools, with an AI admin panel and Google AdSense, Search Console, Analytics and Ads integrations.',
-        'meta_kw' => 'php cms script, adsense ready script, article website script, web tools script',
+        'name' => 'متابعين إنستقرام حقيقيين', 'platform' => 'instagram',
+        'type' => 'متابعين', 'icon' => 'fa-brands fa-instagram', 'art' => 'p1',
+        'price' => 4.50, 'compare' => 7.00, 'badge' => 'الأكثر طلباً', 'featured' => 1,
+        'tagline' => '1000 متابع حقيقي، تسليم تدريجي وبدون كلمة مرور حسابك.',
+        'short' => 'متابعين حقيقيين لحساب إنستقرام، تسليم تدريجي طبيعي يحافظ على أمان حسابك، بدون طلب كلمة المرور أبداً.',
+        'features' => "تسليم تدريجي طبيعي (ليس دفعة واحدة)\nحسابات نشطة وليست فارغة\nلا حاجة لكلمة مرور حسابك — فقط اسم المستخدم\nدعم عبر تيليجرام أو المساعد الذكي\nإمكانية زيادة الكمية لاحقاً بسعر أفضل",
+        'includes' => "1000 متابع\nتفعيل خلال 24 ساعة من تأكيد الدفع\nدعم بعد الطلب\nسياسة استرجاع عند عدم التسليم",
+        'meta_desc' => 'متابعين إنستقرام حقيقيين، تسليم تدريجي، دفع فوري بالعملات الرقمية.',
+        'meta_kw' => 'متابعين انستقرام, زيادة متابعين انستقرام, متابعين حقيقيين',
+    ];
+    $P[] = [
+        'name' => 'إعجابات إنستقرام فورية', 'platform' => 'instagram',
+        'type' => 'إعجابات', 'icon' => 'fa-brands fa-instagram', 'art' => 'p2',
+        'price' => 2.50, 'compare' => 4.00, 'badge' => '', 'featured' => 0,
+        'tagline' => '1000 إعجاب فوري على آخر منشور لك.',
+        'short' => 'إعجابات فورية على منشورك، مناسبة لرفع نسبة التفاعل بسرعة بعد النشر.',
+        'features' => "تسليم سريع خلال ساعات\nمن حسابات نشطة\nيرفع نسبة التفاعل على المنشور\nيدعم أي منشور عام",
+        'includes' => "1000 إعجاب\nتفعيل خلال 12 ساعة\nدعم بعد الطلب",
+        'meta_desc' => 'إعجابات إنستقرام فورية وحقيقية، تفعيل سريع بعد الدفع.',
+        'meta_kw' => 'اعجابات انستقرام, زيادة تفاعل انستقرام',
+    ];
+    $P[] = [
+        'name' => 'مشاهدات ريلز إنستقرام', 'platform' => 'instagram',
+        'type' => 'مشاهدات', 'icon' => 'fa-brands fa-instagram', 'art' => 'p3',
+        'price' => 3.00, 'compare' => 5.00, 'badge' => '', 'featured' => 0,
+        'tagline' => '5000 مشاهدة لفيديو Reels لتحسين ظهوره في الاستكشاف.',
+        'short' => 'مشاهدات لفيديو الريلز تساعد على تحسين ظهوره في صفحة الاستكشاف والتوصيات.',
+        'features' => "5000 مشاهدة تدريجية\nيدعم أي فيديو ريلز عام\nيحسّن فرصة الظهور في الاستكشاف\nتسليم يبدأ فوراً بعد الدفع",
+        'includes' => "5000 مشاهدة\nبدء التسليم فوراً\nدعم بعد الطلب",
+        'meta_desc' => 'مشاهدات ريلز إنستقرام لتحسين الظهور في صفحة الاستكشاف.',
+        'meta_kw' => 'مشاهدات ريلز, مشاهدات انستقرام',
     ];
 
     $P[] = [
-        'name' => 'Web Tools Suite — 20 Client-Side Tools',
-        'type' => 'PHP + JS Script', 'icon' => 'fa-toolbox', 'art' => 'p2',
-        'price' => 49.00, 'compare' => 79.00, 'badge' => 'Popular', 'featured' => 1,
-        'tagline' => 'Drop-in collection of 20 browser-based tools that need no server processing.',
-        'short' => 'Image converters, generators, calculators and text utilities — all running client-side, so hosting costs stay near zero no matter how much traffic you get.',
-        'features' => "20 fully working tools out of the box\n100% client-side — no server load, no uploads\nEach tool gets its own SEO-optimized page\nJSON-LD SoftwareApplication schema per tool\nSimple registry to add your own tools\nAdmin panel to edit copy and SEO per tool\nWorks as a standalone site or as a section",
-        'includes' => "Full source code\nTool registry documentation\n12 months of free updates\nEmail setup support\n14-day refund window",
-        'meta_desc' => 'A suite of 20 free client-side web tools you can host yourself — converters, generators and calculators, each with its own SEO page.',
-        'meta_kw' => 'web tools script, online tools website script, free tools php script',
+        'name' => 'متابعين صفحة فيسبوك', 'platform' => 'facebook',
+        'type' => 'متابعين', 'icon' => 'fa-brands fa-facebook', 'art' => 'p4',
+        'price' => 5.00, 'compare' => 8.00, 'badge' => '', 'featured' => 1,
+        'tagline' => '1000 متابع لصفحتك التجارية أو الشخصية على فيسبوك.',
+        'short' => 'متابعين لصفحة فيسبوك التجارية أو الشخصية، مفيد لبناء ثقة أولية لصفحتك.',
+        'features' => "1000 متابع تدريجي\nيدعم الصفحات التجارية والشخصية\nلا حاجة لصلاحيات إدارة — فقط رابط الصفحة\nدعم بعد الطلب",
+        'includes' => "1000 متابع\nتفعيل خلال 24-48 ساعة\nدعم بعد الطلب",
+        'meta_desc' => 'متابعين فيسبوك حقيقيين لصفحتك التجارية أو الشخصية.',
+        'meta_kw' => 'متابعين فيسبوك, زيادة متابعين صفحة فيسبوك',
+    ];
+    $P[] = [
+        'name' => 'إعجابات منشور فيسبوك', 'platform' => 'facebook',
+        'type' => 'إعجابات', 'icon' => 'fa-brands fa-facebook', 'art' => 'p5',
+        'price' => 2.00, 'compare' => 3.50, 'badge' => '', 'featured' => 0,
+        'tagline' => '500 إعجاب على منشور واحد من اختيارك.',
+        'short' => 'إعجابات على منشور محدد لرفع تفاعله الأولي.',
+        'features' => "500 إعجاب\nتسليم سريع\nيدعم أي منشور عام\nيرفع نسبة التفاعل الأولي",
+        'includes' => "500 إعجاب\nتفعيل خلال 24 ساعة\nدعم بعد الطلب",
+        'meta_desc' => 'إعجابات فيسبوك سريعة وحقيقية على منشور محدد.',
+        'meta_kw' => 'اعجابات فيسبوك, زيادة تفاعل فيسبوك',
     ];
 
     $P[] = [
-        'name' => 'AdSense-Ready Blog Starter Template',
-        'type' => 'HTML/CSS Template', 'icon' => 'fa-file-code', 'art' => 'p3',
-        'price' => 29.00, 'compare' => 49.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'A clean, fast blog theme built to meet AdSense policy and technical prerequisites from day one.',
-        'short' => 'A responsive blog template with the structure AdSense reviewers look for: clear navigation, real legal pages, fast load times and properly placed ad zones.',
-        'features' => "Fast, lightweight, no heavy frameworks\nPre-built Privacy Policy, Terms and Editorial Policy pages\nProperly sized, non-intrusive ad zones\nCore Web Vitals friendly\nFull schema markup on every page\nDark and light theme support\nMobile-first responsive layout",
-        'includes' => "HTML/CSS/JS source files\nSetup guide\n6 months of free updates\nEmail support\n14-day refund window",
-        'meta_desc' => 'A fast, responsive blog template built to meet Google AdSense technical and policy prerequisites, with legal pages and ad zones included.',
-        'meta_kw' => 'adsense ready template, blog template, adsense blog theme',
+        'name' => 'مشتركين يوتيوب', 'platform' => 'youtube',
+        'type' => 'مشتركين', 'icon' => 'fa-brands fa-youtube', 'art' => 'p6',
+        'price' => 9.00, 'compare' => 14.00, 'badge' => 'الأفضل قيمة', 'featured' => 1,
+        'tagline' => '500 مشترك حقيقي مع ثبات جيد بمرور الوقت.',
+        'short' => 'مشتركين لقناتك على يوتيوب، تسليم تدريجي يحافظ على معدل ثبات جيد.',
+        'features' => "500 مشترك تدريجي\nثبات جيد بمرور الوقت\nلا حاجة لصلاحيات القناة — فقط رابطها\nدعم بعد الطلب",
+        'includes' => "500 مشترك\nتفعيل خلال 24-72 ساعة\nدعم بعد الطلب\nسياسة استرجاع عند عدم التسليم",
+        'meta_desc' => 'مشتركين يوتيوب حقيقيين بثبات جيد، دفع فوري بالعملات الرقمية.',
+        'meta_kw' => 'مشتركين يوتيوب, زيادة مشتركين يوتيوب',
+    ];
+    $P[] = [
+        'name' => 'مشاهدات يوتيوب طويلة المدة', 'platform' => 'youtube',
+        'type' => 'مشاهدات', 'icon' => 'fa-brands fa-youtube', 'art' => 'p7',
+        'price' => 6.00, 'compare' => 10.00, 'badge' => '', 'featured' => 0,
+        'tagline' => '5000 مشاهدة طويلة المدة تساعد على تحسين ترتيب الفيديو.',
+        'short' => 'مشاهدات لفيديو يوتيوب من اختيارك، مصممة لتحسين وقت المشاهدة وترتيب الفيديو في نتائج البحث.',
+        'features' => "5000 مشاهدة تدريجية\nتحسّن وقت المشاهدة الكلي للفيديو\nيدعم أي فيديو عام\nبدء التسليم خلال ساعات",
+        'includes' => "5000 مشاهدة\nبدء التسليم خلال 24 ساعة\nدعم بعد الطلب",
+        'meta_desc' => 'مشاهدات يوتيوب طويلة المدة لتحسين ترتيب الفيديو في نتائج البحث.',
+        'meta_kw' => 'مشاهدات يوتيوب, زيادة مشاهدات يوتيوب',
     ];
 
     $P[] = [
-        'name' => 'SEO Starter Kit — Schema & Meta Toolkit',
-        'type' => 'Code Toolkit', 'icon' => 'fa-magnifying-glass-chart', 'art' => 'p4',
-        'price' => 24.00, 'compare' => 39.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'Drop-in PHP helpers for meta tags, Open Graph, JSON-LD schema and sitemaps.',
-        'short' => 'Stop hand-writing meta tags. A small, dependency-free PHP toolkit that generates complete, correct SEO markup for any page type.',
-        'features' => "One function call generates full head markup\nArticle, NewsArticle, Product, FAQ and Breadcrumb schema\nOpen Graph and Twitter Card generation\nDynamic XML sitemap builder\nrobots.txt generator\nNo dependencies, works with any PHP project",
-        'includes' => "PHP source files\nUsage documentation with examples\n6 months of free updates\n14-day refund window",
-        'meta_desc' => 'A dependency-free PHP toolkit that generates meta tags, Open Graph, JSON-LD schema and dynamic sitemaps for any page type.',
-        'meta_kw' => 'php seo toolkit, json-ld schema generator, sitemap generator php',
+        'name' => 'أعضاء قناة تيليجرام', 'platform' => 'telegram',
+        'type' => 'أعضاء', 'icon' => 'fa-brands fa-telegram', 'art' => 'p8',
+        'price' => 4.00, 'compare' => 6.50, 'badge' => '', 'featured' => 1,
+        'tagline' => '1000 عضو حقيقي لقناتك أو مجموعتك على تيليجرام.',
+        'short' => 'أعضاء لقناتك أو مجموعتك على تيليجرام، تسليم تدريجي وآمن.',
+        'features' => "1000 عضو تدريجي\nيدعم القنوات والمجموعات العامة\nلا حاجة لصلاحيات إدارية — فقط رابط الدعوة\nدعم بعد الطلب",
+        'includes' => "1000 عضو\nتفعيل خلال 24-48 ساعة\nدعم بعد الطلب",
+        'meta_desc' => 'أعضاء تيليجرام حقيقيون لقناتك أو مجموعتك، دفع فوري بالعملات الرقمية.',
+        'meta_kw' => 'اعضاء تيليجرام, زيادة اعضاء قناة تيليجرام',
+    ];
+    $P[] = [
+        'name' => 'تيليجرام بريميوم 3 أشهر', 'platform' => 'telegram',
+        'type' => 'اشتراك مميز', 'icon' => 'fa-brands fa-telegram', 'art' => 'p9',
+        'price' => 15.00, 'compare' => 22.00, 'badge' => 'جديد', 'featured' => 1,
+        'tagline' => 'اشتراك Telegram Premium الرسمي لمدة 3 أشهر.',
+        'short' => 'اشتراك Telegram Premium الرسمي — رفع سرعات التحميل، ملصقات وتعبيرات حصرية، وميزات إضافية لمدة 3 أشهر كاملة.',
+        'features' => "تفعيل مباشر على حسابك عبر رمز الهدية الرسمي\nسرعات تحميل ورفع أعلى\nملصقات وتعبيرات (Emoji) حصرية\nإزالة الإعلانات من القنوات العامة\n3 أشهر كاملة من التفعيل",
+        'includes' => "3 أشهر Telegram Premium\nتفعيل خلال 24 ساعة من تأكيد الدفع\nدعم بعد الطلب",
+        'meta_desc' => 'اشتراك Telegram Premium الرسمي لمدة 3 أشهر، دفع فوري بالعملات الرقمية.',
+        'meta_kw' => 'تيليجرام بريميوم, telegram premium, اشتراك تيليجرام مميز',
     ];
 
     $P[] = [
-        'name' => 'AI Content Assistant Module',
-        'type' => 'PHP Module', 'icon' => 'fa-robot', 'art' => 'p5',
-        'price' => 39.00, 'compare' => 69.00, 'badge' => 'New', 'featured' => 1,
-        'tagline' => 'Add a safely-scoped AI writing assistant to any PHP admin panel.',
-        'short' => 'A drop-in module that connects Gemini (with OpenRouter fallback) to your admin panel — scoped to a whitelist of safe content actions, never raw file or SQL access.',
-        'features' => "Gemini API integration with automatic OpenRouter fallback\nWhitelisted actions only — no file writes, no raw SQL\nAI-generated content always saved as a draft for review\nFull activity log of every AI action taken\nGraceful handling of malformed AI responses\nProvider-agnostic router you can extend",
-        'includes' => "PHP module source\nIntegration guide\n12 months of free updates\nEmail support\n14-day refund window",
-        'meta_desc' => 'A drop-in PHP module adding a safely-scoped Gemini AI content assistant to your admin panel, with OpenRouter fallback and full action logging.',
-        'meta_kw' => 'gemini php integration, ai content module, ai admin assistant php',
+        'name' => 'اشتراك VPN سنوي', 'platform' => 'security',
+        'type' => 'أداة حماية', 'icon' => 'fa-solid fa-shield-halved', 'art' => 'p10',
+        'price' => 25.00, 'compare' => 40.00, 'badge' => '', 'featured' => 1,
+        'tagline' => 'تصفح آمن ومشفّر على كل أجهزتك لمدة سنة كاملة.',
+        'short' => 'اشتراك VPN موثوق لتشفير اتصالك بالإنترنت وحماية بياناتك على الشبكات العامة، لمدة سنة كاملة على عدة أجهزة.',
+        'features' => "تشفير كامل لاتصال الإنترنت\nيدعم عدة أجهزة (موبايل وكمبيوتر)\nخوادم في عدة دول\nسرعة عالية بدون حدود بيانات\nدعم فني عند التفعيل",
+        'includes' => "سنة كاملة من التفعيل\nتعليمات تفعيل خطوة بخطوة\nدعم بعد الطلب",
+        'meta_desc' => 'اشتراك VPN سنوي لتصفح آمن ومشفّر على جميع أجهزتك.',
+        'meta_kw' => 'vpn, اشتراك في بي ان, حماية رقمية, تصفح آمن',
     ];
-
     $P[] = [
-        'name' => 'Google APIs Integration Pack',
-        'type' => 'PHP Module', 'icon' => 'fa-plug-circle-bolt', 'art' => 'p6',
-        'price' => 34.00, 'compare' => 59.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'OAuth2 + ready-made clients for AdSense, Search Console, Analytics and Google Ads.',
-        'short' => 'Skip the OAuth boilerplate. A working authorization-code flow with automatic token refresh, plus thin clients for four Google APIs.',
-        'features' => "Complete OAuth2 authorization-code flow\nAutomatic access-token refresh\nAdSense Management API client\nSearch Console API client\nAnalytics Data (GA4) API client\nGoogle Ads API client with developer-token handling\nClear, actionable error messages instead of raw API failures",
-        'includes' => "PHP source files\nGoogle Cloud setup walkthrough\n12 months of free updates\nEmail support\n14-day refund window",
-        'meta_desc' => 'PHP OAuth2 integration pack with ready-made clients for the AdSense Management, Search Console, Analytics Data and Google Ads APIs.',
-        'meta_kw' => 'google api php integration, adsense api php, search console api php, oauth2 php',
-    ];
-
-    $P[] = [
-        'name' => 'Admin Dashboard UI Kit',
-        'type' => 'HTML/CSS Template', 'icon' => 'fa-gauge-high', 'art' => 'p7',
-        'price' => 27.00, 'compare' => 45.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'A clean, dependency-free admin panel UI you can drop onto any backend.',
-        'short' => 'Sidebar navigation, stat cards, data tables, tabbed settings, forms and flash messages — all in plain CSS with no framework to fight.',
-        'features' => "Zero dependencies — plain HTML and CSS\nCollapsible sidebar with grouped navigation\nStat cards, data tables and status badges\nTabbed settings layout\nStyled forms, buttons and flash messages\nFully responsive down to mobile\nEasy to recolor with CSS custom properties",
-        'includes' => "HTML/CSS source\nComponent reference\n6 months of free updates\n14-day refund window",
-        'meta_desc' => 'A dependency-free admin dashboard UI kit in plain HTML and CSS — sidebar, stat cards, tables, tabbed settings and forms.',
-        'meta_kw' => 'admin dashboard template, admin ui kit, php admin panel template',
-    ];
-
-    $P[] = [
-        'name' => 'GUI Installer Wizard Module',
-        'type' => 'PHP Module', 'icon' => 'fa-wand-magic-sparkles', 'art' => 'p8',
-        'price' => 19.00, 'compare' => 34.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'Give your script a professional one-click installer instead of a config file to edit.',
-        'short' => 'A multi-step install wizard: requirement checks, database connection test, admin account creation, auto-seeding, and a self-lock so it can never be re-run.',
-        'features' => "Multi-step wizard with progress indicator\nServer requirement checks before install\nLive database connection test with clear errors\nWrites the config file for the user automatically\nSelf-healing schema creation — no SQL import\nAdmin account creation with password validation\nSelf-locking after install for security",
-        'includes' => "PHP module source\nIntegration guide\n6 months of free updates\n14-day refund window",
-        'meta_desc' => 'A PHP install wizard module with requirement checks, database testing, auto schema creation and self-locking security.',
-        'meta_kw' => 'php installer script, install wizard php, script installer module',
-    ];
-
-    $P[] = [
-        'name' => 'Landing Page Pack — 6 Conversion Templates',
-        'type' => 'HTML/CSS Template', 'icon' => 'fa-rocket', 'art' => 'p9',
-        'price' => 32.00, 'compare' => 55.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'Six ready-to-edit landing pages for products, apps, services and lead capture.',
-        'short' => 'Fast, responsive landing pages with hero sections, feature grids, pricing tables, testimonial blocks and FAQ accordions — all in clean HTML and CSS.',
-        'features' => "6 distinct landing page layouts\nHero, features, pricing, testimonials and FAQ sections\nSVG illustrations included, no stock photo licensing\nNo frameworks — loads fast on any host\nEasy recoloring via CSS custom properties\nFully responsive and accessible markup",
-        'includes' => "HTML/CSS/SVG source files\nCustomization guide\n6 months of free updates\n14-day refund window",
-        'meta_desc' => 'Six fast, responsive landing page templates with hero sections, pricing tables, testimonials and FAQ blocks in clean HTML and CSS.',
-        'meta_kw' => 'landing page template, html landing pages, conversion template pack',
-    ];
-
-    $P[] = [
-        'name' => 'SVG Icon & Illustration Pack',
-        'type' => 'Design Asset', 'icon' => 'fa-shapes', 'art' => 'p10',
-        'price' => 15.00, 'compare' => 29.00, 'badge' => '', 'featured' => 0,
-        'tagline' => 'Original gradient SVG illustrations and icons — royalty-free, no attribution required.',
-        'short' => 'Hand-built SVG artwork designed for tech sites: hero illustrations, decorative patterns and category icons, all fully editable and infinitely scalable.',
-        'features' => "Original artwork — no stock licensing risk\nPure SVG: infinitely scalable, tiny file sizes\nGradient-based, modern visual style\nEditable colors via CSS custom properties\nHero illustrations, patterns and category icons\nRoyalty-free commercial license, no attribution required",
-        'includes' => "All SVG source files\nColor customization guide\nCommercial license\n14-day refund window",
-        'meta_desc' => 'Original royalty-free SVG illustrations, gradient patterns and icons built for modern tech websites — fully editable and scalable.',
-        'meta_kw' => 'svg illustration pack, gradient svg icons, royalty free svg',
+        'name' => 'مدير كلمات مرور مشفّر', 'platform' => 'security',
+        'type' => 'أداة حماية', 'icon' => 'fa-solid fa-key', 'art' => 'p1',
+        'price' => 18.00, 'compare' => 30.00, 'badge' => '', 'featured' => 0,
+        'tagline' => 'حفظ ومزامنة كلمات المرور بتشفير كامل لسنة كاملة.',
+        'short' => 'أداة موثوقة لحفظ كلمات المرور ومزامنتها بين أجهزتك بتشفير من طرف إلى طرف، مع مولّد كلمات مرور قوية.',
+        'features' => "تشفير من طرف إلى طرف\nمزامنة بين الموبايل والكمبيوتر\nمولّد كلمات مرور قوية تلقائياً\nتنبيه عند تسريب كلمة مرور\nسنة كاملة من التفعيل",
+        'includes' => "سنة كاملة من التفعيل\nتعليمات تفعيل خطوة بخطوة\nدعم بعد الطلب",
+        'meta_desc' => 'مدير كلمات مرور مشفّر لحماية حساباتك، دفع فوري بالعملات الرقمية.',
+        'meta_kw' => 'مدير كلمات مرور, حماية حسابات, تشفير كلمات المرور',
     ];
 
     $stmt = $pdo->prepare("INSERT IGNORE INTO products
-        (name, slug, tagline, product_type, icon_class, art_key, price, compare_at_price, currency, badge,
+        (name, slug, tagline, product_type, platform, icon_class, art_key, price, compare_at_price, currency, badge,
          short_description, full_description, features, includes_list, meta_title, meta_description, meta_keywords,
          status, featured, sort_order)
-        VALUES (:name,:slug,:tagline,:product_type,:icon_class,:art_key,:price,:compare_at_price,'USD',:badge,
+        VALUES (:name,:slug,:tagline,:product_type,:platform,:icon_class,:art_key,:price,:compare_at_price,'USD',:badge,
          :short_description,:full_description,:features,:includes_list,:meta_title,:meta_description,:meta_keywords,
          'published',:featured,:sort_order)");
 
     $order = 0;
     foreach ($P as $p) {
-        $full = '<h2>What you get</h2><p>' . htmlspecialchars($p['short'], ENT_QUOTES, 'UTF-8') . '</p>'
-              . '<h2>Support &amp; guarantee</h2>'
-              . '<p>Every purchase includes email support for installation and setup, free updates for the period listed above, '
-              . 'and a 14-day refund window if the product does not work as described.</p>'
-              . '<p><strong>An honest note on AdSense:</strong> products described as "AdSense-ready" are built to meet Google\'s '
-              . 'technical and policy prerequisites — original content structure, required legal pages, fast load times, clear '
-              . 'navigation and correctly placed ad zones. Approval itself is Google\'s decision and depends on your own domain, '
-              . 'traffic and published content, so no seller can honestly guarantee it, and we do not.</p>';
+        $full = '<h2>ما تحصل عليه</h2><p>' . htmlspecialchars($p['short'], ENT_QUOTES, 'UTF-8') . '</p>'
+              . '<h2>الدعم والضمان</h2>'
+              . '<p>كل طلب يشمل تفعيلاً بعد تأكيد الدفع، دعماً مباشراً عبر تيليجرام أو المساعد الذكي على الموقع، '
+              . 'وسياسة استرجاع واضحة إذا لم تصل الخدمة كما هو موصوف.</p>'
+              . '<p><strong>ملاحظة صادقة:</strong> باقات المتابعين والمشاهدات والأعضاء تعتمد على نمو تدريجي حسب سياسات '
+              . 'كل منصة اجتماعية بذاتها — نحن لا نتحكم بتلك السياسات ولا نعِد بنتائج تتجاوزها، ونصف كل باقة بدقة '
+              . 'حتى تعرف بالضبط ما تطلبه.</p>';
 
         $stmt->execute([
             'name' => $p['name'],
             'slug' => slugify($p['name']),
             'tagline' => $p['tagline'],
             'product_type' => $p['type'],
+            'platform' => $p['platform'],
             'icon_class' => $p['icon'],
             'art_key' => $p['art'],
             'price' => $p['price'],
@@ -167,7 +171,7 @@ function seed_products(PDO $pdo): void {
             'full_description' => $full,
             'features' => $p['features'],
             'includes_list' => $p['includes'],
-            'meta_title' => $p['name'] . ' — Download',
+            'meta_title' => $p['name'] . ' — طلب فوري',
             'meta_description' => $p['meta_desc'],
             'meta_keywords' => $p['meta_kw'],
             'featured' => $p['featured'],

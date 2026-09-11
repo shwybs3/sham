@@ -43,4 +43,33 @@ class OpenRouterClient
         }
         return ['ok' => false, 'error' => 'All free OpenRouter models failed or are rate-limited right now.'];
     }
+
+    /** Multi-turn chat (used by the public storefront assistant): takes a
+     *  full messages array (system + history + latest user turn) as-is. */
+    public static function chat(array $messages): array {
+        if (!self::isConfigured()) {
+            return ['ok' => false, 'error' => 'no_key'];
+        }
+        foreach (self::FREE_MODELS as $model) {
+            $ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode(['model' => $model, 'messages' => $messages, 'max_tokens' => 600]),
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: Bearer ' . self::apiKey(),
+                    'Content-Type: application/json',
+                    'HTTP-Referer: ' . SITE_URL,
+                    'X-Title: ' . setting('site_name', 'Yassota'),
+                ],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 40,
+            ]);
+            $body = curl_exec($ch);
+            curl_close($ch);
+            $json = json_decode((string)$body, true);
+            $text = $json['choices'][0]['message']['content'] ?? null;
+            if ($text) return ['ok' => true, 'reply' => $text, 'model' => $model];
+        }
+        return ['ok' => false, 'error' => 'all_models_failed'];
+    }
 }

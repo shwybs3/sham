@@ -328,6 +328,10 @@ function sh_ensure_schema(PDO $pdo): void {
 
     sh_ensure_column($pdo, 'payments', 'coupon_code', "VARCHAR(40) DEFAULT ''");
     sh_ensure_column($pdo, 'payments', 'discount_usd', "DECIMAL(10,2) NOT NULL DEFAULT 0");
+
+    /* Which platform/category a store package belongs to, so the
+       storefront can filter packages by tab (Instagram/Facebook/etc.). */
+    sh_ensure_column($pdo, 'products', 'platform', "VARCHAR(40) NOT NULL DEFAULT 'other'");
 }
 
 /**

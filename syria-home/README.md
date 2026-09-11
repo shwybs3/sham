@@ -1,8 +1,32 @@
-# Syria Home
+# Yassota — Digital Growth & Security Store
+
+## What changed in this pass: an Arabic (RTL) storefront on top of Syria Home
+
+The storefront pages (`index.php`, `products.php`, `product.php`, `checkout.php`, `about.php`, `contact.php`)
+were re-themed and rewritten in Arabic to sell social-growth packages (Instagram/Facebook/YouTube/Telegram
+followers, likes, views, Premium) plus digital-security tools (VPN, password manager), with instant crypto
+checkout via **NOWPayments** (already wired end-to-end in `checkout.php`/`payment-webhook.php`) and a free
+**OpenRouter**-powered chat assistant (`chat.php` + the floating widget on every page — it turns on automatically
+the moment an OpenRouter key is saved in **Admin → Settings → API Keys**, no extra wiring needed).
+
+- **New visual identity**: deep-navy canvas with cyan/violet/gold gradients, Cairo (headings) + Tajawal (body) +
+  JetBrains Mono (numbers) — applied once in `assets/css/style.css` + `partials.php`, so the header/footer/cards
+  are consistent site-wide automatically.
+- **Packages**: each product now has a `platform` (`instagram`/`facebook`/`youtube`/`telegram`/`security`) used
+  to drive the storefront's filter tabs. Manage them in **Admin → Store Products** (the form has a Platform
+  dropdown).
+- **Left in English on purpose**: the article engine (`articles.php`, 21 posts) and the 40 free tools
+  (`tools.php`) are untouched — useful bonus SEO content, not yet translated. Same for the legal pages
+  (`privacy-policy.php`, `terms.php`, etc.). Translating those fully is a separate, large pass.
+- **yassota.com**: `sitemap.php`/`robots.php` are already domain-agnostic (built from `SITE_URL`/`site_url()`),
+  so pointing the domain (or a subdomain) at this folder and running `install/` makes them live immediately at
+  `https://yassota.com/sitemap.xml` and `https://yassota.com/robots.txt` via the existing `.htaccess` rewrites.
+
+---
 
 A self-contained PHP/MySQL content + tools site: news/articles/comparisons/tutorials, 20 free client-side web tools, an admin panel with a scoped AI content assistant, and OAuth-based integrations for Google AdSense Management, Search Console, Analytics (GA4) and Google Ads.
 
-Built as an independent app inside this repo (`syria-home/`) so it can be deployed to its own subdomain (e.g. `syria-home.yassota.com`) without touching the existing `yassota` app-store site in the rest of this repository.
+Built as an independent app inside this repo (`syria-home/`) so it can be deployed to its own subdomain (e.g. `syria-home.yassota.com`, or the root of `yassota.com` itself) without touching the existing `yassota` app-store site in the rest of this repository.
 
 ## 1. Deploy the files
 

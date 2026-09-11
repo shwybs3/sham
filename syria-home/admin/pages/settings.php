@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
         set_setting('site_tagline', trim($_POST['site_tagline'] ?? ''));
         set_setting('site_description', trim($_POST['site_description'] ?? ''));
         set_setting('contact_email', trim($_POST['contact_email'] ?? ''));
+        set_setting('support_telegram', trim($_POST['support_telegram'] ?? ''));
         set_setting('maintenance_mode', isset($_POST['maintenance_mode']) ? '1' : '0');
         set_setting('parent_site_url', trim($_POST['parent_site_url'] ?? ''));
         set_setting('logo_url', trim($_POST['logo_url'] ?? ''));
@@ -131,6 +132,7 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
     <label>Tagline</label><input type="text" name="site_tagline" value="<?= e(setting('site_tagline')) ?>">
     <label>Description (SEO default)</label><textarea name="site_description"><?= e(setting('site_description')) ?></textarea>
     <label>Contact email (shown on the Contact page)</label><input type="text" name="contact_email" value="<?= e(setting('contact_email', 'contact@yassota.com')) ?>">
+    <label>Support Telegram username (header button + Contact page, e.g. @yourhandle)</label><input type="text" name="support_telegram" value="<?= e(setting('support_telegram')) ?>" placeholder="@yourhandle">
 
     <h3>Logo</h3>
     <div class="row2">
