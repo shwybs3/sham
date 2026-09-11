@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0A0E13">
+<title>Hamado Market — دفتر الديون</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2312D9A0'/%3E%3Cpath d='M4.4 9.5h15.2V19a1 1 0 0 1-1 1H5.4a1 1 0 0 1-1-1z' fill='none' stroke='%2303291F' stroke-width='1.8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="ticker" id="ticker" hidden><div class="ticker-track" id="tickerTrack"></div></div>
+
+<!-- ══════════════ الرئيسية ══════════════ -->
+<section class="view is-active" id="view-home">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" id="brandMark"></span>
+      <div class="brand-text">
+        <b id="shopName">Hamado Market</b>
+        <small>دفتر الديون</small>
+      </div>
+    </div>
+    <button class="icon-btn" id="btnRefresh" aria-label="تحديث"></button>
+  </header>
+
+  <div class="scroll" id="homeScroll">
+    <div class="stat-strip">
+      <div class="stat stat-debt">
+        <span class="stat-ic" data-ic="wallet"></span>
+        <b class="num" id="statTotal">0</b>
+        <small>إجمالي المستحق لك</small>
+      </div>
+      <div class="stat">
+        <span class="stat-ic" data-ic="users"></span>
+        <b class="num" id="statCustomers">0</b>
+        <small>عميل</small>
+      </div>
+      <div class="stat">
+        <span class="stat-ic" data-ic="alert"></span>
+        <b class="num" id="statDebtors">0</b>
+        <small>عليهم دين</small>
+      </div>
+      <div class="stat">
+        <span class="stat-ic" data-ic="check"></span>
+        <b class="num" id="statClear">0</b>
+        <small>مسدَّد</small>
+      </div>
+    </div>
+
+    <div class="banners" id="banners" hidden></div>
+
+    <!-- التسجيل السريع -->
+    <div class="quick card" id="quickCard">
+      <div class="quick-head">
+        <span class="quick-ic" data-ic="bolt"></span>
+        <h2>تسجيل سريع</h2>
+      </div>
+
+      <div class="field-wrap">
+        <span class="field-ic" data-ic="search"></span>
+        <input id="qName" class="field" type="text" inputmode="text" autocomplete="off"
+               placeholder="اكتب أول حرفين من الاسم…" aria-label="اسم العميل">
+        <button class="clear-btn" id="qClear" hidden aria-label="مسح"></button>
+      </div>
+      <div class="suggest" id="suggestBox" hidden></div>
+
+      <div class="selected-chip" id="selectedChip" hidden>
+        <span class="chip-avatar" id="chipAvatar"></span>
+        <div class="chip-info">
+          <b id="chipName"></b>
+          <small id="chipBal"></small>
+        </div>
+        <button class="chip-x" id="chipClear" aria-label="إلغاء الاختيار"></button>
+      </div>
+
+      <div class="seg" id="qType">
+        <button class="seg-btn is-on" data-type="debt"><span data-ic="minus-c"></span> دين جديد</button>
+        <button class="seg-btn" data-type="payment"><span data-ic="plus-c"></span> تسديد دفعة</button>
+      </div>
+
+      <div class="field-wrap">
+        <span class="field-ic" data-ic="cash"></span>
+        <input id="qAmount" class="field field-num" type="text" inputmode="decimal" placeholder="المبلغ" aria-label="المبلغ">
+        <span class="field-suffix" id="qCur">ل.س</span>
+      </div>
+
+      <div class="chips" id="qQuickAmounts"></div>
+
+      <input id="qNote" class="field field-note" type="text" placeholder="ملاحظة (اختياري)" aria-label="ملاحظة">
+
+      <button class="btn btn-primary btn-lg" id="qSave">
+        <span data-ic="save"></span> حفظ الحركة
+      </button>
+    </div>
+
+    <!-- قائمة العملاء -->
+    <div class="list-head">
+      <h2><span data-ic="list"></span> العملاء</h2>
+      <div class="tabs" id="homeTabs">
+        <button class="tab is-on" data-tab="all">الكل</button>
+        <button class="tab" data-tab="debt">عليهم دين</button>
+        <button class="tab" data-tab="clear">مسدَّد</button>
+      </div>
+    </div>
+
+    <div class="field-wrap search-wrap">
+      <span class="field-ic" data-ic="search"></span>
+      <input id="listSearch" class="field" type="text" placeholder="ابحث عن عميل…" autocomplete="off" aria-label="بحث">
+      <button class="clear-btn" id="listSearchClear" hidden aria-label="مسح"></button>
+    </div>
+
+    <div class="cards" id="customerCards"></div>
+    <div class="empty" id="homeEmpty" hidden>
+      <span data-ic="inbox"></span>
+      <p>لا يوجد عملاء بعد</p>
+      <small>سجّل أول دين من بطاقة "تسجيل سريع" بالأعلى</small>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ صفحة العميل ══════════════ -->
+<section class="view" id="view-customer">
+  <header class="topbar">
+    <button class="icon-btn" id="custBack" aria-label="رجوع"></button>
+    <div class="brand brand-center">
+      <div class="brand-text">
+        <b id="custTitle">—</b>
+        <small id="custSub"></small>
+      </div>
+    </div>
+    <button class="icon-btn" id="custMenu" aria-label="خيارات"></button>
+  </header>
+
+  <div class="scroll" id="custScroll">
+    <div class="balance-hero" id="balHero">
+      <span class="bh-avatar" id="custAvatar"></span>
+      <small>الرصيد الحالي</small>
+      <b class="num" id="custBalance">0</b>
+      <span class="bh-tag" id="custTag"></span>
+      <div class="bh-actions">
+        <button class="btn btn-danger" id="custAddDebt"><span data-ic="minus-c"></span> دين</button>
+        <button class="btn btn-ok" id="custAddPay"><span data-ic="plus-c"></span> دفعة</button>
+        <button class="btn btn-ghost" id="custSettle"><span data-ic="check"></span> سدّد الكل</button>
+      </div>
+      <div class="bh-links" id="custLinks"></div>
+    </div>
+
+    <div class="mini-stats" id="custMini"></div>
+
+    <div class="list-head">
+      <h2><span data-ic="history"></span> سجل الحركات</h2>
+      <span class="count-pill" id="custTxCount">0</span>
+    </div>
+    <div class="tx-list" id="custTx"></div>
+    <div class="empty" id="custEmpty" hidden>
+      <span data-ic="inbox"></span>
+      <p>لا توجد حركات</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ الخبز ══════════════ -->
+<section class="view" id="view-bread">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark bread-mark" data-ic="bread"></span>
+      <div class="brand-text">
+        <b>دفتر الخبز</b>
+        <small id="breadDateLabel">اليوم</small>
+      </div>
+    </div>
+    <button class="icon-btn" id="breadCal" aria-label="اختيار التاريخ"></button>
+  </header>
+
+  <div class="scroll" id="breadScroll">
+    <input type="date" id="breadDate" class="date-input">
+
+    <div class="stat-strip">
+      <div class="stat">
+        <span class="stat-ic" data-ic="bread"></span>
+        <b class="num" id="bStatCount">0</b>
+        <small>ربطة اليوم</small>
+      </div>
+      <div class="stat">
+        <span class="stat-ic" data-ic="check"></span>
+        <b class="num" id="bStatPaid">0</b>
+        <small>مدفوع</small>
+      </div>
+      <div class="stat stat-debt">
+        <span class="stat-ic" data-ic="alert"></span>
+        <b class="num" id="bStatDue">0</b>
+        <small>على الحساب</small>
+      </div>
+      <div class="stat">
+        <span class="stat-ic" data-ic="cash"></span>
+        <b class="num" id="bStatTotal">0</b>
+        <small>إجمالي اليوم</small>
+      </div>
+    </div>
+
+    <div class="quick card">
+      <div class="quick-head">
+        <span class="quick-ic" data-ic="bolt"></span>
+        <h2>تسجيل ربطة خبز</h2>
+      </div>
+
+      <div class="field-wrap">
+        <span class="field-ic" data-ic="search"></span>
+        <input id="bName" class="field" type="text" autocomplete="off" placeholder="اسم الزبون…" aria-label="اسم الزبون">
+        <button class="clear-btn" id="bClear" hidden aria-label="مسح"></button>
+      </div>
+      <div class="suggest" id="bSuggest" hidden></div>
+
+      <div class="stepper-row">
+        <div class="stepper">
+          <button class="step-btn" id="bMinus" aria-label="أنقص"></button>
+          <div class="step-val"><b id="bCount">1</b><small>ربطة</small></div>
+          <button class="step-btn" id="bPlus" aria-label="زد"></button>
+        </div>
+        <div class="bread-total">
+          <small>الإجمالي</small>
+          <b class="num" id="bTotal">0</b>
+        </div>
+      </div>
+
+      <div class="seg" id="bPaidSeg">
+        <button class="seg-btn is-on" data-paid="1"><span data-ic="check"></span> دفع الآن</button>
+        <button class="seg-btn" data-paid="0"><span data-ic="book"></span> على الحساب</button>
+      </div>
+
+      <button class="btn btn-amber btn-lg" id="bSave">
+        <span data-ic="save"></span> تسجيل الخبز
+      </button>
+    </div>
+
+    <div class="list-head">
+      <h2><span data-ic="history"></span> سجل اليوم</h2>
+      <span class="count-pill" id="bLogCount">0</span>
+    </div>
+    <div class="tx-list" id="breadLog"></div>
+    <div class="empty" id="breadEmpty" hidden>
+      <span data-ic="bread"></span>
+      <p>لا توجد تسجيلات لهذا اليوم</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ لوحة الإدارة ══════════════ -->
+<section class="view" id="view-admin">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark admin-mark" data-ic="shield"></span>
+      <div class="brand-text">
+        <b>لوحة الإدارة</b>
+        <small id="adminSub">محمية برمز</small>
+      </div>
+    </div>
+    <button class="icon-btn" id="adminLock" hidden aria-label="قفل"></button>
+  </header>
+
+  <div class="scroll" id="adminScroll">
+
+    <!-- بوابة الدخول -->
+    <div class="lock-gate" id="lockGate">
+      <div class="lock-icon" data-ic="lock"></div>
+      <h2>أدخل رمز الإدارة</h2>
+      <p>الرمز الافتراضي <b>1234</b> — غيّره من الإعدادات بعد الدخول</p>
+      <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i></div>
+      <div class="keypad" id="keypad"></div>
+      <div class="lock-err" id="lockErr" hidden>رمز غير صحيح</div>
+    </div>
+
+    <!-- المحتوى بعد الدخول -->
+    <div id="adminBody" hidden>
+      <div class="stat-strip">
+        <div class="stat"><span class="stat-ic" data-ic="users"></span><b class="num" id="aStatCust">0</b><small>عميل</small></div>
+        <div class="stat"><span class="stat-ic" data-ic="history"></span><b class="num" id="aStatTx">0</b><small>حركة</small></div>
+        <div class="stat"><span class="stat-ic" data-ic="bread"></span><b class="num" id="aStatBread">0</b><small>سجل خبز</small></div>
+        <div class="stat stat-debt"><span class="stat-ic" data-ic="wallet"></span><b class="num" id="aStatDue">0</b><small>مستحق</small></div>
+      </div>
+
+      <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="store"></span> إعدادات المتجر <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <label class="lbl">اسم المتجر</label>
+          <input class="field" id="setShopName" type="text" placeholder="Hamado Market">
+          <label class="lbl">رمز العملة</label>
+          <div class="chips" id="curChips"></div>
+          <input class="field" id="setCurrency" type="text" placeholder="ل.س">
+          <label class="lbl">سعر ربطة الخبز</label>
+          <input class="field field-num" id="setBreadPrice" type="text" inputmode="decimal" placeholder="0">
+          <button class="btn btn-primary" id="saveShop"><span data-ic="save"></span> حفظ الإعدادات</button>
+        </div>
+      </div>
+
+      <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="lock"></span> رمز الحماية <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <label class="lbl">رمز جديد (4 أرقام)</label>
+          <input class="field field-num" id="setPin" type="text" inputmode="numeric" maxlength="4" placeholder="••••">
+          <p class="hint">هذا الرمز يحمي لوحة الإدارة من العبث على الجهاز نفسه فقط — وهو ليس تشفيراً للبيانات. من يملك الهاتف ومعرفة تقنية يستطيع قراءة قاعدة البيانات المحلية، لذلك لا تعتبره حماية لأسرار حسّاسة.</p>
+          <button class="btn btn-primary" id="savePin"><span data-ic="save"></span> تغيير الرمز</button>
+        </div>
+      </div>
+
+      <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="megaphone"></span> الإعلانات والبنرات <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <label class="lbl">شريط نصي متحرك (أعلى الشاشة)</label>
+          <input class="field" id="setTicker" type="text" placeholder="مثال: عروض اليوم على السكر والزيت">
+          <div class="switch-row">
+            <span>تفعيل الشريط المتحرك</span>
+            <label class="switch"><input type="checkbox" id="setTickerOn"><i></i></label>
+          </div>
+          <hr class="sep">
+          <label class="lbl">بنرات الرئيسية</label>
+          <div id="bannerList" class="banner-admin"></div>
+          <input class="field" id="bnText" type="text" placeholder="نص البنر">
+          <input class="field" id="bnSub" type="text" placeholder="سطر فرعي (اختياري)">
+          <button class="btn btn-ghost" id="bnAdd"><span data-ic="plus"></span> إضافة بنر</button>
+          <button class="btn btn-primary" id="saveAds"><span data-ic="save"></span> حفظ الإعلانات</button>
+        </div>
+      </div>
+
+      <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="users"></span> إدارة العملاء <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <div class="field-wrap">
+            <span class="field-ic" data-ic="search"></span>
+            <input class="field" id="adminCustSearch" type="text" placeholder="ابحث…">
+          </div>
+          <div id="adminCustList" class="admin-list"></div>
+        </div>
+      </div>
+
+      <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="cloud"></span> النسخ الاحتياطي <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <p class="hint">كل بياناتك محفوظة داخل الجهاز. خذ نسخة احتياطية بانتظام حتى لا تفقدها إذا ضاع الهاتف أو حُذف التطبيق.</p>
+          <button class="btn btn-primary" id="bkDownload"><span data-ic="download"></span> حفظ نسخة في الجهاز</button>
+          <button class="btn btn-ghost" id="bkShare"><span data-ic="share"></span> مشاركة / رفع إلى Google Drive</button>
+          <hr class="sep">
+          <label class="lbl">توكن بوت تيليجرام</label>
+          <input class="field ltr" id="setTgToken" type="text" placeholder="123456:ABC-DEF…">
+          <label class="lbl">معرّف الدردشة (Chat ID)</label>
+          <input class="field ltr" id="setTgChat" type="text" placeholder="مثال: 123456789">
+          <div class="switch-row">
+            <span>نسخة تلقائية لتيليجرام يومياً</span>
+            <label class="switch"><input type="checkbox" id="setTgAuto"><i></i></label>
+          </div>
+          <button class="btn btn-ghost" id="saveTg"><span data-ic="save"></span> حفظ إعدادات تيليجرام</button>
+          <button class="btn btn-amber" id="bkTelegram"><span data-ic="send"></span> إرسال نسخة الآن لتيليجرام</button>
+          <hr class="sep">
+          <label class="lbl">استعادة من ملف نسخة احتياطية</label>
+          <input type="file" id="bkFile" accept="application/json,.json" class="file-input">
+          <button class="btn btn-ghost" id="bkRestore"><span data-ic="upload"></span> اختيار ملف واستعادة</button>
+        </div>
+      </div>
+
+      <div class="acc acc-danger" data-acc>
+        <button class="acc-head"><span data-ic="alert"></span> منطقة الخطر <i class="acc-arrow"></i></button>
+        <div class="acc-body">
+          <p class="hint">هذه الإجراءات لا يمكن التراجع عنها. خذ نسخة احتياطية أولاً.</p>
+          <button class="btn btn-danger" id="wipeBread"><span data-ic="trash"></span> حذف كل سجلات الخبز</button>
+          <button class="btn btn-danger" id="wipeAll"><span data-ic="trash"></span> حذف كل البيانات نهائياً</button>
+        </div>
+      </div>
+
+      <p class="version">Hamado Market · إصدار <span id="appVer">1.0.0</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ شريط التنقل ══════════════ -->
+<nav class="tabbar" id="tabbar">
+  <button class="tabbar-btn is-on" data-go="home"><span data-ic="home"></span><small>الرئيسية</small></button>
+  <button class="tabbar-btn" data-go="bread"><span data-ic="bread"></span><small>الخبز</small></button>
+  <button class="fab" id="fabAdd" aria-label="تسجيل سريع"><span data-ic="plus"></span></button>
+  <button class="tabbar-btn" data-go="admin"><span data-ic="shield"></span><small>الإدارة</small></button>
+  <button class="tabbar-btn" data-go="customers"><span data-ic="users"></span><small>العملاء</small></button>
+</nav>
+
+<!-- ══════════════ الأوراق المنبثقة ══════════════ -->
+<div class="sheet-wrap" id="sheetWrap" hidden>
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-grip"></div>
+    <h3 id="sheetTitle">—</h3>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="confirm-wrap" id="confirmWrap" hidden>
+  <div class="confirm">
+    <span class="confirm-ic" data-ic="alert"></span>
+    <h3 id="confirmTitle">تأكيد</h3>
+    <p id="confirmText"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" id="confirmNo">إلغاء</button>
+      <button class="btn btn-danger" id="confirmYes">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
