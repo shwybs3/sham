@@ -29,10 +29,11 @@ function nari_head(array $opts): void {
     $title = $opts['title'] ?? 'ناري ستور';
     $description = $opts['description'] ?? 'ناري ستور — متجر رقمي سوري لشحن الألعاب والبطاقات والاشتراكات عبر شام كاش.';
     $path = ltrim($opts['path'] ?? '', '/');
-    $url = nari_site_url() . '/' . $path;
+    $url = $path === '' ? nari_site_url() . '/' : nari_site_url() . '/' . $path;
     $image = $opts['image'] ?? (nari_site_url() . '/assets/art/hero.svg');
     $keywords = $opts['keywords'] ?? '';
     $jsonld = $opts['jsonld'] ?? [];
+    $extraHeadHtml = $opts['extra_head_html'] ?? '';
     $v = NARI_ASSET_VER;
     ?>
 <!DOCTYPE html>
@@ -69,6 +70,7 @@ function nari_head(array $opts): void {
 <?php foreach ($jsonld as $block): ?>
 <script type="application/ld+json"><?= $block ?></script>
 <?php endforeach; ?>
+<?= $extraHeadHtml ?>
 </head>
 <body>
 
@@ -76,6 +78,12 @@ function nari_head(array $opts): void {
   <span class="announce-text"></span>
   <button class="close-announce" type="button" aria-label="إغلاق الإعلان"><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
 </div>
+<?php if (!empty($opts['top_alert'])): ?>
+<div class="top-alert">
+  <svg class="icon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2c1 3-2 5-2 8 0 2 1.5 3 1.5 3s-4-1-4-5c0-1 .2-2 .2-2S4 9 4 13c0 5 3.5 8 8 8s8-3 8-8c0-4-3-6-4-9-.3 2-1 3.5-2.5 4 .5-2.5-.5-4.5-2.5-6z"/></svg> <span><?= nari_esc($opts['top_alert']) ?></span>
+  <a data-wa="مرحباً، أرغب بمعرفة المزيد عن خدماتكم" href="#">اطلب الآن عبر واتساب ←</a>
+</div>
+<?php endif; ?>
 <header class="site">
   <div class="wrap nav">
     <a href="index.html" class="brand" aria-label="ناري ستور — الصفحة الرئيسية">
@@ -95,21 +103,27 @@ function nari_head(array $opts): void {
   </div>
 </header>
 
+<?php if (($opts['show_crumbs'] ?? true)): ?>
 <nav class="crumbs" aria-label="مسار التصفح"><div class="wrap">
 <?php
-    $crumbs = $opts['crumbs'] ?? [];
-    $parts = ['<a href="index.html">الرئيسية</a>'];
-    $n = count($crumbs);
-    foreach ($crumbs as $i => $c) {
-        if ($i === $n - 1 || empty($c['url'])) {
-            $parts[] = '<span>' . nari_esc($c['label']) . '</span>';
-        } else {
-            $parts[] = '<a href="' . nari_esc($c['url']) . '">' . nari_esc($c['label']) . '</a>';
+    if (isset($opts['crumbs_html'])) {
+        echo $opts['crumbs_html'];
+    } else {
+        $crumbs = $opts['crumbs'] ?? [];
+        $parts = ['<a href="index.html">الرئيسية</a>'];
+        $n = count($crumbs);
+        foreach ($crumbs as $i => $c) {
+            if ($i === $n - 1 || empty($c['url'])) {
+                $parts[] = '<span>' . nari_esc($c['label']) . '</span>';
+            } else {
+                $parts[] = '<a href="' . nari_esc($c['url']) . '">' . nari_esc($c['label']) . '</a>';
+            }
         }
+        echo implode(' ← ', $parts);
     }
-    echo implode(' ← ', $parts);
 ?>
 </div></nav>
+<?php endif; ?>
 <?php
 }
 
