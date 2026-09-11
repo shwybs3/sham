@@ -145,6 +145,7 @@
         <button class="btn btn-ghost" id="custSettle"><span data-ic="check"></span> سدّد الكل</button>
       </div>
       <div class="bh-links" id="custLinks"></div>
+      <button class="btn btn-ghost" id="custStatement" style="margin-top:7px;"><span data-ic="share"></span> إرسال كشف حساب</button>
     </div>
 
     <div class="mini-stats" id="custMini"></div>
@@ -247,6 +248,85 @@
   </div>
 </section>
 
+<!-- ══════════════ الأسعار والمنتجات ══════════════ -->
+<section class="view" id="view-prices">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark price-mark" data-ic="tag"></span>
+      <div class="brand-text">
+        <b>الأسعار</b>
+        <small>قائمة منتجات الدكان</small>
+      </div>
+    </div>
+    <button class="icon-btn" id="cartJump" aria-label="السلة"></button>
+  </header>
+
+  <div class="scroll" id="pricesScroll">
+    <div class="stat-strip">
+      <div class="stat"><span class="stat-ic" data-ic="tag"></span><b class="num" id="pStatCount">0</b><small>منتج</small></div>
+      <div class="stat"><span class="stat-ic" data-ic="cart"></span><b class="num" id="pStatItems">0</b><small>في السلة</small></div>
+      <div class="stat stat-jade"><span class="stat-ic" data-ic="cash"></span><b class="num" id="pStatTotal">0</b><small>إجمالي السلة</small></div>
+    </div>
+
+    <!-- السلة -->
+    <div class="card cart-card" id="cartCard" hidden>
+      <div class="quick-head">
+        <span class="quick-ic cart-ic" data-ic="cart"></span>
+        <h2>سلة المشتريات</h2>
+        <button class="chip-x" id="cartClear" aria-label="تفريغ"></button>
+      </div>
+      <div id="cartList"></div>
+      <div class="cart-total">
+        <span>الإجمالي</span>
+        <b class="num" id="cartTotal">0</b>
+      </div>
+      <button class="btn btn-primary btn-lg" id="cartToCustomer">
+        <span data-ic="user-plus"></span> سجّل على حساب زبون
+      </button>
+    </div>
+
+    <!-- إضافة منتج -->
+    <div class="card">
+      <div class="quick-head">
+        <span class="quick-ic" data-ic="plus"></span>
+        <h2 id="prodFormTitle">إضافة منتج</h2>
+      </div>
+      <div class="field-wrap">
+        <span class="field-ic" data-ic="tag"></span>
+        <input id="prodName" class="field" type="text" placeholder="اسم المنتج (مثال: سكر ١ كغ)" autocomplete="off">
+      </div>
+      <div class="field-wrap">
+        <span class="field-ic" data-ic="cash"></span>
+        <input id="prodPrice" class="field field-num" type="text" inputmode="decimal" placeholder="السعر">
+        <span class="field-suffix" id="prodCur">ل.س</span>
+      </div>
+      <div class="chips" id="prodCats"></div>
+      <div class="two-btns">
+        <button class="btn btn-primary" id="prodSave"><span data-ic="save"></span> حفظ المنتج</button>
+        <button class="btn btn-ghost" id="prodCancel" hidden><span data-ic="x"></span> إلغاء التعديل</button>
+      </div>
+    </div>
+
+    <div class="list-head">
+      <h2><span data-ic="list"></span> قائمة الأسعار</h2>
+      <span class="count-pill" id="prodCount">0</span>
+    </div>
+
+    <div class="field-wrap search-wrap">
+      <span class="field-ic" data-ic="search"></span>
+      <input id="prodSearch" class="field" type="text" placeholder="ابحث عن منتج…" autocomplete="off">
+      <button class="clear-btn" id="prodSearchClear" hidden aria-label="مسح"></button>
+    </div>
+
+    <div class="prod-grid" id="prodList"></div>
+    <div class="empty" id="prodEmpty" hidden>
+      <span data-ic="tag"></span>
+      <p>لا توجد منتجات بعد</p>
+      <small>أضف منتجاتك بأسعارها لتسجّل المشتريات بضغطة بدل كتابة المبلغ</small>
+    </div>
+  </div>
+</section>
+
 <!-- ══════════════ لوحة الإدارة ══════════════ -->
 <section class="view" id="view-admin">
   <header class="topbar">
@@ -282,13 +362,18 @@
       </div>
 
       <div class="acc" data-acc>
+        <button class="acc-head"><span data-ic="chart"></span> التقارير <i class="acc-arrow"></i></button>
+        <div class="acc-body" id="reportBody"></div>
+      </div>
+
+      <div class="acc" data-acc>
         <button class="acc-head"><span data-ic="store"></span> إعدادات المتجر <i class="acc-arrow"></i></button>
         <div class="acc-body">
           <label class="lbl">اسم المتجر</label>
           <input class="field" id="setShopName" type="text" placeholder="Hamado Market">
-          <label class="lbl">رمز العملة</label>
-          <div class="chips" id="curChips"></div>
-          <input class="field" id="setCurrency" type="text" placeholder="ل.س">
+          <label class="lbl">العملة</label>
+          <div class="cur-grid" id="curChips"></div>
+          <input type="hidden" id="setCurrency">
           <label class="lbl">سعر ربطة الخبز</label>
           <input class="field field-num" id="setBreadPrice" type="text" inputmode="decimal" placeholder="0">
           <button class="btn btn-primary" id="saveShop"><span data-ic="save"></span> حفظ الإعدادات</button>
@@ -376,10 +461,10 @@
 <!-- ══════════════ شريط التنقل ══════════════ -->
 <nav class="tabbar" id="tabbar">
   <button class="tabbar-btn is-on" data-go="home"><span data-ic="home"></span><small>الرئيسية</small></button>
-  <button class="tabbar-btn" data-go="bread"><span data-ic="bread"></span><small>الخبز</small></button>
+  <button class="tabbar-btn" data-go="prices"><span data-ic="tag"></span><small>الأسعار</small></button>
   <button class="fab" id="fabAdd" aria-label="تسجيل سريع"><span data-ic="plus"></span></button>
+  <button class="tabbar-btn" data-go="bread"><span data-ic="bread"></span><small>الخبز</small></button>
   <button class="tabbar-btn" data-go="admin"><span data-ic="shield"></span><small>الإدارة</small></button>
-  <button class="tabbar-btn" data-go="customers"><span data-ic="users"></span><small>العملاء</small></button>
 </nav>
 
 <!-- ══════════════ الأوراق المنبثقة ══════════════ -->
@@ -389,6 +474,26 @@
     <div class="sheet-grip"></div>
     <h3 id="sheetTitle">—</h3>
     <div id="sheetBody"></div>
+  </div>
+</div>
+
+<!-- ══════════════ الإعداد الأول ══════════════ -->
+<div class="setup-wrap" id="setupWrap" hidden>
+  <div class="setup">
+    <span class="setup-logo" data-ic="store"></span>
+    <h2>أهلاً بك في Hamado Market</h2>
+    <p>إعداد سريع لمرة واحدة — يمكنك تغيير كل شيء لاحقاً من لوحة الإدارة.</p>
+
+    <label class="lbl">اسم الدكان</label>
+    <input class="field" id="suShop" type="text" value="Hamado Market">
+
+    <label class="lbl">العملة</label>
+    <div class="cur-grid" id="suCur"></div>
+
+    <label class="lbl">سعر ربطة الخبز (اختياري الآن)</label>
+    <input class="field field-num" id="suBread" type="text" inputmode="decimal" placeholder="0">
+
+    <button class="btn btn-primary btn-lg" id="suStart"><span data-ic="check"></span> ابدأ الاستخدام</button>
   </div>
 </div>
 

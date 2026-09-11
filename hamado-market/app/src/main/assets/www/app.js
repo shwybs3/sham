@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '2.0.0';
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
@@ -50,6 +50,9 @@ const ICONS = {
   book:     '<path d="M5 5.4A1.4 1.4 0 0 1 6.4 4H18v14.5H6.4A1.4 1.4 0 0 0 5 20z"/><path d="M5 18.6A1.4 1.4 0 0 1 6.4 17.2H18"/>',
   tag:      '<path d="M4.5 11.3V5.6a1 1 0 0 1 1-1h5.7a1 1 0 0 1 .7.3l7 7a1 1 0 0 1 0 1.4l-5.7 5.7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1-.3-.7z"/><circle cx="8.4" cy="8.4" r="1.3"/>',
   clock:    '<circle cx="12" cy="12" r="7.8"/><path d="M12 7.6V12l2.9 1.8"/>',
+  cart:     '<path d="M4 5h2.2l2.1 9.3a1.4 1.4 0 0 0 1.4 1.1h7.2a1.4 1.4 0 0 0 1.4-1.1L20 8.2H6.7"/><circle cx="10.2" cy="19" r="1.3"/><circle cx="17.2" cy="19" r="1.3"/>',
+  'user-plus':'<path d="M15 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-4A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="9.5" cy="8" r="3.2"/><path d="M18 8.2v5M15.5 10.7h5"/>',
+  chart:    '<path d="M4.5 19.5h15"/><rect x="6" y="11" width="3.2" height="6" rx="1"/><rect x="11" y="7.5" width="3.2" height="9.5" rx="1"/><rect x="16" y="13.5" width="3.2" height="3.5" rx="1"/>',
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.tag;
@@ -69,9 +72,13 @@ const DB = (function () {
   function open() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
-      const rq = indexedDB.open('hamado_market', 1);
+      const rq = indexedDB.open('hamado_market', 2);
       rq.onupgradeneeded = e => {
         const db = e.target.result;
+        if (!db.objectStoreNames.contains('products')) {
+          const s = db.createObjectStore('products', { keyPath: 'id', autoIncrement: true });
+          s.createIndex('norm', 'norm', { unique: false });
+        }
         if (!db.objectStoreNames.contains('customers')) {
           const s = db.createObjectStore('customers', { keyPath: 'id', autoIncrement: true });
           s.createIndex('norm', 'norm', { unique: false });
@@ -106,13 +113,26 @@ const DB = (function () {
   };
 })();
 
+/* العملات المدعومة — الافتراضية الليرة السورية */
+const CURRENCIES = [
+  { code: 'SYP', symbol: 'ل.س', name: 'ليرة سورية' },
+  { code: 'USD', symbol: '$',   name: 'دولار' },
+  { code: 'TRY', symbol: '₺',   name: 'ليرة تركية' },
+];
+
 /* ─────────────────── الحالة ─────────────────── */
 const S = {
   customers: [],
   tx: [],
   bread: [],
+  products: [],
+  cart: [],
+  editingProduct: null,
+  prodQuery: '',
+  prodCat: '',
   balances: {},
   settings: {
+    setupDone: false,
     shopName: 'Hamado Market',
     currency: 'ل.س',
     breadPrice: 0,
@@ -285,12 +305,13 @@ const Native = {
 
 /* ─────────────────── تحميل البيانات ─────────────────── */
 async function loadAll() {
-  const [cs, txs, br, st] = await Promise.all([
-    DB.all('customers'), DB.all('transactions'), DB.all('bread'), DB.all('settings'),
+  const [cs, txs, br, pr, st] = await Promise.all([
+    DB.all('customers'), DB.all('transactions'), DB.all('bread'), DB.all('products'), DB.all('settings'),
   ]);
   S.customers = cs;
   S.tx = txs;
   S.bread = br;
+  S.products = pr;
   st.forEach(row => { S.settings[row.key] = row.value; });
   recomputeBalances();
 }
@@ -345,6 +366,7 @@ function go(view) {
   $$('.tabbar-btn').forEach(b => b.classList.toggle('is-on', b.dataset.go === view));
   if (view === 'home')   renderHome();
   if (view === 'bread')  renderBread();
+  if (view === 'prices') renderPrices();
   if (view === 'admin')  renderAdmin();
 }
 
@@ -735,6 +757,242 @@ async function deleteBread(id) {
   renderBread(); toast('تم الحذف', 'ok');
 }
 
+/* ─────────────────── الأسعار والمنتجات ─────────────────── */
+const PROD_CATS = ['مواد غذائية', 'مشروبات', 'منظفات', 'خضار وفواكه', 'ألبان', 'أخرى'];
+
+function cartCount() { return S.cart.reduce((s, i) => s + i.qty, 0); }
+function cartTotal() { return S.cart.reduce((s, i) => s + i.qty * i.price, 0); }
+function cartOf(id) { return S.cart.find(i => i.productId === id); }
+
+function addToCart(p) {
+  const it = cartOf(p.id);
+  if (it) it.qty++;
+  else S.cart.push({ productId: p.id, name: p.name, price: Number(p.price) || 0, qty: 1 });
+  renderPrices();
+}
+function setQty(id, delta) {
+  const it = cartOf(id);
+  if (!it) return;
+  it.qty += delta;
+  if (it.qty <= 0) S.cart = S.cart.filter(i => i.productId !== id);
+  renderPrices();
+}
+
+function renderPrices() {
+  const cur = S.settings.currency;
+  $('#prodCur').textContent = cur;
+  $('#pStatCount').textContent = S.products.length;
+  $('#pStatItems').textContent = cartCount();
+  $('#pStatTotal').textContent = moneyBare(cartTotal());
+
+  // السلة
+  const cc = $('#cartCard');
+  cc.hidden = S.cart.length === 0;
+  if (S.cart.length) {
+    $('#cartList').innerHTML = S.cart.map(i =>
+      '<div class="cart-row"><span class="cr-info"><b>' + esc(i.name) + '</b>' +
+        '<small>' + moneyBare(i.price) + ' × ' + i.qty + ' = ' + moneyBare(i.price * i.qty) + '</small></span>' +
+        '<span class="qty">' +
+          '<button class="qty-btn" data-q="-1" data-id="' + i.productId + '">' + icon('minus') + '</button>' +
+          '<span class="qty-val">' + i.qty + '</span>' +
+          '<button class="qty-btn" data-q="1" data-id="' + i.productId + '">' + icon('plus') + '</button>' +
+        '</span></div>'
+    ).join('');
+    $('#cartTotal').textContent = money(cartTotal());
+  }
+
+  // فئات
+  $('#prodCats').innerHTML = PROD_CATS.map(c =>
+    '<button class="chip ' + (S.prodCat === c ? 'is-on' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('');
+
+  // القائمة
+  const q = arNorm(S.prodQuery);
+  let list = S.products.slice();
+  if (q) list = list.filter(p => p.norm.indexOf(q) !== -1);
+  list.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  $('#prodCount').textContent = list.length;
+
+  $('#prodList').innerHTML = list.map((p, i) => {
+    const it = cartOf(p.id);
+    return '<div class="prod ' + (it ? 'in-cart' : '') + '" data-prod="' + p.id + '" style="animation-delay:' + Math.min(i * 20, 340) + 'ms">' +
+      (it ? '<span class="in-badge">' + it.qty + '</span>' : '') +
+      '<b>' + esc(p.name) + '</b>' +
+      '<span class="price">' + moneyBare(p.price) + ' ' + esc(cur) + '</span>' +
+      (p.cat ? '<small style="color:var(--dim);font-size:.7rem">' + esc(p.cat) + '</small>' : '') +
+      '<span class="prod-acts">' +
+        '<button class="tx-act" data-prod-edit="' + p.id + '" aria-label="تعديل">' + icon('edit') + '</button>' +
+        '<button class="tx-act danger" data-prod-del="' + p.id + '" aria-label="حذف">' + icon('trash') + '</button>' +
+      '</span></div>';
+  }).join('');
+  $('#prodEmpty').hidden = list.length > 0;
+}
+
+async function saveProduct() {
+  const name = $('#prodName').value.trim();
+  const price = parseAmount($('#prodPrice').value);
+  if (!name) { toast('اكتب اسم المنتج', 'err'); $('#prodName').focus(); return; }
+  if (!price) { toast('أدخل سعراً صحيحاً', 'err'); $('#prodPrice').focus(); return; }
+
+  if (S.editingProduct) {
+    const p = S.products.find(x => x.id === S.editingProduct);
+    if (p) {
+      p.name = name; p.norm = arNorm(name); p.price = price; p.cat = S.prodCat || p.cat || '';
+      await DB.put('products', p);
+      const it = cartOf(p.id);
+      if (it) { it.name = p.name; it.price = p.price; }
+    }
+    cancelProductEdit();
+    toast('تم تعديل المنتج', 'ok');
+  } else {
+    const rec = { name: name, norm: arNorm(name), price: price, cat: S.prodCat || '', createdAt: nowISO() };
+    rec.id = await DB.add('products', rec);
+    S.products.push(rec);
+    $('#prodName').value = ''; $('#prodPrice').value = '';
+    $('#prodName').focus();
+    toast('أُضيف «' + name + '»', 'ok');
+  }
+  renderPrices();
+}
+function startProductEdit(id) {
+  const p = S.products.find(x => x.id === id);
+  if (!p) return;
+  S.editingProduct = id;
+  S.prodCat = p.cat || '';
+  $('#prodName').value = p.name;
+  $('#prodPrice').value = p.price;
+  $('#prodFormTitle').textContent = 'تعديل: ' + p.name;
+  $('#prodCancel').hidden = false;
+  renderPrices();
+  $('#prodName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function cancelProductEdit() {
+  S.editingProduct = null;
+  $('#prodName').value = ''; $('#prodPrice').value = '';
+  $('#prodFormTitle').textContent = 'إضافة منتج';
+  $('#prodCancel').hidden = true;
+  renderPrices();
+}
+async function deleteProduct(id) {
+  const p = S.products.find(x => x.id === id);
+  if (!p) return;
+  const ok = await confirmBox('حذف المنتج', 'حذف «' + p.name + '» من قائمة الأسعار؟ الحركات المسجّلة سابقاً لا تتأثر.');
+  if (!ok) return;
+  await DB.del('products', id);
+  S.products = S.products.filter(x => x.id !== id);
+  S.cart = S.cart.filter(i => i.productId !== id);
+  renderPrices(); toast('تم حذف المنتج', 'ok');
+}
+
+/* تسجيل السلة على حساب زبون */
+function cartToCustomerSheet() {
+  if (!S.cart.length) return;
+  const total = cartTotal();
+  openSheet('تسجيل ' + money(total) + ' على حساب',
+    '<div class="field-wrap"><span class="field-ic" data-ic="search"></span>' +
+    '<input id="ctName" class="field" placeholder="اكتب اسم الزبون…" autocomplete="off"></div>' +
+    '<div class="suggest" id="ctSuggest" hidden></div>' +
+    '<p class="hint" id="ctPicked">اختر زبوناً من الاقتراحات، أو اكتب اسماً جديداً ليُنشأ تلقائياً.</p>' +
+    '<button class="btn btn-primary btn-lg" id="ctSave">' + icon('save') + ' تسجيل على الحساب</button>');
+
+  let picked = null;
+  const inp = $('#ctName');
+  setTimeout(() => inp.focus(), 120);
+  inp.addEventListener('input', () => {
+    picked = null;
+    const v = inp.value;
+    if (arNorm(v).length < 2) { $('#ctSuggest').hidden = true; return; }
+    $('#ctSuggest').innerHTML = suggestHTML(v, searchCustomers(v), false);
+    $('#ctSuggest').hidden = false;
+    paintIcons($('#ctSuggest'));
+  });
+  $('#ctSuggest').addEventListener('click', e => {
+    const p = e.target.closest('[data-pick]'); if (!p) return;
+    picked = S.customers.find(x => x.id === Number(p.dataset.pick));
+    inp.value = picked.name;
+    $('#ctSuggest').hidden = true;
+    $('#ctPicked').textContent = 'الرصيد الحالي: ' + money(balOf(picked.id));
+  });
+  $('#ctSave').onclick = async () => {
+    const typed = inp.value.trim();
+    if (!picked && !typed) { toast('اكتب اسم الزبون', 'err'); return; }
+    const c = picked || await findOrCreateCustomer(typed);
+    const note = S.cart.map(i => i.name + '×' + i.qty).join('، ');
+    await addTx(c.id, 'debt', total, note, { source: 'cart', items: S.cart.slice() });
+    S.cart = [];
+    closeSheet(); renderPrices(); renderHome();
+    toast('سُجّل ' + money(total) + ' على ' + c.name, 'ok');
+    maybeAutoBackup();
+  };
+}
+
+/* ─────────────────── كشف الحساب ─────────────────── */
+function statementText(c) {
+  const mine = S.tx.filter(t => t.customerId === c.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  let out = 'كشف حساب — ' + (S.settings.shopName || 'Hamado Market') + '\n';
+  out += 'الزبون: ' + c.name + '\n';
+  out += '────────────────\n';
+  mine.forEach(t => {
+    const d = new Date(t.createdAt).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    out += d + ' · ' + (t.type === 'debt' ? 'دين' : 'دفعة') + ' ' + moneyBare(t.amount) +
+           (t.note ? ' (' + t.note + ')' : '') + '\n';
+  });
+  out += '────────────────\n';
+  const b = balOf(c.id);
+  out += b > 0 ? 'المتبقي عليه: ' + money(b) : (b < 0 ? 'له رصيد: ' + money(-b) : 'الحساب مسدَّد بالكامل');
+  return out;
+}
+function shareStatement() {
+  const c = S.currentCustomer;
+  if (!c) return;
+  const txt = statementText(c);
+  if (c.phone) {
+    window.open('https://wa.me/' + String(c.phone).replace(/\D/g, '') + '?text=' + encodeURIComponent(txt), '_blank');
+  } else if (navigator.share) {
+    navigator.share({ text: txt }).catch(() => {});
+  } else {
+    Native.shareFile('كشف-حساب-' + c.name + '.txt', txt);
+  }
+}
+
+/* ─────────────────── التقارير ─────────────────── */
+function renderReports() {
+  const t = today(), month = t.slice(0, 7);
+  let dDebt = 0, dPay = 0, mDebt = 0, mPay = 0;
+  S.tx.forEach(x => {
+    const d = (x.createdAt || '').slice(0, 10);
+    const amt = Number(x.amount) || 0;
+    if (d === t) { if (x.type === 'debt') dDebt += amt; else dPay += amt; }
+    if (d.slice(0, 7) === month) { if (x.type === 'debt') mDebt += amt; else mPay += amt; }
+  });
+  const bToday = S.bread.filter(b => b.date === t);
+  const bCount = bToday.reduce((s, b) => s + Number(b.count || 0), 0);
+
+  $('#reportBody').innerHTML =
+    '<div class="mini-stats" style="margin-bottom:10px">' +
+      '<div class="ms"><b style="color:var(--debt)">' + moneyBare(dDebt) + '</b><small>ديون اليوم</small></div>' +
+      '<div class="ms"><b style="color:var(--paid)">' + moneyBare(dPay) + '</b><small>مقبوضات اليوم</small></div>' +
+      '<div class="ms"><b style="color:var(--amber)">' + bCount + '</b><small>ربطة خبز اليوم</small></div>' +
+    '</div>' +
+    '<div class="mini-stats">' +
+      '<div class="ms"><b style="color:var(--debt)">' + moneyBare(mDebt) + '</b><small>ديون الشهر</small></div>' +
+      '<div class="ms"><b style="color:var(--paid)">' + moneyBare(mPay) + '</b><small>مقبوضات الشهر</small></div>' +
+      '<div class="ms"><b>' + S.tx.length + '</b><small>كل الحركات</small></div>' +
+    '</div>';
+}
+
+/* ─────────────────── الإعداد الأول ─────────────────── */
+function renderSetup() {
+  const chosen = S.settings.currency || 'ل.س';
+  $('#suCur').innerHTML = CURRENCIES.map(c =>
+    '<button class="cur-opt ' + (c.symbol === chosen ? 'is-on' : '') + '" data-sym="' + c.symbol + '">' +
+    '<b>' + c.symbol + '</b><small>' + c.name + '</small></button>').join('');
+}
+function showSetup() {
+  $('#setupWrap').hidden = false;
+  renderSetup();
+  paintIcons($('#setupWrap'));
+}
+
 /* ─────────────────── لوحة الإدارة ─────────────────── */
 function renderKeypad() {
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clr', '0', 'del'];
@@ -784,11 +1042,14 @@ function renderAdmin() {
   $('#setTgChat').value     = S.settings.tgChat || '';
   $('#setTgAuto').checked   = !!S.settings.tgAuto;
 
-  $('#curChips').innerHTML = ['ل.س', '₺', '$', '€'].map(c =>
-    '<button class="chip ' + (c === S.settings.currency ? 'is-on' : '') + '" data-cur="' + c + '">' + c + '</button>').join('');
+  $('#setCurrency').value = S.settings.currency || 'ل.س';
+  $('#curChips').innerHTML = CURRENCIES.map(c =>
+    '<button class="cur-opt ' + (c.symbol === S.settings.currency ? 'is-on' : '') + '" data-cur="' + c.symbol + '">' +
+    '<b>' + c.symbol + '</b><small>' + c.name + '</small></button>').join('');
 
   renderBannerAdmin();
   renderAdminCustomers();
+  renderReports();
   paintIcons($('#adminBody'));
 }
 function renderBannerAdmin() {
@@ -1004,8 +1265,68 @@ function bind() {
   $('#curChips').addEventListener('click', e => {
     const b = e.target.closest('[data-cur]'); if (!b) return;
     $('#setCurrency').value = b.dataset.cur;
-    $$('#curChips .chip').forEach(x => x.classList.toggle('is-on', x === b));
+    $$('#curChips .cur-opt').forEach(x => x.classList.toggle('is-on', x === b));
   });
+
+  /* الأسعار والمنتجات */
+  $('#prodSave').onclick = saveProduct;
+  $('#prodCancel').onclick = cancelProductEdit;
+  $('#prodName').addEventListener('keydown', e => { if (e.key === 'Enter') $('#prodPrice').focus(); });
+  $('#prodPrice').addEventListener('keydown', e => { if (e.key === 'Enter') saveProduct(); });
+  $('#prodCats').addEventListener('click', e => {
+    const b = e.target.closest('[data-cat]'); if (!b) return;
+    S.prodCat = (S.prodCat === b.dataset.cat) ? '' : b.dataset.cat;
+    renderPrices();
+  });
+  $('#prodSearch').addEventListener('input', e => {
+    S.prodQuery = e.target.value;
+    $('#prodSearchClear').hidden = !e.target.value;
+    renderPrices();
+  });
+  $('#prodSearchClear').onclick = () => { $('#prodSearch').value = ''; S.prodQuery = ''; $('#prodSearchClear').hidden = true; renderPrices(); };
+  $('#prodList').addEventListener('click', e => {
+    const ed = e.target.closest('[data-prod-edit]');
+    const dl = e.target.closest('[data-prod-del]');
+    const card = e.target.closest('[data-prod]');
+    if (ed) { startProductEdit(Number(ed.dataset.prodEdit)); return; }
+    if (dl) { deleteProduct(Number(dl.dataset.prodDel)); return; }
+    if (card) {
+      const p = S.products.find(x => x.id === Number(card.dataset.prod));
+      if (p) addToCart(p);
+    }
+  });
+  $('#cartList').addEventListener('click', e => {
+    const b = e.target.closest('[data-q]'); if (!b) return;
+    setQty(Number(b.dataset.id), Number(b.dataset.q));
+  });
+  $('#cartClear').onclick = async () => {
+    const ok = await confirmBox('تفريغ السلة', 'سيُحذف كل ما في السلة دون تسجيله.');
+    if (ok) { S.cart = []; renderPrices(); }
+  };
+  $('#cartToCustomer').onclick = cartToCustomerSheet;
+  $('#cartJump').onclick = () => {
+    if (!S.cart.length) { toast('السلة فارغة — اضغط على منتج لإضافته'); return; }
+    $('#cartCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  /* كشف الحساب */
+  $('#custStatement').onclick = shareStatement;
+
+  /* الإعداد الأول */
+  $('#suCur').addEventListener('click', e => {
+    const b = e.target.closest('[data-sym]'); if (!b) return;
+    S.settings.currency = b.dataset.sym;
+    renderSetup();
+  });
+  $('#suStart').onclick = async () => {
+    await saveSetting('shopName', $('#suShop').value.trim() || 'Hamado Market');
+    await saveSetting('currency', S.settings.currency || 'ل.س');
+    await saveSetting('breadPrice', parseAmount($('#suBread').value) || 0);
+    await saveSetting('setupDone', true);
+    $('#setupWrap').hidden = true;
+    renderHome();
+    toast('جاهز — ابدأ بتسجيل أول دين', 'ok');
+  };
   $('#saveShop').onclick = async () => {
     await saveSetting('shopName', $('#setShopName').value.trim() || 'Hamado Market');
     await saveSetting('currency', $('#setCurrency').value.trim() || 'ل.س');
@@ -1099,6 +1420,9 @@ function bind() {
   $('#chipClear').innerHTML = icon('x');
   $('#bMinus').innerHTML = icon('minus');
   $('#bPlus').innerHTML = icon('plus');
+  $('#cartJump').innerHTML = icon('cart');
+  $('#cartClear').innerHTML = icon('trash');
+  $('#prodSearchClear').innerHTML = icon('x');
   try {
     await loadAll();
   } catch (e) {
@@ -1107,6 +1431,7 @@ function bind() {
   bind();
   $('#breadDate').value = S.breadSel.date;
   go('home');
+  if (!S.settings.setupDone) showSetup();
   maybeAutoBackup();
 })();
 
