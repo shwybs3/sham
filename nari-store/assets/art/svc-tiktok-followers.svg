@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#3DD9EB"/><stop offset="100%" stop-color="#3DD9EB" stop-opacity="0"/></radialGradient>
+<linearGradient id="line" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3DD9EB"/><stop offset="100%" stop-color="#9B5DE5"/></linearGradient><linearGradient id="note" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3DD9EB"/><stop offset="100%" stop-color="#9B5DE5"/></linearGradient>
+</defs>
+<rect width="480" height="320" rx="22" fill="url(#bg)"/>
+<circle cx="374" cy="70" r="176" fill="url(#glow)" opacity=".55"/>
+<circle cx="86" cy="272" r="134" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(240,166)">
+  <rect x="-152" y="-100" width="304" height="186" rx="20" fill="#140A11" opacity=".45"/>
+  <g stroke="#FBF0E4" stroke-opacity=".14" stroke-width="2">
+    <path d="M-134 34h268M-134 -14h268M-134 -62h268"/>
+  </g>
+  <path d="M-128 46L-64 8 0 24 68 -38 130 -74" fill="none" stroke="url(#line)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#3DD9EB">
+    <circle cx="-128" cy="46" r="8"/><circle cx="-64" cy="8" r="8"/><circle cx="0" cy="24" r="8"/>
+    <circle cx="68" cy="-38" r="8"/><circle cx="130" cy="-74" r="10"/>
+  </g>
+  <g transform="translate(-58,-60)" opacity=".95"><g>
+  <path d="M-4 30V-30l44-8v52" fill="none" stroke="url(#note)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="-16" cy="32" r="14" fill="url(#note)"/>
+  <circle cx="28" cy="24" r="14" fill="url(#note)"/>
+  <g transform="translate(74,-14)" opacity=".7"><circle r="16" fill="#3DD9EB"/><path d="M-16 16c2-9 9-13 16-13s14 4 16 13z" fill="#3DD9EB"/></g>
+</g></g>
+</g>
+<path d="M400 81L402.5 87.5L409 90L402.5 92.5L400 99L397.5 92.5L391 90L397.5 87.5Z" fill="#FFD166" opacity=".7"/><path d="M64 68L66.2 73.8L72 76L66.2 78.2L64 84L61.8 78.2L56 76L61.8 73.8Z" fill="#FBF0E4" opacity=".5"/>
+
+</svg>

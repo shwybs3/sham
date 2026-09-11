@@ -1,0 +1,14 @@
+[
+  { "id": "freefire",            "name": "شحن جواهر فري فاير",       "slug": "freefire-topup.html",           "category": "شحن ألعاب",        "active": true, "note": "" },
+  { "id": "pubg",                "name": "شحن شدات ببجي موبايل",      "slug": "pubg-mobile-uc-topup.html",     "category": "شحن ألعاب",        "active": true, "note": "" },
+  { "id": "cod",                 "name": "شحن نقاط كول أوف ديوتي",    "slug": "cod-mobile-cp-topup.html",      "category": "شحن ألعاب",        "active": true, "note": "" },
+  { "id": "tiktok-coins",        "name": "شحن كوينز تيك توك",         "slug": "tiktok-coins-topup.html",       "category": "شحن ألعاب",        "active": true, "note": "" },
+  { "id": "itunes",              "name": "بطاقات آيتونز",             "slug": "itunes-gift-cards.html",        "category": "بطاقات واشتراكات", "active": true, "note": "" },
+  { "id": "google-play",         "name": "بطاقات جوجل بلاي",          "slug": "google-play-gift-cards.html",   "category": "بطاقات واشتراكات", "active": true, "note": "" },
+  { "id": "shahid",              "name": "اشتراك شاهد VIP",           "slug": "shahid-vip-subscription.html",  "category": "بطاقات واشتراكات", "active": true, "note": "" },
+  { "id": "netflix",             "name": "اشتراك نتفليكس",            "slug": "netflix-subscription.html",     "category": "بطاقات واشتراكات", "active": true, "note": "" },
+  { "id": "instagram-followers", "name": "زيادة متابعين انستقرام",    "slug": "instagram-followers.html",      "category": "نمو السوشيال ميديا","active": true, "note": "" },
+  { "id": "instagram-likes",     "name": "زيادة لايكات انستقرام",     "slug": "instagram-likes.html",          "category": "نمو السوشيال ميديا","active": true, "note": "" },
+  { "id": "tiktok-followers",    "name": "زيادة متابعين تيك توك",     "slug": "tiktok-followers.html",         "category": "نمو السوشيال ميديا","active": true, "note": "" },
+  { "id": "youtube-views",       "name": "زيادة مشاهدات يوتيوب",      "slug": "youtube-views.html",            "category": "نمو السوشيال ميديا","active": true, "note": "" }
+]

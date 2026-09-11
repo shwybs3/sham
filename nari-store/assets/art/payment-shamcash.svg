@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FFD166" stop-opacity="0"/></radialGradient>
+<linearGradient id="pay" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6A2FB5"/><stop offset="100%" stop-color="#B0134A"/></linearGradient><linearGradient id="coin2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF8A3D"/></linearGradient>
+</defs>
+<rect width="480" height="320" rx="22" fill="url(#bg)"/>
+<circle cx="374" cy="70" r="176" fill="url(#glow)" opacity=".55"/>
+<circle cx="86" cy="272" r="134" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(240,160)">
+  <rect x="-176" y="-104" width="352" height="208" rx="26" fill="url(#pay)"/>
+  <rect x="-176" y="-104" width="352" height="208" rx="26" fill="none" stroke="#FFD166" stroke-opacity=".5" stroke-width="3"/>
+  <rect x="-176" y="-52" width="352" height="30" fill="#140A11" opacity=".5"/>
+  <g transform="translate(-108,36)">
+    <rect x="-44" y="-16" width="88" height="32" rx="8" fill="#FFD166" opacity=".9"/>
+    <rect x="-30" y="-4" width="60" height="8" rx="4" fill="#140A11" opacity=".5"/>
+  </g>
+  <g transform="translate(80,30)">
+    <circle r="42" fill="url(#coin2)"/>
+    <path d="M-12 16V-10l24-5v22" fill="none" stroke="#140A11" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+  </g>
+  <g transform="translate(-104,-72)">
+    <circle r="14" fill="#FBF0E4" opacity=".85"/>
+    <circle cx="30" r="14" fill="#FFD166" opacity=".7"/>
+  </g>
+</g>
+<path d="M400 74L402.8 81.2L410 84L402.8 86.8L400 94L397.2 86.8L390 84L397.2 81.2Z" fill="#FFD166" opacity=".8"/><path d="M72 236L74.2 241.8L80 244L74.2 246.2L72 252L69.8 246.2L64 244L69.8 241.8Z" fill="#FBF0E4" opacity=".55"/>
+
+</svg>

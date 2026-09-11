@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#201122"/><stop offset="100%" stop-color="#140A11"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#9B5DE5"/><stop offset="100%" stop-color="#9B5DE5" stop-opacity="0"/></radialGradient>
+<linearGradient id="big" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF3D68"/><stop offset="100%" stop-color="#9B5DE5"/></linearGradient><linearGradient id="f404" x1="0.5" y1="0" x2="0.5" y2="1"><stop offset="0%" stop-color="#FFD166"/><stop offset="100%" stop-color="#FF3D68"/></linearGradient>
+</defs>
+<rect width="600" height="420" rx="22" fill="url(#bg)"/>
+<circle cx="468" cy="92" r="231" fill="url(#glow)" opacity=".55"/>
+<circle cx="108" cy="357" r="176" fill="url(#glow)" opacity=".28"/>
+
+<g transform="translate(300,206)">
+  <g opacity=".95">
+    <text x="0" y="34" text-anchor="middle" font-family="Cairo, Tahoma, sans-serif" font-weight="900" font-size="150" fill="url(#big)">404</text>
+  </g>
+  <g transform="translate(0,-118)">
+    <path d="M0-58c9 19-17 33-17 56 0 14 10 22 10 22s-29-8-29-37c0-8 2-14 2-14s-22 18-22 52c0 36 25 58 56 58s56-22 56-58c0-29-22-45-29-66-3 15-8 25-18 29 5-18-4-32-18-42z" fill="url(#f404)" opacity=".9"/>
+  </g>
+  <g transform="translate(0,116)">
+    <rect x="-130" y="-16" width="260" height="32" rx="16" fill="#FBF0E4" opacity=".14"/>
+    <rect x="-96" y="-7" width="192" height="14" rx="7" fill="#FBF0E4" opacity=".28"/>
+  </g>
+</g>
+<path d="M120 78L123.4 86.6L132 90L123.4 93.4L120 102L116.6 93.4L108 90L116.6 86.6Z" fill="#FFD166" opacity=".8"/><path d="M500 110L502.8 117.2L510 120L502.8 122.8L500 130L497.2 122.8L490 120L497.2 117.2Z" fill="#3DD9EB" opacity=".7"/><path d="M96 316L98.8 323.2L106 326L98.8 328.8L96 336L93.2 328.8L86 326L93.2 323.2Z" fill="#FF3D68" opacity=".7"/><path d="M516 321L518.5 327.5L525 330L518.5 332.5L516 339L513.5 332.5L507 330L513.5 327.5Z" fill="#FFD166" opacity=".7"/>
+
+</svg>

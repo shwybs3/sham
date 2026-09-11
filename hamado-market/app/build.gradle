@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hamado.market'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.hamado.market"
+        minSdk 24
+        targetSdk 34
+        versionCode 2
+        versionName "2.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // نوقّع نسخة الإصدار بمفتاح الـ debug حتى تُنتج CI ملف APK
+            // قابلاً للتثبيت مباشرة دون الحاجة لمفتاح خاص. إن أردت نشره على
+            // Google Play لاحقاً، أنشئ keystore خاصاً وبدّل هذا السطر.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

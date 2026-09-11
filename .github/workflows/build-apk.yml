@@ -1,0 +1,62 @@
+name: Build Hamado Market APK
+
+on:
+  push:
+    branches:
+      - claude/ai-website-multi-page-79fwd3
+    paths:
+      - 'hamado-market/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Build release APK
+        working-directory: hamado-market
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        working-directory: hamado-market
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk out/HamadoMarket.apk
+          ls -lh out/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HamadoMarket-apk
+          path: hamado-market/out/HamadoMarket.apk
+          if-no-files-found: error
+
+      - name: Publish APK to a release (direct download link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="hamado-market-v1.0.0-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" \
+            --title "Hamado Market ${TAG}" \
+            --notes "تطبيق Hamado Market — دفتر ديون الدكان. حمّل الملف HamadoMarket.apk وثبّته على هاتف أندرويد (فعّل: السماح بالتثبيت من مصادر غير معروفة)." \
+            hamado-market/out/HamadoMarket.apk
+          echo "APK_URL=$(gh release view "$TAG" --json assets -q '.assets[0].url')" >> "$GITHUB_STEP_SUMMARY"
