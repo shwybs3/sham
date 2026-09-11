@@ -15,8 +15,10 @@ function seo_head(array $o): void {
     <meta name="description" content="<?= e($desc) ?>">
     <?php if ($keywords): ?><meta name="keywords" content="<?= e($keywords) ?>"><?php endif; ?>
     <link rel="canonical" href="<?= e($canonical) ?>">
-    <meta name="robots" content="index, follow, max-image-preview:large">
+    <?php /* One robots directive per page — a second, conflicting tag is worse than none. */ ?>
+    <meta name="robots" content="<?= !empty($o['noindex']) ? 'noindex, follow' : 'index, follow, max-image-preview:large' ?>">
     <meta property="og:type" content="<?= e($type) ?>">
+    <meta property="og:locale" content="ar_AR">
     <meta property="og:title" content="<?= e($title) ?>">
     <meta property="og:description" content="<?= e($desc) ?>">
     <meta property="og:url" content="<?= e($canonical) ?>">
@@ -77,7 +79,7 @@ function product_card(array $p): void {
         $off = (int)round(100 - ((float)$p['price'] / (float)$p['compare_at_price'] * 100));
     }
     ?>
-    <a class="product-card" href="<?= site_url('product.php?slug=' . urlencode($p['slug'])) ?>">
+    <a class="product-card" href="<?= product_url($p['slug']) ?>">
       <div class="art-wrap">
         <?= svg_product_art($p['art_key']) ?>
         <?php if (!empty($p['badge'])): ?><span class="badge-corner"><?= e($p['badge']) ?></span><?php endif; ?>
@@ -202,7 +204,7 @@ function site_footer(): void {
               $footerPages = $pdo->query("SELECT title, slug FROM pages WHERE show_in_footer=1 AND status='published' ORDER BY title ASC")->fetchAll();
               foreach ($footerPages as $fp):
           ?>
-            <a href="<?= e(site_url('p/' . $fp['slug'])) ?>"><i class="fa-solid fa-file-lines fa-fw"></i> <?= e($fp['title']) ?></a>
+            <a href="<?= e(page_url($fp['slug'])) ?>"><i class="fa-solid fa-file-lines fa-fw"></i> <?= e($fp['title']) ?></a>
           <?php endforeach; } catch (Throwable $e) {} ?>
         </div>
       </div>
@@ -296,7 +298,7 @@ function ad_zone(string $slotKey = 'default'): void {
 function article_card(array $a): void {
     $cat = $a['category_name'] ?? ucfirst($a['content_type']);
     ?>
-    <a class="card" href="<?= site_url('article.php?slug=' . urlencode($a['slug'])) ?>">
+    <a class="card" href="<?= article_url($a['slug']) ?>">
       <div class="hero" style="<?= hero_style_css($a['hero_gradient']) ?>">
         <span class="badge"><?= e(ucfirst($a['content_type'])) ?></span>
         <?php if (!empty($a['trending'])): ?><span class="trend"><i class="fa-solid fa-fire"></i> Trending</span><?php endif; ?>
@@ -336,7 +338,7 @@ function tip_widget(string $label): void {
 function tool_card(array $t): void {
     $rating = rating_summary('tool', (int)$t['id']);
     ?>
-    <a class="tcard" href="<?= site_url('tool.php?slug=' . urlencode($t['slug'])) ?>">
+    <a class="tcard" href="<?= tool_url($t['slug']) ?>">
       <div class="tcard-top">
         <span class="tcard-icon" style="<?= hero_style_css('g' . (((int)$t['id'] % 8) + 1)) ?>"><i class="fa-solid <?= e($t['icon_class']) ?>"></i></span>
         <div class="tcard-heading">

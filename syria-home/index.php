@@ -2,6 +2,14 @@
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/partials.php';
 
+/* Reached only through the ^__rewrite-probe rule in .htaccess — lets the admin
+   panel verify from the browser that mod_rewrite is really working here. */
+if (isset($_GET['__rewrite_probe'])) {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'SH_REWRITE_OK';
+    exit;
+}
+
 $featured = $pdo->query("SELECT * FROM products WHERE status='published' AND featured=1 ORDER BY sort_order LIMIT 6")->fetchAll();
 $latest = $pdo->query("SELECT * FROM products WHERE status='published' ORDER BY sort_order, id LIMIT 8")->fetchAll();
 $totalPackages = (int)$pdo->query("SELECT COUNT(*) FROM products WHERE status='published'")->fetchColumn();

@@ -332,6 +332,10 @@ function sh_ensure_schema(PDO $pdo): void {
     /* Which platform/category a store package belongs to, so the
        storefront can filter packages by tab (Instagram/Facebook/etc.). */
     sh_ensure_column($pdo, 'products', 'platform', "VARCHAR(40) NOT NULL DEFAULT 'other'");
+
+    /* Real edit timestamp, so <lastmod> in the sitemap reflects when a package
+       actually changed rather than when it was first created. */
+    sh_ensure_column($pdo, 'products', 'updated_at', "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
 }
 
 /**

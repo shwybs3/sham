@@ -9,6 +9,8 @@ $product = $stmt->fetch();
 
 if (!$product) { http_response_code(404); require __DIR__ . '/404.php'; exit; }
 
+enforce_canonical_url(product_url($product['slug']));
+
 $orderSent = false; $orderError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_check()) {
@@ -56,7 +58,7 @@ $jsonld = [
         'price' => number_format((float)$product['price'], 2, '.', ''),
         'priceCurrency' => $product['currency'],
         'availability' => 'https://schema.org/InStock',
-        'url' => site_url('product.php?slug=' . $product['slug']),
+        'url' => product_url($product['slug']),
     ],
 ];
 ?><!doctype html><html lang="ar" dir="rtl"><head>
@@ -64,7 +66,7 @@ $jsonld = [
     'title' => ($product['meta_title'] ?: $product['name']) . ' | ' . setting('site_name', 'Yassota'),
     'description' => $product['meta_description'] ?: $product['short_description'],
     'keywords' => $product['meta_keywords'],
-    'canonical' => site_url('product.php?slug=' . $product['slug']),
+    'canonical' => product_url($product['slug']),
     'type' => 'product',
     'jsonld' => $jsonld,
 ]); ?>

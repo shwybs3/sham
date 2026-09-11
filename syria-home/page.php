@@ -8,7 +8,9 @@ if ($slug === '') { header('Location: ' . site_url('')); exit; }
 $st = $pdo->prepare("SELECT * FROM pages WHERE slug = ? AND status = 'published'");
 $st->execute([$slug]);
 $page = $st->fetch();
-if (!$page) { include __DIR__ . '/404.php'; exit; }
+if (!$page) { http_response_code(404); include __DIR__ . '/404.php'; exit; }
+
+enforce_canonical_url(page_url($slug));
 
 $title = $page['meta_title'] ?: $page['title'];
 $desc  = $page['meta_description'] ?: setting('site_description', '');
@@ -16,7 +18,7 @@ $desc  = $page['meta_description'] ?: setting('site_description', '');
 <!doctype html>
 <html lang="en">
 <head>
-<?php seo_head(['title' => $title, 'description' => $desc, 'canonical' => site_url('p/' . $slug)]); ?>
+<?php seo_head(['title' => $title, 'description' => $desc, 'canonical' => page_url($slug)]); ?>
 </head>
 <body>
 <?php site_header(); ?>

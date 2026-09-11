@@ -68,6 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
     }
 
     if ($formTab === 'seo') {
+        set_setting('canonical_site_url', rtrim(trim($_POST['canonical_site_url'] ?? ''), '/'));
+        $urlMode = strtolower(trim($_POST['pretty_urls'] ?? 'auto'));
+        set_setting('pretty_urls', in_array($urlMode, ['auto', 'on', 'off'], true) ? $urlMode : 'auto');
         set_setting('seo_default_keywords', trim($_POST['seo_default_keywords'] ?? ''));
         set_setting('google_site_verification', trim($_POST['google_site_verification'] ?? ''));
         set_setting('bing_site_verification', trim($_POST['bing_site_verification'] ?? ''));
@@ -84,8 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_check()) {
             file_put_contents(ROOT_PATH . '/sitemap.xml', $xml);
             $msg = ['ok', 'sitemap.xml generated (' . strlen($xml) . ' bytes).'];
         } elseif ($sitemapAction === 'generate_robots') {
-            $robots = "User-agent: *\nAllow: /\nSitemap: " . rtrim(SITE_URL, '/') . "/sitemap.xml\n";
-            file_put_contents(ROOT_PATH . '/robots.txt', $robots);
+            // Same source as the live /robots.txt endpoint — a hand-rolled copy
+            // here previously omitted every Disallow rule.
+            file_put_contents(ROOT_PATH . '/robots.txt', sh_robots_body());
             $msg = ['ok', 'robots.txt generated.'];
         }
     }
@@ -384,6 +388,58 @@ if (isset($_GET['google_error'])) $msg = ['err', 'Google connection failed: ' . 
 <?php elseif ($tab === 'seo'): ?>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= csrf_token() ?>"><input type="hidden" name="tab" value="seo">
+
+    <h3>Canonical site address</h3>
+    <label>Site URL (every canonical tag, sitemap entry and search-engine submission uses this)</label>
+    <input type="text" name="canonical_site_url" value="<?= e(setting('canonical_site_url')) ?>" placeholder="<?= e(rtrim(SITE_URL, '/')) ?>">
+    <?php
+      $detected = (request_is_https() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '');
+      $detectedBase = rtrim($detected . rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/'), '/');
+      $effective = rtrim(canonical_base_url(), '/');
+    ?>
+    <p class="hint">
+      In use now: <code><?= e($effective) ?></code> · from config.php: <code><?= e(rtrim(SITE_URL, '/')) ?></code> · you are browsing: <code><?= e($detectedBase) ?></code><br>
+      Leave blank to use the value written by the installer. Set it if that value is wrong — a baked-in
+      <code>http://</code>, a <code>www.</code> prefix or a temporary hosting domain makes every URL you publish
+      point at the wrong place. Use the exact form you want indexed, with no trailing slash.
+    </p>
+
+    <h3>URL format</h3>
+    <label>Link format for articles, tools, packages and pages</label>
+    <select name="pretty_urls">
+      <?php foreach ([
+        'auto' => 'Auto — use clean URLs only when the server supports rewriting (recommended)',
+        'on'   => 'Always clean: /product/my-package',
+        'off'  => 'Always query: /product.php?slug=my-package',
+      ] as $k => $label): ?>
+        <option value="<?= $k ?>" <?= strtolower(trim(setting('pretty_urls', 'auto'))) === $k ? 'selected' : '' ?>><?= $label ?></option>
+      <?php endforeach; ?>
+    </select>
+    <p class="hint">
+      Currently publishing: <b><?= pretty_urls_enabled() ? 'clean URLs' : 'query URLs' ?></b>.
+      Both forms always keep working; this only controls which one is linked, declared canonical and submitted
+      to search engines — the other one 301-redirects to it.
+      <button type="button" class="btn gray sm" style="margin-top:8px" onclick="shProbeRewrite(this)">Test rewrite support</button>
+      <span id="shProbeResult" style="margin-inline-start:8px"></span>
+    </p>
+    <script>
+    function shProbeRewrite(btn) {
+      var out = document.getElementById('shProbeResult');
+      out.textContent = 'Testing…';
+      fetch('<?= e(site_url('__rewrite-probe')) ?>', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (t) {
+          out.innerHTML = t.trim() === 'SH_REWRITE_OK'
+            ? '<b style="color:#16a34a">✓ Rewriting works — clean URLs are safe to use.</b>'
+            : '<b style="color:#dc2626">✗ Unexpected response — keep "Always query".</b>';
+        })
+        .catch(function () {
+          out.innerHTML = '<b style="color:#dc2626">✗ No rewrite support on this host — use "Always query".</b>';
+        });
+    }
+    </script>
+
+    <h3>General</h3>
     <label>Default keywords (used as a fallback)</label><input type="text" name="seo_default_keywords" value="<?= e(setting('seo_default_keywords')) ?>">
     <label>Google Search Console verification meta tag content</label><input type="text" name="google_site_verification" value="<?= e(setting('google_site_verification')) ?>">
     <label>Bing Webmaster verification meta tag content</label><input type="text" name="bing_site_verification" value="<?= e(setting('bing_site_verification')) ?>">

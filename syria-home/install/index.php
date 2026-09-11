@@ -152,7 +152,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sh_reset_schema($pdo);
             sh_ensure_schema($pdo);
 
-            $siteUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
+            /* request_is_https() rather than isset($_SERVER['HTTPS']) — the latter
+               is true even when the value is the string "off", which bakes an
+               http:// canonical into every URL the site will ever publish. */
+            $siteUrl = (request_is_https() ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
                 . rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'])), '/');
 
             $configPhp = "<?php\n"

@@ -20,6 +20,7 @@ if ($q !== '') {
     'title' => ($q !== '' ? 'Search results for “' . $q . '”' : 'Search') . ' | ' . setting('site_name'),
     'description' => 'Search articles, guides and free tools on ' . setting('site_name') . '.',
     'canonical' => site_url('search.php'),
+    'noindex' => true, // search result pages are thin, near-duplicate content
 ]); ?>
 </head><body>
 <?php site_header(); ?>

@@ -1,13 +1,9 @@
 <?php
+/**
+ * Dynamic robots.txt. The body itself lives in sh_robots_body()
+ * (includes/functions.php) so the admin panel's "generate a physical
+ * robots.txt" action writes exactly what this endpoint serves.
+ */
 require_once __DIR__ . '/config.php';
-header('Content-Type: text/plain; charset=utf-8');
-echo "User-agent: *\n";
-echo "Disallow: /admin/\n";
-echo "Disallow: /install/\n";
-echo "Disallow: /includes/\n";
-echo "Disallow: /checkout.php\n";
-echo "Disallow: /payment-status.php\n";
-echo "Disallow: /payment-webhook.php\n";
-echo "Disallow: /chat.php\n";
-echo "Allow: /\n\n";
-echo 'Sitemap: ' . site_url('sitemap.php') . "\n";
+if (!headers_sent()) header('Content-Type: text/plain; charset=utf-8');
+echo sh_robots_body();

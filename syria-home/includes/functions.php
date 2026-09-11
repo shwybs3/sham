@@ -70,12 +70,139 @@ function require_admin(): void {
     }
 }
 
+/** Built from the host actually being browsed, so a wrong canonical URL can
+ *  never lock an admin out of the panel. */
 function admin_base_url(): string {
-    return rtrim(SITE_URL, '/') . '/admin';
+    $scheme = request_is_https() ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? parse_url(SITE_URL, PHP_URL_HOST);
+    $dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
+    if (basename($dir) === 'admin' || basename($dir) === 'pages') $dir = dirname($dir);
+    return $scheme . '://' . $host . rtrim($dir, '/') . '/admin';
+}
+
+/** HTTPS detection that survives reverse proxies — `isset($_SERVER['HTTPS'])`
+ *  alone is true even when the value is the string "off". */
+function request_is_https(): bool {
+    if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') return true;
+    return (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+}
+
+/**
+ * The one base URL every canonical tag, sitemap entry, Open Graph URL and
+ * IndexNow submission is built from.
+ *
+ * SITE_URL is written once by the installer from whatever hostname the browser
+ * happened to be using at that moment — an http:// scheme, a www. prefix or a
+ * temporary hosting domain baked in there silently corrupts every URL the site
+ * publishes. The `canonical_site_url` setting overrides it from the admin panel
+ * so that is fixable without editing config files over FTP.
+ */
+function canonical_base_url(): string {
+    static $base = null;
+    if ($base !== null) return $base;
+    $override = '';
+    if (isset($GLOBALS['pdo'])) {
+        try { $override = trim((string)setting('canonical_site_url', '')); } catch (Throwable $e) {}
+    }
+    $base = rtrim($override !== '' ? $override : SITE_URL, '/');
+    return $base;
 }
 
 function site_url(string $path = ''): string {
-    return rtrim(SITE_URL, '/') . '/' . ltrim($path, '/');
+    return canonical_base_url() . '/' . ltrim($path, '/');
+}
+
+/**
+ * Whether to publish the rewritten URL shape (/article/slug) instead of the
+ * query shape (article.php?slug=slug).
+ *
+ * "auto" (the default) trusts a marker that .htaccess can only set when
+ * mod_rewrite is actually processing it — so a host without rewrite support,
+ * or a deployment where .htaccess never got uploaded, keeps working on the
+ * query shape instead of publishing links that would 404.
+ */
+function pretty_urls_enabled(): bool {
+    static $on = null;
+    if ($on !== null) return $on;
+
+    $mode = 'auto';
+    if (isset($GLOBALS['pdo'])) {
+        try { $mode = strtolower(trim((string)setting('pretty_urls', 'auto'))); } catch (Throwable $e) {}
+    }
+    if ($mode === 'on')  return $on = true;
+    if ($mode === 'off') return $on = false;
+
+    // Apache prefixes env vars with REDIRECT_ once per internal redirect.
+    foreach (['SH_REWRITE_OK', 'REDIRECT_SH_REWRITE_OK', 'REDIRECT_REDIRECT_SH_REWRITE_OK'] as $key) {
+        if (!empty($_SERVER[$key])) return $on = true;
+    }
+    return $on = false;
+}
+
+function article_url(string $slug): string {
+    return pretty_urls_enabled() ? site_url('article/' . $slug) : site_url('article.php?slug=' . urlencode($slug));
+}
+function tool_url(string $slug): string {
+    return pretty_urls_enabled() ? site_url('tool/' . $slug) : site_url('tool.php?slug=' . urlencode($slug));
+}
+function product_url(string $slug): string {
+    return pretty_urls_enabled() ? site_url('product/' . $slug) : site_url('product.php?slug=' . urlencode($slug));
+}
+function category_url(string $slug): string {
+    return pretty_urls_enabled() ? site_url('category/' . $slug) : site_url('category.php?slug=' . urlencode($slug));
+}
+function page_url(string $slug): string {
+    return pretty_urls_enabled() ? site_url('p/' . $slug) : site_url('page.php?slug=' . urlencode($slug));
+}
+
+/**
+ * Sends the query-shaped URL to its canonical rewritten twin with a 301, so a
+ * page that search engines already found at ?slug= consolidates onto one URL
+ * instead of competing with itself.
+ */
+function enforce_canonical_url(string $canonical): void {
+    if (!pretty_urls_enabled()) return;
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') return;
+    if (strpos((string)($_SERVER['REQUEST_URI'] ?? ''), '.php') === false) return; // already canonical
+
+    $extra = $_GET;
+    unset($extra['slug']);
+    header('Location: ' . $canonical . ($extra ? '?' . http_build_query($extra) : ''), true, 301);
+    exit;
+}
+
+/**
+ * The robots.txt body, shared by the /robots.txt endpoint and the admin's
+ * static-file generator so the two can never disagree.
+ */
+function sh_robots_body(): string
+{
+    $lines = [
+        'User-agent: *',
+        'Allow: /',
+        '',
+        '# Private or utility endpoints — nothing here belongs in search results',
+        'Disallow: /admin/',
+        'Disallow: /install/',
+        'Disallow: /includes/',
+        'Disallow: /seed/',
+        'Disallow: /search.php',
+        'Disallow: /checkout.php',
+        'Disallow: /payment-status.php',
+        'Disallow: /payment-webhook.php',
+        'Disallow: /chat.php',
+        'Disallow: /rate.php',
+        'Disallow: /track-view.php',
+        '',
+        '# Crawlers must be able to fetch these to render and judge the page',
+        'Allow: /assets/',
+        'Allow: /uploads/',
+        '',
+        'Sitemap: ' . site_url('sitemap.xml'),
+    ];
+    return implode("\n", $lines) . "\n";
 }
 
 /* Original CSS-only "hero" graphic per article/tool — avoids any copyright

@@ -107,8 +107,7 @@ else {
     }
 }
 ?><!doctype html><html lang="ar" dir="rtl"><head>
-<?php seo_head(['title' => 'الدفع | ' . setting('site_name', 'Yassota'), 'description' => 'دفع آمن بالعملات الرقمية.', 'canonical' => site_url('checkout.php')]); ?>
-<meta name="robots" content="noindex">
+<?php seo_head(['title' => 'الدفع | ' . setting('site_name', 'Yassota'), 'description' => 'دفع آمن بالعملات الرقمية.', 'canonical' => site_url('checkout.php'), 'noindex' => true]); ?>
 </head><body>
 <?php site_header(); ?>
 
