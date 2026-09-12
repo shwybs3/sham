@@ -36,3 +36,4 @@ yassota/android/secrets.properties
 # Android build output
 yassota/android/build/
 yassota/android/*.apk
+yassota/android/*.idsig

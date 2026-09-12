@@ -178,8 +178,10 @@ function ya_ensure_schema(PDO $pdo): void {
         'site_name' => 'YASSOTA', 'site_url' => '', 'lang' => 'ar',
         'site_desc' => 'YASSOTA — منصة اجتماعية عربية حديثة لمشاركة الصور والفيديوهات والمقالات. كل منشور صفحة مستقلة تظهر في محركات البحث.',
         'og_image' => '', 'google_client_id' => '', 'google_verification' => '', 'twitter_handle' => '@yassota',
-        'apk_version' => '', 'apk_size' => '', 'apk_sha256' => '', 'apk_min_android' => '7.0 (API 24)',
-        'apk_url' => '', 'play_url' => '',
+        // بيانات الإصدار المبني فعلياً (yassota/android/build.sh) — تُعدَّل من لوحة الإدارة عند كل إصدار
+        'apk_version' => '1.0.0', 'apk_size' => '21 KB', 'apk_min_android' => '7.0 (API 24)',
+        'apk_sha256' => '0E:4B:6A:6B:8D:88:56:F7:DE:F8:65:41:74:F8:07:52:6D:6F:77:A7:B6:1F:FE:58:49:2F:18:59:E6:AE:BE:9E',
+        'apk_url' => 'downloads/YASSOTA-1.0.0.apk', 'play_url' => '',
     ];
     $have = $pdo->query("SELECT k FROM settings")->fetchAll(PDO::FETCH_COLUMN);
     $ins = $pdo->prepare("INSERT INTO settings (k, v) VALUES (?, ?)");

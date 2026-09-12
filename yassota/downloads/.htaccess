@@ -1,0 +1,9 @@
+# نوع MIME الصحيح لحزم أندرويد + فرض التنزيل بدل العرض
+AddType application/vnd.android.package-archive .apk
+<FilesMatch "\.apk$">
+  Header set Content-Disposition "attachment"
+  Header set X-Content-Type-Options "nosniff"
+</FilesMatch>
+# لا تنفيذ لأي سكربت داخل مجلد التنزيلات
+php_flag engine off
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8
