@@ -90,7 +90,7 @@ a.back{color:#ff0033;font-size:13px}
     <label>عنوان الإرسال</label>
     <input id="addr" readonly value="<?= e($order['pay_address']) ?>">
     <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('addr').value)">نسخ العنوان</button>
-    <p style="font-size:12px;color:#8a8a92;margin-top:14px">⏳ بانتظار الدفع (≈ $<?= number_format((float)$order['price_usd'], 2) ?>)... سيتحدّث هذا الصفحة تلقائياً.</p>
+    <p style="font-size:12px;color:#8ea0bd;margin-top:14px">⏳ بانتظار الدفع (≈ $<?= number_format((float)$order['price_usd'], 2) ?>)... سيتحدّث هذا الصفحة تلقائياً.</p>
   <?php endif; ?>
   </div>
   <script>
