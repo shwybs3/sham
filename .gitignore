@@ -33,3 +33,6 @@ yassota/android/*.jks
 yassota/android/*.keystore
 yassota/android/keystore.properties
 yassota/android/secrets.properties
+# Android build output
+yassota/android/build/
+yassota/android/*.apk
