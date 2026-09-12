@@ -15,7 +15,7 @@ function seo_head(array $o): void {
     $tw = setting('twitter_handle', '@yassota');
     ?>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
 <title><?= e($title) ?></title>
 <meta name="description" content="<?= e($desc) ?>">
 <?php if ($kw): ?><meta name="keywords" content="<?= e($kw) ?>"><?php endif; ?>
@@ -132,13 +132,26 @@ function layout_top(array $seo = []): void {
 
 function layout_bottom(): void {
     $me = current_user(); $items = nav_items();
+    $active = '';
     ?>
+    <footer class="site-foot">
+      <div class="sf-top"><span class="logo" style="width:28px;height:28px;font-size:15px;border-radius:9px">Y</span><b class="wm"><?= e(setting('site_name', 'YASSOTA')) ?></b></div>
+      <div class="sf-links">
+        <a href="<?= e(url('about')) ?>">عن يسوتا</a><a href="<?= e(url('privacy')) ?>">الخصوصية</a>
+        <a href="<?= e(url('terms')) ?>">الشروط</a><a href="<?= e(url('community-guidelines')) ?>">إرشادات المجتمع</a>
+        <a href="<?= e(url('dmca')) ?>">DMCA</a><a href="<?= e(url('contact')) ?>">تواصل معنا</a>
+      </div>
+      <a class="sf-apk" href="<?= e(url('apps/yassota')) ?>"><?= icon('download', 18) ?> تحميل تطبيق أندرويد (APK)</a>
+      <div class="sf-copy">© <?= date('Y') ?> <?= e(setting('site_name', 'YASSOTA')) ?> — جميع الحقوق محفوظة</div>
+    </footer>
   </main>
 </div>
 
 <nav class="bottomnav">
-  <?php foreach ($items as $it): ?>
-    <a href="<?= e($it[1]) ?>" aria-label="<?= e($it[2]) ?>"><?= icon($it[0], 25) ?></a>
+  <?php foreach ($items as $it):
+    $isCreate = $it[3] === 'create';
+    $cls = $isCreate ? 'fab' : ''; ?>
+    <a class="<?= $cls ?>" href="<?= e($it[1]) ?>" aria-label="<?= e($it[2]) ?>"><?= icon($it[0], $isCreate ? 24 : 23) ?><span><?= e($it[2]) ?></span></a>
   <?php endforeach; ?>
 </nav>
 
@@ -191,7 +204,7 @@ function post_card(array $p): void {
 <?php
 }
 
-/* ═══════════════════════ رفع الصور (تحقق + تحسين + WebP) ═══════════════════════ */
+/* ═══ رفع الصور (تحقق + تحسين + WebP) ═══ */
 function ya_upload_image(array $file, string $subdir = 'posts', int $maxW = 1600): array {
     if (($file['error'] ?? 4) !== 0 || empty($file['tmp_name'])) return ['ok' => false, 'error' => 'لم يتم اختيار صورة.'];
     if ($file['size'] > 8 * 1024 * 1024) return ['ok' => false, 'error' => 'حجم الصورة يتجاوز 8MB.'];
@@ -232,7 +245,7 @@ function ya_parse_tags(string $s): array {
     return array_slice(array_values($out), 0, 15);
 }
 
-/* ═══════════════════════ استعلامات الـFeed ═══════════════════════ */
+/* ═══ استعلامات الـFeed ═══ */
 define('YA_PER', 12);
 
 function fetch_feed(string $mode, string $arg = '', int $page = 1): array {
