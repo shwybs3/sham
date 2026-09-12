@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YASSOTA</string>
+    <string name="pick_image">Choose an image</string>
+    <string name="retry">Retry</string>
+    <string name="err_offline">No internet connection.\nCheck your network and try again.</string>
+</resources>
