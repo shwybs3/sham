@@ -16,9 +16,23 @@ if ($me && !$isSelf) {
     $iFollow = (bool)$f->fetch();
 }
 
-$rows = fetch_feed('user', (string)$u['id'], 1);
-if ($tab === 'saved' && $isSelf) $rows = fetch_feed('user_saved', (string)$u['id'], 1);
-if ($tab === 'videos') $rows = array_values(array_filter($rows, fn($r) => $r['type'] === 'video'));
+$people = null;
+if ($tab === 'followers' || $tab === 'following') {
+    if ($tab === 'followers') {
+        $ps = $pdo->prepare("SELECT u.* FROM follows f JOIN users u ON u.id = f.follower_id
+            WHERE f.following_id = ? AND u.banned = 0 ORDER BY f.created_at DESC LIMIT 100");
+    } else {
+        $ps = $pdo->prepare("SELECT u.* FROM follows f JOIN users u ON u.id = f.following_id
+            WHERE f.follower_id = ? AND u.banned = 0 ORDER BY f.created_at DESC LIMIT 100");
+    }
+    $ps->execute([$u['id']]);
+    $people = $ps->fetchAll();
+    $rows = [];
+} else {
+    $rows = fetch_feed('user', (string)$u['id'], 1);
+    if ($tab === 'saved' && $isSelf) $rows = fetch_feed('user_saved', (string)$u['id'], 1);
+    if ($tab === 'videos') $rows = array_values(array_filter($rows, fn($r) => $r['type'] === 'video'));
+}
 
 $name = $u['name'] ?: $u['username'];
 $bio = $u['bio'] ?: ('حساب ' . $name . ' على يسوتا');
@@ -63,8 +77,8 @@ $cover = is_real_image($u['cover']) ? 'background-image:url(' . e($u['cover']) .
     </div>
     <div class="p-stats">
       <div><b><?= num_fmt($u['posts_count']) ?></b><span>منشور</span></div>
-      <div><b><?= num_fmt($u['followers_count']) ?></b><span>متابِع</span></div>
-      <div><b><?= num_fmt($u['following_count']) ?></b><span>يتابع</span></div>
+      <a href="<?= e(user_url($u['username']) . '?tab=followers') ?>"><b><?= num_fmt($u['followers_count']) ?></b><span>متابِع</span></a>
+      <a href="<?= e(user_url($u['username']) . '?tab=following') ?>"><b><?= num_fmt($u['following_count']) ?></b><span>يتابع</span></a>
     </div>
   </div>
   <div class="tabs">
@@ -74,7 +88,13 @@ $cover = is_real_image($u['cover']) ? 'background-image:url(' . e($u['cover']) .
   </div>
 </div>
 
-<?php if ((int)$u['is_private'] === 1 && !$isSelf && !$iFollow): ?>
+<?php if ($people !== null): ?>
+  <?php if ($people): $fset = my_following_ids(); ?>
+    <div class="ulist"><?php foreach ($people as $pu) user_row($pu, isset($fset[(int)$pu['id']])); ?></div>
+  <?php else: ?>
+    <div class="empty"><?= icon('user',44) ?><p><?= $tab === 'followers' ? 'لا متابعين بعد.' : 'لا يتابع أحداً بعد.' ?></p></div>
+  <?php endif; ?>
+<?php elseif ((int)$u['is_private'] === 1 && !$isSelf && !$iFollow): ?>
   <div class="empty"><?= icon('lock',44) ?><p>هذا الحساب خاص. تابعه لرؤية منشوراته.</p></div>
 <?php elseif ($rows): ?>
   <div class="ex-grid"><?= render_tiles($rows) ?></div>

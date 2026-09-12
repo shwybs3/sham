@@ -11,9 +11,10 @@ layout_top([
 <div class="phead"><div><h1>استكشاف</h1><p class="sub">أحدث ما يُنشر على يسوتا</p></div></div>
 <div class="chips">
   <a class="chip on" href="<?= e(url('explore')) ?>">الكل</a>
-  <a class="chip" href="<?= e(url('trending')) ?>">🔥 الترند</a>
-  <a class="chip" href="<?= e(url('videos')) ?>">🎬 فيديوهات</a>
-  <?php foreach ($cats as $c): ?><a class="chip" href="<?= e(category_url($c['slug'])) ?>"><?= e($c['name']) ?></a><?php endforeach; ?>
+  <a class="chip ico" href="<?= e(url('trending')) ?>"><?= icon('fire', 16) ?> الترند</a>
+  <a class="chip ico" href="<?= e(url('videos')) ?>"><?= icon('video', 16) ?> فيديوهات</a>
+  <a class="chip ico" href="<?= e(url('people')) ?>"><?= icon('user', 16) ?> أشخاص</a>
+  <?php foreach ($cats as $c): ?><a class="chip ico" href="<?= e(category_url($c['slug'])) ?>"><?= icon($c['icon'], 16) ?> <?= e($c['name']) ?></a><?php endforeach; ?>
 </div>
 <?php if ($rows): ?>
 <div class="ex-grid" data-feed="explore" data-layout="tiles"><?= render_tiles($rows) ?></div>
