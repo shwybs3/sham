@@ -146,8 +146,10 @@ case 'msg_send': {
     $pdo->prepare("INSERT INTO conversations (user_a,user_b) VALUES (?,?) ON DUPLICATE KEY UPDATE last_at=NOW()")->execute([$a, $b]);
     $cv = $pdo->prepare("SELECT id FROM conversations WHERE user_a=? AND user_b=?"); $cv->execute([$a, $b]); $cid = (int)$cv->fetch()['id'];
     $pdo->prepare("INSERT INTO messages (conversation_id,sender_id,body) VALUES (?,?,?)")->execute([$cid, $me['id'], mb_substr($body, 0, 2000)]);
+    // التقط المعرّف قبل notify()، وإلا أعاد lastInsertId معرّف الإشعار لا الرسالة
+    $mid = (int)$pdo->lastInsertId();
     notify($to, (int)$me['id'], 'message');
-    jout(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
+    jout(['ok' => true, 'id' => $mid]);
 }
 
 case 'msg_list': {

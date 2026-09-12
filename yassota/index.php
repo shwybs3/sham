@@ -29,7 +29,7 @@ layout_top([
 </div>
 
 <div class="feed" data-feed="<?= $me ? 'home' : 'explore' ?>">
-<?php if ($rows) echo render_cards($rows); else: ?>
+<?php if ($rows): echo render_cards($rows); else: ?>
   <div class="empty"><?= icon('compass', 44) ?><p>لا توجد منشورات بعد. <a href="<?= e(url('create')) ?>" style="color:var(--brand-ink)">كن أول من ينشر!</a></p></div>
 <?php endif; ?>
 </div>

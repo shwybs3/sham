@@ -28,6 +28,11 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    // وحّد ساعة قاعدة البيانات مع ساعة PHP. بدونها تكتب MySQL بتوقيت UTC
+    // بينما يقرأ PHP بتوقيت الرياض، فيظهر كل منشور ورسالة وتعليق جديد
+    // وكأن عمره 3 ساعات. الإزاحة الرقمية تعمل حتى حيث لا تُحمَّل جداول
+    // أسماء المناطق الزمنية (ومنها استضافة InfinityFree).
+    $pdo->exec("SET time_zone = '" . date('P') . "'");
 } catch (PDOException $e) {
     http_response_code(503);
     die('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 16px;direction:rtl">'
