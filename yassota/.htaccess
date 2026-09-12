@@ -29,6 +29,7 @@ RewriteRule ^logout/?$ auth.php?do=logout [L,QSA]
 
 RewriteRule ^explore/?$ explore.php [L,QSA]
 RewriteRule ^trending/?$ trending.php [L,QSA]
+RewriteRule ^people/?$ people.php [L,QSA]
 RewriteRule ^videos/?$ videos.php [L,QSA]
 RewriteRule ^search/?$ search.php [L,QSA]
 RewriteRule ^create/?$ create.php [L,QSA]

@@ -39,8 +39,9 @@ layout_top(['title' => 'الرسائل | ' . setting('site_name', 'YASSOTA'), 'n
   <script>
   (function(){
     var to=<?= (int)$active['id'] ?>, area=document.getElementById('msgArea'), last=0;
+    var SEEN='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-inline-start:3px"><path d="M2 13l3.5 3.5L13 9"/><path d="M11 16.5L14.5 20 22 12.5"/></svg>';
     function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-    function render(m){var el=document.createElement('div');el.style.cssText='max-width:78%;padding:9px 13px;border-radius:16px;font-size:14px;'+(m.mine?'align-self:flex-start;background:var(--grad);color:#fff;border-bottom-inline-start-radius:5px':'align-self:flex-end;background:var(--surface-2);border-bottom-inline-end-radius:5px');el.innerHTML=esc(m.body)+'<div style="font-size:10px;opacity:.7;margin-top:2px">'+m.time+(m.mine&&m.seen?' ✓✓':'')+'</div>';area.appendChild(el);}
+    function render(m){var el=document.createElement('div');el.style.cssText='max-width:78%;padding:9px 13px;border-radius:16px;font-size:14px;'+(m.mine?'align-self:flex-start;background:var(--grad);color:#fff;border-bottom-inline-start-radius:5px':'align-self:flex-end;background:var(--surface-2);border-bottom-inline-end-radius:5px');el.innerHTML=esc(m.body)+'<div style="font-size:10px;opacity:.75;margin-top:2px">'+m.time+(m.mine&&m.seen?SEEN:'')+'</div>';area.appendChild(el);}
     function poll(){yaApi('msg_list',{to:to,after:last}).then(function(r){if(r.ok&&r.messages.length){r.messages.forEach(function(m){render(m);last=Math.max(last,m.id);});area.scrollTop=area.scrollHeight;}});}
     document.getElementById('msgForm').addEventListener('submit',function(e){e.preventDefault();var b=document.getElementById('msgBody');var t=b.value.trim();if(!t)return;b.value='';yaApi('msg_send',{to:to,body:t}).then(function(r){if(r.ok)poll();else yaToast(r.error||'تعذّر الإرسال','err');});});
     poll();setInterval(poll,4000);
@@ -56,6 +57,6 @@ layout_top(['title' => 'الرسائل | ' . setting('site_name', 'YASSOTA'), 'n
   <?php endforeach; ?>
   </div>
 <?php else: ?>
-  <div class="empty"><?= icon('chat',44) ?><p>لا محادثات بعد. افتح ملف مستخدم واضغط زر الرسالة لبدء محادثة.</p></div>
+  <div class="empty"><?= icon('chat',44) ?><p>لا محادثات بعد. افتح ملف مستخدم واضغط زر الرسالة لبدء محادثة، أو من صفحة <a href="<?= e(url('people')) ?>" style="color:var(--brand-ink)">أشخاص</a>.</p></div>
 <?php endif; ?>
 <?php layout_bottom(); ?>
