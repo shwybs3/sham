@@ -1,0 +1,21 @@
+{
+  "name": "YASSOTA — يسوتا",
+  "short_name": "YASSOTA",
+  "description": "منصة اجتماعية عربية حديثة — كل منشور صفحة مستقلة تظهر في محركات البحث.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0ea5e9",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["social", "photo", "news"],
+  "icons": [
+    { "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "إنشاء منشور", "url": "create" },
+    { "name": "استكشاف", "url": "explore" }
+  ]
+}

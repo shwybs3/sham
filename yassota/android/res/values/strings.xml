@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">يسوتا</string>
+    <string name="pick_image">اختر صورة</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="err_offline">تعذّر الاتصال بالإنترنت.\nتحقّق من اتصالك ثم أعد المحاولة.</string>
+</resources>

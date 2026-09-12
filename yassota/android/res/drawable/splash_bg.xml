@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android:width/height على <item> متاح من API 23، و minSdk هنا 24 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/bg" />
+    <item
+        android:drawable="@drawable/ic_launcher"
+        android:gravity="center"
+        android:width="120dp"
+        android:height="120dp" />
+</layer-list>

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# غلاف تستدعيه لوحة التحكم للتحكم بخدمة واحدة
+exec shamhost service "$@"

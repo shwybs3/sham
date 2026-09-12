@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ShamHost</string>
+    <string name="tagline">لوحة استضافة الجوال</string>
+    <string name="host_label">عنوان الخادم (IP الجوال المستضيف)</string>
+    <string name="port_label">منفذ اللوحة</string>
+    <string name="connect">اتصال</string>
+    <string name="discover">بحث تلقائي في الشبكة</string>
+    <string name="this_device">هذا الجهاز</string>
+    <string name="termux_control">التحكم بخدمات Termux</string>
+    <string name="setup_hint">شغّل ShamHost على الجوال المستضيف ثم نفّذ فيه الأمر shamhost url وانسخ العنوان الظاهر.</string>
+    <string name="scanning">جارٍ فحص الشبكة…</string>
+    <string name="none_found">لم يُعثر على خادم ShamHost في هذه الشبكة.</string>
+    <string name="pick_server">اختر الخادم</string>
+    <string name="bad_host">أدخل عنوان خادم صالح</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="change_server">تغيير الخادم</string>
+    <string name="refresh">تحديث</string>
+    <string name="load_error">تعذّر الوصول إلى اللوحة</string>
+    <string name="load_error_hint">تأكد أن الجهازين على نفس الشبكة، وأن الخدمة تعمل على الجوال المستضيف (shamhost status).</string>
+    <string name="exit_confirm">اضغط رجوع مرة أخرى للخروج</string>
+    <string name="termux_missing">Termux غير مثبّت على هذا الجهاز. هذه الصفحة تعمل فقط على الجوال المستضيف.</string>
+    <string name="termux_note">يتطلب التحكم إضافة السطر التالي في ~/.termux/termux.properties داخل Termux ثم إعادة تشغيله:\nallow-external-apps = true</string>
+    <string name="cmd_sent">أُرسل الأمر إلى Termux</string>
+    <string name="cmd_failed">تعذّر إرسال الأمر. تأكد من allow-external-apps = true</string>
+    <string name="open_panel">فتح اللوحة</string>
+    <string name="install_shamhost">تثبيت ShamHost على هذا الجهاز</string>
+    <string name="copy_command">نسخ أمر التثبيت</string>
+    <string name="copied">نُسخ الأمر — الصقه في Termux</string>
+    <string name="status_checking">جارٍ فحص الخدمة…</string>
+    <string name="status_up">الخدمة تعمل على %1$s</string>
+    <string name="status_down">الخدمة لا تعمل على %1$s</string>
+    <string name="termux_not_installed">Termux غير مثبّت. ثبّته من F-Droid (وليس من Google Play) ثم ارجع.</string>
+    <string name="open_fdroid">تنزيل Termux من F-Droid</string>
+    <string name="not_installed_hint">يبدو أن ShamHost غير مثبّت أو غير مشغّل على هذا الجهاز. اضغط «تثبيت ShamHost» لتنفيذ كل شيء تلقائياً داخل Termux، أو «تشغيل الخدمات» إن كان مثبّتاً مسبقاً.</string>
+    <string name="install_started">بدأ التثبيت في Termux — انتظر حتى تظهر كلمة المرور، ثم ارجع واضغط اتصال.</string>
+    <string name="battery_prompt">لمنع أندرويد من قتل الخادم، اسمح بتشغيل التطبيق بلا قيود على البطارية.</string>
+    <string name="perm_note">التطبيق يطلب عند التشغيل: الإشعارات، الوصول للملفات، وتنفيذ الأوامر في Termux. أندرويد لا يمنح كل الصلاحيات بضغطة واحدة، فكل إذن يظهر في حواره الخاص.</string>
+    <string name="start_services">تشغيل الخدمات</string>
+</resources>

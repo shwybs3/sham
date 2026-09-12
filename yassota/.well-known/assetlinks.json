@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.yassota.app",
+    "sha256_cert_fingerprints": [
+      "0E:4B:6A:6B:8D:88:56:F7:DE:F8:65:41:74:F8:07:52:6D:6F:77:A7:B6:1F:FE:58:49:2F:18:59:E6:AE:BE:9E"
+    ]
+  }
+}]

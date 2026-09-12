@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="22dp"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:src="@mipmap/ic_launcher"
+            android:contentDescription="@string/app_name" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:text="@string/app_name"
+            android:textColor="@color/text"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="10dp"
+            android:text="@string/tagline"
+            android:textColor="@color/muted"
+            android:textSize="14sp" />
+
+        <TextView android:id="@+id/statusChip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card"
+            android:padding="12dp"
+            android:gravity="center"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp"
+            android:text="@string/status_checking" />
+
+        <TextView style="@style/Label" android:id="@+id/lblHost"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/host_label" />
+
+        <EditText style="@style/Field" android:id="@+id/host"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="192.168.1.20"
+            android:inputType="textUri"
+            android:importantForAutofill="no" />
+
+        <TextView style="@style/Label"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/port_label" />
+
+        <EditText style="@style/Field" android:id="@+id/port"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="8088"
+            android:inputType="number"
+            android:importantForAutofill="no" />
+
+        <Button style="@style/Btn" android:id="@+id/btnConnect"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/connect" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnDiscover"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/discover" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnLocal"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/this_device" />
+
+        <Button style="@style/Btn" android:id="@+id/btnInstall"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/install_shamhost" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnStart"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/start_services" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnCopyCmd"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/copy_command" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnFdroid"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/open_fdroid" />
+
+        <Button style="@style/Btn.Ghost" android:id="@+id/btnTermux"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:visibility="gone"
+            android:text="@string/termux_control" />
+
+        <TextView android:id="@+id/status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp"
+            android:lineSpacingMultiplier="1.4"
+            android:text="@string/setup_hint" />
+
+    </LinearLayout>
+</ScrollView>

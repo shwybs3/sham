@@ -1,0 +1,66 @@
+# YASSOTA — روابط نظيفة + أمان
+Options -Indexes +FollowSymLinks
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+RewriteRule ^(config\.local\.php|\.env|composer\.(json|lock)|README\.md)$ - [F,L]
+RewriteRule ^\.well-known/ - [L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteRule ^rss\.xml$ rss.php [L]
+RewriteRule ^robots\.txt$ robots.php [L]
+
+RewriteRule ^post/([A-Za-z0-9._-]+)/?$ post.php?slug=$1 [L,QSA]
+RewriteRule ^user/([A-Za-z0-9._-]+)/?$ user.php?u=$1 [L,QSA]
+RewriteRule ^tag/([^/]+)/?$ tag.php?slug=$1 [L,QSA]
+RewriteRule ^category/([A-Za-z0-9._-]+)/?$ category.php?slug=$1 [L,QSA]
+RewriteRule ^apps/[A-Za-z0-9._-]+/?$ apps.php [L,QSA]
+
+RewriteRule ^auth/([a-z]+)/?$ auth.php?do=$1 [L,QSA]
+RewriteRule ^login/?$ auth.php?do=login [L,QSA]
+RewriteRule ^register/?$ auth.php?do=register [L,QSA]
+RewriteRule ^logout/?$ auth.php?do=logout [L,QSA]
+
+RewriteRule ^explore/?$ explore.php [L,QSA]
+RewriteRule ^trending/?$ trending.php [L,QSA]
+RewriteRule ^people/?$ people.php [L,QSA]
+RewriteRule ^videos/?$ videos.php [L,QSA]
+RewriteRule ^search/?$ search.php [L,QSA]
+RewriteRule ^create/?$ create.php [L,QSA]
+RewriteRule ^settings/?$ settings.php [L,QSA]
+RewriteRule ^notifications/?$ notifications.php [L,QSA]
+RewriteRule ^messages/?$ messages.php [L,QSA]
+RewriteRule ^admin/?$ admin.php [L,QSA]
+RewriteRule ^api/?$ api.php [L,QSA]
+
+RewriteRule ^(about|privacy|terms|cookies|community-guidelines|dmca|contact)/?$ page.php?p=$1 [L,QSA]
+
+RewriteRule ^ 404.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml text/xml
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+</IfModule>
+
+ErrorDocument 404 /404.php
