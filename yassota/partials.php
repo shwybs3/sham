@@ -45,6 +45,11 @@ function seo_head(array $o): void {
 <?php endforeach;
 }
 
+/** هل نعمل داخل تطبيق أندرويد؟ (يضيف التطبيق YassotaApp إلى الـUser-Agent) */
+function is_app(): bool {
+    return strpos($_SERVER['HTTP_USER_AGENT'] ?? '', 'YassotaApp') !== false;
+}
+
 function nav_items(): array {
     $me = current_user();
     if ($me) return [
@@ -115,6 +120,7 @@ function layout_top(array $seo = []): void {
       <?php if ($me): ?>
         <a class="nav-link<?= $active === 'messages' ? ' on' : '' ?>" href="<?= e(url('messages')) ?>"><?= icon('chat', 24) ?><span>الرسائل</span></a>
         <a class="nav-link<?= $active === 'trending' ? ' on' : '' ?>" href="<?= e(url('trending')) ?>"><?= icon('fire', 24) ?><span>الترند</span></a>
+        <a class="nav-link<?= $active === 'people' ? ' on' : '' ?>" href="<?= e(url('people')) ?>"><?= icon('user', 24) ?><span>أشخاص</span></a>
         <?php if ((int)$me['is_admin'] === 1): ?><a class="nav-link<?= $active === 'admin' ? ' on' : '' ?>" href="<?= e(url('admin')) ?>"><?= icon('shield', 24) ?><span>الإدارة</span></a><?php endif; ?>
       <?php endif; ?>
     </nav>
@@ -123,7 +129,7 @@ function layout_top(array $seo = []): void {
     <?php endif; ?>
     <div class="side-foot">
       <a href="<?= e(url('about')) ?>">عن يسوتا</a> · <a href="<?= e(url('privacy')) ?>">الخصوصية</a> · <a href="<?= e(url('terms')) ?>">الشروط</a><br>
-      <a href="<?= e(url('apps/yassota')) ?>">تطبيق أندرويد</a> · © <?= date('Y') ?>
+      <?php if (!is_app()): ?><a href="<?= e(url('apps/yassota')) ?>">تطبيق أندرويد</a> · <?php endif; ?>© <?= date('Y') ?>
     </div>
   </aside>
   <main class="main">
@@ -132,7 +138,6 @@ function layout_top(array $seo = []): void {
 
 function layout_bottom(): void {
     $me = current_user(); $items = nav_items();
-    $active = '';
     ?>
     <footer class="site-foot">
       <div class="sf-top"><span class="logo" style="width:28px;height:28px;font-size:15px;border-radius:9px">Y</span><b class="wm"><?= e(setting('site_name', 'YASSOTA')) ?></b></div>
@@ -141,7 +146,9 @@ function layout_bottom(): void {
         <a href="<?= e(url('terms')) ?>">الشروط</a><a href="<?= e(url('community-guidelines')) ?>">إرشادات المجتمع</a>
         <a href="<?= e(url('dmca')) ?>">DMCA</a><a href="<?= e(url('contact')) ?>">تواصل معنا</a>
       </div>
+      <?php if (!is_app()): /* قسم تحميل التطبيق يظهر على الويب فقط، لا داخل التطبيق نفسه */ ?>
       <a class="sf-apk" href="<?= e(url('apps/yassota')) ?>"><?= icon('download', 18) ?> تحميل تطبيق أندرويد (APK)</a>
+      <?php endif; ?>
       <div class="sf-copy">© <?= date('Y') ?> <?= e(setting('site_name', 'YASSOTA')) ?> — جميع الحقوق محفوظة</div>
     </footer>
   </main>
@@ -311,6 +318,42 @@ function decorate_posts(array $rows): array {
 
 function render_cards(array $rows): string {
     ob_start(); foreach ($rows as $p) post_card($p); return ob_get_clean();
+}
+
+/** صف مستخدم مع زر متابعة — يُستخدم في «أشخاص» وقوائم المتابعين */
+function user_row(array $u, bool $iFollow = false): void {
+    $me = current_user();
+    $self = $me && (int)$me['id'] === (int)$u['id'];
+    ?>
+  <div class="urow">
+    <a class="urow-l" href="<?= e(user_url($u['username'])) ?>">
+      <?= avatar_html($u, 46) ?>
+      <span class="urow-t">
+        <b><?= e($u['name'] ?: $u['username']) ?><?= verified($u) ?></b>
+        <small>@<?= e($u['username']) ?><?= !empty($u['followers_count']) ? ' · ' . num_fmt($u['followers_count']) . ' متابِع' : '' ?></small>
+        <?php if (!empty($u['bio'])): ?><em><?= e(mb_substr($u['bio'], 0, 60)) ?></em><?php endif; ?>
+      </span>
+    </a>
+    <?php if (!$self): ?>
+      <?php if ($me): ?>
+        <button class="btn <?= $iFollow ? 'btn-ghost on' : 'btn-primary' ?>" data-act="follow" data-id="<?= (int)$u['id'] ?>"><?= $iFollow ? 'إلغاء المتابعة' : 'متابعة' ?></button>
+      <?php else: ?>
+        <a class="btn btn-primary" href="<?= e(url('login')) ?>">متابعة</a>
+      <?php endif; ?>
+    <?php endif; ?>
+  </div>
+<?php
+}
+
+/** يجلب مجموعة معرّفات المستخدمين الذين أتابعهم */
+function my_following_ids(): array {
+    global $pdo; static $c = null;
+    if ($c !== null) return $c;
+    $me = current_user();
+    if (!$me) return $c = [];
+    $st = $pdo->prepare("SELECT following_id FROM follows WHERE follower_id = ?");
+    $st->execute([$me['id']]);
+    return $c = array_flip(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)));
 }
 
 function render_comment(array $c, bool $isReply = false): void {
